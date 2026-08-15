@@ -29,6 +29,10 @@ and this user is not in the `docker` group. Start Docker Desktop before
 **The repo path contains a space** (`DevsFleet POS`). Quote paths in shell
 commands.
 
+**Git**: the project directory is root-owned, so git needs a path exception.
+Already applied via
+`git config --global --add safe.directory '/media/khaled/Education/DevsFleet/DevsFleet POS'`.
+
 ## Layout
 
 ```
