@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "moduleDetection": "force",
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": false,
+    "useUnknownInCatchVariables": true,
+
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "removeComments": false,
+
+    /**
+     * `incremental` is deliberately OFF.
+     *
+     * A `tsc --noEmit` typecheck run writes a .tsbuildinfo recording the project
+     * as up to date. The next real build then reads it, decides there is
+     * nothing to do, emits no files, and exits 0. `pnpm typecheck && pnpm build`
+     * therefore produces an EMPTY dist with a green exit code — which is exactly
+     * the order CI runs them in.
+     *
+     * Turbo already caches task output, so the rebuild cost is not paid twice.
+     * Turn this back on only with a distinct `tsBuildInfoFile` per config.
+     */
+    "incremental": false,
+
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
+  },
+  "exclude": ["node_modules", "dist", ".next", "release", "coverage"]
+}

@@ -1,0 +1,20 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "tools/*"
+
+# pnpm >=10 blocks lifecycle scripts by default. These need to compile native
+# bindings or download a platform binary at install time.
+allowBuilds:
+  "@swc/core": true
+  better-sqlite3: true
+  electron: true
+  esbuild: true
+  sharp: true
+  unrs-resolver: true
+
+  # Analytics ping on install. No functional purpose here.
+  "@scarf/scarf": false
+  # Downloads the Squirrel.Windows toolchain. electron-builder.yml targets
+  # NSIS, so this is dead weight on every install.
+  electron-winstaller: false

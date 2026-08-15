@@ -1,0 +1,52 @@
+appId: com.devsfleet.pos
+productName: DevsFleet POS
+copyright: Copyright © DevsFleet
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - dist/**/*
+  - dist-electron/**/*
+  - package.json
+
+# better-sqlite3 is a native binding: it must be unpacked from the asar
+# archive, because Node cannot dlopen a .node file that lives inside one.
+asarUnpack:
+  - "**/node_modules/better-sqlite3/**/*"
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  # Signing matters here: an unsigned POS installer trips SmartScreen on every
+  # terminal, and a shop's IT will simply refuse to install it.
+  # certificateFile / certificatePassword come from CI secrets.
+
+nsis:
+  oneClick: false
+  perMachine: true
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: DevsFleet POS
+
+linux:
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+  category: Office
+
+mac:
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+  category: public.app-category.business
+
+# Terminals sit behind a shop's router with no one watching them. Auto-update
+# from the self-hosted VPS keeps them current without a site visit.
+publish:
+  provider: generic
+  url: https://pos.devsfleet.com/releases
