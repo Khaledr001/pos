@@ -1,9 +1,0 @@
-node_modules
-dist
-.next
-.turbo
-release
-dist-electron
-coverage
-pnpm-lock.yaml
-packages/db/migrations
