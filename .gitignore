@@ -52,3 +52,10 @@ Thumbs.db
 
 # claude
 .claude/settings.local.json
+
+# per-service and deployment env (secrets)
+apps/*/.env
+deploy/.env
+deploy/api.env
+deploy/backups/
+.bundle/

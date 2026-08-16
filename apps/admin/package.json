@@ -15,6 +15,7 @@
     "@devsfleet/shared-types": "workspace:*",
     "@devsfleet/shared-utils": "workspace:*",
     "@tanstack/react-query": "^5.90.2",
+    "lucide-react": "^1.31.0",
     "next": "^16.0.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

@@ -1,0 +1,27 @@
+# Everything a build stage should never see. Keeps the context small and stops
+# a developer's .env from being baked into an image.
+**/node_modules
+**/dist
+**/dist-electron
+**/.next
+**/.turbo
+**/release
+**/coverage
+**/*.tsbuildinfo
+
+.git
+.github
+.claude
+
+**/.env
+**/.env.*
+!**/.env.example
+
+docs
+*.md
+!README.md
+
+data/price-lists
+**/*.xlsx
+**/*.sqlite
+docker/volumes

@@ -1,150 +1,264 @@
+@import "tailwindcss";
+
 /**
- * POS terminal styling.
+ * DESIGN SYSTEM — DevsFleet POS terminal
  *
- * Optimised for a counter, not a desk: large hit targets for touch, high
- * contrast for a shop with strip lighting and glare, tabular figures so a
- * cashier can scan a column of prices without misreading a digit.
+ * Designed for a trade counter, not a desk: fluorescent overhead light, a
+ * touchscreen at arm's length, a cashier with a queue, and a contractor reading
+ * the screen upside down to check the price of 50 elbows.
+ *
+ * Palette: brass on galvanised steel.
+ *   The greys are cool and blue-shifted, like zinc-plated fittings, rather than
+ *   neutral black — pure black under shop lighting shows every fingerprint and
+ *   reflects the strip lights straight back.
+ *   The accent is BRASS, taken from the merchandise itself. It is warm enough to
+ *   stay legible under warm fluorescents, and it is not the acid green or
+ *   electric blue that every dark dashboard reaches for.
+ *
+ * Type: system stacks only, no webfonts.
+ *   This is an offline-first app under a strict CSP. A terminal that has been
+ *   offline for a day must render identically to one that is online, and a font
+ *   fetched from a CDN would simply fail. Numbers are set in a mono stack with
+ *   tabular figures, because on this screen the numbers ARE the content.
  */
 
-:root {
-  --bg: #0b0d10;
-  --surface: #12161b;
-  --border: #232a33;
-  --fg: #e6e8eb;
-  --muted: #9099a6;
-  --brand: #3b82f6;
-  --ok: #22c55e;
-  --warn: #f59e0b;
+@theme {
+  /* Surfaces — galvanised steel, cool and blue-shifted */
+  --color-steel-900: #10151a; /* app background */
+  --color-steel-850: #161c23; /* panels */
+  --color-steel-800: #1d242d; /* raised: cards, inputs */
+  --color-steel-750: #232c37; /* hover */
+  --color-steel-700: #2a343f; /* borders */
 
-  color-scheme: dark;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  font-size: 16px;
+  /* Ink */
+  --color-chalk: #edf2f7; /* primary text — chalk marker on steel */
+  --color-zinc-400: #93a1b1; /* secondary text */
+  --color-zinc-500: #6b7987; /* tertiary, disabled */
+
+  /* Brass — the merchandise, and the only accent */
+  --color-brass: #e3a733;
+  --color-brass-bright: #f5bf52;
+  --color-brass-dim: #7a5c1c;
+
+  /* Signals. Borrowed from the safety signage already on a hardware shop wall. */
+  --color-signal-green: #3fb950;
+  --color-signal-red: #e5484d;
+  --color-signal-amber: #d89614;
+
+  --font-sans:
+    system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  /* Numbers, SKUs, barcodes, the receipt column. */
+  --font-mono:
+    ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace;
+
+  --radius-control: 0.5rem;
+  --radius-panel: 0.75rem;
 }
 
-* {
-  box-sizing: border-box;
+@layer base {
+  :root {
+    color-scheme: dark;
+    /* Touch targets are sized off this. 44px is the accessibility floor; a
+       gloved hand on a resistive shop touchscreen wants more. */
+    --touch-min: 3rem;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-steel-900);
+    color: var(--color-chalk);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+    /* A cashier must never be able to drag-select the UI mid-transaction, or
+       highlight half the cart while reaching for a button. */
+    user-select: none;
+    -webkit-user-select: none;
+    overflow: hidden;
+  }
+
+  input,
+  textarea {
+    user-select: text;
+    -webkit-user-select: text;
+  }
+
+  /* Every focusable control shows focus. On a keyboard-driven till this is not
+     an accessibility checkbox — it is how the cashier knows where they are. */
+  :focus-visible {
+    outline: 2px solid var(--color-brass);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* The scanner and the keypad drive this UI; a scrollbar is a rare sight. */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-steel-700);
+    border-radius: 5px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-zinc-500);
+  }
 }
 
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--fg);
-  /* A cashier must never be able to drag-select the UI mid-transaction. */
-  user-select: none;
-  -webkit-user-select: none;
+@layer components {
+  /**
+   * Any figure a person reads as a number gets tabular alignment, so a column
+   * of prices lines up on the decimal and a misread digit becomes unlikely.
+   */
+  .num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+
+  /**
+   * Section label. Small, wide-tracked, quiet — it names a region without
+   * competing with the data inside it.
+   */
+  .eyebrow {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-zinc-500);
+  }
+
+  /**
+   * The tear line. A dashed rule above the totals, echoing where the paper
+   * receipt is torn off. The digital cart and the printed output then read as
+   * the same object, which is what lets a cashier check their work once
+   * instead of twice.
+   */
+  .tear {
+    border-top: 1px dashed var(--color-steel-700);
+  }
+
+  .panel {
+    background: var(--color-steel-850);
+    border: 1px solid var(--color-steel-700);
+    border-radius: var(--radius-panel);
+  }
+
+  /* Controls sized for a fingertip, not a cursor. */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: var(--touch-min);
+    padding-inline: 1rem;
+    border-radius: var(--radius-control);
+    font-weight: 600;
+    font-size: 14px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition:
+      background-color 120ms ease,
+      border-color 120ms ease;
+  }
+  .btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .btn-primary {
+    background: var(--color-brass);
+    color: #1a1205;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--color-brass-bright);
+  }
+
+  .btn-ghost {
+    background: var(--color-steel-800);
+    border-color: var(--color-steel-700);
+    color: var(--color-chalk);
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background: var(--color-steel-750);
+  }
+
+  .btn-danger {
+    background: color-mix(in srgb, var(--color-signal-red) 16%, transparent);
+    border-color: color-mix(in srgb, var(--color-signal-red) 40%, transparent);
+    color: var(--color-signal-red);
+  }
+  .btn-danger:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--color-signal-red) 26%, transparent);
+  }
+
+  .field {
+    width: 100%;
+    min-height: var(--touch-min);
+    padding: 0.625rem 0.875rem;
+    background: var(--color-steel-800);
+    border: 1px solid var(--color-steel-700);
+    border-radius: var(--radius-control);
+    color: var(--color-chalk);
+    font-size: 15px;
+  }
+  .field::placeholder {
+    color: var(--color-zinc-500);
+  }
+  .field:focus {
+    border-color: var(--color-brass);
+    outline: none;
+  }
 }
 
-input,
-textarea {
-  user-select: text;
-  -webkit-user-select: text;
-}
+@layer utilities {
+  /**
+   * A scanned line flashes in. Scanners fire fast and the cashier is usually
+   * looking at the goods, not the screen — this is the confirmation that the
+   * scan actually registered.
+   */
+  @keyframes line-in {
+    from {
+      opacity: 0;
+      transform: translateX(-6px);
+      background: color-mix(in srgb, var(--color-brass) 18%, transparent);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+      background: transparent;
+    }
+  }
+  .animate-line-in {
+    animation: line-in 320ms ease-out;
+  }
 
-.app {
-  min-height: 100dvh;
-  display: flex;
-  flex-direction: column;
-}
+  @keyframes total-pulse {
+    0%,
+    100% {
+      color: var(--color-brass);
+    }
+    50% {
+      color: var(--color-brass-bright);
+    }
+  }
+  .animate-total {
+    animation: total-pulse 260ms ease-out;
+  }
 
-.app__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.875rem 1.25rem;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
-}
-
-.app__header h1 {
-  margin: 0;
-  font-size: 1.125rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-
-.badge {
-  padding: 0.25rem 0.625rem;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.badge--ok {
-  background: color-mix(in srgb, var(--ok) 18%, transparent);
-  color: var(--ok);
-}
-
-.badge--warn {
-  background: color-mix(in srgb, var(--warn) 18%, transparent);
-  color: var(--warn);
-}
-
-.app__main {
-  flex: 1;
-  padding: 1.25rem;
-  max-width: 56rem;
-  width: 100%;
-  margin-inline: auto;
-}
-
-.cart {
-  width: 100%;
-  border-collapse: collapse;
-  font-variant-numeric: tabular-nums;
-}
-
-.cart th,
-.cart td {
-  padding: 0.75rem 0.5rem;
-  text-align: left;
-  border-bottom: 1px solid var(--border);
-}
-
-.cart th {
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-}
-
-.cart .num {
-  text-align: right;
-}
-
-.cart tfoot td {
-  border-bottom: none;
-  padding-block: 0.375rem;
-  color: var(--muted);
-}
-
-.cart__total td {
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--border);
-  font-size: 1.125rem;
-  font-weight: 700;
-  color: var(--fg);
-}
-
-.sku {
-  display: block;
-  font-size: 0.75rem;
-  color: var(--muted);
-  font-family: ui-monospace, monospace;
-}
-
-.note {
-  margin-top: 2rem;
-  font-size: 0.8125rem;
-  color: var(--muted);
-}
-
-.note code {
-  font-family: ui-monospace, monospace;
-  background: var(--surface);
-  padding: 0.125rem 0.375rem;
-  border-radius: 0.25rem;
+  @media (prefers-reduced-motion: reduce) {
+    .animate-line-in,
+    .animate-total {
+      animation: none;
+    }
+  }
 }

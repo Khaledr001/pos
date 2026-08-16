@@ -1,5 +1,7 @@
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
+import { fileURLToPath } from "node:url";
 import electron from "vite-plugin-electron/simple";
 import renderer from "vite-plugin-electron-renderer";
 
@@ -15,8 +17,14 @@ import renderer from "vite-plugin-electron-renderer";
  * no filesystem access by design.
  */
 export default defineConfig({
+  resolve: {
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+    },
+  },
   plugins: [
     react(),
+    tailwindcss(),
     electron({
       main: {
         entry: "electron/main.ts",

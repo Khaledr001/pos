@@ -1,0 +1,14 @@
+packages:
+  - "packages/*"
+  - "tools/*"
+
+# pnpm >=10 blocks lifecycle scripts by default. These need to compile native
+# bindings or download a platform binary at install time.
+allowBuilds:
+  "@swc/core": true
+  esbuild: true
+  sharp: true
+  unrs-resolver: true
+
+  # Analytics ping on install. No functional purpose here.
+  "@scarf/scarf": false

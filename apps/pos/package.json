@@ -23,7 +23,8 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.9.3",
-    "zustand": "^5.0.8"
+    "zustand": "^5.0.8",
+    "lucide-react": "^1.31.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
@@ -36,6 +37,8 @@
     "vite": "^7.1.7",
     "vite-plugin-electron": "^0.29.0",
     "vite-plugin-electron-renderer": "^0.14.6",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "tailwindcss": "^4.3.3",
+    "@tailwindcss/vite": "^4.3.3"
   }
 }

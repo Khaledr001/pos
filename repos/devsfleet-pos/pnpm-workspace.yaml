@@ -1,0 +1,11 @@
+packages:
+  - "packages/*"
+
+# pnpm >=10 blocks lifecycle scripts by default.
+allowBuilds:
+  better-sqlite3: true
+  electron: true
+  esbuild: true
+
+  "@scarf/scarf": false
+  electron-winstaller: false

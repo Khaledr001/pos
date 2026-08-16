@@ -11,7 +11,93 @@ import { contextBridge, ipcRenderer } from "electron";
  * nothing else is reachable.
  */
 
+/**
+ * Shapes are re-declared here rather than imported from the renderer's
+ * src/lib/pos-data.ts. The preload script is a separate bundle in the main
+ * process's world; importing renderer code into it would drag renderer
+ * dependencies across the isolation boundary that this file exists to defend.
+ */
+interface BridgeProduct {
+  id: string;
+  sku: string;
+  barcode: string | null;
+  name: string;
+  unitAbbr: string;
+  sellingPrice: string;
+  minSellingPrice: string | null;
+  taxPercent: string;
+  stock: string;
+  categoryName: string | null;
+}
+
+interface BridgeCustomer {
+  id: string;
+  name: string;
+  company: string | null;
+  phone: string | null;
+  trn: string | null;
+  priceListId: string | null;
+  creditLimit: string;
+  creditBalance: string;
+  creditOnHold: boolean;
+}
+
+interface BridgeCashSession {
+  id: string;
+  openingAmount: string;
+  openedAt: string;
+  status: "open" | "closed";
+  cashIn: string;
+  cashOut: string;
+  cashSales: string;
+}
+
 const api = {
+  /**
+   * Catalogue, read from the local SQLite mirror.
+   *
+   * Read-only by design: a terminal never edits a product. The catalogue
+   * arrives by sync and leaves by sync, so there is no path by which one till
+   * can disagree with another about what something costs.
+   */
+  catalog: {
+    search: (query: string, limit?: number): Promise<BridgeProduct[]> =>
+      ipcRenderer.invoke("catalog:search", query, limit),
+    byBarcode: (barcode: string): Promise<BridgeProduct | null> =>
+      ipcRenderer.invoke("catalog:by-barcode", barcode),
+  },
+
+  customers: {
+    search: (query: string): Promise<BridgeCustomer[]> =>
+      ipcRenderer.invoke("customers:search", query),
+  },
+
+  cash: {
+    current: (): Promise<BridgeCashSession | null> => ipcRenderer.invoke("cash:current"),
+    open: (openingAmount: string): Promise<BridgeCashSession> =>
+      ipcRenderer.invoke("cash:open", openingAmount),
+    close: (countedAmount: string, notes?: string): Promise<void> =>
+      ipcRenderer.invoke("cash:close", countedAmount, notes),
+    movement: (
+      type: "cash_in" | "cash_out",
+      amount: string,
+      reason: string,
+    ): Promise<void> => ipcRenderer.invoke("cash:movement", type, amount, reason),
+  },
+
+  sales: {
+    /**
+     * Writes the sale to local SQLite and queues it in the outbox, then
+     * returns. It deliberately does not wait for the network: the customer is
+     * standing at the counter, and the sale is already real.
+     */
+    commit: (draft: unknown): Promise<unknown> => ipcRenderer.invoke("sales:commit", draft),
+    recent: (limit?: number): Promise<unknown[]> =>
+      ipcRenderer.invoke("sales:recent", limit),
+    find: (reference: string): Promise<unknown> =>
+      ipcRenderer.invoke("sales:find", reference),
+  },
+
   sync: {
     /** Force a sync cycle now — the "Sync" button on the status bar. */
     now: (): Promise<SyncStatusSnapshot> => ipcRenderer.invoke("sync:now"),

@@ -1,0 +1,29 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "baseUrl": "./",
+    /**
+     * CommonJS, not ESM.
+     *
+     * NestJS's dependency injection reads `design:type` / `design:paramtypes`
+     * metadata emitted by TypeScript's legacy decorators, and the whole
+     * ecosystem (@nestjs/cli, ts-jest, most Nest packages) still ships and
+     * expects CJS. The workspace packages this app imports are ESM-with-types
+     * and resolve fine through Node's interop; this app itself stays CJS.
+     */
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "lib": ["ES2023"],
+    "types": ["node", "vitest/globals"],
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "strictPropertyInitialization": false,
+    "paths": {
+      "@/*": ["src/*"]
+    }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "test", "**/*.spec.ts"]
+}

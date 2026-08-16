@@ -37,8 +37,22 @@ import { HealthModule } from "./modules/health/health.module.js";
     ConfigModule.forRoot({
       isGlobal: true,
       cache: true,
-      // One .env at the repo root, shared by every workspace.
-      envFilePath: [resolve(process.cwd(), "../../.env"), resolve(process.cwd(), ".env")],
+      /**
+       * This service owns its configuration.
+       *
+       * Order matters — earlier wins, and real `process.env` beats them all,
+       * which is how the container and systemd inject settings in production.
+       *
+       *   1. apps/api/.env   the service's own file. In a Docker image this is
+       *                      the ONLY one that exists.
+       *   2. ../../.env      repo root, developer convenience so `pnpm dev`
+       *                      works without copying secrets twice. Absent in
+       *                      every production image.
+       *
+       * Missing files are skipped silently. Nothing here may become required,
+       * or this service stops being independently deployable.
+       */
+      envFilePath: [resolve(process.cwd(), ".env"), resolve(process.cwd(), "../../.env")],
       validate: validateEnv,
     }),
 

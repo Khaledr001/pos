@@ -1,0 +1,154 @@
+import { DEFAULT_ROLE_PERMISSIONS } from "@devsfleet/shared-types";
+import { Loader2, Store } from "lucide-react";
+import { useState } from "react";
+import { Keypad } from "../components/Keypad.js";
+import { useHotkeys } from "../lib/keyboard.js";
+import { useAuth, type Cashier } from "../store/auth.js";
+
+/**
+ * Counter sign-in.
+ *
+ * A PIN, not a password. Cashiers hand the till over to each other several
+ * times a shift, and a 12-character password typed on a touchscreen between
+ * every customer is a rule that gets worked around — usually by never signing
+ * out at all, which is worse than a short PIN.
+ *
+ * The PIN is only weak in isolation. The server accepts it solely alongside a
+ * registered device id and a branch, so it is not a credential that works from
+ * anywhere; see `pinLogin` in the API's auth service.
+ */
+
+const PIN_LENGTH = 4;
+
+/**
+ * Development stand-in for the staff list, which arrives with the catalogue on
+ * the first sync. PINs are verified by the server, never here — this screen
+ * only collects them.
+ */
+const DEV_STAFF: Array<Cashier & { pin: string }> = [
+  {
+    id: "u1",
+    name: "Administrator",
+    roleName: "admin",
+    permissions: [...(DEFAULT_ROLE_PERMISSIONS.admin ?? [])],
+    pin: "1234",
+  },
+  {
+    id: "u2",
+    name: "Ravi Kumar",
+    roleName: "cashier",
+    permissions: [...(DEFAULT_ROLE_PERMISSIONS.cashier ?? [])],
+    pin: "2222",
+  },
+  {
+    id: "u3",
+    name: "Fatima Al Balushi",
+    roleName: "manager",
+    permissions: [...(DEFAULT_ROLE_PERMISSIONS.manager ?? [])],
+    pin: "3333",
+  },
+];
+
+export function Login() {
+  const { terminal, signIn } = useAuth();
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+
+  function submit(candidate: string) {
+    setChecking(true);
+    setError(null);
+
+    // Deliberate delay. Verification is a server round-trip in Phase 3, and a
+    // constant cost here keeps a wrong PIN from being distinguishable by speed.
+    setTimeout(() => {
+      const staff = DEV_STAFF.find((s) => s.pin === candidate);
+      if (staff) {
+        const { pin: _pin, ...cashier } = staff;
+        signIn(cashier);
+      } else {
+        setError("That PIN was not recognised. Try again.");
+        setPin("");
+      }
+      setChecking(false);
+    }, 220);
+  }
+
+  function push(digit: string) {
+    if (checking) return;
+    setError(null);
+    const next = (pin + digit).slice(0, PIN_LENGTH);
+    setPin(next);
+    if (next.length === PIN_LENGTH) submit(next);
+  }
+
+  useHotkeys({
+    ...Object.fromEntries(
+      Array.from({ length: 10 }, (_, n) => [String(n), () => push(String(n))]),
+    ),
+    backspace: () => setPin((p) => p.slice(0, -1)),
+    escape: () => setPin(""),
+  });
+
+  return (
+    <div className="flex h-full items-center justify-center bg-steel-900 p-6">
+      <div className="w-full max-w-sm">
+        <div className="mb-8 text-center">
+          <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-xl bg-brass/12">
+            <Store className="size-6 text-brass" aria-hidden />
+          </div>
+          <h1 className="text-lg font-semibold">{terminal?.tenantName}</h1>
+          <p className="num mt-1 text-[12px] text-zinc-500">
+            {terminal?.branchName} · {terminal?.deviceName}
+          </p>
+        </div>
+
+        <div className="panel p-6">
+          <p className="mb-4 text-center text-[13px] text-zinc-400">
+            Enter your PIN to start a shift
+          </p>
+
+          {/* Filled pips rather than a text field: it reads at arm's length and
+              a shoulder-surfer learns only the length. */}
+          <div
+            className="mb-5 flex justify-center gap-3"
+            role="status"
+            aria-label={`${pin.length} of ${PIN_LENGTH} digits entered`}
+          >
+            {Array.from({ length: PIN_LENGTH }, (_, i) => (
+              <span
+                key={i}
+                className={[
+                  "size-3.5 rounded-full border transition-colors",
+                  i < pin.length
+                    ? "border-brass bg-brass"
+                    : "border-steel-700 bg-steel-800",
+                ].join(" ")}
+              />
+            ))}
+          </div>
+
+          <div className="mb-4 flex h-5 items-center justify-center">
+            {checking && <Loader2 className="size-4 animate-spin text-zinc-500" />}
+            {error && (
+              <p role="alert" className="text-[12px] text-signal-red">
+                {error}
+              </p>
+            )}
+          </div>
+
+          <Keypad
+            onDigit={push}
+            onBackspace={() => setPin((p) => p.slice(0, -1))}
+            onClear={() => setPin("")}
+            disabled={checking}
+          />
+        </div>
+
+        <p className="mt-5 text-center text-[11px] leading-relaxed text-zinc-600">
+          Development PINs — 1234 admin · 2222 cashier · 3333 manager
+        </p>
+      </div>
+    </div>
+  );
+}
