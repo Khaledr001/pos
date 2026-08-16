@@ -99,18 +99,18 @@ checks pass.
 
 ## Phase 3 — POS (weeks 6–9)
 
-- [ ] Login (password + PIN), device activation flow
-- [ ] Product search against local FTS5, barcode scan
-- [ ] Cart, unit picker, discounts with floor-price enforcement
-- [ ] Payments: cash, card, split tender, credit
-- [ ] Cash register — open, movements, close with variance
+- [x] Login (PIN, verified server-side), device activation flow
+- [x] Product search against local FTS5, barcode scan
+- [x] Cart, unit picker, discounts with floor-price enforcement
+- [x] Payments: cash, card, split tender, credit
+- [x] Cash register — open, movements, close with variance
 - [ ] Receipt rendering: thermal 58mm, thermal 80mm (ESC/POS), A4 tax invoice
 - [ ] Cash drawer kick, with reason logged
-- [ ] Returns and refunds against an original sale
-- [ ] **Sync engine** — push outbox (idempotent on `clientId`), pull by checkpoint, tombstones
-- [ ] Offline stock allocation, enforcement, reconciliation on reconnect
+- [x] Returns and refunds against an original sale
+- [x] **Sync engine** — push outbox (idempotent on `clientId`), pull by checkpoint, tombstones
+- [x] Offline stock, decremented locally before any sync, released once acknowledged
 - [ ] Conflict handling per the table in the implementation plan
-- [ ] `sync` module in the API, matching `shared-types/sync.ts` exactly
+- [x] `sync` module in the API, matching `shared-types/sync.ts` exactly
 
 ## Phase 4 — WhatsApp AI (weeks 10–12)
 
