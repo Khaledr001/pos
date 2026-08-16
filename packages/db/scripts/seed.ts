@@ -129,6 +129,14 @@ try {
         email: ADMIN_EMAIL,
         passwordHash: await bcrypt.hash(ADMIN_PASSWORD, rounds),
         pinHash: await bcrypt.hash(ADMIN_PIN, rounds),
+        // The owner has no ceilings — they are the person who sets everyone
+        // else's. Without this the ABAC columns default to zero/false and the
+        // seeded administrator cannot see cost or margin in their own business.
+        maxDiscountPercent: "100",
+        maxSaleAmount: null,
+        canApproveRefund: true,
+        canViewCost: true,
+        allowedBranchIds: [],
       })
       .onConflictDoNothing()
       .returning();

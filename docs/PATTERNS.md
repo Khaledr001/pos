@@ -269,6 +269,27 @@ when `@Inject()` runs, and Nest fails at boot with
 Same class of problem in the schema: `tenantScope` lives in `tenants.ts`
 because `_shared.ts` cannot import a table.
 
+### Correlated subqueries must qualify the outer column by name
+
+```ts
+// ❌ silently returns 0 for everything
+sql`(SELECT sum(i.quantity) FROM inventory i WHERE i.variant_id = ${schema.productVariants.id})`
+
+// ✅
+sql`(SELECT sum(i.quantity) FROM inventory i WHERE i.variant_id = product_variants.id)`
+```
+
+Drizzle omits the table qualifier when a query has **no joins**, so the first
+form renders as `WHERE i.variant_id = "id"`. Inside the subquery a bare `"id"`
+binds to `inventory`.`id`, the predicate becomes `i.variant_id = i.id`, and it
+matches nothing — every row reports zero, with no error and no warning.
+
+The same code is correct in a query that happens to have a join, because the
+join forces drizzle to qualify. That is what makes it dangerous: it works until
+someone removes a join.
+
+Write the outer table name out in full in any correlated subquery.
+
 ### Zod applies checks in declaration order
 
 ```ts
