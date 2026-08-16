@@ -23,6 +23,7 @@ import { CatalogModule } from "./modules/catalog/catalog.module.js";
 import { InventoryModule } from "./modules/inventory/inventory.module.js";
 import { ProductsModule } from "./modules/products/products.module.js";
 import { SalesModule } from "./modules/sales/sales.module.js";
+import { SyncModule } from "./modules/sync/sync.module.js";
 import { UsersModule } from "./modules/users/users.module.js";
 
 /**
@@ -117,6 +118,7 @@ import { UsersModule } from "./modules/users/users.module.js";
     InventoryModule,
     CashRegisterModule,
     SalesModule,
+    SyncModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

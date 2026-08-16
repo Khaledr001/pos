@@ -317,6 +317,34 @@ z.string().regex(/^[A-Z0-9]+$/).toUpperCase()   // ❌ rejects "auh"
 
 Normalise before you validate, or you reject exactly what users type.
 
+### A sync high-water mark must never round-trip through `Date`
+
+```ts
+// ❌ every pull re-sent the entire catalogue, forever
+mark = { at: row.updatedAt, id: row.id };        // Date — millisecond precision
+sql`(t.updated_at, t.id) > (${mark.at}, ${mark.id})`
+
+// ✅
+updatedAtRaw: sql<string>`product_prices.updated_at::text`,
+mark = { at: row.updatedAtRaw, id: row.id };     // raw Postgres text
+```
+
+Postgres `timestamptz` keeps microseconds; a JavaScript `Date` keeps
+milliseconds. `2026-08-16 19:42:56.117434+04` becomes `...117Z`, so the mark
+lands **434 µs behind** the row it was taken from and matches it again on the
+next pull. The terminal never converges, the catalogue is resent on every
+sync, and nothing anywhere reports an error.
+
+The same reasoning applies to the mark per entity: entities are unrelated
+timelines, so the checkpoint carries a **map**, not one shared keyset. It stays
+opaque to the terminal — base64url over `{entity: "<raw timestamp>|<uuid>"}` —
+so the shape can change without a client release.
+
+Verify convergence explicitly, never by eye: pull, pull again with the returned
+checkpoint (**must be 0**), change exactly one row, pull again (**must be 1**).
+Bump a value the row does not already hold — `set_updated_at` skips a no-op
+UPDATE, and a test that re-sets the same value reads as a broken sync.
+
 ---
 
 ## Frontend

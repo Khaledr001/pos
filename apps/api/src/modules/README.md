@@ -35,7 +35,7 @@ Copying its shape is what keeps twenty modules looking like one codebase.
 | `suppliers` | 2 | ⬜ todo | Supplier CRUD |
 | `purchases` | 2 | ⬜ todo | Purchase orders, goods receipts, landed cost |
 | `transfers` | 2 | ⬜ todo | Inter-branch request → approve → ship → receive |
-| `sync` | 3 | ⬜ todo | POS push/pull, idempotency, conflict resolution |
+| `sync` | 3 | ✅ done | POS push/pull, idempotency, per-entity checkpoints |
 | `cash-register` | 3 | ✅ done | Drawer sessions, movements, close-out variance |
 | `sales` | 3 | ✅ done | Sale creation, returns, voids |
 | `payments` | 3 | ⬜ todo | Split tender, credit settlement, refunds |
