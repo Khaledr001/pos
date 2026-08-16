@@ -1,1 +1,78 @@
-"use strict";const n=require("electron"),s={catalog:{search:(e,r)=>n.ipcRenderer.invoke("catalog:search",e,r),byBarcode:e=>n.ipcRenderer.invoke("catalog:by-barcode",e)},customers:{search:e=>n.ipcRenderer.invoke("customers:search",e)},cash:{current:()=>n.ipcRenderer.invoke("cash:current"),open:e=>n.ipcRenderer.invoke("cash:open",e),close:(e,r)=>n.ipcRenderer.invoke("cash:close",e,r),movement:(e,r,c)=>n.ipcRenderer.invoke("cash:movement",e,r,c)},sales:{commit:e=>n.ipcRenderer.invoke("sales:commit",e),recent:e=>n.ipcRenderer.invoke("sales:recent",e),find:e=>n.ipcRenderer.invoke("sales:find",e)},sync:{now:()=>n.ipcRenderer.invoke("sync:now"),status:()=>n.ipcRenderer.invoke("sync:status"),onStatusChange:e=>{const r=(c,i)=>e(i);return n.ipcRenderer.on("sync:status-changed",r),()=>n.ipcRenderer.removeListener("sync:status-changed",r)}},printer:{printReceipt:(e,r)=>n.ipcRenderer.invoke("printer:receipt",e,r),printTest:e=>n.ipcRenderer.invoke("printer:test",e),list:()=>n.ipcRenderer.invoke("printer:list")},cashDrawer:{open:e=>n.ipcRenderer.invoke("cash-drawer:open",e)},scanner:{onScan:e=>{const r=(c,i)=>e(i);return n.ipcRenderer.on("scanner:scan",r),()=>n.ipcRenderer.removeListener("scanner:scan",r)}},device:{info:()=>n.ipcRenderer.invoke("device:info"),activate:(e,r)=>n.ipcRenderer.invoke("device:activate",e,r)}};n.contextBridge.exposeInMainWorld("devsfleet",s);
+"use strict";
+const electron = require("electron");
+const api = {
+  /**
+   * Catalogue, read from the local SQLite mirror.
+   *
+   * Read-only by design: a terminal never edits a product. The catalogue
+   * arrives by sync and leaves by sync, so there is no path by which one till
+   * can disagree with another about what something costs.
+   */
+  catalog: {
+    search: (query, limit) => electron.ipcRenderer.invoke("catalog:search", query, limit),
+    byBarcode: (barcode) => electron.ipcRenderer.invoke("catalog:by-barcode", barcode)
+  },
+  customers: {
+    search: (query) => electron.ipcRenderer.invoke("customers:search", query)
+  },
+  cash: {
+    current: () => electron.ipcRenderer.invoke("cash:current"),
+    open: (openingAmount) => electron.ipcRenderer.invoke("cash:open", openingAmount),
+    close: (countedAmount, notes) => electron.ipcRenderer.invoke("cash:close", countedAmount, notes),
+    movement: (type, amount, reason) => electron.ipcRenderer.invoke("cash:movement", type, amount, reason)
+  },
+  sales: {
+    /**
+     * Writes the sale to local SQLite and queues it in the outbox, then
+     * returns. It deliberately does not wait for the network: the customer is
+     * standing at the counter, and the sale is already real.
+     */
+    commit: (draft) => electron.ipcRenderer.invoke("sales:commit", draft),
+    recent: (limit) => electron.ipcRenderer.invoke("sales:recent", limit),
+    find: (reference) => electron.ipcRenderer.invoke("sales:find", reference)
+  },
+  sync: {
+    /** Force a sync cycle now — the "Sync" button on the status bar. */
+    now: () => electron.ipcRenderer.invoke("sync:now"),
+    status: () => electron.ipcRenderer.invoke("sync:status"),
+    /** Push-based status updates, so the UI does not poll. */
+    onStatusChange: (callback) => {
+      const listener = (_, status) => callback(status);
+      electron.ipcRenderer.on("sync:status-changed", listener);
+      return () => electron.ipcRenderer.removeListener("sync:status-changed", listener);
+    }
+  },
+  printer: {
+    /** Thermal 58mm/80mm or A4. Rendering happens in the main process. */
+    printReceipt: (saleId, format) => electron.ipcRenderer.invoke("printer:receipt", saleId, format),
+    printTest: (format) => electron.ipcRenderer.invoke("printer:test", format),
+    list: () => electron.ipcRenderer.invoke("printer:list")
+  },
+  cashDrawer: {
+    /**
+     * Fires the ESC/POS kick pulse. Requires a reason so an unexplained drawer
+     * opening is traceable — an unaudited "open drawer" button is a shrinkage
+     * hole, not a feature.
+     */
+    open: (reason) => electron.ipcRenderer.invoke("cash-drawer:open", reason)
+  },
+  scanner: {
+    /**
+     * USB HID scanners type their payload like a keyboard, so the renderer can
+     * usually just listen for keypresses. This channel is for scanners in
+     * serial mode, which the renderer cannot see at all.
+     */
+    onScan: (callback) => {
+      const listener = (_, barcode) => callback(barcode);
+      electron.ipcRenderer.on("scanner:scan", listener);
+      return () => electron.ipcRenderer.removeListener("scanner:scan", listener);
+    }
+  },
+  device: {
+    /** Hardware fingerprint + registration state, shown on the settings screen. */
+    info: () => electron.ipcRenderer.invoke("device:info"),
+    /** Bind this installation to a device row using a one-time activation code. */
+    activate: (activationCode, apiUrl) => electron.ipcRenderer.invoke("device:activate", activationCode, apiUrl)
+  }
+};
+electron.contextBridge.exposeInMainWorld("devsfleet", api);

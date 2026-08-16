@@ -8,6 +8,7 @@ import { RequestContext } from "./common/context/request-context.js";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter.js";
 import { JwtAuthGuard } from "./common/guards/jwt-auth.guard.js";
 import { PermissionsGuard } from "./common/guards/permissions.guard.js";
+import { PlatformGuard } from "./common/guards/platform.guard.js";
 import { TransformInterceptor } from "./common/interceptors/transform.interceptor.js";
 import { RequestContextMiddleware } from "./common/middleware/request-context.middleware.js";
 import { validateEnv } from "./config/env.js";
@@ -15,7 +16,9 @@ import { DatabaseModule } from "./database/database.module.js";
 import { AuthModule } from "./modules/auth/auth.module.js";
 import { BranchesModule } from "./modules/branches/branches.module.js";
 import { HealthModule } from "./modules/health/health.module.js";
+import { PlatformModule } from "./modules/platform/platform.module.js";
 import { TenantsModule } from "./modules/tenants/tenants.module.js";
+import { UsersModule } from "./modules/users/users.module.js";
 
 /**
  * Application root.
@@ -101,11 +104,14 @@ import { TenantsModule } from "./modules/tenants/tenants.module.js";
     HealthModule,
     AuthModule,
     TenantsModule,
+    PlatformModule,
+    UsersModule,
     BranchesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
+    { provide: APP_GUARD, useClass: PlatformGuard },
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_INTERCEPTOR, useClass: TransformInterceptor },
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

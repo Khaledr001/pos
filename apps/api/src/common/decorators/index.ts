@@ -15,6 +15,7 @@ import { RequestContext } from "../context/request-context.js";
  */
 
 export const IS_PUBLIC_KEY = "isPublic";
+export const PLATFORM_ONLY_KEY = "platformOnly";
 export const PERMISSIONS_KEY = "permissions";
 export const AUDIT_KEY = "audit";
 
@@ -26,6 +27,17 @@ export const AUDIT_KEY = "audit";
  * else marked public should be questioned in review.
  */
 export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
+
+/**
+ * Restrict a route to platform operators — the people who run the SaaS, not
+ * the businesses on it.
+ *
+ * Separate from `@RequirePermissions` on purpose. Tenant permissions describe
+ * what someone may do INSIDE a business; this describes standing OUTSIDE every
+ * business. Expressing it as a permission would mean a tenant admin could be
+ * granted it by editing their own role.
+ */
+export const PlatformOnly = () => SetMetadata(PLATFORM_ONLY_KEY, true);
 
 /**
  * Require every listed permission. Enforced by PermissionsGuard.
