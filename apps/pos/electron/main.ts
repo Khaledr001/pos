@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { closeDatabase, openDatabase } from "./db/sqlite.js";
 import { registerHardwareHandlers } from "./hardware/index.js";
+import { registerDataHandlers } from "./ipc/index.js";
 import { registerSyncHandlers, stopSyncEngine } from "./sync/index.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -85,6 +86,7 @@ if (!app.requestSingleInstanceLock()) {
 
   void app.whenReady().then(() => {
     openDatabase();
+    registerDataHandlers(ipcMain);
     registerSyncHandlers(ipcMain, () => mainWindow);
     registerHardwareHandlers(ipcMain);
     createWindow();

@@ -1,4 +1,8 @@
-import type { PaymentMethod } from "@devsfleet/shared-types";
+import {
+  DEFAULT_ROLE_PERMISSIONS,
+  type PaymentMethod,
+  type PermissionGrant,
+} from "@devsfleet/shared-types";
 
 /**
  * The renderer's only route to data.
@@ -21,10 +25,21 @@ import type { PaymentMethod } from "@devsfleet/shared-types";
  */
 
 export interface PosProduct {
+  /**
+   * The VARIANT id — the sellable unit, and what a sale line carries.
+   *
+   * A 1" elbow and a 3/4" elbow are one catalogue entry with two barcodes, two
+   * prices and two stock figures. The cashier scans the variant, so that is
+   * what the till holds and what the server is told was sold.
+   */
   id: string;
+  /** The catalogue entry this variant belongs to. Display and grouping only. */
+  productId: string;
   sku: string;
   barcode: string | null;
   name: string;
+  /** e.g. '1 inch' — null when the product has a single variant. */
+  variantName: string | null;
   unitAbbr: string;
   /** Decimal string, never a float. Feed it to Money.toMinor. */
   sellingPrice: string;
@@ -50,7 +65,7 @@ export interface PosCustomer {
 }
 
 export interface PosSaleLine {
-  productId: string;
+  variantId: string;
   productName: string;
   productSku: string;
   quantity: string;
@@ -91,7 +106,28 @@ export interface PosCashSession {
   cashSales: string;
 }
 
+export interface PosCashier {
+  id: string;
+  name: string;
+  roleName: string;
+  permissions: PermissionGrant[];
+  branchId: string | null;
+  branchName: string | null;
+  tenantName: string | null;
+}
+
 export interface PosDataAdapter {
+  /**
+   * Verify a cashier PIN.
+   *
+   * The one call that genuinely needs the network — a PIN cannot be checked
+   * against a mirror without storing something equivalent to the PIN on the
+   * terminal, and a stolen till would then hand over every cashier's
+   * credentials. A shift change therefore requires connectivity; a sale does
+   * not.
+   */
+  signIn(pin: string): Promise<PosCashier>;
+
   searchProducts(query: string, limit?: number): Promise<PosProduct[]>;
   findByBarcode(barcode: string): Promise<PosProduct | null>;
   searchCustomers(query: string): Promise<PosCustomer[]>;
@@ -120,6 +156,7 @@ export const hasBridge = (): boolean =>
   typeof window !== "undefined" && typeof window.devsfleet !== "undefined";
 
 const electronAdapter: PosDataAdapter = {
+  signIn: (pin) => window.devsfleet.auth.pinLogin(pin) as Promise<PosCashier>,
   searchProducts: (query, limit) => window.devsfleet.catalog.search(query, limit),
   findByBarcode: (barcode) => window.devsfleet.catalog.byBarcode(barcode),
   searchCustomers: (query) => window.devsfleet.customers.search(query),
@@ -140,10 +177,12 @@ const electronAdapter: PosDataAdapter = {
 /** Mirrors `pnpm db:seed`, so the dev catalogue is the real seeded catalogue. */
 const SEED_PRODUCTS: PosProduct[] = [
   {
-    id: "p1",
+    id: "v1",
+    productId: "p1",
     sku: "PVC-ELB-001",
     barcode: "6291000000017",
     name: 'PVC Elbow 1" 90 Degree',
+    variantName: null,
     unitAbbr: "pcs",
     sellingPrice: "2.75",
     minSellingPrice: "2.00",
@@ -152,10 +191,12 @@ const SEED_PRODUCTS: PosProduct[] = [
     categoryName: "Plumbing",
   },
   {
-    id: "p2",
+    id: "v2",
+    productId: "p2",
     sku: "PVC-ELB-002",
     barcode: "6291000000024",
     name: 'PVC Elbow 3/4" 90 Degree',
+    variantName: null,
     unitAbbr: "pcs",
     sellingPrice: "2.10",
     minSellingPrice: "1.55",
@@ -164,10 +205,12 @@ const SEED_PRODUCTS: PosProduct[] = [
     categoryName: "Plumbing",
   },
   {
-    id: "p3",
+    id: "v3",
+    productId: "p3",
     sku: "CBL-25-RED",
     barcode: "6291000000031",
     name: "Electrical Cable 2.5mm Red",
+    variantName: null,
     unitAbbr: "m",
     sellingPrice: "3.50",
     minSellingPrice: "2.75",
@@ -176,10 +219,12 @@ const SEED_PRODUCTS: PosProduct[] = [
     categoryName: "Electrical",
   },
   {
-    id: "p4",
+    id: "v4",
+    productId: "p4",
     sku: "PNT-WHT-4L",
     barcode: "6291000000048",
     name: "Emulsion Paint White 4 Litre",
+    variantName: null,
     unitAbbr: "ltr",
     sellingPrice: "48.00",
     minSellingPrice: "38.00",
@@ -188,10 +233,12 @@ const SEED_PRODUCTS: PosProduct[] = [
     categoryName: "Paint",
   },
   {
-    id: "p5",
+    id: "v5",
+    productId: "p5",
     sku: "TAP-MIX-CHR",
     barcode: "6291000000055",
     name: "Basin Mixer Tap Chrome",
+    variantName: null,
     unitAbbr: "pcs",
     sellingPrice: "135.00",
     minSellingPrice: "105.00",
@@ -235,7 +282,51 @@ const browserState = {
 const matches = (haystack: string, needle: string) =>
   haystack.toLowerCase().includes(needle.toLowerCase());
 
+/**
+ * Development staff, matching `pnpm db:seed`. PINs are verified by the server
+ * on a real terminal — this list exists so the login screen is reachable in a
+ * browser tab with no API running.
+ */
+const SEED_STAFF: Array<PosCashier & { pin: string }> = [
+  {
+    id: "u1",
+    name: "Administrator",
+    roleName: "admin",
+    permissions: [...(DEFAULT_ROLE_PERMISSIONS.admin ?? [])],
+    branchId: "dev-branch",
+    branchName: "Dubai — Main",
+    tenantName: "DevsFleet Trading",
+    pin: "1234",
+  },
+  {
+    id: "u2",
+    name: "Ravi Kumar",
+    roleName: "cashier",
+    permissions: [...(DEFAULT_ROLE_PERMISSIONS.cashier ?? [])],
+    branchId: "dev-branch",
+    branchName: "Dubai — Main",
+    tenantName: "DevsFleet Trading",
+    pin: "2222",
+  },
+  {
+    id: "u3",
+    name: "Fatima Al Balushi",
+    roleName: "manager",
+    permissions: [...(DEFAULT_ROLE_PERMISSIONS.manager ?? [])],
+    branchId: "dev-branch",
+    branchName: "Dubai — Main",
+    tenantName: "DevsFleet Trading",
+    pin: "3333",
+  },
+];
+
 const browserAdapter: PosDataAdapter = {
+  async signIn(pin) {
+    const staff = SEED_STAFF.find((s) => s.pin === pin);
+    if (!staff) throw new Error("That PIN was not recognised. Try again.");
+    const { pin: _pin, ...cashier } = staff;
+    return cashier;
+  },
   async searchProducts(query, limit = 25) {
     const q = query.trim();
     if (!q) return SEED_PRODUCTS.slice(0, limit);

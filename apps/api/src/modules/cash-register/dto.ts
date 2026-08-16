@@ -5,6 +5,13 @@ export const OpenSessionSchema = z.object({
   deviceId: z.string().uuid().optional(),
   openingAmount: z.coerce.number().min(0),
   notes: z.string().trim().max(500).optional(),
+  /**
+   * Minted by the terminal when the drawer was opened offline. The server
+   * upserts on it, so a push retried after a timeout reopens nothing.
+   */
+  clientId: z.string().uuid().optional(),
+  /** The terminal's clock at the moment the drawer opened. */
+  openedAt: z.string().datetime().optional(),
 });
 export type OpenSessionDto = z.infer<typeof OpenSessionSchema>;
 

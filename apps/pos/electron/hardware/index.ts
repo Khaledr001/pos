@@ -47,13 +47,7 @@ export function registerHardwareHandlers(ipcMain: IpcMain): void {
     throw new Error("Cash drawer control lands in Phase 3");
   });
 
-  ipcMain.handle("device:info", async () => {
-    // TODO(phase-3): stable hardware fingerprint (machine id + primary MAC).
-    return { deviceId: null, hardwareId: "", version: process.env.npm_package_version ?? "0.1.0" };
-  });
-
-  ipcMain.handle("device:activate", async (_event, _code: string, _apiUrl: string) => {
-    // TODO(phase-3): redeem the one-time activation code, store the device id.
-    throw new Error("Device activation lands in Phase 3");
-  });
+  // `device:info` and `device:activate` live in ../ipc/index.ts, next to the
+  // state they read. Electron throws on a duplicate channel, so registering
+  // them in two places is a startup crash, not a shadowed handler.
 }

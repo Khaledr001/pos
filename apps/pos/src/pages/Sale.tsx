@@ -79,7 +79,7 @@ export function Sale({ cashSessionId }: { cashSessionId: string | null }) {
       customerId: cart.customer?.id ?? null,
       cashSessionId,
       lines: cart.lines.map((line, index) => ({
-        productId: line.product.id,
+        variantId: line.product.id,
         productName: line.product.name,
         productSku: line.product.sku,
         quantity: line.quantity,

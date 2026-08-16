@@ -227,6 +227,119 @@ const MIGRATIONS: Array<{ version: number; sql: string }> = [
       END;
     `,
   },
+  {
+    version: 3,
+    sql: `
+      -- The sellable unit is the VARIANT, not the product. A 1" elbow and a
+      -- 3/4" elbow are one catalogue entry with two barcodes, two prices and
+      -- two stock figures, and it is the variant a cashier scans.
+      --
+      -- The mirror is disposable by definition, so it is rebuilt rather than
+      -- migrated: dropping it costs one pull. The outbox is untouched — it
+      -- holds sales that exist nowhere else yet.
+      DROP TRIGGER IF EXISTS products_fts_insert;
+      DROP TRIGGER IF EXISTS products_fts_delete;
+      DROP TRIGGER IF EXISTS products_fts_update;
+      DROP TABLE IF EXISTS products_fts;
+      DROP TABLE IF EXISTS products;
+      DROP TABLE IF EXISTS product_prices;
+      DROP TABLE IF EXISTS inventory;
+
+      CREATE TABLE IF NOT EXISTS variants (
+        id               TEXT PRIMARY KEY,
+        product_id       TEXT NOT NULL,
+        sku              TEXT NOT NULL,
+        barcode          TEXT,
+        product_name     TEXT NOT NULL,
+        variant_name     TEXT,
+        search_key       TEXT NOT NULL DEFAULT '',
+        unit_abbr        TEXT,
+        category_name    TEXT,
+        tax_rate         TEXT,
+        min_stock        TEXT,
+        is_stock_tracked INTEGER NOT NULL DEFAULT 1,
+        updated_at       TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_variants_sku ON variants(sku);
+      CREATE INDEX IF NOT EXISTS idx_variants_barcode ON variants(barcode);
+
+      -- External-content FTS5: the index stores terms, not a second copy of
+      -- the rows. Over 5,000 SKUs a partial-word search stays instant.
+      CREATE VIRTUAL TABLE IF NOT EXISTS variants_fts USING fts5(
+        product_name, variant_name, sku, search_key,
+        content='variants',
+        content_rowid='rowid',
+        tokenize='unicode61 remove_diacritics 2'
+      );
+
+      CREATE TRIGGER IF NOT EXISTS variants_fts_insert AFTER INSERT ON variants BEGIN
+        INSERT INTO variants_fts(rowid, product_name, variant_name, sku, search_key)
+        VALUES (new.rowid, new.product_name, new.variant_name, new.sku, new.search_key);
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS variants_fts_delete AFTER DELETE ON variants BEGIN
+        INSERT INTO variants_fts(variants_fts, rowid, product_name, variant_name, sku, search_key)
+        VALUES ('delete', old.rowid, old.product_name, old.variant_name, old.sku, old.search_key);
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS variants_fts_update AFTER UPDATE ON variants BEGIN
+        INSERT INTO variants_fts(variants_fts, rowid, product_name, variant_name, sku, search_key)
+        VALUES ('delete', old.rowid, old.product_name, old.variant_name, old.sku, old.search_key);
+        INSERT INTO variants_fts(rowid, product_name, variant_name, sku, search_key)
+        VALUES (new.rowid, new.product_name, new.variant_name, new.sku, new.search_key);
+      END;
+
+      -- Prices arrive already resolved by the server. The terminal must never
+      -- reimplement the resolution ladder, or an offline sale would price
+      -- differently from the same sale rung up online.
+      CREATE TABLE IF NOT EXISTS variant_prices (
+        id                TEXT PRIMARY KEY,
+        variant_id        TEXT NOT NULL,
+        price_list_id     TEXT NOT NULL,
+        selling_price     TEXT NOT NULL,
+        min_selling_price TEXT,
+        updated_at        TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_variant_prices_variant ON variant_prices(variant_id);
+
+      CREATE TABLE IF NOT EXISTS inventory (
+        id              TEXT PRIMARY KEY,
+        variant_id      TEXT NOT NULL UNIQUE,
+        quantity        TEXT NOT NULL DEFAULT '0',
+        reserved_qty    TEXT NOT NULL DEFAULT '0',
+        -- Decremented locally as offline sales are rung up, so the second
+        -- cashier to sell the last tap sees zero rather than one.
+        local_delta     TEXT NOT NULL DEFAULT '0',
+        updated_at      TEXT NOT NULL
+      );
+
+      -- A tombstone must survive the row it kills. Without it a variant that
+      -- was deactivated server-side is indistinguishable from one that simply
+      -- was not in the last page, and the till keeps offering it forever.
+      CREATE TABLE IF NOT EXISTS deleted_records (
+        entity      TEXT NOT NULL,
+        id          TEXT NOT NULL,
+        deleted_at  TEXT NOT NULL,
+        PRIMARY KEY (entity, id)
+      );
+    `,
+  },
+  {
+    version: 4,
+    sql: `
+      -- Which price list a row belongs to is not something the terminal can
+      -- infer, and a variant carries one row per list. Without the flag the
+      -- till shows whichever the join happened to return — a different price
+      -- on two tills looking at the same product.
+      ALTER TABLE variant_prices ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0;
+
+      -- The sale line references the variant it sold. Snapshotted alongside it:
+      -- name, sku and tax as they were at that moment, because a receipt is a
+      -- statement about a moment and must not be rewritten by a later edit.
+      ALTER TABLE local_sale_items RENAME COLUMN product_id TO variant_id;
+      ALTER TABLE local_sale_items ADD COLUMN unit_abbr TEXT;
+    `,
+  },
 ];
 
 function migrate(database: Database.Database): void {

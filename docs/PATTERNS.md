@@ -345,6 +345,37 @@ checkpoint (**must be 0**), change exactly one row, pull again (**must be 1**).
 Bump a value the row does not already hold — `set_updated_at` skips a no-op
 UPDATE, and a test that re-sets the same value reads as a broken sync.
 
+### Never send a terminal a value that means "look it up"
+
+`products.tax_rate` is nullable, meaning *use the tenant default*. Sending the
+raw null gave the POS a 0% rate, so an offline receipt totalled **23.31** where
+the server's invoice for the same basket said **24.48**. Two documents, one
+sale, and the customer holding the wrong one.
+
+Resolve before sending. The same applies to any field a terminal cannot
+resolve for itself: the effective tax rate, the tax mode, and which price list
+is the default — a variant carries one price row per list, and without
+`isDefault` the till shows whichever the join happened to return.
+
+### Offline records reference each other by `clientId`
+
+A sale rung up against a drawer opened offline names that drawer by the id the
+*terminal* minted. The server has its own. Push applies items in `sequence`
+order, so the session exists by then — but only under the server's id.
+
+```ts
+where: (t, { eq: e, or: o }) => o(e(t.id, reference), e(t.clientId, reference))
+```
+
+Accept both forms on every cross-record reference. The terminal then never has
+to rewrite an identifier under a running shift, which would orphan every local
+row already pointing at it.
+
+Not every missing reference is equal. A sale whose drawer cannot be found is
+still a sale — it lands with `applied_with_warning`, because discarding
+takings over missing metadata is the worse failure. A cash movement with no
+drawer *is* nothing, and is rejected.
+
 ---
 
 ## Frontend

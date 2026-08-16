@@ -1,9 +1,9 @@
-import { DEFAULT_ROLE_PERMISSIONS } from "@devsfleet/shared-types";
 import { Loader2, Store } from "lucide-react";
 import { useState } from "react";
 import { Keypad } from "../components/Keypad.js";
 import { useHotkeys } from "../lib/keyboard.js";
-import { useAuth, type Cashier } from "../store/auth.js";
+import { posData } from "../lib/pos-data.js";
+import { useAuth } from "../store/auth.js";
 
 /**
  * Counter sign-in.
@@ -20,58 +20,53 @@ import { useAuth, type Cashier } from "../store/auth.js";
 
 const PIN_LENGTH = 4;
 
-/**
- * Development stand-in for the staff list, which arrives with the catalogue on
- * the first sync. PINs are verified by the server, never here — this screen
- * only collects them.
- */
-const DEV_STAFF: Array<Cashier & { pin: string }> = [
-  {
-    id: "u1",
-    name: "Administrator",
-    roleName: "admin",
-    permissions: [...(DEFAULT_ROLE_PERMISSIONS.admin ?? [])],
-    pin: "1234",
-  },
-  {
-    id: "u2",
-    name: "Ravi Kumar",
-    roleName: "cashier",
-    permissions: [...(DEFAULT_ROLE_PERMISSIONS.cashier ?? [])],
-    pin: "2222",
-  },
-  {
-    id: "u3",
-    name: "Fatima Al Balushi",
-    roleName: "manager",
-    permissions: [...(DEFAULT_ROLE_PERMISSIONS.manager ?? [])],
-    pin: "3333",
-  },
-];
-
 export function Login() {
-  const { terminal, signIn } = useAuth();
+  const { terminal, signIn, bindTerminal } = useAuth();
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
 
-  function submit(candidate: string) {
+  /**
+   * The PIN is verified by the server, never here.
+   *
+   * That makes a shift change the one counter action that needs connectivity —
+   * accepted deliberately, because the alternative is holding something
+   * PIN-equivalent on a machine that sits unattended in a shop.
+   */
+  async function submit(candidate: string) {
     setChecking(true);
     setError(null);
 
-    // Deliberate delay. Verification is a server round-trip in Phase 3, and a
-    // constant cost here keeps a wrong PIN from being distinguishable by speed.
-    setTimeout(() => {
-      const staff = DEV_STAFF.find((s) => s.pin === candidate);
-      if (staff) {
-        const { pin: _pin, ...cashier } = staff;
-        signIn(cashier);
-      } else {
-        setError("That PIN was not recognised. Try again.");
-        setPin("");
+    try {
+      const cashier = await posData.signIn(candidate);
+      signIn({
+        id: cashier.id,
+        name: cashier.name,
+        roleName: cashier.roleName,
+        permissions: cashier.permissions,
+      });
+
+      // The server decides which branch this terminal sells against — a PIN
+      // login is pinned to the device's branch, whatever the cashier's own
+      // access would otherwise allow.
+      if (cashier.branchId) {
+        bindTerminal({
+          ...terminal!,
+          branchId: cashier.branchId,
+          branchName: cashier.branchName ?? terminal?.branchName ?? "",
+          tenantName: cashier.tenantName ?? terminal?.tenantName ?? "",
+        });
       }
+    } catch (error) {
+      setError(
+        error instanceof Error && error.message
+          ? error.message
+          : "That PIN was not recognised. Try again.",
+      );
+      setPin("");
+    } finally {
       setChecking(false);
-    }, 220);
+    }
   }
 
   function push(digit: string) {
@@ -79,7 +74,7 @@ export function Login() {
     setError(null);
     const next = (pin + digit).slice(0, PIN_LENGTH);
     setPin(next);
-    if (next.length === PIN_LENGTH) submit(next);
+    if (next.length === PIN_LENGTH) void submit(next);
   }
 
   useHotkeys({

@@ -18,10 +18,13 @@ import { contextBridge, ipcRenderer } from "electron";
  * dependencies across the isolation boundary that this file exists to defend.
  */
 interface BridgeProduct {
+  /** The VARIANT id — the sellable unit. A sale line carries this, not productId. */
   id: string;
+  productId: string;
   sku: string;
   barcode: string | null;
   name: string;
+  variantName: string | null;
   unitAbbr: string;
   sellingPrice: string;
   minSellingPrice: string | null;
@@ -142,10 +145,25 @@ const api = {
     },
   },
 
+  auth: {
+    /**
+     * The PIN goes to the main process, never to the renderer's own fetch. The
+     * refresh token then lives outside the window, so a compromised renderer
+     * cannot walk off with a terminal's long-lived credentials.
+     */
+    pinLogin: (pin: string): Promise<{ name: string; permissions: string[] }> =>
+      ipcRenderer.invoke("auth:pin-login", pin),
+  },
+
   device: {
     /** Hardware fingerprint + registration state, shown on the settings screen. */
-    info: (): Promise<{ deviceId: string | null; hardwareId: string; version: string }> =>
-      ipcRenderer.invoke("device:info"),
+    info: (): Promise<{
+      deviceId: string | null;
+      branchId: string | null;
+      apiUrl: string | null;
+      hardwareId: string;
+      version: string;
+    }> => ipcRenderer.invoke("device:info"),
     /** Bind this installation to a device row using a one-time activation code. */
     activate: (activationCode: string, apiUrl: string): Promise<{ deviceId: string }> =>
       ipcRenderer.invoke("device:activate", activationCode, apiUrl),

@@ -1,5 +1,6 @@
 import type { PrintFormat, SyncStatusSnapshot } from "@devsfleet/shared-types";
 import type {
+  PosCashier,
   PosCashSession,
   PosCustomer,
   PosProduct,
@@ -20,6 +21,14 @@ import type {
  * adapter.
  */
 export interface DevsfleetBridge {
+  auth: {
+    /**
+     * The PIN crosses into the main process and no further. The refresh token
+     * it earns is stored there, outside the window, so a compromised renderer
+     * cannot walk off with a terminal's long-lived credentials.
+     */
+    pinLogin(pin: string): Promise<PosCashier>;
+  };
   catalog: {
     search(query: string, limit?: number): Promise<PosProduct[]>;
     byBarcode(barcode: string): Promise<PosProduct | null>;
@@ -59,7 +68,13 @@ export interface DevsfleetBridge {
     onScan(callback: (barcode: string) => void): () => void;
   };
   device: {
-    info(): Promise<{ deviceId: string | null; hardwareId: string; version: string }>;
+    info(): Promise<{
+      deviceId: string | null;
+      branchId: string | null;
+      apiUrl: string | null;
+      hardwareId: string;
+      version: string;
+    }>;
     activate(activationCode: string, apiUrl: string): Promise<{ deviceId: string }>;
   };
 }

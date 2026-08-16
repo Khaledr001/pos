@@ -7,6 +7,7 @@ import type {
   SyncPushResponse,
   SyncPushResult,
 } from "@devsfleet/shared-types";
+import { resolveTenantSettings } from "@devsfleet/shared-types";
 import { AppError, ERROR_CODES } from "@devsfleet/shared-utils";
 import { Injectable, Logger } from "@nestjs/common";
 import { z } from "zod";
@@ -159,6 +160,21 @@ export class SyncService {
     const changes: SyncPullChange[] = [];
     let hasMore = false;
 
+    /**
+     * The tenant's tax defaults travel with the catalogue.
+     *
+     * `products.tax_rate` is nullable, meaning "use the tenant default" — a
+     * fallback the terminal has no way to know. Sending the raw null makes an
+     * offline receipt total 23.31 where the server's invoice says 24.48, and
+     * the customer is holding the wrong one. The rate is resolved here, once,
+     * so the terminal never has to guess.
+     */
+    const settings = await this.db.run(async (tx) => {
+      const tenant = await tx.query.tenants.findFirst({ columns: { settings: true } });
+      return resolveTenantSettings(tenant?.settings);
+    });
+    const defaultTaxRate = String(settings.tax.defaultRate);
+
     const wanted = (entity: string) =>
       !request.entities || request.entities.includes(entity as never);
 
@@ -277,7 +293,7 @@ export class SyncService {
         collect(
           "product",
           rows,
-          (r) => r,
+          (r) => ({ ...r, taxRate: r.taxRate ?? defaultTaxRate, taxMode: settings.tax.mode }),
           // A deactivated variant is a tombstone too: the till must stop
           // offering it, and it has no other way to learn that.
           (r) => r.deletedAt !== null || !r.isActive,
@@ -295,8 +311,19 @@ export class SyncService {
             sellingPrice: schema.productPrices.sellingPrice,
             minSellingPrice: schema.productPrices.minSellingPrice,
             effectiveTo: schema.productPrices.effectiveTo,
+            /**
+             * Without this the terminal holds several prices per variant and
+             * no rule for choosing between them — it would show whichever row
+             * the join happened to return, which is a different price on two
+             * tills looking at the same product.
+             */
+            isDefault: schema.priceLists.isDefault,
           })
           .from(schema.productPrices)
+          .innerJoin(
+            schema.priceLists,
+            eq(schema.productPrices.priceListId, schema.priceLists.id),
+          )
           .where(and(after("product_price", schema.productPrices), isNull(schema.productPrices.effectiveTo)))
           .orderBy(schema.productPrices.updatedAt, schema.productPrices.id)
           .limit(limit);
@@ -394,11 +421,20 @@ export class SyncService {
           };
         }
 
+        /**
+         * The drawer this sale was rung up against was opened OFFLINE, so the
+         * payload names it by the terminal's own id. Items are applied in
+         * sequence order, so the session exists by now — but under the id the
+         * server assigned it, not the one the terminal knows.
+         */
+        const session = await this.resolveCashSession(payload.cashSessionId);
+
         // Server-owned fields are stamped BEFORE validation, so the schema sees
         // the shape the service will actually receive. Branch, idempotency key
         // and origin are never the terminal's to choose.
         const dto = this.parsePayload(CreateSaleSchema, "sale", {
           ...payload,
+          cashSessionId: session,
           branchId: payload.branchId ?? branchId,
           clientId: item.clientId,
           occurredAt: item.occurredAt,
@@ -411,21 +447,59 @@ export class SyncService {
           dueAmount: string;
         };
 
+        /**
+         * A sale whose drawer could not be found is still a sale.
+         *
+         * Rejecting it would discard takings because a piece of metadata went
+         * missing; the warning tells the terminal to show it as uploaded but
+         * unreconciled, which is a question for a manager rather than a lost
+         * invoice.
+         */
+        const detached = payload.cashSessionId != null && session === null;
+
         return {
           clientId: item.clientId,
-          outcome: "applied",
+          outcome: detached ? "applied_with_warning" : "applied",
           serverId: sale.id,
           documentNumber: sale.saleNumber,
+          ...(detached
+            ? { message: "Uploaded, but the drawer session it belonged to was not found" }
+            : {}),
         };
       }
 
       case "cash_session": {
-        const dto = this.parsePayload(OpenSessionSchema, "cash_session", {
-          ...payload,
-          branchId: payload.branchId ?? branchId,
-        });
+        const dto = this.parsePayload(
+          OpenSessionSchema.extend({
+            /**
+             * The close travels inside the open, not as a second item. Two
+             * items can be split across batches, and a drawer that closed at
+             * 8pm would stay open on the server overnight.
+             */
+            closedAt: z.string().datetime().optional(),
+            countedAmount: z.coerce.number().min(0).optional(),
+          }),
+          "cash_session",
+          {
+            ...payload,
+            branchId: payload.branchId ?? branchId,
+            clientId: item.clientId,
+            openedAt: (payload.openedAt as string | undefined) ?? item.occurredAt,
+          },
+        );
 
-        const session = (await this.cash.open(dto)) as { id: string; sessionNumber: string };
+        const session = (await this.cash.open(dto)) as {
+          id: string;
+          sessionNumber: string;
+          status: string;
+        };
+
+        if (dto.closedAt && session.status === "open") {
+          await this.cash.close(session.id, {
+            countedAmount: dto.countedAmount ?? 0,
+            ...(dto.notes ? { notes: dto.notes } : {}),
+          });
+        }
 
         return {
           clientId: item.clientId,
@@ -442,7 +516,17 @@ export class SyncService {
           payload,
         );
 
-        const movement = (await this.cash.recordMovement(cashSessionId, body)) as { id: string };
+        // Unlike a sale, a movement IS its drawer link — cash that moved
+        // through no drawer is not a record anyone can reconcile.
+        const session = await this.resolveCashSession(cashSessionId);
+        if (!session) {
+          throw new AppError(
+            ERROR_CODES.NOT_FOUND,
+            "The drawer session this movement belongs to was not found",
+          );
+        }
+
+        const movement = (await this.cash.recordMovement(session, body)) as { id: string };
 
         return { clientId: item.clientId, outcome: "applied", serverId: movement.id };
       }
@@ -487,6 +571,25 @@ export class SyncService {
       }`,
       { issues: parsed.error.issues },
     );
+  }
+
+  /**
+   * Map a terminal's drawer reference onto the server's id.
+   *
+   * Offline records name each other by the `clientId` the terminal minted, so
+   * a reference is checked against both: the server id when the terminal has
+   * already been told it, and the client id when this is the first push.
+   */
+  private async resolveCashSession(reference: unknown): Promise<string | null> {
+    if (typeof reference !== "string" || reference.length === 0) return null;
+
+    return this.db.run(async (tx) => {
+      const session = await tx.query.cashSessions.findFirst({
+        where: (t, { eq: e, or: o }) => o(e(t.id, reference), e(t.clientId, reference)),
+        columns: { id: true },
+      });
+      return session?.id ?? null;
+    });
   }
 
   private async requireDevice(deviceId: string) {
