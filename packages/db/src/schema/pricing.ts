@@ -13,7 +13,7 @@ import {
 import { activeFlag, money, primaryId, timestamps } from "./_shared.js";
 import { tenantScope } from "./tenants.js";
 import { users } from "./auth.js";
-import { products } from "./catalog.js";
+import { productVariants } from "./catalog.js";
 import { customers } from "./partners.js";
 
 /**
@@ -59,9 +59,9 @@ export const productPrices = pgTable(
   {
     id: primaryId(),
     ...tenantScope(),
-    productId: uuid()
+    variantId: uuid()
       .notNull()
-      .references(() => products.id, { onDelete: "cascade" }),
+      .references(() => productVariants.id, { onDelete: "cascade" }),
     priceListId: uuid()
       .notNull()
       .references(() => priceLists.id, { onDelete: "cascade" }),
@@ -86,7 +86,7 @@ export const productPrices = pgTable(
   },
   (t) => [
     uniqueIndex("uq_product_prices_effective").on(
-      t.productId,
+      t.variantId,
       t.priceListId,
       t.effectiveFrom,
     ),
@@ -96,7 +96,7 @@ export const productPrices = pgTable(
      * years of price history that is a fraction of the table.
      */
     index("idx_product_prices_current")
-      .on(t.productId, t.priceListId)
+      .on(t.variantId, t.priceListId)
       .where(sql`effective_to IS NULL`),
     index("idx_product_prices_list").on(t.priceListId),
   ],
@@ -115,9 +115,9 @@ export const priceHistory = pgTable(
   {
     id: primaryId(),
     ...tenantScope(),
-    productId: uuid()
+    variantId: uuid()
       .notNull()
-      .references(() => products.id, { onDelete: "cascade" }),
+      .references(() => productVariants.id, { onDelete: "cascade" }),
     priceListId: uuid()
       .notNull()
       .references(() => priceLists.id, { onDelete: "cascade" }),
@@ -134,7 +134,7 @@ export const priceHistory = pgTable(
     createdAt: timestamps().createdAt,
   },
   (t) => [
-    index("idx_price_history_product").on(t.productId, t.createdAt),
+    index("idx_price_history_variant").on(t.variantId, t.createdAt),
     index("idx_price_history_tenant_created").on(t.tenantId, t.createdAt),
   ],
 );
@@ -148,9 +148,9 @@ export const customerPrices = pgTable(
     customerId: uuid()
       .notNull()
       .references(() => customers.id, { onDelete: "cascade" }),
-    productId: uuid()
+    variantId: uuid()
       .notNull()
-      .references(() => products.id, { onDelete: "cascade" }),
+      .references(() => productVariants.id, { onDelete: "cascade" }),
     specialPrice: money().notNull(),
     /** Why this customer gets this rate — shown to whoever approves it later. */
     notes: text(),
@@ -162,11 +162,11 @@ export const customerPrices = pgTable(
   (t) => [
     uniqueIndex("uq_customer_prices_effective").on(
       t.customerId,
-      t.productId,
+      t.variantId,
       t.effectiveFrom,
     ),
     index("idx_customer_prices_current")
-      .on(t.customerId, t.productId)
+      .on(t.customerId, t.variantId)
       .where(sql`effective_to IS NULL`),
   ],
 );
@@ -176,7 +176,7 @@ export const priceListsRelations = relations(priceLists, ({ many }) => ({
 }));
 
 export const productPricesRelations = relations(productPrices, ({ one }) => ({
-  product: one(products, { fields: [productPrices.productId], references: [products.id] }),
+  variant: one(productVariants, { fields: [productPrices.variantId], references: [productVariants.id] }),
   priceList: one(priceLists, {
     fields: [productPrices.priceListId],
     references: [priceLists.id],
@@ -188,7 +188,7 @@ export const customerPricesRelations = relations(customerPrices, ({ one }) => ({
     fields: [customerPrices.customerId],
     references: [customers.id],
   }),
-  product: one(products, { fields: [customerPrices.productId], references: [products.id] }),
+  variant: one(productVariants, { fields: [customerPrices.variantId], references: [productVariants.id] }),
 }));
 
 export type PriceList = typeof priceLists.$inferSelect;

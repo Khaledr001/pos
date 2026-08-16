@@ -11,19 +11,40 @@ import {
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
-import { activeFlag, money, primaryId, quantity, softDelete, timestamps, tsvector } from "./_shared.js";
+import {
+  activeFlag,
+  money,
+  primaryId,
+  quantity,
+  softDelete,
+  timestamps,
+  tsvector,
+} from "./_shared.js";
 import { tenantScope } from "./tenants.js";
 
 /**
  * PRODUCT CATALOGUE
  *
- * Structural skeleton per the implementation plan. The exact attribute keys and
- * category tree get finalised against the real 5,000-SKU price list; until then
- * `attributes` (JSONB) absorbs whatever columns that file turns out to have,
- * without a migration per column.
+ * Two levels, and the split is load-bearing:
+ *
+ *   products          the catalogue entry. What you browse, categorise and
+ *                     photograph. NOT directly sellable.
+ *   product_variants  the sellable unit. Carries the barcode, the stock, and
+ *                     the price. `PVC Elbow` is a product; `1"` and `3/4"` are
+ *                     variants of it.
+ *
+ * A product with no real variation still has exactly one variant, named
+ * "Default". That uniformity is the point: every sale line, every ledger row
+ * and every price references a variant, so nothing downstream needs to ask
+ * whether this product happens to have variants.
+ *
+ * This matters for these verticals specifically — sanitary ware varies by size
+ * and finish, paint by colour and can size. Modelling each size as a separate
+ * product would fragment the catalogue and make "show me every finish of this
+ * tap" impossible.
  */
 
-/** Hierarchical. Depth is unbounded but the UI assumes ~3 levels. */
+/** Hierarchical. Depth is capped at 5 by the application. */
 export const categories = pgTable(
   "categories",
   {
@@ -33,10 +54,15 @@ export const categories = pgTable(
     name: varchar({ length: 255 }).notNull(),
     slug: varchar({ length: 255 }).notNull(),
     /**
+     * Prefix for auto-generated SKUs, e.g. "PLB" -> PLB-000123.
+     * Changing it does not renumber existing products.
+     */
+    skuPrefix: varchar({ length: 16 }),
+    /**
      * Materialised ancestor path, e.g. "plumbing/pvc/elbows".
-     * Maintained by the application on insert/move. Lets "everything under
-     * Plumbing" be a prefix scan instead of a recursive CTE — which matters
-     * when the WhatsApp bot has to answer inside a message round-trip.
+     * Lets "everything under Plumbing" be a prefix scan instead of a recursive
+     * CTE — which matters when the WhatsApp bot must answer inside a message
+     * round-trip.
      */
     path: text().notNull().default(""),
     depth: integer().notNull().default(0),
@@ -68,7 +94,7 @@ export const brands = pgTable(
   (t) => [uniqueIndex("uq_brands_tenant_slug").on(t.tenantId, t.slug)],
 );
 
-/** Piece, Box, Roll, Metre, Kg. The *base* unit a product is stocked in. */
+/** Piece, Box, Roll, Metre, Kg. The base unit a variant is stocked in. */
 export const units = pgTable(
   "units",
   {
@@ -86,34 +112,29 @@ export const units = pgTable(
   (t) => [uniqueIndex("uq_units_tenant_abbr").on(t.tenantId, t.abbreviation)],
 );
 
+/**
+ * The catalogue entry. Not sellable on its own — see `product_variants`.
+ */
 export const products = pgTable(
   "products",
   {
     id: primaryId(),
     ...tenantScope(),
+    /** Base SKU. Variants derive theirs from it. Unique per tenant. */
     sku: varchar({ length: 50 }).notNull(),
-    /** Primary scannable code. Alternates (box, pack) live in product_barcodes. */
-    barcode: varchar({ length: 50 }),
     name: varchar({ length: 500 }).notNull(),
 
     /**
-     * Full-text vector over the product name, for the AI's catalogue search.
-     * 'english' stems plurals ("elbows" -> "elbow"), which is what most of this
-     * catalogue is written in. Non-English and fuzzy/misspelled input is served
-     * by the pg_trgm index on `searchKey` below, not by this column.
+     * Full-text vector for catalogue browsing. 'english' stems plurals
+     * ("elbows" -> "elbow"), which suits most of this catalogue. Fuzzy and
+     * non-English input is served by the trigram index on
+     * `product_variants.searchKey`, which is what the POS actually queries.
      */
     nameSearch: tsvector()
       .generatedAlwaysAs(sql`to_tsvector('english', coalesce(name, ''))`)
       .notNull(),
 
-    /**
-     * Normalised search string: lowercase, accents stripped, measurements
-     * canonicalised so `3/4"`, `3/4 inch` and `0.75in` collapse to one form.
-     * Written by the application via searchKey() in @devsfleet/shared-utils.
-     */
-    searchKey: text().notNull().default(""),
-
-    /** Product name in other languages, keyed by locale: { ar: "...", ur: "..." }. */
+    /** Product name in other locales: { ar: "...", ur: "..." }. */
     nameTranslations: jsonb().$type<Record<string, string>>().notNull().default({}),
 
     categoryId: uuid().references(() => categories.id, { onDelete: "set null" }),
@@ -123,26 +144,32 @@ export const products = pgTable(
       .references(() => units.id, { onDelete: "restrict" }),
 
     /**
-     * Free-form specs: size, colour, material, thread, voltage, finish.
-     * Deliberately schemaless — this catalogue spans electrical, sanitary and
-     * paint, and no fixed column set covers all three. Promote a key to a real
-     * column only once it needs to be filtered or sorted at scale.
+     * Specs shared by every variant: material, thread, voltage, standard.
+     * Anything that DIFFERS between variants belongs on the variant instead.
      */
     attributes: jsonb().$type<Record<string, string | number | boolean>>().notNull().default({}),
 
     description: text(),
-    /** Denormalised from product_images where isPrimary — saves a join in list views. */
+    /** Denormalised from product_images where isPrimary — saves a join in lists. */
     imageUrl: varchar({ length: 500 }),
 
-    /** Snapshot for reorder maths; the authoritative per-branch value is on `inventory`. */
-    defaultReorderLevel: quantity(),
-    /** Weight in kg, for delivery quoting. */
-    weight: quantity(),
+    /** Overrides the tenant's default VAT rate. NULL = inherit. */
+    taxRate: money(),
 
     /** false = sold but not stock-tracked (labour, delivery charge). */
     isStockTracked: boolean().notNull().default(true),
-    /** Overrides the tenant's default VAT rate for this product. NULL = inherit. */
-    taxRate: money(),
+    /** Capture a serial per unit at sale time. Electronics, power tools. */
+    trackSerial: boolean().notNull().default(false),
+    /** Capture an expiry date. Adhesives, sealants, paint hardeners. */
+    trackExpiry: boolean().notNull().default(false),
+    /** Warranty period printed on the receipt. */
+    warrantyMonths: integer(),
+
+    /**
+     * false = a single sellable form. One "Default" variant still exists, so
+     * nothing downstream has to special-case it.
+     */
+    hasVariants: boolean().notNull().default(false),
 
     ...activeFlag(),
     ...timestamps(),
@@ -150,71 +177,137 @@ export const products = pgTable(
   },
   (t) => [
     uniqueIndex("uq_products_tenant_sku").on(t.tenantId, t.sku),
-    // Composite GIN (btree_gin extension) so full-text search stays tenant-scoped.
+    // Composite GIN (btree_gin extension) keeps full-text search tenant-scoped.
     index("idx_products_search").using("gin", t.tenantId, t.nameSearch),
-    index("idx_products_trgm").using("gin", t.searchKey.op("gin_trgm_ops")),
-    index("idx_products_barcode")
-      .on(t.tenantId, t.barcode)
-      .where(sql`barcode IS NOT NULL`),
     index("idx_products_category").on(t.tenantId, t.categoryId),
     index("idx_products_brand").on(t.tenantId, t.brandId),
-    // Sync pulls page through this.
     index("idx_products_updated").on(t.tenantId, t.updatedAt),
   ],
 );
 
-/** Alternate scannable codes: the box barcode, the manufacturer's code, an old SKU. */
-export const productBarcodes = pgTable(
-  "product_barcodes",
+/**
+ * THE SELLABLE UNIT.
+ *
+ * Every sale line, ledger row, price and stock balance points here — never at
+ * `products`. Barcode lives here because that is what a scanner resolves: a
+ * specific size of a specific fitting, not the family it belongs to.
+ */
+export const productVariants = pgTable(
+  "product_variants",
   {
     id: primaryId(),
     ...tenantScope(),
     productId: uuid()
       .notNull()
       .references(() => products.id, { onDelete: "cascade" }),
-    barcode: varchar({ length: 50 }).notNull(),
+
+    /** "Default" for a single-form product; otherwise `1 inch`, `Red / 500ml`. */
+    variantName: varchar({ length: 255 }).notNull().default("Default"),
+
+    /**
+     * The real stock code — this is what goes on a shelf label and a purchase
+     * order. Derived from the product SKU (`PVC-ELB-001-1IN`) but independently
+     * editable, because merchants have existing codes they will not renumber.
+     */
+    sku: varchar({ length: 64 }).notNull(),
+
+    /** One scan resolves to exactly one variant. Unique per tenant when present. */
+    barcode: varchar({ length: 64 }),
+
+    /**
+     * Normalised search text: lowercase, accents stripped, measurements
+     * canonicalised so `3/4"`, `3/4 inch` and `0.75in` collapse to one form.
+     * Built from product name + variant name + SKU by searchKey() in
+     * @devsfleet/shared-utils. This is the POS search path.
+     */
+    searchKey: text().notNull().default(""),
+
+    /** What varies: { size: "1in", colour: "red", finish: "chrome" }. */
+    attributes: jsonb().$type<Record<string, string | number | boolean>>().notNull().default({}),
+
+    /** Low-stock threshold. Per variant, because a 1" elbow sells faster than a 4". */
+    minStock: quantity().notNull().default("0"),
+    reorderQuantity: quantity().notNull().default("0"),
+
+    /** Weight in kg, for delivery quoting. */
+    weight: quantity(),
+    imageUrl: varchar({ length: 500 }),
+    sortOrder: integer().notNull().default(0),
+
+    ...activeFlag(),
+    ...timestamps(),
+    ...softDelete(),
+  },
+  (t) => [
+    uniqueIndex("uq_variants_tenant_sku").on(t.tenantId, t.sku),
+    /**
+     * A blank barcode must not collide with another blank one, so the
+     * uniqueness is partial.
+     */
+    uniqueIndex("uq_variants_tenant_barcode")
+      .on(t.tenantId, t.barcode)
+      .where(sql`barcode IS NOT NULL AND deleted_at IS NULL`),
+    index("idx_variants_product").on(t.productId, t.sortOrder),
+    index("idx_variants_trgm").using("gin", t.searchKey.op("gin_trgm_ops")),
+    /** Sync pulls page through this. */
+    index("idx_variants_updated").on(t.tenantId, t.updatedAt),
+  ],
+);
+
+/**
+ * Alternate scannable codes for one variant: the outer-box code, the
+ * manufacturer's code, a superseded SKU.
+ */
+export const variantBarcodes = pgTable(
+  "variant_barcodes",
+  {
+    id: primaryId(),
+    ...tenantScope(),
+    variantId: uuid()
+      .notNull()
+      .references(() => productVariants.id, { onDelete: "cascade" }),
+    barcode: varchar({ length: 64 }).notNull(),
     /** Which packaging this code identifies. NULL = the base unit. */
     unitId: uuid().references(() => units.id, { onDelete: "set null" }),
     label: varchar({ length: 100 }),
     ...timestamps(),
   },
   (t) => [
-    // Globally unique per tenant: one scan must resolve to exactly one product.
-    uniqueIndex("uq_product_barcodes_tenant_code").on(t.tenantId, t.barcode),
-    index("idx_product_barcodes_product").on(t.productId),
+    uniqueIndex("uq_variant_barcodes_tenant_code").on(t.tenantId, t.barcode),
+    index("idx_variant_barcodes_variant").on(t.variantId),
   ],
 );
 
 /**
  * Packaging conversions: 1 Box = 100 Pieces.
  *
- * Stock is always held in the product's base unit. Selling a box deducts
+ * Stock is always held in the variant's base unit. Selling a box deducts
  * `conversionFactor` base units, which is the only way a POS sale and a
- * warehouse count can ever agree.
+ * warehouse count can agree.
  */
-export const productUnits = pgTable(
-  "product_units",
+export const variantUnits = pgTable(
+  "variant_units",
   {
     id: primaryId(),
     ...tenantScope(),
-    productId: uuid()
+    variantId: uuid()
       .notNull()
-      .references(() => products.id, { onDelete: "cascade" }),
+      .references(() => productVariants.id, { onDelete: "cascade" }),
     unitId: uuid()
       .notNull()
       .references(() => units.id, { onDelete: "restrict" }),
     /** How many base units this packaging contains. Box of 100 -> 100. */
     conversionFactor: quantity().notNull(),
-    barcode: varchar({ length: 50 }),
-    /** Optional flat price for the pack. NULL = base price x conversionFactor. */
+    barcode: varchar({ length: 64 }),
+    /** Flat price for the pack. NULL = base price x conversionFactor. */
     priceOverride: money(),
     /** Offer this packaging in the POS unit picker. */
     isSellable: boolean().notNull().default(true),
     ...timestamps(),
   },
   (t) => [
-    uniqueIndex("uq_product_units").on(t.productId, t.unitId),
-    index("idx_product_units_product").on(t.productId),
+    uniqueIndex("uq_variant_units").on(t.variantId, t.unitId),
+    index("idx_variant_units_variant").on(t.variantId),
   ],
 );
 
@@ -222,10 +315,9 @@ export const productUnits = pgTable(
  * Product images.
  *
  * `checksum` is the SHA-256 of the uploaded bytes and is unique per tenant, so
- * the same photo cannot be stored twice under two SKUs — the requirement was
- * explicitly "no duplicate image is published". On collision the API links the
- * existing object instead of uploading again, which also keeps MinIO small
- * across a 5,000-product catalogue where variants share photography.
+ * the same photo cannot be stored twice under two products. On collision the
+ * API links the existing object instead of uploading again — which also keeps
+ * storage small across a catalogue where variants share photography.
  */
 export const productImages = pgTable(
   "product_images",
@@ -235,6 +327,8 @@ export const productImages = pgTable(
     productId: uuid()
       .notNull()
       .references(() => products.id, { onDelete: "cascade" }),
+    /** Set when the image shows one specific variant rather than the family. */
+    variantId: uuid().references(() => productVariants.id, { onDelete: "cascade" }),
     url: varchar({ length: 500 }).notNull(),
     thumbnailUrl: varchar({ length: 500 }),
     /** SHA-256 hex of the original bytes. The dedup key. */
@@ -259,6 +353,36 @@ export const productImages = pgTable(
   ],
 );
 
+/**
+ * Serial numbers, for variants whose product sets `trackSerial`.
+ *
+ * Transitions: Available -> Sold -> Returned -> Available; any state ->
+ * Damaged, which is terminal.
+ */
+export const serialNumbers = pgTable(
+  "serial_numbers",
+  {
+    id: primaryId(),
+    ...tenantScope(),
+    variantId: uuid()
+      .notNull()
+      .references(() => productVariants.id, { onDelete: "restrict" }),
+    serial: varchar({ length: 120 }).notNull(),
+    /** available | sold | returned | damaged */
+    status: varchar({ length: 20 }).notNull().default("available"),
+    /** Current location while unsold. */
+    branchId: uuid(),
+    /** Set when sold. */
+    saleItemId: uuid(),
+    expiryDate: varchar({ length: 10 }),
+    ...timestamps(),
+  },
+  (t) => [
+    uniqueIndex("uq_serials_tenant_serial").on(t.tenantId, t.serial),
+    index("idx_serials_variant_status").on(t.variantId, t.status),
+  ],
+);
+
 export const categoriesRelations = relations(categories, ({ one, many }) => ({
   parent: one(categories, {
     fields: [categories.parentId],
@@ -273,18 +397,29 @@ export const productsRelations = relations(products, ({ one, many }) => ({
   category: one(categories, { fields: [products.categoryId], references: [categories.id] }),
   brand: one(brands, { fields: [products.brandId], references: [brands.id] }),
   unit: one(units, { fields: [products.unitId], references: [units.id] }),
-  barcodes: many(productBarcodes),
-  packagings: many(productUnits),
+  variants: many(productVariants),
   images: many(productImages),
 }));
 
-export const productBarcodesRelations = relations(productBarcodes, ({ one }) => ({
-  product: one(products, { fields: [productBarcodes.productId], references: [products.id] }),
+export const productVariantsRelations = relations(productVariants, ({ one, many }) => ({
+  product: one(products, { fields: [productVariants.productId], references: [products.id] }),
+  barcodes: many(variantBarcodes),
+  packagings: many(variantUnits),
 }));
 
-export const productUnitsRelations = relations(productUnits, ({ one }) => ({
-  product: one(products, { fields: [productUnits.productId], references: [products.id] }),
-  unit: one(units, { fields: [productUnits.unitId], references: [units.id] }),
+export const variantBarcodesRelations = relations(variantBarcodes, ({ one }) => ({
+  variant: one(productVariants, {
+    fields: [variantBarcodes.variantId],
+    references: [productVariants.id],
+  }),
+}));
+
+export const variantUnitsRelations = relations(variantUnits, ({ one }) => ({
+  variant: one(productVariants, {
+    fields: [variantUnits.variantId],
+    references: [productVariants.id],
+  }),
+  unit: one(units, { fields: [variantUnits.unitId], references: [units.id] }),
 }));
 
 export const productImagesRelations = relations(productImages, ({ one }) => ({
@@ -299,7 +434,10 @@ export type Unit = typeof units.$inferSelect;
 export type NewUnit = typeof units.$inferInsert;
 export type Product = typeof products.$inferSelect;
 export type NewProduct = typeof products.$inferInsert;
-export type ProductBarcode = typeof productBarcodes.$inferSelect;
-export type ProductUnit = typeof productUnits.$inferSelect;
+export type ProductVariant = typeof productVariants.$inferSelect;
+export type NewProductVariant = typeof productVariants.$inferInsert;
+export type VariantBarcode = typeof variantBarcodes.$inferSelect;
+export type VariantUnit = typeof variantUnits.$inferSelect;
 export type ProductImage = typeof productImages.$inferSelect;
 export type NewProductImage = typeof productImages.$inferInsert;
+export type SerialNumber = typeof serialNumbers.$inferSelect;

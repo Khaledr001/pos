@@ -13,7 +13,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { money, percent, primaryId, quantity, timestamps } from "./_shared.js";
 import { users } from "./auth.js";
-import { products, units } from "./catalog.js";
+import { productVariants, units } from "./catalog.js";
 import { suppliers } from "./partners.js";
 import { branches, tenantScope } from "./tenants.js";
 
@@ -85,11 +85,12 @@ export const purchaseOrderItems = pgTable(
     purchaseOrderId: uuid()
       .notNull()
       .references(() => purchaseOrders.id, { onDelete: "cascade" }),
-    productId: uuid()
+    variantId: uuid()
       .notNull()
-      .references(() => products.id, { onDelete: "restrict" }),
+      .references(() => productVariants.id, { onDelete: "restrict" }),
     productName: varchar({ length: 500 }).notNull(),
-    productSku: varchar({ length: 50 }).notNull(),
+    variantName: varchar({ length: 255 }).notNull().default("Default"),
+    productSku: varchar({ length: 64 }).notNull(),
 
     unitId: uuid().references(() => units.id, { onDelete: "set null" }),
     unitConversionFactor: quantity().notNull().default("1"),
@@ -154,9 +155,9 @@ export const goodsReceiptItems = pgTable(
     purchaseOrderItemId: uuid().references(() => purchaseOrderItems.id, {
       onDelete: "set null",
     }),
-    productId: uuid()
+    variantId: uuid()
       .notNull()
-      .references(() => products.id, { onDelete: "restrict" }),
+      .references(() => productVariants.id, { onDelete: "restrict" }),
 
     quantity: quantity().notNull(),
     /**
@@ -174,7 +175,7 @@ export const goodsReceiptItems = pgTable(
   },
   (t) => [
     index("idx_grn_items_grn").on(t.goodsReceiptId),
-    index("idx_grn_items_product").on(t.productId, t.createdAt),
+    index("idx_grn_items_variant").on(t.variantId, t.createdAt),
   ],
 );
 
@@ -193,10 +194,10 @@ export const purchaseOrderItemsRelations = relations(purchaseOrderItems, ({ one 
     fields: [purchaseOrderItems.purchaseOrderId],
     references: [purchaseOrders.id],
   }),
-  product: one(products, {
-    fields: [purchaseOrderItems.productId],
-    references: [products.id],
-  }),
+  variant: one(productVariants, {
+      fields: [purchaseOrderItems.variantId],
+      references: [productVariants.id],
+    }),
 }));
 
 export const goodsReceiptsRelations = relations(goodsReceipts, ({ one, many }) => ({
@@ -216,10 +217,10 @@ export const goodsReceiptItemsRelations = relations(goodsReceiptItems, ({ one })
     fields: [goodsReceiptItems.goodsReceiptId],
     references: [goodsReceipts.id],
   }),
-  product: one(products, {
-    fields: [goodsReceiptItems.productId],
-    references: [products.id],
-  }),
+  variant: one(productVariants, {
+      fields: [goodsReceiptItems.variantId],
+      references: [productVariants.id],
+    }),
 }));
 
 export type PurchaseOrder = typeof purchaseOrders.$inferSelect;

@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { PlanLimitService } from "../../common/guards/plan-limit.service.js";
 import { BranchesController } from "./branches.controller.js";
 import { BranchesService } from "./branches.service.js";
 
@@ -11,7 +12,7 @@ import { BranchesService } from "./branches.service.js";
  */
 @Module({
   controllers: [BranchesController],
-  providers: [BranchesService],
+  providers: [BranchesService, PlanLimitService],
   exports: [BranchesService],
 })
 export class BranchesModule {}

@@ -4,6 +4,7 @@ import type { Paginated } from "@devsfleet/shared-types";
 import { AppError, ERROR_CODES } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
 import { RequestContext } from "../../common/context/request-context.js";
+import { PlanLimitService } from "../../common/guards/plan-limit.service.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import type { CreateBranchDto, ListBranchesDto, UpdateBranchDto } from "./dto.js";
 
@@ -27,7 +28,10 @@ import type { CreateBranchDto, ListBranchesDto, UpdateBranchDto } from "./dto.js
  */
 @Injectable()
 export class BranchesService {
-  constructor(private readonly db: TenantDatabase) {}
+  constructor(
+    private readonly db: TenantDatabase,
+    private readonly planLimits: PlanLimitService,
+  ) {}
 
   async list(query: ListBranchesDto): Promise<Paginated<Branch>> {
     const { page, limit, q, includeInactive, sortBy, sortOrder } = query;
@@ -93,6 +97,12 @@ export class BranchesService {
   }
 
   async create(dto: CreateBranchDto): Promise<Branch> {
+    // Both checks before any write. A tenant past its trial or at its branch
+    // cap must be refused with a message naming the reason, not left to
+    // discover it from a constraint violation.
+    this.planLimits.assertTrialActive();
+    await this.planLimits.assertCanCreate("branches");
+
     const tenantId = RequestContext.requireTenantId();
 
     return this.db.run(async (tx) => {

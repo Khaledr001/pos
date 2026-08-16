@@ -80,6 +80,7 @@ export class AuthService {
     const tokens = await this.issueTokens({
       user: found.user,
       role: found.role,
+      tenant: found.tenant,
       isPos: false,
     });
 
@@ -153,19 +154,23 @@ export class AuthService {
       }
       if (!(await bcrypt.compare(dto.pin, candidate.user.pinHash))) continue;
 
+      const tenantRow = await this.db.runAsPlatformAdmin(async (tx) =>
+        tx.query.tenants.findFirst({ where: (t, { eq: e }) => e(t.id, device.tenantId) }),
+      );
+      if (!tenantRow) {
+        throw new AppError(ERROR_CODES.TENANT_INACTIVE, "This business is no longer active");
+      }
+
       const tokens = await this.issueTokens({
         user: candidate.user,
         role: candidate.role,
+        tenant: tenantRow,
         isPos: true,
         deviceId: device.id,
         // A POS session is always pinned to the terminal's branch, even for a
         // user who normally has tenant-wide access.
         branchIdOverride: dto.branchId,
       });
-
-      const tenant = await this.db.runAsPlatformAdmin(async (tx) =>
-        tx.query.tenants.findFirst({ where: (t, { eq: e }) => e(t.id, device.tenantId) }),
-      );
 
       return {
         ...tokens,
@@ -176,7 +181,7 @@ export class AuthService {
           roleName: candidate.role.name,
           permissions: candidate.role.permissions,
           tenantId: device.tenantId,
-          tenantName: tenant?.name ?? "",
+          tenantName: tenantRow.name,
           branchId: dto.branchId,
           branchName: null,
           locale: candidate.user.locale,
@@ -246,9 +251,17 @@ export class AuthService {
       throw new AppError(ERROR_CODES.INVALID_CREDENTIALS, "User is no longer active");
     }
 
+    const tenantRow = await this.db.runAsPlatformAdmin(async (tx) =>
+      tx.query.tenants.findFirst({ where: (t, { eq: e }) => e(t.id, stored.tenantId) }),
+    );
+    if (!tenantRow?.isActive) {
+      throw new AppError(ERROR_CODES.TENANT_SUSPENDED, "This business is suspended");
+    }
+
     const tokens = await this.issueTokens({
       user: found.user,
       role: found.role,
+      tenant: tenantRow,
       isPos: Boolean(stored.deviceId),
       ...(stored.deviceId ? { deviceId: stored.deviceId } : {}),
     });
@@ -273,17 +286,81 @@ export class AuthService {
     });
   }
 
+  /**
+   * Build a full session for a user who has ALREADY been authenticated by
+   * another means — today, only self-registration, which has just verified the
+   * password by choosing it.
+   *
+   * Deliberately not exported through a controller. Anything reachable from
+   * HTTP that mints a session without checking a credential is an
+   * authentication bypass.
+   */
+  async issueSessionFor(userId: string, tenantId: string): Promise<AuthSession> {
+    const found = await this.db.runAsPlatformAdmin(async (tx) => {
+      const rows = await tx
+        .select({
+          user: schema.users,
+          role: schema.roles,
+          tenant: schema.tenants,
+          branch: schema.branches,
+        })
+        .from(schema.users)
+        .innerJoin(schema.roles, eq(schema.users.roleId, schema.roles.id))
+        .innerJoin(schema.tenants, eq(schema.users.tenantId, schema.tenants.id))
+        .leftJoin(schema.branches, eq(schema.users.branchId, schema.branches.id))
+        .where(and(eq(schema.users.id, userId), eq(schema.users.tenantId, tenantId)))
+        .limit(1);
+      return rows[0];
+    });
+
+    if (!found) {
+      throw new AppError(ERROR_CODES.INVALID_CREDENTIALS, "Account not found");
+    }
+
+    const tokens = await this.issueTokens({
+      user: found.user,
+      role: found.role,
+      tenant: found.tenant,
+      isPos: false,
+    });
+
+    return {
+      ...tokens,
+      user: {
+        id: found.user.id,
+        name: found.user.name,
+        email: found.user.email,
+        roleName: found.role.name,
+        permissions: found.role.permissions,
+        tenantId: found.tenant.id,
+        tenantName: found.tenant.name,
+        branchId: found.branch?.id ?? null,
+        branchName: found.branch?.name ?? null,
+        locale: found.user.locale,
+      },
+    };
+  }
+
   // ---------------------------------------------------------------------------
 
   private async issueTokens(input: {
     user: typeof schema.users.$inferSelect;
     role: typeof schema.roles.$inferSelect;
+    tenant: typeof schema.tenants.$inferSelect;
     isPos: boolean;
     deviceId?: string;
     branchIdOverride?: string;
   }): Promise<AuthTokens> {
-    const { user, role, isPos, deviceId, branchIdOverride } = input;
+    const { user, role, tenant, isPos, deviceId, branchIdOverride } = input;
 
+    /**
+     * Everything authorization needs travels in the token, so a permission or
+     * limit check never costs a database round trip — including on a sync push
+     * carrying hundreds of items.
+     *
+     * The cost is staleness: a permission revoked now still works until the
+     * access token expires. Fifteen minutes is the deliberate ceiling on that.
+     */
     const payload: Omit<JwtPayload, "iat" | "exp"> = {
       sub: user.id,
       tenantId: user.tenantId,
@@ -291,6 +368,16 @@ export class AuthService {
       roleId: role.id,
       roleName: role.name,
       permissions: role.permissions,
+      abac: {
+        maxDiscountPercent: user.maxDiscountPercent,
+        maxSaleAmount: user.maxSaleAmount,
+        canApproveRefund: user.canApproveRefund,
+        canViewCost: user.canViewCost,
+        allowedBranchIds: user.allowedBranchIds,
+      },
+      isPlatformAdmin: user.isPlatformAdmin,
+      planId: tenant.planId,
+      trialEndsAt: tenant.trialEndsAt ? tenant.trialEndsAt.toISOString() : null,
       ...(deviceId ? { deviceId } : {}),
     };
 

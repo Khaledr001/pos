@@ -198,8 +198,16 @@ export class AllExceptionsFilter implements ExceptionFilter {
         return HttpStatus.UNAUTHORIZED;
       case ERROR_CODES.INSUFFICIENT_PERMISSIONS:
       case ERROR_CODES.TENANT_INACTIVE:
+      case ERROR_CODES.TENANT_SUSPENDED:
+      case ERROR_CODES.ACCOUNT_DISABLED:
       case ERROR_CODES.DEVICE_NOT_REGISTERED:
         return HttpStatus.FORBIDDEN;
+      case ERROR_CODES.ACCOUNT_LOCKED:
+        // 429: the credentials may well be right; the caller is rate-limited.
+        return HttpStatus.TOO_MANY_REQUESTS;
+      case ERROR_CODES.DUPLICATE_SLUG:
+      case ERROR_CODES.DUPLICATE_EMAIL:
+        return HttpStatus.CONFLICT;
       case ERROR_CODES.PRODUCT_NOT_FOUND:
       case ERROR_CODES.CUSTOMER_NOT_FOUND:
       case ERROR_CODES.NOT_FOUND:

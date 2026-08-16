@@ -2,6 +2,7 @@ import { ERROR_CODES } from "@devsfleet/shared-utils";
 import { Test } from "@nestjs/testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RequestContext } from "../../common/context/request-context.js";
+import { PlanLimitService } from "../../common/guards/plan-limit.service.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import { BranchesService } from "./branches.service.js";
 
@@ -50,6 +51,16 @@ describe("BranchesService", () => {
               RequestContext.requireTenantId();
               return fn(tx);
             },
+          },
+        },
+        {
+          // Permissive stub. That limits ARE enforced is proved against a real
+          // database in scripts/verify-rls.mjs and the plan-limit integration
+          // check, not re-asserted in every service test.
+          provide: PlanLimitService,
+          useValue: {
+            assertTrialActive: () => {},
+            assertCanCreate: async () => {},
           },
         },
       ],

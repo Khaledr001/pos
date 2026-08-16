@@ -21,7 +21,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { money, percent, primaryId, quantity, syncable, timestamps } from "./_shared.js";
 import { users } from "./auth.js";
-import { products, units } from "./catalog.js";
+import { productVariants, units } from "./catalog.js";
 import { customers } from "./partners.js";
 import { cashSessions } from "./payments.js";
 import { branches, tenantScope } from "./tenants.js";
@@ -60,16 +60,17 @@ const documentTotals = {
 
 /** Fields every line item carries. */
 const lineItemFields = {
-  productId: uuid()
+  variantId: uuid()
     .notNull()
-    .references(() => products.id, { onDelete: "restrict" }),
+    .references(() => productVariants.id, { onDelete: "restrict" }),
   /**
-   * Name and SKU as they were when the document was issued.
+   * Name, variant and SKU as they were when the document was issued.
    * A product renamed or re-SKU'd next year must not silently rewrite last
    * year's invoice.
    */
   productName: varchar({ length: 500 }).notNull(),
-  productSku: varchar({ length: 50 }).notNull(),
+  variantName: varchar({ length: 255 }).notNull().default("Default"),
+  productSku: varchar({ length: 64 }).notNull(),
 
   /** Packaging sold. NULL = the product's base unit. */
   unitId: uuid().references(() => units.id, { onDelete: "set null" }),
@@ -316,7 +317,7 @@ export const saleItems = pgTable(
   (t) => [
     index("idx_sale_items_sale").on(t.saleId, t.sortOrder),
     /** Product sales history — feeds the "what sells" report and reorder suggestions. */
-    index("idx_sale_items_product").on(t.productId, t.createdAt),
+    index("idx_sale_items_variant").on(t.variantId, t.createdAt),
   ],
 );
 
@@ -331,7 +332,7 @@ export const quotationItemsRelations = relations(quotationItems, ({ one }) => ({
     fields: [quotationItems.quotationId],
     references: [quotations.id],
   }),
-  product: one(products, { fields: [quotationItems.productId], references: [products.id] }),
+  variant: one(productVariants, { fields: [quotationItems.variantId], references: [productVariants.id] }),
 }));
 
 export const ordersRelations = relations(orders, ({ one, many }) => ({
@@ -343,7 +344,7 @@ export const ordersRelations = relations(orders, ({ one, many }) => ({
 
 export const orderItemsRelations = relations(orderItems, ({ one }) => ({
   order: one(orders, { fields: [orderItems.orderId], references: [orders.id] }),
-  product: one(products, { fields: [orderItems.productId], references: [products.id] }),
+  variant: one(productVariants, { fields: [orderItems.variantId], references: [productVariants.id] }),
 }));
 
 export const salesRelations = relations(sales, ({ one, many }) => ({
@@ -355,7 +356,7 @@ export const salesRelations = relations(sales, ({ one, many }) => ({
 
 export const saleItemsRelations = relations(saleItems, ({ one }) => ({
   sale: one(sales, { fields: [saleItems.saleId], references: [sales.id] }),
-  product: one(products, { fields: [saleItems.productId], references: [products.id] }),
+  variant: one(productVariants, { fields: [saleItems.variantId], references: [productVariants.id] }),
 }));
 
 export type Quotation = typeof quotations.$inferSelect;

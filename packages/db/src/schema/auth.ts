@@ -3,6 +3,7 @@ import { relations, sql } from "drizzle-orm";
 import {
   boolean,
   index,
+  integer,
   jsonb,
   pgTable,
   text,
@@ -11,7 +12,7 @@ import {
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
-import { activeFlag, primaryId, softDelete, timestamps } from "./_shared.js";
+import { activeFlag, money, percent, primaryId, softDelete, timestamps } from "./_shared.js";
 import { branches, tenantScope } from "./tenants.js";
 
 /**
@@ -63,6 +64,48 @@ export const users = pgTable(
     passwordHash: varchar({ length: 255 }).notNull(),
     locale: varchar({ length: 5 }).$type<Locale>().notNull().default("en"),
     lastLoginAt: timestamp({ withTimezone: true, mode: "date" }),
+
+    /**
+     * ATTRIBUTE-BASED LIMITS
+     *
+     * Permissions answer "may this person do this kind of thing?".
+     * These answer "how far may they go?".
+     *
+     * Both are needed: `sale:discount` says a cashier may discount at all,
+     * `maxDiscountPercent` says 5% is their ceiling. Expressing the ceiling as
+     * a permission would mean inventing `sale:discount_5`, `sale:discount_10`
+     * and so on — a permission per number, which does not scale and cannot be
+     * tuned per person.
+     *
+     * Defaults come from the role at user creation and are then editable per
+     * user, because the limit that fits a new hire is not the one that fits a
+     * ten-year employee in the same role.
+     *
+     * These are carried in the access token so a check costs no query, and they
+     * are re-checked server-side in every command. A hidden button is a
+     * courtesy, not a control.
+     */
+    maxDiscountPercent: percent().notNull().default("0"),
+    /** NULL = unlimited. Zero would mean "may not sell at all". */
+    maxSaleAmount: money(),
+    canApproveRefund: boolean().notNull().default(false),
+    /** Gates purchase price, cost and margin everywhere — filtered server-side. */
+    canViewCost: boolean().notNull().default(false),
+    /**
+     * Branches this user may operate in. Empty array = every branch in the
+     * tenant, which is how an owner is represented.
+     */
+    allowedBranchIds: jsonb().$type<string[]>().notNull().default([]),
+
+    /**
+     * Platform operator. Belongs to no tenant, bypasses the tenant filter, and
+     * is exempt from plan limits. Never granted through the tenant UI.
+     */
+    isPlatformAdmin: boolean().notNull().default(false),
+
+    failedLoginCount: integer().notNull().default(0),
+    /** Set after repeated failures; login is refused until it passes. */
+    lockedUntil: timestamp({ withTimezone: true, mode: "date" }),
     ...activeFlag(),
     ...timestamps(),
     ...softDelete(),

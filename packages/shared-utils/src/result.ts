@@ -62,6 +62,15 @@ export class AppError extends Error {
  * site — the admin panel and the POS both map these to localised messages.
  */
 export const ERROR_CODES = {
+  // saas / tenancy
+  DUPLICATE_SLUG: "DUPLICATE_SLUG",
+  DUPLICATE_EMAIL: "DUPLICATE_EMAIL",
+  PLAN_LIMIT_EXCEEDED: "PLAN_LIMIT_EXCEEDED",
+  TRIAL_EXPIRED: "TRIAL_EXPIRED",
+  TENANT_SUSPENDED: "TENANT_SUSPENDED",
+  ACCOUNT_LOCKED: "ACCOUNT_LOCKED",
+  ACCOUNT_DISABLED: "ACCOUNT_DISABLED",
+
   // auth
   INVALID_CREDENTIALS: "INVALID_CREDENTIALS",
   TOKEN_EXPIRED: "TOKEN_EXPIRED",

@@ -15,6 +15,7 @@ import { DatabaseModule } from "./database/database.module.js";
 import { AuthModule } from "./modules/auth/auth.module.js";
 import { BranchesModule } from "./modules/branches/branches.module.js";
 import { HealthModule } from "./modules/health/health.module.js";
+import { TenantsModule } from "./modules/tenants/tenants.module.js";
 
 /**
  * Application root.
@@ -99,6 +100,7 @@ import { HealthModule } from "./modules/health/health.module.js";
     // Feature modules. Add new ones here — see src/modules/README.md.
     HealthModule,
     AuthModule,
+    TenantsModule,
     BranchesModule,
   ],
   providers: [

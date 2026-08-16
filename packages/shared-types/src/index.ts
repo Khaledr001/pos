@@ -11,5 +11,6 @@
 export * from "./enums.js";
 export * from "./permissions.js";
 export * from "./settings.js";
+export * from "./plans.js";
 export * from "./api.js";
 export * from "./sync.js";

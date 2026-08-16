@@ -1,6 +1,15 @@
-import type { BranchSettings, TenantSettings } from "@devsfleet/shared-types";
+import type { BranchSettings, PlanId, TenantSettings } from "@devsfleet/shared-types";
 import { relations } from "drizzle-orm";
-import { index, jsonb, pgTable, text, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
+import {
+  index,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+  varchar,
+} from "drizzle-orm/pg-core";
 import { activeFlag, primaryId, softDelete, timestamps } from "./_shared.js";
 
 /**
@@ -23,11 +32,34 @@ export const tenants = pgTable(
     slug: varchar({ length: 100 }).notNull().unique(),
     /** Shape: TenantSettings from @devsfleet/shared-types. VAT rate, currency, locales. */
     settings: jsonb().$type<Partial<TenantSettings>>().notNull().default({}),
+
+    /**
+     * SUBSCRIPTION
+     *
+     * `planId` names a plan defined in code (see PLANS in @devsfleet/shared-types),
+     * not a row. Changing what a plan includes is a deployment, not a data edit —
+     * which means a tenant cannot be silently moved onto limits nobody reviewed,
+     * and the limits are testable.
+     *
+     * An unrecognised id resolves to `free`. Failing closed matters: a typo must
+     * shrink a tenant's allowance, never grant an unlimited one.
+     */
+    planId: varchar({ length: 30 }).$type<PlanId>().notNull().default("trial"),
+    /** Set to now + 14 days at self-registration. NULL once subscribed. */
+    trialEndsAt: timestamp({ withTimezone: true, mode: "date" }),
+    /** End of the current paid period. */
+    subscriptionEndsAt: timestamp({ withTimezone: true, mode: "date" }),
+    /** External payment-processor references. Opaque to this system. */
+    paymentCustomerId: varchar({ length: 100 }),
+    paymentSubscriptionId: varchar({ length: 100 }),
+    /** Set when an operator suspends the tenant, for the message shown at login. */
+    suspendedAt: timestamp({ withTimezone: true, mode: "date" }),
+    suspendedReason: text(),
     ...activeFlag(),
     ...timestamps(),
     ...softDelete(),
   },
-  (t) => [index("idx_tenants_slug").on(t.slug)],
+  (t) => [index("idx_tenants_slug").on(t.slug), index("idx_tenants_plan").on(t.planId)],
 );
 
 /**

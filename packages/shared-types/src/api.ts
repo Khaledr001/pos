@@ -84,26 +84,57 @@ export const MAX_PAGE_SIZE = 200;
 export interface JwtPayload {
   /** users.id */
   sub: string;
-  tenantId: string;
+  /** null for a platform operator. */
+  tenantId: string | null;
   /** null = the user may act on any branch in the tenant. */
   branchId: string | null;
   roleId: string;
   roleName: string;
   permissions: PermissionGrant[];
+  abac: AbacAttributes;
+  isPlatformAdmin: boolean;
+  planId: string;
+  /** ISO instant, or null when the tenant is not on trial. */
+  trialEndsAt: string | null;
   /** Present only on tokens minted for a POS terminal. */
   deviceId?: string;
   iat: number;
   exp: number;
 }
 
+/**
+ * Per-user ceilings, carried in the token so no check costs a query.
+ *
+ * Always re-validated server-side in the command handler. The client uses them
+ * only to disable controls the user would be refused anyway.
+ */
+export interface AbacAttributes {
+  /** 0-100. Highest discount this user may apply, per line and in aggregate. */
+  maxDiscountPercent: string;
+  /** Decimal string, or null for no ceiling. */
+  maxSaleAmount: string | null;
+  canApproveRefund: boolean;
+  /** Gates purchase price, cost and margin everywhere. */
+  canViewCost: boolean;
+  /** Branches this user may operate in. Empty = all branches in the tenant. */
+  allowedBranchIds: string[];
+}
+
 /** What `@CurrentUser()` injects into a controller. */
 export interface AuthenticatedUser {
   id: string;
-  tenantId: string;
+  /** null only for a platform operator, who belongs to no tenant. */
+  tenantId: string | null;
   branchId: string | null;
   roleId: string;
   roleName: string;
   permissions: PermissionGrant[];
+  abac: AbacAttributes;
+  /** Bypasses the tenant filter and every plan limit. */
+  isPlatformAdmin: boolean;
+  /** The tenant's plan, so limit checks need no lookup. */
+  planId: string;
+  trialEndsAt: string | null;
   deviceId?: string;
 }
 

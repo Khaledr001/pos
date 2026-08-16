@@ -11,7 +11,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { money, primaryId, quantity, timestamps } from "./_shared.js";
 import { users } from "./auth.js";
-import { products } from "./catalog.js";
+import { productVariants } from "./catalog.js";
 import { branches, tenantScope } from "./tenants.js";
 
 /**
@@ -35,9 +35,9 @@ export const inventory = pgTable(
   {
     id: primaryId(),
     ...tenantScope(),
-    productId: uuid()
+    variantId: uuid()
       .notNull()
-      .references(() => products.id, { onDelete: "cascade" }),
+      .references(() => productVariants.id, { onDelete: "restrict" }),
     branchId: uuid()
       .notNull()
       .references(() => branches.id, { onDelete: "restrict" }),
@@ -63,12 +63,12 @@ export const inventory = pgTable(
     ...timestamps(),
   },
   (t) => [
-    uniqueIndex("uq_inventory_product_branch").on(t.productId, t.branchId),
+    uniqueIndex("uq_inventory_variant_branch").on(t.variantId, t.branchId),
     index("idx_inventory_branch").on(t.branchId),
     index("idx_inventory_updated").on(t.tenantId, t.updatedAt),
     /** Low-stock report: available (quantity - reserved) at or below reorder level. */
     index("idx_inventory_low_stock")
-      .on(t.branchId, t.productId)
+      .on(t.branchId, t.variantId)
       .where(sql`quantity - reserved_quantity <= reorder_level`),
   ],
 );
@@ -86,9 +86,9 @@ export const inventoryTransactions = pgTable(
   {
     id: primaryId(),
     ...tenantScope(),
-    productId: uuid()
+    variantId: uuid()
       .notNull()
-      .references(() => products.id, { onDelete: "restrict" }),
+      .references(() => productVariants.id, { onDelete: "restrict" }),
     branchId: uuid()
       .notNull()
       .references(() => branches.id, { onDelete: "restrict" }),
@@ -113,7 +113,7 @@ export const inventoryTransactions = pgTable(
   },
   (t) => [
     /** The stock-card query: one product, one branch, newest first. */
-    index("idx_inv_tx_product_branch").on(t.productId, t.branchId, t.createdAt),
+    index("idx_inv_tx_variant_branch").on(t.variantId, t.branchId, t.createdAt),
     index("idx_inv_tx_reference").on(t.referenceType, t.referenceId),
     index("idx_inv_tx_tenant_created").on(t.tenantId, t.createdAt),
   ],
@@ -171,9 +171,9 @@ export const stockTransferItems = pgTable(
     transferId: uuid()
       .notNull()
       .references(() => stockTransfers.id, { onDelete: "cascade" }),
-    productId: uuid()
+    variantId: uuid()
       .notNull()
-      .references(() => products.id, { onDelete: "restrict" }),
+      .references(() => productVariants.id, { onDelete: "restrict" }),
     requestedQuantity: quantity().notNull(),
     /** NULL until shipped. May be less than requested. */
     shippedQuantity: quantity(),
@@ -226,9 +226,9 @@ export const stockCountItems = pgTable(
     stockCountId: uuid()
       .notNull()
       .references(() => stockCounts.id, { onDelete: "cascade" }),
-    productId: uuid()
+    variantId: uuid()
       .notNull()
-      .references(() => products.id, { onDelete: "restrict" }),
+      .references(() => productVariants.id, { onDelete: "restrict" }),
     /** What the system believed, captured when the count sheet was generated. */
     systemQuantity: quantity().notNull(),
     /** What was actually on the shelf. */
@@ -239,22 +239,22 @@ export const stockCountItems = pgTable(
     ...timestamps(),
   },
   (t) => [
-    uniqueIndex("uq_stock_count_items").on(t.stockCountId, t.productId),
+    uniqueIndex("uq_stock_count_items").on(t.stockCountId, t.variantId),
     index("idx_stock_count_items_count").on(t.stockCountId),
   ],
 );
 
 export const inventoryRelations = relations(inventory, ({ one }) => ({
-  product: one(products, { fields: [inventory.productId], references: [products.id] }),
+  variant: one(productVariants, { fields: [inventory.variantId], references: [productVariants.id] }),
   branch: one(branches, { fields: [inventory.branchId], references: [branches.id] }),
 }));
 
 export const inventoryTransactionsRelations = relations(
   inventoryTransactions,
   ({ one }) => ({
-    product: one(products, {
-      fields: [inventoryTransactions.productId],
-      references: [products.id],
+    variant: one(productVariants, {
+      fields: [inventoryTransactions.variantId],
+      references: [productVariants.id],
     }),
     branch: one(branches, {
       fields: [inventoryTransactions.branchId],
@@ -282,9 +282,9 @@ export const stockTransferItemsRelations = relations(stockTransferItems, ({ one 
     fields: [stockTransferItems.transferId],
     references: [stockTransfers.id],
   }),
-  product: one(products, {
-    fields: [stockTransferItems.productId],
-    references: [products.id],
+  variant: one(productVariants, {
+    fields: [stockTransferItems.variantId],
+    references: [productVariants.id],
   }),
 }));
 

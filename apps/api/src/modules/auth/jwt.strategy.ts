@@ -27,8 +27,13 @@ export class JwtStrategy extends PassportStrategy(Strategy, "jwt") {
   }
 
   validate(payload: JwtPayload): AuthenticatedUser {
-    if (!payload.sub || !payload.tenantId) {
+    // A platform operator legitimately has no tenant, so only `sub` is
+    // universally required.
+    if (!payload.sub) {
       throw new UnauthorizedException("Malformed access token");
+    }
+    if (!payload.tenantId && !payload.isPlatformAdmin) {
+      throw new UnauthorizedException("Access token names no business");
     }
 
     return {
@@ -38,6 +43,22 @@ export class JwtStrategy extends PassportStrategy(Strategy, "jwt") {
       roleId: payload.roleId,
       roleName: payload.roleName,
       permissions: payload.permissions ?? [],
+      /**
+       * Defaulted rather than assumed present: a token minted before these
+       * claims existed would otherwise yield `undefined` ceilings, and an
+       * undefined ceiling compares as "no limit". Failing closed means an old
+       * token grants nothing instead of everything.
+       */
+      abac: payload.abac ?? {
+        maxDiscountPercent: "0",
+        maxSaleAmount: "0",
+        canApproveRefund: false,
+        canViewCost: false,
+        allowedBranchIds: [],
+      },
+      isPlatformAdmin: payload.isPlatformAdmin ?? false,
+      planId: payload.planId ?? "free",
+      trialEndsAt: payload.trialEndsAt ?? null,
       ...(payload.deviceId ? { deviceId: payload.deviceId } : {}),
     };
   }

@@ -213,70 +213,69 @@ try {
     // Sample products — just enough to exercise search, pricing and stock.
     // The real 5,000-SKU catalogue arrives through tools/import.
     // -------------------------------------------------------------------------
+    // A product is the catalogue entry; a VARIANT is what actually sells.
+    // Two of these have real variants and two have a single "Default" — the
+    // seed covers both shapes so nothing downstream can quietly assume one.
     const productSeed = [
       {
-        sku: "PVC-ELB-001",
-        name: 'PVC Elbow 1" 90 Degree',
+        sku: "PVC-ELB",
+        name: "PVC Elbow 90 Degree",
         category: "Plumbing",
         unit: "pcs",
-        barcode: "6291000000017",
-        attributes: { size: '1in', angle: "90", material: "PVC" },
-        retail: "2.75",
-        wholesale: "2.20",
-        cost: "1.60",
-        floor: "2.00",
-      },
-      {
-        sku: "PVC-ELB-002",
-        name: 'PVC Elbow 3/4" 90 Degree',
-        category: "Plumbing",
-        unit: "pcs",
-        barcode: "6291000000024",
-        attributes: { size: "3/4in", angle: "90", material: "PVC" },
-        retail: "2.10",
-        wholesale: "1.70",
-        cost: "1.20",
-        floor: "1.55",
+        attributes: { angle: "90", material: "PVC" },
+        variants: [
+          { name: '1 inch', sku: "PVC-ELB-1IN", barcode: "6291000000017",
+            attributes: { size: "1in" },
+            retail: "2.75", wholesale: "2.20", cost: "1.60", floor: "2.00" },
+          { name: '3/4 inch', sku: "PVC-ELB-34IN", barcode: "6291000000024",
+            attributes: { size: "3/4in" },
+            retail: "2.10", wholesale: "1.70", cost: "1.20", floor: "1.55" },
+        ],
       },
       {
         sku: "CBL-25-RED",
         name: "Electrical Cable 2.5mm Red",
         category: "Electrical",
         unit: "m",
-        barcode: "6291000000031",
         attributes: { gauge: "2.5mm", colour: "red", material: "copper" },
-        retail: "3.50",
-        wholesale: "2.95",
-        cost: "2.30",
-        floor: "2.75",
+        variants: [
+          { name: "Default", sku: "CBL-25-RED", barcode: "6291000000031",
+            attributes: {},
+            retail: "3.50", wholesale: "2.95", cost: "2.30", floor: "2.75" },
+        ],
       },
       {
-        sku: "PNT-WHT-4L",
-        name: "Emulsion Paint White 4 Litre",
+        sku: "PNT-WHT",
+        name: "Emulsion Paint White",
         category: "Paint",
         unit: "ltr",
-        barcode: "6291000000048",
-        attributes: { colour: "white", volume: "4ltr", finish: "matt" },
-        retail: "48.00",
-        wholesale: "41.00",
-        cost: "33.00",
-        floor: "38.00",
+        attributes: { colour: "white", finish: "matt" },
+        variants: [
+          { name: "4 Litre", sku: "PNT-WHT-4L", barcode: "6291000000048",
+            attributes: { volume: "4ltr" },
+            retail: "48.00", wholesale: "41.00", cost: "33.00", floor: "38.00" },
+          { name: "20 Litre", sku: "PNT-WHT-20L", barcode: "6291000000062",
+            attributes: { volume: "20ltr" },
+            retail: "210.00", wholesale: "185.00", cost: "150.00", floor: "170.00" },
+        ],
       },
       {
         sku: "TAP-MIX-CHR",
         name: "Basin Mixer Tap Chrome",
         category: "Sanitary",
         unit: "pcs",
-        barcode: "6291000000055",
         attributes: { finish: "chrome", type: "mixer" },
-        retail: "135.00",
-        wholesale: "112.00",
-        cost: "88.00",
-        floor: "105.00",
+        variants: [
+          { name: "Default", sku: "TAP-MIX-CHR", barcode: "6291000000055",
+            attributes: {},
+            retail: "135.00", wholesale: "112.00", cost: "88.00", floor: "105.00" },
+        ],
       },
     ];
 
     let productCount = 0;
+    let variantCount = 0;
+
     for (const p of productSeed) {
       const [product] = await tx
         .insert(schema.products)
@@ -284,81 +283,107 @@ try {
           tenantId,
           sku: p.sku,
           name: p.name,
-          barcode: p.barcode,
-          searchKey: searchKey(p.name, p.sku),
           categoryId: categories.get(p.category)!,
           unitId: units.get(p.unit)!,
           attributes: p.attributes,
+          hasVariants: p.variants.length > 1,
         })
         .onConflictDoUpdate({
           target: [schema.products.tenantId, schema.products.sku],
-          set: { name: p.name, searchKey: searchKey(p.name, p.sku) },
+          set: { name: p.name, hasVariants: p.variants.length > 1 },
         })
         .returning();
 
       if (!product) continue;
       productCount += 1;
 
-      for (const [listName, price] of [
-        ["Retail", p.retail],
-        ["Wholesale", p.wholesale],
-        ["VIP", p.wholesale],
-      ] as const) {
-        const priceListId = priceLists.get(listName);
-        if (!priceListId) continue;
-
-        const existing = await tx.query.productPrices.findFirst({
-          where: (t, { and, eq: e, isNull }) =>
-            and(
-              e(t.productId, product.id),
-              e(t.priceListId, priceListId),
-              isNull(t.effectiveTo),
-            ),
-        });
-        if (existing) continue;
-
-        await tx.insert(schema.productPrices).values({
-          tenantId,
-          productId: product.id,
-          priceListId,
-          purchasePrice: p.cost,
-          sellingPrice: price,
-          minSellingPrice: p.floor,
-        });
-      }
-
-      // Opening stock at every branch, with a ledger row so the balance is
-      // explained rather than appearing from nowhere.
-      for (const branch of branches) {
-        const [inv] = await tx
-          .insert(schema.inventory)
+      for (const [index, v] of p.variants.entries()) {
+        const [variant] = await tx
+          .insert(schema.productVariants)
           .values({
             tenantId,
             productId: product.id,
-            branchId: branch.id,
-            quantity: "100",
-            reorderLevel: "20",
+            variantName: v.name,
+            sku: v.sku,
+            barcode: v.barcode,
+            // The POS searches this, so it carries the product name too —
+            // a cashier types "elbow", not the variant name alone.
+            searchKey: searchKey(p.name, v.name, v.sku),
+            attributes: v.attributes,
+            minStock: "20",
             reorderQuantity: "100",
-            averageCost: p.cost,
+            sortOrder: index,
           })
-          .onConflictDoNothing()
+          .onConflictDoUpdate({
+            target: [schema.productVariants.tenantId, schema.productVariants.sku],
+            set: { searchKey: searchKey(p.name, v.name, v.sku) },
+          })
           .returning();
 
-        if (inv) {
-          await tx.insert(schema.inventoryTransactions).values({
-            tenantId,
-            productId: product.id,
-            branchId: branch.id,
-            type: "opening_balance",
-            quantity: "100",
-            balanceAfter: "100",
-            unitCost: p.cost,
-            notes: "Seed opening balance",
+        if (!variant) continue;
+        variantCount += 1;
+
+        for (const [listName, price] of [
+          ["Retail", v.retail],
+          ["Wholesale", v.wholesale],
+          ["VIP", v.wholesale],
+        ] as const) {
+          const priceListId = priceLists.get(listName);
+          if (!priceListId) continue;
+
+          const existing = await tx.query.productPrices.findFirst({
+            where: (t, { and, eq: e, isNull }) =>
+              and(
+                e(t.variantId, variant.id),
+                e(t.priceListId, priceListId),
+                isNull(t.effectiveTo),
+              ),
           });
+          if (existing) continue;
+
+          await tx.insert(schema.productPrices).values({
+            tenantId,
+            variantId: variant.id,
+            priceListId,
+            purchasePrice: v.cost,
+            sellingPrice: price,
+            minSellingPrice: v.floor,
+          });
+        }
+
+        // Opening stock at every branch, with a ledger row so the balance is
+        // explained rather than appearing from nowhere.
+        for (const branch of branches) {
+          const [inv] = await tx
+            .insert(schema.inventory)
+            .values({
+              tenantId,
+              variantId: variant.id,
+              branchId: branch.id,
+              quantity: "100",
+              reorderLevel: "20",
+              reorderQuantity: "100",
+              averageCost: v.cost,
+            })
+            .onConflictDoNothing()
+            .returning();
+
+          if (inv) {
+            await tx.insert(schema.inventoryTransactions).values({
+              tenantId,
+              variantId: variant.id,
+              branchId: branch.id,
+              type: "opening_balance",
+              quantity: "100",
+              balanceAfter: "100",
+              unitCost: v.cost,
+              notes: "Seed opening balance",
+            });
+          }
         }
       }
     }
-    console.log(`✓ ${productCount} products with prices and opening stock`);
+    console.log(`✓ ${productCount} products / ${variantCount} variants with prices and opening stock`);
 
     // -------------------------------------------------------------------------
     // Devices — two terminals per branch, per the plan

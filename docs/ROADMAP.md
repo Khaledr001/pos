@@ -42,6 +42,36 @@ as they land.
 - [x] RBAC — cashier token gets 403 with the missing permission named, while
       `/auth/me` still works
 
+## SaaS foundation ✅ done
+
+- [x] **Product variants** — `product_variants` is now the sellable unit; barcode,
+      stock, price and every document line repoint to it. `products` stays the
+      catalogue entry. Migration regenerated clean (no production data existed).
+- [x] Subscription plans as code constants (free/trial/starter/pro/enterprise),
+      failing closed to `free` on an unknown id
+- [x] Tenant subscription fields: `planId`, `trialEndsAt`, `subscriptionEndsAt`,
+      payment references, suspension reason
+- [x] ABAC on users: `maxDiscountPercent`, `maxSaleAmount`, `canApproveRefund`,
+      `canViewCost`, `allowedBranchIds`, plus lockout counters
+- [x] Access token carries permissions + ABAC + plan + trial, so no check costs
+      a query; unknown claims default closed
+- [x] Self-service registration — tenant, 4 roles, branch, unit, default price
+      list and a signed-in session, in one transaction
+- [x] Reserved slugs shared by the schema and the availability check
+- [x] Plan-limit enforcement with live usage counts, wired into branch creation
+- [x] Trial expiry blocks writes but never reads
+
+Verified against live PostgreSQL 18: two tenants fully isolated, plan limit
+refuses the 3rd branch on a 2-branch plan with `PLAN_LIMIT_EXCEEDED`, 11/11 RLS
+checks pass.
+
+### Still to do in this phase
+
+- [ ] SuperAdmin platform console (suspend/activate, change plan, impersonate)
+- [ ] Billing: checkout session + webhook handling
+- [ ] Users module with ABAC editing
+- [ ] ABAC enforcement at sale time (discount cap, sale ceiling, branch scope)
+
 ## Phase 1 — Foundation (weeks 1–3)
 
 **Blocked on the real price list** for the last three items.

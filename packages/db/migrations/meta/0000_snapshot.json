@@ -1,5 +1,5 @@
 {
-  "id": "86506ef0-5565-4c1a-9d87-f535553dbfc5",
+  "id": "369c6f7d-9151-4251-a8b7-a0ef3f7da0d9",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -175,6 +175,49 @@
           "notNull": true,
           "default": "'{}'::jsonb"
         },
+        "plan_id": {
+          "name": "plan_id",
+          "type": "varchar(30)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'trial'"
+        },
+        "trial_ends_at": {
+          "name": "trial_ends_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "subscription_ends_at": {
+          "name": "subscription_ends_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "payment_customer_id": {
+          "name": "payment_customer_id",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "payment_subscription_id": {
+          "name": "payment_subscription_id",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "suspended_at": {
+          "name": "suspended_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "suspended_reason": {
+          "name": "suspended_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "is_active": {
           "name": "is_active",
           "type": "boolean",
@@ -209,6 +252,21 @@
           "columns": [
             {
               "expression": "slug",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_tenants_plan": {
+          "name": "idx_tenants_plan",
+          "columns": [
+            {
+              "expression": "plan_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -754,6 +812,60 @@
           "primaryKey": false,
           "notNull": false
         },
+        "max_discount_percent": {
+          "name": "max_discount_percent",
+          "type": "numeric(5, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "max_sale_amount": {
+          "name": "max_sale_amount",
+          "type": "numeric(12, 4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "can_approve_refund": {
+          "name": "can_approve_refund",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "can_view_cost": {
+          "name": "can_view_cost",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "allowed_branch_ids": {
+          "name": "allowed_branch_ids",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "is_platform_admin": {
+          "name": "is_platform_admin",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "failed_login_count": {
+          "name": "failed_login_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "locked_until": {
+          "name": "locked_until",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "is_active": {
           "name": "is_active",
           "type": "boolean",
@@ -1031,6 +1143,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "sku_prefix": {
+          "name": "sku_prefix",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": false
+        },
         "path": {
           "name": "path",
           "type": "text",
@@ -1179,147 +1297,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.product_barcodes": {
-      "name": "product_barcodes",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "tenant_id": {
-          "name": "tenant_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "product_id": {
-          "name": "product_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "barcode": {
-          "name": "barcode",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "unit_id": {
-          "name": "unit_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "label": {
-          "name": "label",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "uq_product_barcodes_tenant_code": {
-          "name": "uq_product_barcodes_tenant_code",
-          "columns": [
-            {
-              "expression": "tenant_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "barcode",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "idx_product_barcodes_product": {
-          "name": "idx_product_barcodes_product",
-          "columns": [
-            {
-              "expression": "product_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "product_barcodes_tenant_id_tenants_id_fk": {
-          "name": "product_barcodes_tenant_id_tenants_id_fk",
-          "tableFrom": "product_barcodes",
-          "tableTo": "tenants",
-          "columnsFrom": [
-            "tenant_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "product_barcodes_product_id_products_id_fk": {
-          "name": "product_barcodes_product_id_products_id_fk",
-          "tableFrom": "product_barcodes",
-          "tableTo": "products",
-          "columnsFrom": [
-            "product_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "product_barcodes_unit_id_units_id_fk": {
-          "name": "product_barcodes_unit_id_units_id_fk",
-          "tableFrom": "product_barcodes",
-          "tableTo": "units",
-          "columnsFrom": [
-            "unit_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.product_images": {
       "name": "product_images",
       "schema": "",
@@ -1342,6 +1319,12 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
+        },
+        "variant_id": {
+          "name": "variant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
         },
         "url": {
           "name": "url",
@@ -1506,6 +1489,19 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
+        },
+        "product_images_variant_id_product_variants_id_fk": {
+          "name": "product_images_variant_id_product_variants_id_fk",
+          "tableFrom": "product_images",
+          "tableTo": "product_variants",
+          "columnsFrom": [
+            "variant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1514,8 +1510,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.product_units": {
-      "name": "product_units",
+    "public.product_variants": {
+      "name": "product_variants",
       "schema": "",
       "columns": {
         "id": {
@@ -1537,32 +1533,74 @@
           "primaryKey": false,
           "notNull": true
         },
-        "unit_id": {
-          "name": "unit_id",
-          "type": "uuid",
+        "variant_name": {
+          "name": "variant_name",
+          "type": "varchar(255)",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "'Default'"
         },
-        "conversion_factor": {
-          "name": "conversion_factor",
-          "type": "numeric(12, 4)",
+        "sku": {
+          "name": "sku",
+          "type": "varchar(64)",
           "primaryKey": false,
           "notNull": true
         },
         "barcode": {
           "name": "barcode",
-          "type": "varchar(50)",
+          "type": "varchar(64)",
           "primaryKey": false,
           "notNull": false
         },
-        "price_override": {
-          "name": "price_override",
+        "search_key": {
+          "name": "search_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "attributes": {
+          "name": "attributes",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "min_stock": {
+          "name": "min_stock",
+          "type": "numeric(12, 4)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "reorder_quantity": {
+          "name": "reorder_quantity",
+          "type": "numeric(12, 4)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "weight": {
+          "name": "weight",
           "type": "numeric(12, 4)",
           "primaryKey": false,
           "notNull": false
         },
-        "is_sellable": {
-          "name": "is_sellable",
+        "image_url": {
+          "name": "image_url",
+          "type": "varchar(500)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "is_active": {
+          "name": "is_active",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
@@ -1581,20 +1619,26 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
-        "uq_product_units": {
-          "name": "uq_product_units",
+        "uq_variants_tenant_sku": {
+          "name": "uq_variants_tenant_sku",
           "columns": [
             {
-              "expression": "product_id",
+              "expression": "tenant_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
             },
             {
-              "expression": "unit_id",
+              "expression": "sku",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1605,11 +1649,76 @@
           "method": "btree",
           "with": {}
         },
-        "idx_product_units_product": {
-          "name": "idx_product_units_product",
+        "uq_variants_tenant_barcode": {
+          "name": "uq_variants_tenant_barcode",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "barcode",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "barcode IS NOT NULL AND deleted_at IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_variants_product": {
+          "name": "idx_variants_product",
           "columns": [
             {
               "expression": "product_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "sort_order",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_variants_trgm": {
+          "name": "idx_variants_trgm",
+          "columns": [
+            {
+              "expression": "search_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last",
+              "opclass": "gin_trgm_ops"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "gin",
+          "with": {}
+        },
+        "idx_variants_updated": {
+          "name": "idx_variants_updated",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "updated_at",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1622,9 +1731,9 @@
         }
       },
       "foreignKeys": {
-        "product_units_tenant_id_tenants_id_fk": {
-          "name": "product_units_tenant_id_tenants_id_fk",
-          "tableFrom": "product_units",
+        "product_variants_tenant_id_tenants_id_fk": {
+          "name": "product_variants_tenant_id_tenants_id_fk",
+          "tableFrom": "product_variants",
           "tableTo": "tenants",
           "columnsFrom": [
             "tenant_id"
@@ -1635,9 +1744,9 @@
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
-        "product_units_product_id_products_id_fk": {
-          "name": "product_units_product_id_products_id_fk",
-          "tableFrom": "product_units",
+        "product_variants_product_id_products_id_fk": {
+          "name": "product_variants_product_id_products_id_fk",
+          "tableFrom": "product_variants",
           "tableTo": "products",
           "columnsFrom": [
             "product_id"
@@ -1646,19 +1755,6 @@
             "id"
           ],
           "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "product_units_unit_id_units_id_fk": {
-          "name": "product_units_unit_id_units_id_fk",
-          "tableFrom": "product_units",
-          "tableTo": "units",
-          "columnsFrom": [
-            "unit_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
           "onUpdate": "no action"
         }
       },
@@ -1691,12 +1787,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "barcode": {
-          "name": "barcode",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": false
-        },
         "name": {
           "name": "name",
           "type": "varchar(500)",
@@ -1712,13 +1802,6 @@
             "as": "to_tsvector('english', coalesce(name, ''))",
             "type": "stored"
           }
-        },
-        "search_key": {
-          "name": "search_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
         },
         "name_translations": {
           "name": "name_translations",
@@ -1764,14 +1847,8 @@
           "primaryKey": false,
           "notNull": false
         },
-        "default_reorder_level": {
-          "name": "default_reorder_level",
-          "type": "numeric(12, 4)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "weight": {
-          "name": "weight",
+        "tax_rate": {
+          "name": "tax_rate",
           "type": "numeric(12, 4)",
           "primaryKey": false,
           "notNull": false
@@ -1783,11 +1860,32 @@
           "notNull": true,
           "default": true
         },
-        "tax_rate": {
-          "name": "tax_rate",
-          "type": "numeric(12, 4)",
+        "track_serial": {
+          "name": "track_serial",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "track_expiry": {
+          "name": "track_expiry",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "warranty_months": {
+          "name": "warranty_months",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false
+        },
+        "has_variants": {
+          "name": "has_variants",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         },
         "is_active": {
           "name": "is_active",
@@ -1858,44 +1956,6 @@
           "isUnique": false,
           "concurrently": false,
           "method": "gin",
-          "with": {}
-        },
-        "idx_products_trgm": {
-          "name": "idx_products_trgm",
-          "columns": [
-            {
-              "expression": "search_key",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last",
-              "opclass": "gin_trgm_ops"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "gin",
-          "with": {}
-        },
-        "idx_products_barcode": {
-          "name": "idx_products_barcode",
-          "columns": [
-            {
-              "expression": "tenant_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "barcode",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "barcode IS NOT NULL",
-          "concurrently": false,
-          "method": "btree",
           "with": {}
         },
         "idx_products_category": {
@@ -2022,6 +2082,153 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.serial_numbers": {
+      "name": "serial_numbers",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "variant_id": {
+          "name": "variant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "serial": {
+          "name": "serial",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'available'"
+        },
+        "branch_id": {
+          "name": "branch_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sale_item_id": {
+          "name": "sale_item_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expiry_date": {
+          "name": "expiry_date",
+          "type": "varchar(10)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "uq_serials_tenant_serial": {
+          "name": "uq_serials_tenant_serial",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "serial",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_serials_variant_status": {
+          "name": "idx_serials_variant_status",
+          "columns": [
+            {
+              "expression": "variant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "serial_numbers_tenant_id_tenants_id_fk": {
+          "name": "serial_numbers_tenant_id_tenants_id_fk",
+          "tableFrom": "serial_numbers",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "serial_numbers_variant_id_product_variants_id_fk": {
+          "name": "serial_numbers_variant_id_product_variants_id_fk",
+          "tableFrom": "serial_numbers",
+          "tableTo": "product_variants",
+          "columnsFrom": [
+            "variant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.units": {
       "name": "units",
       "schema": "",
@@ -2117,6 +2324,301 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.variant_barcodes": {
+      "name": "variant_barcodes",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "variant_id": {
+          "name": "variant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "barcode": {
+          "name": "barcode",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "unit_id": {
+          "name": "unit_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "label": {
+          "name": "label",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "uq_variant_barcodes_tenant_code": {
+          "name": "uq_variant_barcodes_tenant_code",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "barcode",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_variant_barcodes_variant": {
+          "name": "idx_variant_barcodes_variant",
+          "columns": [
+            {
+              "expression": "variant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "variant_barcodes_tenant_id_tenants_id_fk": {
+          "name": "variant_barcodes_tenant_id_tenants_id_fk",
+          "tableFrom": "variant_barcodes",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "variant_barcodes_variant_id_product_variants_id_fk": {
+          "name": "variant_barcodes_variant_id_product_variants_id_fk",
+          "tableFrom": "variant_barcodes",
+          "tableTo": "product_variants",
+          "columnsFrom": [
+            "variant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "variant_barcodes_unit_id_units_id_fk": {
+          "name": "variant_barcodes_unit_id_units_id_fk",
+          "tableFrom": "variant_barcodes",
+          "tableTo": "units",
+          "columnsFrom": [
+            "unit_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.variant_units": {
+      "name": "variant_units",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "variant_id": {
+          "name": "variant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "unit_id": {
+          "name": "unit_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "conversion_factor": {
+          "name": "conversion_factor",
+          "type": "numeric(12, 4)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "barcode": {
+          "name": "barcode",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "price_override": {
+          "name": "price_override",
+          "type": "numeric(12, 4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_sellable": {
+          "name": "is_sellable",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "uq_variant_units": {
+          "name": "uq_variant_units",
+          "columns": [
+            {
+              "expression": "variant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "unit_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_variant_units_variant": {
+          "name": "idx_variant_units_variant",
+          "columns": [
+            {
+              "expression": "variant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "variant_units_tenant_id_tenants_id_fk": {
+          "name": "variant_units_tenant_id_tenants_id_fk",
+          "tableFrom": "variant_units",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "variant_units_variant_id_product_variants_id_fk": {
+          "name": "variant_units_variant_id_product_variants_id_fk",
+          "tableFrom": "variant_units",
+          "tableTo": "product_variants",
+          "columnsFrom": [
+            "variant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "variant_units_unit_id_units_id_fk": {
+          "name": "variant_units_unit_id_units_id_fk",
+          "tableFrom": "variant_units",
+          "tableTo": "units",
+          "columnsFrom": [
+            "unit_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.customer_prices": {
       "name": "customer_prices",
       "schema": "",
@@ -2140,8 +2642,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "product_id": {
-          "name": "product_id",
+        "variant_id": {
+          "name": "variant_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -2203,7 +2705,7 @@
               "nulls": "last"
             },
             {
-              "expression": "product_id",
+              "expression": "variant_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -2230,7 +2732,7 @@
               "nulls": "last"
             },
             {
-              "expression": "product_id",
+              "expression": "variant_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -2270,12 +2772,12 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "customer_prices_product_id_products_id_fk": {
-          "name": "customer_prices_product_id_products_id_fk",
+        "customer_prices_variant_id_product_variants_id_fk": {
+          "name": "customer_prices_variant_id_product_variants_id_fk",
           "tableFrom": "customer_prices",
-          "tableTo": "products",
+          "tableTo": "product_variants",
           "columnsFrom": [
-            "product_id"
+            "variant_id"
           ],
           "columnsTo": [
             "id"
@@ -2320,8 +2822,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "product_id": {
-          "name": "product_id",
+        "variant_id": {
+          "name": "variant_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -2395,11 +2897,11 @@
         }
       },
       "indexes": {
-        "idx_price_history_product": {
-          "name": "idx_price_history_product",
+        "idx_price_history_variant": {
+          "name": "idx_price_history_variant",
           "columns": [
             {
-              "expression": "product_id",
+              "expression": "variant_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -2452,12 +2954,12 @@
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
-        "price_history_product_id_products_id_fk": {
-          "name": "price_history_product_id_products_id_fk",
+        "price_history_variant_id_product_variants_id_fk": {
+          "name": "price_history_variant_id_product_variants_id_fk",
           "tableFrom": "price_history",
-          "tableTo": "products",
+          "tableTo": "product_variants",
           "columnsFrom": [
-            "product_id"
+            "variant_id"
           ],
           "columnsTo": [
             "id"
@@ -2634,8 +3136,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "product_id": {
-          "name": "product_id",
+        "variant_id": {
+          "name": "variant_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -2697,7 +3199,7 @@
           "name": "uq_product_prices_effective",
           "columns": [
             {
-              "expression": "product_id",
+              "expression": "variant_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -2724,7 +3226,7 @@
           "name": "idx_product_prices_current",
           "columns": [
             {
-              "expression": "product_id",
+              "expression": "variant_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -2772,12 +3274,12 @@
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
-        "product_prices_product_id_products_id_fk": {
-          "name": "product_prices_product_id_products_id_fk",
+        "product_prices_variant_id_product_variants_id_fk": {
+          "name": "product_prices_variant_id_product_variants_id_fk",
           "tableFrom": "product_prices",
-          "tableTo": "products",
+          "tableTo": "product_variants",
           "columnsFrom": [
-            "product_id"
+            "variant_id"
           ],
           "columnsTo": [
             "id"
@@ -3284,8 +3786,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "product_id": {
-          "name": "product_id",
+        "variant_id": {
+          "name": "variant_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -3358,11 +3860,11 @@
         }
       },
       "indexes": {
-        "uq_inventory_product_branch": {
-          "name": "uq_inventory_product_branch",
+        "uq_inventory_variant_branch": {
+          "name": "uq_inventory_variant_branch",
           "columns": [
             {
-              "expression": "product_id",
+              "expression": "variant_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -3425,7 +3927,7 @@
               "nulls": "last"
             },
             {
-              "expression": "product_id",
+              "expression": "variant_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -3452,17 +3954,17 @@
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
-        "inventory_product_id_products_id_fk": {
-          "name": "inventory_product_id_products_id_fk",
+        "inventory_variant_id_product_variants_id_fk": {
+          "name": "inventory_variant_id_product_variants_id_fk",
           "tableFrom": "inventory",
-          "tableTo": "products",
+          "tableTo": "product_variants",
           "columnsFrom": [
-            "product_id"
+            "variant_id"
           ],
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "restrict",
           "onUpdate": "no action"
         },
         "inventory_branch_id_branches_id_fk": {
@@ -3502,8 +4004,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "product_id": {
-          "name": "product_id",
+        "variant_id": {
+          "name": "variant_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -3577,11 +4079,11 @@
         }
       },
       "indexes": {
-        "idx_inv_tx_product_branch": {
-          "name": "idx_inv_tx_product_branch",
+        "idx_inv_tx_variant_branch": {
+          "name": "idx_inv_tx_variant_branch",
           "columns": [
             {
-              "expression": "product_id",
+              "expression": "variant_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -3661,12 +4163,12 @@
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
-        "inventory_transactions_product_id_products_id_fk": {
-          "name": "inventory_transactions_product_id_products_id_fk",
+        "inventory_transactions_variant_id_product_variants_id_fk": {
+          "name": "inventory_transactions_variant_id_product_variants_id_fk",
           "tableFrom": "inventory_transactions",
-          "tableTo": "products",
+          "tableTo": "product_variants",
           "columnsFrom": [
-            "product_id"
+            "variant_id"
           ],
           "columnsTo": [
             "id"
@@ -3730,8 +4232,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "product_id": {
-          "name": "product_id",
+        "variant_id": {
+          "name": "variant_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -3786,7 +4288,7 @@
               "nulls": "last"
             },
             {
-              "expression": "product_id",
+              "expression": "variant_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -3840,12 +4342,12 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "stock_count_items_product_id_products_id_fk": {
-          "name": "stock_count_items_product_id_products_id_fk",
+        "stock_count_items_variant_id_product_variants_id_fk": {
+          "name": "stock_count_items_variant_id_product_variants_id_fk",
           "tableFrom": "stock_count_items",
-          "tableTo": "products",
+          "tableTo": "product_variants",
           "columnsFrom": [
-            "product_id"
+            "variant_id"
           ],
           "columnsTo": [
             "id"
@@ -4068,8 +4570,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "product_id": {
-          "name": "product_id",
+        "variant_id": {
+          "name": "variant_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -4157,12 +4659,12 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "stock_transfer_items_product_id_products_id_fk": {
-          "name": "stock_transfer_items_product_id_products_id_fk",
+        "stock_transfer_items_variant_id_product_variants_id_fk": {
+          "name": "stock_transfer_items_variant_id_product_variants_id_fk",
           "tableFrom": "stock_transfer_items",
-          "tableTo": "products",
+          "tableTo": "product_variants",
           "columnsFrom": [
-            "product_id"
+            "variant_id"
           ],
           "columnsTo": [
             "id"
@@ -4469,8 +4971,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "product_id": {
-          "name": "product_id",
+        "variant_id": {
+          "name": "variant_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -4481,9 +4983,16 @@
           "primaryKey": false,
           "notNull": true
         },
+        "variant_name": {
+          "name": "variant_name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'Default'"
+        },
         "product_sku": {
           "name": "product_sku",
-          "type": "varchar(50)",
+          "type": "varchar(64)",
           "primaryKey": false,
           "notNull": true
         },
@@ -4638,12 +5147,12 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "order_items_product_id_products_id_fk": {
-          "name": "order_items_product_id_products_id_fk",
+        "order_items_variant_id_product_variants_id_fk": {
+          "name": "order_items_variant_id_product_variants_id_fk",
           "tableFrom": "order_items",
-          "tableTo": "products",
+          "tableTo": "product_variants",
           "columnsFrom": [
-            "product_id"
+            "variant_id"
           ],
           "columnsTo": [
             "id"
@@ -5019,8 +5528,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "product_id": {
-          "name": "product_id",
+        "variant_id": {
+          "name": "variant_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -5031,9 +5540,16 @@
           "primaryKey": false,
           "notNull": true
         },
+        "variant_name": {
+          "name": "variant_name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'Default'"
+        },
         "product_sku": {
           "name": "product_sku",
-          "type": "varchar(50)",
+          "type": "varchar(64)",
           "primaryKey": false,
           "notNull": true
         },
@@ -5181,12 +5697,12 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "quotation_items_product_id_products_id_fk": {
-          "name": "quotation_items_product_id_products_id_fk",
+        "quotation_items_variant_id_product_variants_id_fk": {
+          "name": "quotation_items_variant_id_product_variants_id_fk",
           "tableFrom": "quotation_items",
-          "tableTo": "products",
+          "tableTo": "product_variants",
           "columnsFrom": [
-            "product_id"
+            "variant_id"
           ],
           "columnsTo": [
             "id"
@@ -5550,8 +6066,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "product_id": {
-          "name": "product_id",
+        "variant_id": {
+          "name": "variant_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -5562,9 +6078,16 @@
           "primaryKey": false,
           "notNull": true
         },
+        "variant_name": {
+          "name": "variant_name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'Default'"
+        },
         "product_sku": {
           "name": "product_sku",
-          "type": "varchar(50)",
+          "type": "varchar(64)",
           "primaryKey": false,
           "notNull": true
         },
@@ -5703,11 +6226,11 @@
           "method": "btree",
           "with": {}
         },
-        "idx_sale_items_product": {
-          "name": "idx_sale_items_product",
+        "idx_sale_items_variant": {
+          "name": "idx_sale_items_variant",
           "columns": [
             {
-              "expression": "product_id",
+              "expression": "variant_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -5752,12 +6275,12 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "sale_items_product_id_products_id_fk": {
-          "name": "sale_items_product_id_products_id_fk",
+        "sale_items_variant_id_product_variants_id_fk": {
+          "name": "sale_items_variant_id_product_variants_id_fk",
           "tableFrom": "sale_items",
-          "tableTo": "products",
+          "tableTo": "product_variants",
           "columnsFrom": [
-            "product_id"
+            "variant_id"
           ],
           "columnsTo": [
             "id"
@@ -7018,8 +7541,8 @@
           "primaryKey": false,
           "notNull": false
         },
-        "product_id": {
-          "name": "product_id",
+        "variant_id": {
+          "name": "variant_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -7092,11 +7615,11 @@
           "method": "btree",
           "with": {}
         },
-        "idx_grn_items_product": {
-          "name": "idx_grn_items_product",
+        "idx_grn_items_variant": {
+          "name": "idx_grn_items_variant",
           "columns": [
             {
-              "expression": "product_id",
+              "expression": "variant_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -7154,12 +7677,12 @@
           "onDelete": "set null",
           "onUpdate": "no action"
         },
-        "goods_receipt_items_product_id_products_id_fk": {
-          "name": "goods_receipt_items_product_id_products_id_fk",
+        "goods_receipt_items_variant_id_product_variants_id_fk": {
+          "name": "goods_receipt_items_variant_id_product_variants_id_fk",
           "tableFrom": "goods_receipt_items",
-          "tableTo": "products",
+          "tableTo": "product_variants",
           "columnsFrom": [
-            "product_id"
+            "variant_id"
           ],
           "columnsTo": [
             "id"
@@ -7416,8 +7939,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "product_id": {
-          "name": "product_id",
+        "variant_id": {
+          "name": "variant_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -7428,9 +7951,16 @@
           "primaryKey": false,
           "notNull": true
         },
+        "variant_name": {
+          "name": "variant_name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'Default'"
+        },
         "product_sku": {
           "name": "product_sku",
-          "type": "varchar(50)",
+          "type": "varchar(64)",
           "primaryKey": false,
           "notNull": true
         },
@@ -7578,12 +8108,12 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "purchase_order_items_product_id_products_id_fk": {
-          "name": "purchase_order_items_product_id_products_id_fk",
+        "purchase_order_items_variant_id_product_variants_id_fk": {
+          "name": "purchase_order_items_variant_id_product_variants_id_fk",
           "tableFrom": "purchase_order_items",
-          "tableTo": "products",
+          "tableTo": "product_variants",
           "columnsFrom": [
-            "product_id"
+            "variant_id"
           ],
           "columnsTo": [
             "id"

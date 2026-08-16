@@ -35,12 +35,14 @@
     "prod:migrate": "docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env --profile migrate run --rm migrate",
     "prod:ps": "docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env ps",
     "bundle:api": "pnpm --filter=@devsfleet/api build && pnpm deploy --filter=@devsfleet/api --prod --legacy .bundle/api",
-    "bundle:admin": "pnpm --filter=@devsfleet/admin build"
+    "bundle:admin": "pnpm --filter=@devsfleet/admin build",
+    "verify:rls": "node scripts/verify-rls.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
     "prettier": "^3.6.2",
     "turbo": "^2.5.4",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "postgres": "^3.4.7"
   }
 }

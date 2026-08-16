@@ -22,6 +22,8 @@ export interface RequestContextStore {
   /** The branch this request acts on: an explicit override, or the user's own. */
   branchId?: string | null;
   ipAddress?: string;
+  /** Mirrored from the token so plan checks need no lookup. */
+  trialEndsAt?: Date | null;
   startedAt: number;
 }
 
@@ -73,8 +75,9 @@ export const RequestContext = {
     const store = storage.getStore();
     if (!store) return;
     store.user = user;
-    store.tenantId = user.tenantId;
+    store.tenantId = user.tenantId ?? undefined;
     store.branchId = user.branchId;
+    store.trialEndsAt = user.trialEndsAt ? new Date(user.trialEndsAt) : null;
   },
 
   /** Narrow the request to one branch, after the guard has authorised it. */

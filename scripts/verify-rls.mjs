@@ -168,9 +168,26 @@ try {
        WHERE id = (SELECT id FROM inventory_transactions LIMIT 1)`,
     ),
   );
+
+  /**
+   * A row has to exist first. `BEFORE DELETE` triggers fire per row, so a
+   * DELETE that matches nothing raises nothing — and on a freshly seeded
+   * database `audit_log` is empty, which made this check report a failure the
+   * schema had not actually committed.
+   */
+  await migrator`
+    INSERT INTO audit_log (tenant_id, entity_type, action, reason)
+    VALUES (${realTenant.id}, 'rls_probe', 'create', 'immutability check')
+  `;
   check(
     "audit_log rejects DELETE",
-    await expectRejected(`DELETE FROM audit_log WHERE true`),
+    await expectRejected(`DELETE FROM audit_log WHERE entity_type = 'rls_probe'`),
+  );
+  check(
+    "audit_log rejects UPDATE",
+    await expectRejected(
+      `UPDATE audit_log SET action = 'tampered' WHERE entity_type = 'rls_probe'`,
+    ),
   );
 
   // ---------------------------------------------------------------------------
