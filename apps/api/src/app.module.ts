@@ -25,7 +25,12 @@ import { ProductsModule } from "./modules/products/products.module.js";
 import { DayCloseModule } from "./modules/day-close/day-close.module.js";
 import { ExpensesModule } from "./modules/expenses/expenses.module.js";
 import { HeldCartsModule } from "./modules/held-carts/held-carts.module.js";
+import { PurchasesModule } from "./modules/purchases/purchases.module.js";
+import { QuotationsModule } from "./modules/quotations/quotations.module.js";
+import { ReportsModule } from "./modules/reports/reports.module.js";
 import { SalesModule } from "./modules/sales/sales.module.js";
+import { StockTakeModule } from "./modules/stock-take/stock-take.module.js";
+import { SuppliersModule } from "./modules/suppliers/suppliers.module.js";
 import { SyncModule } from "./modules/sync/sync.module.js";
 import { UsersModule } from "./modules/users/users.module.js";
 
@@ -124,6 +129,11 @@ import { UsersModule } from "./modules/users/users.module.js";
     HeldCartsModule,
     DayCloseModule,
     ExpensesModule,
+    SuppliersModule,
+    PurchasesModule,
+    StockTakeModule,
+    QuotationsModule,
+    ReportsModule,
     SyncModule,
   ],
   providers: [

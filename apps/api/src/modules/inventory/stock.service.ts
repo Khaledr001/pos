@@ -311,6 +311,26 @@ export class StockService {
     const userId = RequestContext.get()?.user?.id ?? null;
     const delta = Money.toDecimalString(signedQuantity, 4);
 
+    /**
+     * Weighted average cost, recomputed on the way IN.
+     *
+     *   new = (onHand x oldAverage + arriving x arrivingCost) / (onHand + arriving)
+     *
+     * Only stock coming in moves it. Selling at any price does not change what
+     * the remaining units cost, and letting an outbound movement rewrite the
+     * average would make margin depend on the order things were sold in.
+     *
+     * Computed in SQL against the row being locked by this very statement, so
+     * two receipts landing together cannot both read the same "old" average and
+     * each overwrite the other's result.
+     *
+     * `GREATEST(..., 0)` guards the denominator: a variant whose on-hand has
+     * gone negative through an out-of-order sale would otherwise divide by a
+     * quantity smaller than what is arriving, and produce an average far above
+     * anything ever paid.
+     */
+    const arriving = signedQuantity > 0n && input.unitCost ? input.unitCost : null;
+
     // Upsert so the first movement for a (variant, branch) does not need a
     // separate "create the inventory row" step that every caller could forget.
     const [balance] = await tx
@@ -326,10 +346,28 @@ export class StockService {
         target: [schema.inventory.variantId, schema.inventory.branchId],
         set: {
           quantity: sql`${schema.inventory.quantity} + ${delta}::numeric`,
+          ...(arriving
+            ? {
+                averageCost: sql`
+                  CASE
+                    WHEN ${schema.inventory.averageCost} IS NULL THEN ${arriving}::numeric
+                    ELSE round(
+                      (
+                        GREATEST(${schema.inventory.quantity}, 0) * ${schema.inventory.averageCost}
+                        + ${delta}::numeric * ${arriving}::numeric
+                      ) / NULLIF(GREATEST(${schema.inventory.quantity}, 0) + ${delta}::numeric, 0),
+                      4
+                    )
+                  END`,
+              }
+            : {}),
           updatedAt: new Date(),
         },
       })
-      .returning({ quantity: schema.inventory.quantity });
+      .returning({
+        quantity: schema.inventory.quantity,
+        averageCost: schema.inventory.averageCost,
+      });
 
     if (!balance) {
       throw new AppError(ERROR_CODES.INTERNAL_ERROR, "Could not update the stock balance");

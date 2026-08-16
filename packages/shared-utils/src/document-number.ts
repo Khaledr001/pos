@@ -20,6 +20,7 @@ export const DOCUMENT_PREFIXES = {
   goods_receipt: "GRN",
   stock_transfer: "TRF",
   stock_adjustment: "ADJ",
+  stock_count: "SC",
   payment: "PAY",
   cash_session: "CS",
 } as const;
