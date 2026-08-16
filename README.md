@@ -44,13 +44,14 @@ pnpm dev               # all apps
 | API docs | http://localhost:3001/api/v1/docs |
 | Admin panel | http://localhost:3000 |
 | POS | Electron window |
-
-Working on POS screens only? `pnpm --filter @devsfleet/pos dev:ui` serves the
-renderer at http://localhost:5173 with sample data and no Electron window.
 | MinIO console | http://localhost:9001 |
 
 Seeded login: `admin@devsfleet.com` / `ChangeMe123!` · POS PIN `1234`.
 Change both before deploying.
+
+Working on POS screens only? `pnpm --filter @devsfleet/pos dev:ui` runs the
+renderer alone at http://localhost:5173 — sample data, no Electron window, no
+database needed.
 
 > **Docker**: the active context is `desktop-linux` and its daemon is not
 > running. Either start Docker Desktop, or run `sudo usermod -aG docker $USER`
