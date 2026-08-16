@@ -1,5 +1,6 @@
 import { DEFAULT_TENANT_SETTINGS } from "@devsfleet/shared-types";
 import { Money, calculateDocument, type DocumentTotals } from "@devsfleet/shared-utils";
+import { useMemo } from "react";
 import { create } from "zustand";
 import type { PosCustomer, PosProduct } from "../lib/pos-data.js";
 
@@ -47,6 +48,15 @@ interface CartState {
   setNote: (note: string) => void;
   clear: () => void;
 
+  /**
+   * Non-reactive readers.
+   *
+   * Call these from event handlers via `useCart.getState()`. Do NOT pass them
+   * to a `useCart(...)` selector — they build a fresh object on every call, so
+   * `useSyncExternalStore` would see a new snapshot each render and loop
+   * forever (React error #185). Components use the `useCartTotals` /
+   * `useFloorViolations` hooks below instead.
+   */
   totals: () => DocumentTotals;
   lineCount: () => number;
   unitCount: () => string;
@@ -202,3 +212,59 @@ export const useCart = create<CartState>((set, get) => ({
     });
   },
 }));
+
+// -----------------------------------------------------------------------------
+// Reactive selectors
+// -----------------------------------------------------------------------------
+
+/**
+ * Cart totals, recomputed only when the cart actually changes.
+ *
+ * The naive form — `useCart((s) => s.totals())` — is an infinite render loop.
+ * zustand compares snapshots with `Object.is`, `calculateDocument` returns a
+ * fresh object every call, so every render produces a "changed" snapshot and
+ * schedules another render. React eventually throws error #185.
+ *
+ * Subscribing to `lines` and `documentDiscountPercent` instead is safe: those
+ * are stable references that only change when the cart is genuinely mutated,
+ * and the expensive part is then memoised against them.
+ */
+export function useCartTotals(): DocumentTotals {
+  const lines = useCart((state) => state.lines);
+  const documentDiscountPercent = useCart((state) => state.documentDiscountPercent);
+
+  return useMemo(
+    () =>
+      calculateDocument({
+        taxMode: TAX_MODE,
+        decimals: DECIMALS,
+        documentDiscountPercent,
+        lines: lines.map((line) => ({
+          quantity: line.quantity,
+          unitPrice: line.unitPrice,
+          discountPercent: line.discountPercent,
+          taxPercent: line.product.taxPercent,
+        })),
+      }),
+    [lines, documentDiscountPercent],
+  );
+}
+
+/** Same reasoning as useCartTotals: `filter` returns a new array every call. */
+export function useFloorViolations(): CartLine[] {
+  const lines = useCart((state) => state.lines);
+
+  return useMemo(
+    () =>
+      lines.filter((line) => {
+        if (line.floorOverridden) return false;
+        const floor = line.product.minSellingPrice;
+        if (!floor) return false;
+
+        const unit = Money.toMinor(line.unitPrice);
+        const discount = Money.percentOf(unit, line.discountPercent || "0");
+        return unit - discount < Money.toMinor(floor);
+      }),
+    [lines],
+  );
+}

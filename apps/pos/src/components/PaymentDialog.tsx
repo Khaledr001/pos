@@ -63,15 +63,31 @@ export function PaymentDialog({
   const [method, setMethod] = useState<PaymentMethod>("cash");
   const [input, setInput] = useState("");
   const [reference, setReference] = useState("");
+  /**
+   * The fils written off when cash settles the bill.
+   *
+   * The UAE has no coin below 25 fils, so a bill of 174.31 is physically
+   * settled with 174.25 and the remaining 0.06 is a rounding adjustment on the
+   * sale. Rounding the TENDER instead of the BILL is the trap: it leaves 0.06
+   * outstanding, which no amount of cash can ever clear, and the sale can never
+   * be completed.
+   */
+  const [rounding, setRounding] = useState<Money.Minor4>(0n);
 
   const paid = useMemo(
     () => tenders.reduce<Money.Minor4>((sum, t) => Money.add(sum, t.amount), 0n),
     [tenders],
   );
-  const outstanding = Money.subtract(total, paid);
+
+  /** Rounding counts towards settlement — it is forgiven, not owed. */
+  const covered = Money.add(paid, rounding);
+  const outstanding = Money.subtract(total, covered);
   const settled = !Money.isPositive(outstanding);
   /** Overpayment only ever comes back as cash. */
   const change = settled ? Money.negate(outstanding) : 0n;
+
+  /** What cash physically settles the remaining balance. */
+  const cashSettlement = roundCash(Money.max(outstanding, 0n));
 
   const creditAvailable = customer
     ? Money.subtract(
@@ -87,12 +103,18 @@ export function PaymentDialog({
       setMethod("cash");
       setInput("");
       setReference("");
+      setRounding(0n);
     }
   }, [open]);
 
   const typed = parseAmount(input);
-  /** Empty input means "the rest of it" — the common case. */
-  const pending = typed ?? (Money.isPositive(outstanding) ? outstanding : 0n);
+  /**
+   * Empty input means "the rest of it" — the common case. For cash that is the
+   * rounded figure, because that is what the customer can actually hand over.
+   */
+  const pending =
+    typed ??
+    (method === "cash" ? cashSettlement : Money.max(outstanding, 0n));
 
   const creditBlocked =
     method === "credit" &&
@@ -110,20 +132,34 @@ export function PaymentDialog({
   function addTender() {
     if (!Money.isPositive(pending) || creditBlocked) return;
 
-    // Cash is what physically enters the drawer, so it is what gets rounded.
-    const value = method === "cash" ? roundCash(pending) : pending;
+    /**
+     * A cash tender that reaches the rounded settlement figure closes the bill,
+     * and the sub-25-fils remainder becomes the rounding adjustment. Anything
+     * smaller is a genuine part-payment and leaves the balance owing.
+     */
+    if (method === "cash" && pending >= cashSettlement && Money.isPositive(outstanding)) {
+      setRounding((current) =>
+        Money.add(current, Money.subtract(outstanding, cashSettlement)),
+      );
+    }
 
     setTenders((current) => [
       ...current,
       {
         id: crypto.randomUUID(),
         method,
-        amount: value,
+        amount: pending,
         ...(reference.trim() ? { reference: reference.trim() } : {}),
       },
     ]);
     setInput("");
     setReference("");
+  }
+
+  /** Removing a tender must give back the rounding it triggered. */
+  function removeTender(id: string) {
+    setTenders((current) => current.filter((t) => t.id !== id));
+    setRounding(0n);
   }
 
   const activeMethod = METHODS.find((m) => m.method === method);
@@ -201,7 +237,9 @@ export function PaymentDialog({
               className="field num mt-1.5 text-right text-xl font-semibold"
             />
             <p className="mt-1.5 text-[11px] text-zinc-500">
-              Leave blank to take the full remaining {money(outstanding)}.
+              {method === "cash" && cashSettlement !== outstanding && Money.isPositive(outstanding)
+                ? `Leave blank to take ${money(cashSettlement)} — rounded to the nearest 25 fils, the smallest coin in circulation.`
+                : `Leave blank to take the full remaining ${money(Money.max(outstanding, 0n))}.`}
             </p>
           </div>
 
@@ -233,7 +271,7 @@ export function PaymentDialog({
             onClick={addTender}
             disabled={!Money.isPositive(pending) || creditBlocked}
           >
-            Add {money(method === "cash" ? roundCash(pending) : pending)}
+            Add {money(pending)}
           </button>
 
           {/* Tenders taken so far */}
@@ -259,9 +297,7 @@ export function PaymentDialog({
                     </span>
                     <button
                       type="button"
-                      onClick={() =>
-                        setTenders((c) => c.filter((t) => t.id !== tender.id))
-                      }
+                      onClick={() => removeTender(tender.id)}
                       aria-label="Remove payment"
                       className="rounded p-1 text-zinc-600 hover:bg-signal-red/15 hover:text-signal-red"
                     >
@@ -286,6 +322,9 @@ export function PaymentDialog({
           <div className="space-y-2 rounded-lg bg-steel-800 p-3">
             <Line label="Due" value={amount(total)} />
             <Line label="Paid" value={amount(paid)} />
+            {Money.isPositive(rounding) && (
+              <Line label="Rounding" value={`−${amount(rounding)}`} tone="brass" />
+            )}
             <div className="tear pt-2">
               {settled ? (
                 <Line

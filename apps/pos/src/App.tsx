@@ -1,123 +1,119 @@
-import { DEFAULT_TENANT_SETTINGS } from "@devsfleet/shared-types";
-import { Money, calculateDocument } from "@devsfleet/shared-utils";
-import { useEffect, useState } from "react";
-import type { DevsfleetBridge } from "../electron/preload.js";
+import { Banknote, Settings2, ShoppingCart, Undo2 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { HashRouter, NavLink, Navigate, Route, Routes } from "react-router-dom";
+import { TopBar } from "./components/TopBar.js";
+import { useHotkeys } from "./lib/keyboard.js";
+import { hasBridge, posData, type PosCashSession } from "./lib/pos-data.js";
+import { CashRegister } from "./pages/CashRegister.js";
+import { Login } from "./pages/Login.js";
+import { Returns } from "./pages/Returns.js";
+import { Sale } from "./pages/Sale.js";
+import { Settings } from "./pages/Settings.js";
+import { useAuth } from "./store/auth.js";
 
-declare global {
-  interface Window {
-    devsfleet: DevsfleetBridge;
-  }
+/**
+ * HashRouter, not BrowserRouter.
+ *
+ * The renderer is loaded from a `file://` URL in a packaged build, where the
+ * History API has no server to resolve a path against and a refresh on
+ * /returns would 404. The hash keeps routing entirely client-side.
+ */
+export function App() {
+  return (
+    <HashRouter>
+      <Shell />
+    </HashRouter>
+  );
+}
+
+function Shell() {
+  const cashier = useAuth((s) => s.cashier);
+  const [session, setSession] = useState<PosCashSession | null>(null);
+
+  const refreshSession = useCallback(() => {
+    void posData.getOpenCashSession().then(setSession);
+  }, []);
+
+  useEffect(refreshSession, [refreshSession, cashier]);
+
+  // The whole app is behind sign-in. A till left on the sale screen with no
+  // cashier attached is an unattributed transaction waiting to happen.
+  if (!cashier) return <Login />;
+
+  return (
+    <div className="flex h-full flex-col">
+      <TopBar
+        cashSessionFloat={session?.openingAmount ?? null}
+        onSyncNow={() => hasBridge() && void window.devsfleet.sync.now()}
+      />
+
+      <div className="flex min-h-0 flex-1">
+        <SideNav />
+
+        <main className="flex min-w-0 flex-1 flex-col">
+          <Routes>
+            <Route
+              path="/"
+              element={<Sale cashSessionId={session?.id ?? null} />}
+            />
+            <Route
+              path="/drawer"
+              element={<CashRegister session={session} onChanged={refreshSession} />}
+            />
+            <Route path="/returns" element={<Returns />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </main>
+      </div>
+    </div>
+  );
 }
 
 /**
- * Scaffold shell.
+ * Four destinations, icons and labels both.
  *
- * It renders a cart priced by the shared totals engine rather than static
- * markup, so a successful build proves the whole chain works: the renderer
- * resolves workspace packages, the preload bridge is reachable, and money
- * arithmetic behaves identically here and in the API.
- *
- * Replaced by the real POS screens (Login, POS, CashRegister, Returns,
- * Settings) in Phase 3.
+ * Icon-only navigation is a false economy on a till: staff turnover is high and
+ * a new cashier should not have to learn a pictogram to find returns.
  */
-export function App() {
-  const [syncStatus, setSyncStatus] = useState<string>("checking…");
-
-  useEffect(() => {
-    // The bridge is absent when the renderer runs in a plain browser tab
-    // (`pnpm dev` without Electron), so this must not assume it exists.
-    if (typeof window.devsfleet === "undefined") {
-      setSyncStatus("no electron bridge — running in a browser");
-      return;
-    }
-
-    let cancelled = false;
-    void window.devsfleet.sync.status().then((status) => {
-      if (!cancelled) setSyncStatus(status.online ? "online" : "offline");
-    });
-
-    const unsubscribe = window.devsfleet.sync.onStatusChange((status) =>
-      setSyncStatus(status.online ? "online" : "offline"),
-    );
-
-    return () => {
-      cancelled = true;
-      unsubscribe();
-    };
-  }, []);
-
-  const cart = [
-    { name: 'PVC Elbow 1" 90°', sku: "PVC-ELB-001", quantity: 50, unitPrice: "2.20" },
-    { name: "Basin Mixer Tap Chrome", sku: "TAP-MIX-CHR", quantity: 1, unitPrice: "135.00" },
+function SideNav() {
+  const items = [
+    { to: "/", label: "Sell", icon: ShoppingCart, end: true },
+    { to: "/drawer", label: "Drawer", icon: Banknote },
+    { to: "/returns", label: "Returns", icon: Undo2 },
+    { to: "/settings", label: "Settings", icon: Settings2 },
   ];
 
-  const totals = calculateDocument({
-    taxMode: DEFAULT_TENANT_SETTINGS.tax.mode,
-    lines: cart.map((line) => ({
-      quantity: line.quantity,
-      unitPrice: line.unitPrice,
-      taxPercent: DEFAULT_TENANT_SETTINGS.tax.defaultRate,
-    })),
+  useHotkeys({
+    "ctrl+1": () => (location.hash = "#/"),
+    "ctrl+2": () => (location.hash = "#/drawer"),
+    "ctrl+3": () => (location.hash = "#/returns"),
+    "ctrl+4": () => (location.hash = "#/settings"),
   });
 
-  const money = (amount: bigint) =>
-    Money.formatMoney(amount, { currency: DEFAULT_TENANT_SETTINGS.currency.base });
-
   return (
-    <div className="app">
-      <header className="app__header">
-        <h1>DevsFleet POS</h1>
-        <span className={`badge badge--${syncStatus === "online" ? "ok" : "warn"}`}>
-          {syncStatus}
-        </span>
-      </header>
-
-      <main className="app__main">
-        <table className="cart">
-          <thead>
-            <tr>
-              <th>Item</th>
-              <th className="num">Qty</th>
-              <th className="num">Price</th>
-              <th className="num">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {cart.map((line, i) => (
-              <tr key={line.sku}>
-                <td>
-                  {line.name}
-                  <span className="sku">{line.sku}</span>
-                </td>
-                <td className="num">{line.quantity}</td>
-                <td className="num">{line.unitPrice}</td>
-                <td className="num">{money(totals.lines[i]!.total)}</td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr>
-              <td colSpan={3}>Subtotal</td>
-              <td className="num">{money(totals.subtotal)}</td>
-            </tr>
-            <tr>
-              <td colSpan={3}>
-                {DEFAULT_TENANT_SETTINGS.tax.label} {DEFAULT_TENANT_SETTINGS.tax.defaultRate}%
-              </td>
-              <td className="num">{money(totals.taxAmount)}</td>
-            </tr>
-            <tr className="cart__total">
-              <td colSpan={3}>Total</td>
-              <td className="num">{money(totals.total)}</td>
-            </tr>
-          </tfoot>
-        </table>
-
-        <p className="note">
-          Scaffold. Cart, payments, cash register, returns and hardware land in
-          Phase 3 — see <code>docs/ROADMAP.md</code>.
-        </p>
-      </main>
-    </div>
+    <nav
+      aria-label="Sections"
+      className="flex w-20 shrink-0 flex-col gap-1 border-r border-steel-700 bg-steel-850 p-2"
+    >
+      {items.map(({ to, label, icon: Icon, end }) => (
+        <NavLink
+          key={to}
+          to={to}
+          end={end}
+          className={({ isActive }) =>
+            [
+              "flex flex-col items-center gap-1.5 rounded-lg py-3 text-[11px] font-medium transition-colors",
+              isActive
+                ? "bg-brass/12 text-brass"
+                : "text-zinc-500 hover:bg-steel-800 hover:text-chalk",
+            ].join(" ")
+          }
+        >
+          <Icon className="size-5" aria-hidden />
+          {label}
+        </NavLink>
+      ))}
+    </nav>
   );
 }

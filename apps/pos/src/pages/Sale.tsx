@@ -10,7 +10,7 @@ import { ReceiptPanel } from "../components/ReceiptPanel.js";
 import { useBarcodeScanner, useHotkeys } from "../lib/keyboard.js";
 import { amount, money } from "../lib/money.js";
 import { hasBridge, posData, type PosCustomer } from "../lib/pos-data.js";
-import { useCart, type CartLine } from "../store/cart.js";
+import { useCart, useCartTotals, useFloorViolations, type CartLine } from "../store/cart.js";
 import { useAuth } from "../store/auth.js";
 
 /**
@@ -23,8 +23,8 @@ import { useAuth } from "../store/auth.js";
  */
 export function Sale({ cashSessionId }: { cashSessionId: string | null }) {
   const cart = useCart();
-  const totals = useCart((s) => s.totals());
-  const violations = useCart((s) => s.floorViolations());
+  const totals = useCartTotals();
+  const violations = useFloorViolations();
   const { can } = useAuth();
 
   const [paymentOpen, setPaymentOpen] = useState(false);

@@ -1,7 +1,7 @@
 import { Money } from "@devsfleet/shared-utils";
 import { AlertTriangle, Minus, Plus, Trash2, UserPlus, X } from "lucide-react";
 import { amount, money, quantity as fmtQuantity, TAX } from "../lib/money.js";
-import { useCart, type CartLine } from "../store/cart.js";
+import { useCart, useCartTotals, useFloorViolations, type CartLine } from "../store/cart.js";
 
 /**
  * The cart, set as the receipt it will print.
@@ -23,8 +23,8 @@ export function ReceiptPanel({
 }) {
   const { lines, customer, setCustomer, removeLine, adjustQuantity, documentDiscountPercent } =
     useCart();
-  const totals = useCart((s) => s.totals());
-  const violations = useCart((s) => s.floorViolations());
+  const totals = useCartTotals();
+  const violations = useFloorViolations();
   const violationKeys = new Set(violations.map((line) => line.key));
 
   return (
