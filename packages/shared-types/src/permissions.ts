@@ -76,6 +76,13 @@ export const PERMISSIONS = [
   "settings:write",
   "device:manage",
   "audit:read",
+
+  // financial operations
+  "day_close:read",
+  "day_close:manage", // open and close a day — never the cashier who sold on it
+  "expense:read",
+  "expense:write",
+  "expense:delete",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -138,12 +145,21 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, readonly PermissionGrant[]
     "branch:read",
     "user:read",
     "settings:read",
+    "day_close:read",
+    "day_close:manage",
+    "expense:read",
+    "expense:write",
+    "expense:delete",
   ],
 
   /**
    * Deliberately cannot see cost price or margin (`report:financial`), cannot
    * void a sale, and cannot sell below the floor price. Those three together
    * are the shrinkage surface at the counter.
+   *
+   * `day_close:read` without `day_close:manage` is the same principle: a
+   * cashier can see what the drawer should hold, but cannot sign off the day
+   * they were selling on.
    */
   cashier: [
     "product:read",
@@ -163,6 +179,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, readonly PermissionGrant[]
     "cash:movement",
     "payment:read",
     "payment:write",
+    "day_close:read",
+    "expense:read",
+    "expense:write",
   ],
 
   warehouse: [

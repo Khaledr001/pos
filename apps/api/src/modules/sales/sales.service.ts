@@ -183,12 +183,24 @@ export class SalesService {
       }
 
       // --- payment and credit ---------------------------------------------
-      const paid = (dto.payments ?? []).reduce<bigint>(
+      /**
+       * Tendered is not the same as taken.
+       *
+       * A customer hands over 100 for a 5.78 basket; 94.22 goes straight back
+       * as change. Recording the tender would book that change as revenue —
+       * the drawer reads 94.22 over at close-out, the day's cash total is
+       * wrong, and every VAT figure derived from it is wrong too.
+       *
+       * So each tender is ALLOCATED against what is still owed, and only the
+       * allocated part becomes a payment row.
+       */
+      const tendered = (dto.payments ?? []).reduce<bigint>(
         (sum, p) => Money.add(sum, Money.toMinor(String(p.amount))),
         0n,
       );
+      const paid = Money.min(tendered, totals.total);
       const due = Money.max(Money.subtract(totals.total, paid), 0n);
-      const change = Money.max(Money.subtract(paid, totals.total), 0n);
+      const change = Money.max(Money.subtract(tendered, totals.total), 0n);
 
       if (Money.isPositive(due)) {
         // Unpaid means it goes on an account, and a walk-in has none.
@@ -310,7 +322,29 @@ export class SalesService {
         }
       }
 
+      let unallocated = totals.total;
       for (const payment of dto.payments ?? []) {
+        const offered = Money.toMinor(String(payment.amount));
+        const applied = Money.min(offered, unallocated);
+        unallocated = Money.subtract(unallocated, applied);
+
+        /**
+         * Change comes out of the drawer, so only cash can produce it. A card
+         * charged above the total is an overcharge, not change — silently
+         * dropping the excess would leave the customer's statement and the
+         * receipt disagreeing, with nothing recorded to explain it.
+         */
+        if (applied !== offered && payment.method !== "cash") {
+          throw new AppError(
+            ERROR_CODES.VALIDATION_FAILED,
+            `A ${payment.method} payment cannot exceed the amount due. Change can only be given in cash.`,
+          );
+        }
+
+        // A tender that lands entirely on already-settled value is not a
+        // payment at all — recording a zero row would clutter every statement.
+        if (!Money.isPositive(applied)) continue;
+
         await tx.insert(schema.payments).values({
           tenantId,
           branchId: dto.branchId,
@@ -318,7 +352,7 @@ export class SalesService {
           customerId: dto.customerId ?? null,
           cashSessionId: dto.cashSessionId ?? null,
           method: payment.method as PaymentMethod,
-          amount: String(payment.amount),
+          amount: Money.toDecimalString(applied, 4),
           currency: settings.currency.base,
           ...(payment.reference ? { reference: payment.reference } : {}),
           createdBy: user.id,

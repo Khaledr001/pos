@@ -217,6 +217,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
       case ERROR_CODES.DUPLICATE_IMAGE:
       case ERROR_CODES.CONFLICT:
       case ERROR_CODES.CASH_SESSION_ALREADY_OPEN:
+      case ERROR_CODES.DAY_ALREADY_OPEN:
+      case ERROR_CODES.DAY_ALREADY_CLOSED:
         return HttpStatus.CONFLICT;
       case ERROR_CODES.VALIDATION_FAILED:
         return HttpStatus.BAD_REQUEST;

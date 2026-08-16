@@ -491,6 +491,80 @@ function saleLines(db: Database.Database, clientId: string): unknown[] {
 }
 
 // -----------------------------------------------------------------------------
+// Held carts
+// -----------------------------------------------------------------------------
+
+export interface BridgeHeldCart {
+  id: string;
+  label: string | null;
+  lineCount: number;
+  total: string;
+  customerName: string | null;
+  heldAt: string;
+}
+
+export function holdCart(cart: {
+  label: string | null;
+  lineCount: number;
+  total: string;
+  customerName: string | null;
+  cartData: unknown;
+}): BridgeHeldCart {
+  const db = getDatabase();
+  const id = randomUUID();
+  const heldAt = new Date().toISOString();
+
+  db.prepare(
+    `INSERT INTO held_carts (id, label, line_count, total, customer_name, cart_data, held_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    id,
+    cart.label,
+    cart.lineCount,
+    cart.total,
+    cart.customerName,
+    JSON.stringify(cart.cartData),
+    heldAt,
+  );
+
+  return { id, ...cart, heldAt, cartData: undefined } as BridgeHeldCart;
+}
+
+export function listHeldCarts(limit = 50): BridgeHeldCart[] {
+  return getDatabase()
+    .prepare(
+      `SELECT id, label, line_count AS lineCount, total,
+              customer_name AS customerName, held_at AS heldAt
+       FROM held_carts ORDER BY held_at DESC LIMIT ?`,
+    )
+    .all(limit) as BridgeHeldCart[];
+}
+
+/**
+ * Take a cart back, and stop holding it in the same breath.
+ *
+ * Restoring without removing leaves the same basket parked AND on a till: the
+ * next cashier rings up a cart that is already being paid for at the counter.
+ */
+export function restoreHeldCart(id: string): unknown {
+  const db = getDatabase();
+
+  return db.transaction(() => {
+    const row = db.prepare(`SELECT cart_data FROM held_carts WHERE id = ?`).get(id) as
+      | { cart_data: string }
+      | undefined;
+    if (!row) return null;
+
+    db.prepare(`DELETE FROM held_carts WHERE id = ?`).run(id);
+    return JSON.parse(row.cart_data) as unknown;
+  })();
+}
+
+export function discardHeldCart(id: string): void {
+  getDatabase().prepare(`DELETE FROM held_carts WHERE id = ?`).run(id);
+}
+
+// -----------------------------------------------------------------------------
 // Outbox
 // -----------------------------------------------------------------------------
 

@@ -22,6 +22,9 @@ import { CashRegisterModule } from "./modules/cash-register/cash-register.module
 import { CatalogModule } from "./modules/catalog/catalog.module.js";
 import { InventoryModule } from "./modules/inventory/inventory.module.js";
 import { ProductsModule } from "./modules/products/products.module.js";
+import { DayCloseModule } from "./modules/day-close/day-close.module.js";
+import { ExpensesModule } from "./modules/expenses/expenses.module.js";
+import { HeldCartsModule } from "./modules/held-carts/held-carts.module.js";
 import { SalesModule } from "./modules/sales/sales.module.js";
 import { SyncModule } from "./modules/sync/sync.module.js";
 import { UsersModule } from "./modules/users/users.module.js";
@@ -118,6 +121,9 @@ import { UsersModule } from "./modules/users/users.module.js";
     InventoryModule,
     CashRegisterModule,
     SalesModule,
+    HeldCartsModule,
+    DayCloseModule,
+    ExpensesModule,
     SyncModule,
   ],
   providers: [

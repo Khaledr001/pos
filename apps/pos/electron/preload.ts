@@ -88,6 +88,14 @@ const api = {
     ): Promise<void> => ipcRenderer.invoke("cash:movement", type, amount, reason),
   },
 
+  carts: {
+    /** Parked carts live on the terminal — parking one must work offline. */
+    hold: (cart: unknown): Promise<unknown> => ipcRenderer.invoke("carts:hold", cart),
+    list: (): Promise<unknown[]> => ipcRenderer.invoke("carts:list"),
+    restore: (id: string): Promise<unknown> => ipcRenderer.invoke("carts:restore", id),
+    discard: (id: string): Promise<void> => ipcRenderer.invoke("carts:discard", id),
+  },
+
   sales: {
     /**
      * Writes the sale to local SQLite and queues it in the outbox, then

@@ -109,6 +109,8 @@ checks pass.
 - [x] Returns and refunds against an original sale
 - [x] **Sync engine** — push outbox (idempotent on `clientId`), pull by checkpoint, tombstones
 - [x] Offline stock, decremented locally before any sync, released once acknowledged
+- [x] Held carts — park, list, restore, discard
+- [x] Day close and expenses — per branch, frozen at close
 - [ ] Conflict handling per the table in the implementation plan
 - [x] `sync` module in the API, matching `shared-types/sync.ts` exactly
 

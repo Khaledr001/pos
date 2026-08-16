@@ -63,6 +63,10 @@ export async function runMigrations(options: MigrateOptions): Promise<MigrateRes
   const client = postgres(url, { max: 1, onnotice: () => {} });
 
   try {
+    // Extensions and the RLS helper functions, before anything that uses them.
+    log("→ applying sql/bootstrap.sql");
+    await client.unsafe(await readFile(resolve(sqlFolder, "bootstrap.sql"), "utf8"));
+
     log("→ applying drizzle migrations");
     await migrate(drizzle(client), {
       migrationsFolder,

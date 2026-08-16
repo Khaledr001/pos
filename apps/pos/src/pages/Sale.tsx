@@ -3,6 +3,7 @@ import { Money } from "@devsfleet/shared-utils";
 import { CheckCircle2, Printer, Search as SearchIcon } from "lucide-react";
 import { useCallback, useState } from "react";
 import { Dialog } from "../components/Dialog.js";
+import { HeldCartsDialog } from "../components/HeldCartsDialog.js";
 import { KeyRail, type KeyAction } from "../components/KeyRail.js";
 import { PaymentDialog } from "../components/PaymentDialog.js";
 import { ProductSearch } from "../components/ProductSearch.js";
@@ -33,6 +34,9 @@ export function Sale({ cashSessionId }: { cashSessionId: string | null }) {
   const [completed, setCompleted] = useState<{ change: Money.Minor4 } | null>(null);
   const [focusSignal, setFocusSignal] = useState(0);
   const [scanMiss, setScanMiss] = useState<string | null>(null);
+  const [heldOpen, setHeldOpen] = useState(false);
+  const [labelling, setLabelling] = useState(false);
+  const [label, setLabel] = useState("");
 
   const empty = cart.lines.length === 0;
   const blocked = violations.length > 0;
@@ -61,10 +65,40 @@ export function Sale({ cashSessionId }: { cashSessionId: string | null }) {
     setPaymentOpen(true);
   }, [empty, blocked, cashSessionId]);
 
+  /**
+   * F8 parks the cart. An empty till opens the list instead — the cashier
+   * pressing it with nothing on screen wants the cart they parked, not to park
+   * a cart with no lines in it.
+   */
+  const hold = useCallback(() => {
+    if (empty) {
+      setHeldOpen(true);
+      return;
+    }
+    setLabel("");
+    setLabelling(true);
+  }, [empty]);
+
+  async function park() {
+    const cart = useCart.getState();
+    await posData.holdCart({
+      label: label.trim() || null,
+      lineCount: cart.lines.length,
+      total: Money.toDecimalString(cart.totals().total, 2),
+      customerName: cart.customer?.name ?? null,
+      cartData: cart.snapshot(),
+    });
+
+    setLabelling(false);
+    cart.clear();
+    setFocusSignal((n) => n + 1);
+  }
+
   useHotkeys({
     f1: () => setFocusSignal((n) => n + 1),
     f2: () => setCustomerOpen(true),
     f4: charge,
+    f8: hold,
     escape: () => {
       if (!empty) cart.clear();
     },
@@ -121,6 +155,11 @@ export function Sale({ cashSessionId }: { cashSessionId: string | null }) {
       onPress: charge,
       disabled: empty || blocked || !cashSessionId,
       primary: true,
+    },
+    {
+      combo: "F8",
+      label: empty ? "Held carts" : "Hold cart",
+      onPress: hold,
     },
     {
       combo: "Esc",
@@ -182,6 +221,52 @@ export function Sale({ cashSessionId }: { cashSessionId: string | null }) {
         customer={cart.customer}
         onConfirm={completeSale}
       />
+
+      <HeldCartsDialog
+        open={heldOpen}
+        onClose={() => setHeldOpen(false)}
+        onRestore={(cartData) => useCart.getState().restore(cartData as never)}
+      />
+
+      {/* A label is optional but asked for every time: two unlabelled carts are
+          indistinguishable at exactly the moment you need to tell them apart. */}
+      <Dialog
+        open={labelling}
+        onClose={() => setLabelling(false)}
+        title="Hold this cart"
+        description="Give it a name so you can find it again."
+        width="sm"
+        footer={
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setLabelling(false)}
+              className="flex-1 rounded-lg border border-steel-600 px-4 py-2.5 text-[14px] text-steel-300 hover:bg-steel-800"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void park()}
+              className="flex-1 rounded-lg bg-brass-500 px-4 py-2.5 text-[14px] font-medium text-steel-950 hover:bg-brass-400"
+            >
+              Hold
+            </button>
+          </div>
+        }
+      >
+        <input
+          autoFocus
+          value={label}
+          onChange={(event) => setLabel(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") void park();
+          }}
+          maxLength={80}
+          placeholder="e.g. blue van guy"
+          className="w-full rounded-lg border border-steel-600 bg-steel-900 px-3 py-2.5 text-[15px] text-steel-100 placeholder:text-steel-500 focus:border-brass-500 focus:outline-none"
+        />
+      </Dialog>
 
       <CustomerDialog
         open={customerOpen}

@@ -215,6 +215,16 @@ export const SYNC_STATUSES = asConst(["pending", "synced", "conflict", "resolved
 export type SyncStatus = (typeof SYNC_STATUSES)[number];
 
 /** Entities the POS pushes up or pulls down. Order matters on pull: dependencies first. */
+/**
+ * A closed day is never reopened.
+ *
+ * There is no `reopened` state on purpose: the totals are a signed statement
+ * about a moment, and a state that allows editing them is a state that makes
+ * every prior signature meaningless.
+ */
+export const DAY_CLOSE_STATUSES = asConst(["open", "closed"]);
+export type DayCloseStatus = (typeof DAY_CLOSE_STATUSES)[number];
+
 export const SYNC_ENTITIES = asConst([
   "product",
   "product_price",
@@ -227,6 +237,8 @@ export const SYNC_ENTITIES = asConst([
   "payment",
   "cash_session",
   "cash_movement",
+  "held_cart",
+  "expense",
 ]);
 export type SyncEntity = (typeof SYNC_ENTITIES)[number];
 

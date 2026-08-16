@@ -58,26 +58,10 @@ try {
       GRANT EXECUTE ON FUNCTIONS TO devsfleet_app;
   `);
 
-  // The helper functions live in `public` and were dropped with the schema.
-  await client.unsafe(`
-    CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-    CREATE EXTENSION IF NOT EXISTS "pg_trgm";
-    CREATE EXTENSION IF NOT EXISTS "unaccent";
-    CREATE EXTENSION IF NOT EXISTS "btree_gin";
-
-    CREATE OR REPLACE FUNCTION public.current_tenant_id()
-    RETURNS uuid LANGUAGE sql STABLE PARALLEL SAFE AS $fn$
-        SELECT NULLIF(current_setting('app.current_tenant_id', true), '')::uuid;
-    $fn$;
-
-    CREATE OR REPLACE FUNCTION public.is_platform_admin()
-    RETURNS boolean LANGUAGE sql STABLE PARALLEL SAFE AS $fn$
-        SELECT COALESCE(current_setting('app.is_platform_admin', true), 'off') = 'on';
-    $fn$;
-
-    GRANT EXECUTE ON FUNCTION public.current_tenant_id() TO devsfleet_app;
-    GRANT EXECUTE ON FUNCTION public.is_platform_admin() TO devsfleet_app;
-  `);
+  // The extensions and helper functions went with the schema. `db:migrate`
+  // recreates them from sql/bootstrap.sql — deliberately not duplicated here,
+  // because two copies of a bootstrap drift and only one of them is the copy a
+  // production deploy runs.
 
   console.log("✓ schema reset. Run `pnpm db:migrate` then `pnpm db:seed`.");
 } catch (error) {

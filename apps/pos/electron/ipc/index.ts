@@ -40,6 +40,13 @@ export function registerDataHandlers(ipcMain: IpcMain): void {
     },
   );
 
+  ipcMain.handle("carts:hold", (_event, cart: Parameters<typeof repo.holdCart>[0]) =>
+    repo.holdCart(cart),
+  );
+  ipcMain.handle("carts:list", () => repo.listHeldCarts());
+  ipcMain.handle("carts:restore", (_event, id: string) => repo.restoreHeldCart(id));
+  ipcMain.handle("carts:discard", (_event, id: string) => repo.discardHeldCart(id));
+
   ipcMain.handle("sales:commit", (_event, draft: repo.SaleDraftInput) => {
     const receipt = repo.commitSale(draft);
     // Fire and forget. Waiting for the server would put the counter behind the

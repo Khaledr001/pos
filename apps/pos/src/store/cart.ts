@@ -30,6 +30,15 @@ export interface CartLine {
   addedAt: number;
 }
 
+/** What a held cart stores. Versioned, so an older build can decline politely. */
+export interface CartSnapshot {
+  version: 1;
+  lines: CartLine[];
+  customer: PosCustomer | null;
+  documentDiscountPercent: string;
+  note: string;
+}
+
 interface CartState {
   lines: CartLine[];
   customer: PosCustomer | null;
@@ -47,6 +56,17 @@ interface CartState {
   setDocumentDiscount: (percent: string) => void;
   setNote: (note: string) => void;
   clear: () => void;
+
+  /**
+   * Park the cart, or bring one back.
+   *
+   * The snapshot carries the full `PosProduct` on each line, not just an id.
+   * A cart restored an hour later must ring up at the price it was quoted at —
+   * looking the product up again would silently re-price it, and the customer
+   * standing there was told a number.
+   */
+  snapshot: () => CartSnapshot;
+  restore: (snapshot: CartSnapshot) => void;
 
   /**
    * Non-reactive readers.
@@ -166,6 +186,26 @@ export const useCart = create<CartState>((set, get) => ({
 
   clear() {
     set({ lines: [], customer: null, documentDiscountPercent: "0", note: "" });
+  },
+
+  snapshot() {
+    const { lines, customer, documentDiscountPercent, note } = get();
+    return { version: 1, lines, customer, documentDiscountPercent, note };
+  },
+
+  restore(snapshot) {
+    set({
+      // Fresh keys and timestamps: the old ones would collide with whatever is
+      // on the till now, and a restored line should animate in like any other.
+      lines: snapshot.lines.map((line) => ({
+        ...line,
+        key: crypto.randomUUID(),
+        addedAt: Date.now(),
+      })),
+      customer: snapshot.customer ?? null,
+      documentDiscountPercent: snapshot.documentDiscountPercent ?? "0",
+      note: snapshot.note ?? "",
+    });
   },
 
   totals() {

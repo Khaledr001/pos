@@ -340,6 +340,30 @@ const MIGRATIONS: Array<{ version: number; sql: string }> = [
       ALTER TABLE local_sale_items ADD COLUMN unit_abbr TEXT;
     `,
   },
+  {
+    version: 5,
+    sql: `
+      -- A parked cart, stored whole.
+      --
+      -- Local-first like everything else at the counter: a cart parked while
+      -- the line is down and restored two minutes later must not depend on the
+      -- server having seen it — that is exactly when a queue is forming.
+      --
+      -- Deliberately NOT in the outbox. A held cart is a draft, not a document;
+      -- pushing every parked basket would fill the server with carts that were
+      -- restored and rung up thirty seconds later.
+      CREATE TABLE IF NOT EXISTS held_carts (
+        id            TEXT PRIMARY KEY,
+        label         TEXT,
+        line_count    INTEGER NOT NULL DEFAULT 0,
+        total         TEXT NOT NULL DEFAULT '0',
+        customer_name TEXT,
+        cart_data     TEXT NOT NULL,
+        held_at       TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_held_carts_held_at ON held_carts(held_at DESC);
+    `,
+  },
 ];
 
 function migrate(database: Database.Database): void {

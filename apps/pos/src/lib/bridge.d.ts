@@ -1,6 +1,7 @@
 import type { PrintFormat, SyncStatusSnapshot } from "@devsfleet/shared-types";
 import type {
   PosCashier,
+  PosHeldCart,
   PosCashSession,
   PosCustomer,
   PosProduct,
@@ -45,6 +46,19 @@ export interface DevsfleetBridge {
       amount: string,
       reason: string,
     ): Promise<void>;
+  };
+  carts: {
+    /** Parked carts live on the terminal — parking one must work offline. */
+    hold(cart: {
+      label: string | null;
+      lineCount: number;
+      total: string;
+      customerName: string | null;
+      cartData: unknown;
+    }): Promise<PosHeldCart>;
+    list(): Promise<PosHeldCart[]>;
+    restore(id: string): Promise<unknown>;
+    discard(id: string): Promise<void>;
   };
   sales: {
     commit(draft: PosSaleDraft): Promise<PosSaleReceipt>;

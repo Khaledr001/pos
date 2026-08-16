@@ -38,6 +38,9 @@ Copying its shape is what keeps twenty modules looking like one codebase.
 | `sync` | 3 | ✅ done | POS push/pull, idempotency, per-entity checkpoints |
 | `cash-register` | 3 | ✅ done | Drawer sessions, movements, close-out variance |
 | `sales` | 3 | ✅ done | Sale creation, returns, voids |
+| `held-carts` | 3 | ✅ done | Park a cart, restore it, discard it |
+| `day-close` | 3 | ✅ done | Per-branch daily reconciliation, frozen at close |
+| `expenses` | 3 | ✅ done | Out-of-pocket spending, cash vs non-cash |
 | `payments` | 3 | ⬜ todo | Split tender, credit settlement, refunds |
 | `whatsapp` | 4 | ⬜ todo | Meta Cloud API webhook, send/receive, templates |
 | `ai` | 4 | ⬜ todo | LLM tools, intent extraction, escalation |

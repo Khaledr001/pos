@@ -106,6 +106,15 @@ export interface PosCashSession {
   cashSales: string;
 }
 
+export interface PosHeldCart {
+  id: string;
+  label: string | null;
+  lineCount: number;
+  total: string;
+  customerName: string | null;
+  heldAt: string;
+}
+
 export interface PosCashier {
   id: string;
   name: string;
@@ -141,6 +150,18 @@ export interface PosDataAdapter {
     reason: string,
   ): Promise<void>;
 
+  /**
+   * Park a cart, list what is parked, take one back.
+   *
+   * Local, like everything else here. A cart parked while the line is down and
+   * restored two minutes later must not depend on the server having seen it —
+   * that is the exact moment a queue is forming.
+   */
+  holdCart(cart: { label: string | null; lineCount: number; total: string; customerName: string | null; cartData: unknown }): Promise<PosHeldCart>;
+  listHeldCarts(): Promise<PosHeldCart[]>;
+  restoreHeldCart(id: string): Promise<unknown>;
+  discardHeldCart(id: string): Promise<void>;
+
   /** Writes to the local outbox and returns immediately. Never blocks on network. */
   commitSale(draft: PosSaleDraft): Promise<PosSaleReceipt>;
   recentSales(limit?: number): Promise<PosSaleReceipt[]>;
@@ -165,6 +186,10 @@ const electronAdapter: PosDataAdapter = {
   closeCashSession: (amount, notes) => window.devsfleet.cash.close(amount, notes),
   recordCashMovement: (type, amount, reason) =>
     window.devsfleet.cash.movement(type, amount, reason),
+  holdCart: (cart) => window.devsfleet.carts.hold(cart),
+  listHeldCarts: () => window.devsfleet.carts.list(),
+  restoreHeldCart: (id) => window.devsfleet.carts.restore(id),
+  discardHeldCart: (id) => window.devsfleet.carts.discard(id),
   commitSale: (draft) => window.devsfleet.sales.commit(draft),
   recentSales: (limit) => window.devsfleet.sales.recent(limit),
   findSale: (ref) => window.devsfleet.sales.find(ref),
@@ -277,6 +302,7 @@ const SEED_CUSTOMERS: PosCustomer[] = [
 const browserState = {
   session: null as PosCashSession | null,
   sales: [] as PosSaleReceipt[],
+  carts: [] as Array<PosHeldCart & { cartData: unknown }>,
 };
 
 const matches = (haystack: string, needle: string) =>
@@ -368,6 +394,31 @@ const browserAdapter: PosDataAdapter = {
     browserState.session[key] = String(
       Number(browserState.session[key]) + Number(amount),
     );
+  },
+  async holdCart(cart) {
+    const held = {
+      id: crypto.randomUUID(),
+      label: cart.label,
+      lineCount: cart.lineCount,
+      total: cart.total,
+      customerName: cart.customerName,
+      heldAt: new Date().toISOString(),
+      cartData: cart.cartData,
+    };
+    browserState.carts.unshift(held);
+    return held;
+  },
+  async listHeldCarts() {
+    return browserState.carts;
+  },
+  async restoreHeldCart(id) {
+    const index = browserState.carts.findIndex((c) => c.id === id);
+    if (index < 0) return null;
+    const [held] = browserState.carts.splice(index, 1);
+    return held?.cartData ?? null;
+  },
+  async discardHeldCart(id) {
+    browserState.carts = browserState.carts.filter((c) => c.id !== id);
   },
   async commitSale(draft) {
     const receipt: PosSaleReceipt = { ...draft, saleNumber: null, synced: false };

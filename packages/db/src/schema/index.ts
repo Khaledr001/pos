@@ -24,6 +24,7 @@ export * from "./partners.js";
 export * from "./inventory.js";
 export * from "./sales.js";
 export * from "./payments.js";
+export * from "./financial.js";
 export * from "./purchasing.js";
 export * from "./whatsapp.js";
 export * from "./sync.js";
