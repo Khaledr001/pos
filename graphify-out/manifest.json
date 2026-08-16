@@ -1,0 +1,1066 @@
+{
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/next-env.d.ts": {
+    "mtime": 1786873994.6479666,
+    "hash": "8195d2c60ce847a459ae9d308d6a5724"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/next.config.ts": {
+    "mtime": 1786819838.4684339,
+    "hash": "617471c5ca3a7e036bd84b4bb8910a48"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/postcss.config.mjs": {
+    "mtime": 1786819880.203122,
+    "hash": "a0cc1d073219d2a488673881f06cd111"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/src/app/layout.tsx": {
+    "mtime": 1786871419.6584392,
+    "hash": "67a44f008f90632e9c165be3f093aef0"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/src/app/page.tsx": {
+    "mtime": 1786871460.0842104,
+    "hash": "7e8c0582582ad592987a09f7bf6b58d8"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/src/app/branches/page.tsx": {
+    "mtime": 1786871485.7564993,
+    "hash": "6c455ede0a9c7b99b0e6bb5dfd4a8d70"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/src/app/customers/page.tsx": {
+    "mtime": 1786871612.4771771,
+    "hash": "5be8ecd86ae48d5cf5e4ed6ee973ceed"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/src/app/inventory/page.tsx": {
+    "mtime": 1786871535.62054,
+    "hash": "d1b37ddf93f6897d673b6a124f43795f"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/src/app/login/page.tsx": {
+    "mtime": 1786871436.629092,
+    "hash": "26ff04012815b799233c0a64aab69adf"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/src/app/products/page.tsx": {
+    "mtime": 1786871507.9453115,
+    "hash": "ab5f09b9bc1ab0915e654fc0495f623c"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/src/app/sales/page.tsx": {
+    "mtime": 1786871590.5764022,
+    "hash": "899c43d270661523396aae71d5ec87e4"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/src/app/settings/page.tsx": {
+    "mtime": 1786871572.6910768,
+    "hash": "222ff220ccf2467021f713ba13e71144"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/src/app/whatsapp/page.tsx": {
+    "mtime": 1786871554.733893,
+    "hash": "496b674f096f16b7e28e47986ba6d13e"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/src/components/layout/app-shell.tsx": {
+    "mtime": 1786871407.2861981,
+    "hash": "5014f3d619859f3f4f703fb552133be4"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/src/components/layout/header.tsx": {
+    "mtime": 1786871395.0296698,
+    "hash": "62fabbf5c2243b56ad0c8778225c2d1f"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/src/components/layout/sidebar.tsx": {
+    "mtime": 1786871380.3062575,
+    "hash": "68f66ee37e71ffe689a2a217794961eb"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/src/lib/api-client.ts": {
+    "mtime": 1786819894.4979405,
+    "hash": "f17063a8fed41e37ad4a3499a7982c41"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/src/lib/auth-context.tsx": {
+    "mtime": 1786871352.2951698,
+    "hash": "dfe027294d79220d6b38da0786aae689"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/src/lib/providers.tsx": {
+    "mtime": 1786871364.5461671,
+    "hash": "c06c3ff5f93c6cf489dbe5e2c16e3b47"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/vitest.config.ts": {
+    "mtime": 1786819791.9760106,
+    "hash": "4422e02c35e963e325bfeddd0ee1c978"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/src/app.module.ts": {
+    "mtime": 1786866625.1530955,
+    "hash": "585806014318a2d69a7ccbaa57fc597f"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/src/main.ts": {
+    "mtime": 1786820995.6254623,
+    "hash": "e9f7cb6fc3ea10b0f66e4071b0a9bf46"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/src/common/context/request-context.ts": {
+    "mtime": 1786819273.7575037,
+    "hash": "722dfb97b6d7d86a17b5c5e9f26454bd"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/src/common/decorators/index.ts": {
+    "mtime": 1786819347.9799545,
+    "hash": "ccec7f707c339568e4ff8f5702441a38"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/src/common/filters/all-exceptions.filter.ts": {
+    "mtime": 1786821384.3096604,
+    "hash": "f4a062c3a2e63dd935ce350b07dbc301"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/src/common/guards/jwt-auth.guard.ts": {
+    "mtime": 1786820330.5770285,
+    "hash": "f78457cc600102fb2a9df17e4c175b7c"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/src/common/guards/permissions.guard.ts": {
+    "mtime": 1786819372.7949789,
+    "hash": "8600b22bbfb72304b368ca82bf05806c"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/src/common/interceptors/transform.interceptor.ts": {
+    "mtime": 1786819467.5494118,
+    "hash": "5722a82425cb988243b0a569908eb74c"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/src/common/middleware/request-context.middleware.ts": {
+    "mtime": 1786819525.3341627,
+    "hash": "5d524b1ee15413ee9760131cd9811f9b"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/src/common/pipes/zod-validation.pipe.ts": {
+    "mtime": 1786819539.6318376,
+    "hash": "b966f95cb3d3babb48ecca45f1433cb3"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/src/config/env.ts": {
+    "mtime": 1786820292.3641028,
+    "hash": "2923bb786ccec3d93447864817df06c2"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/src/database/database.module.ts": {
+    "mtime": 1786820957.225356,
+    "hash": "18e40368e500d4fbeeddb3d924b1236e"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/src/database/tenant-database.service.ts": {
+    "mtime": 1786820957.2257006,
+    "hash": "b86b45132a8ccf5b62d9b403679fa5b3"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/src/modules/auth/auth.controller.ts": {
+    "mtime": 1786819625.0077655,
+    "hash": "0deae910a1eb4ea966cb1c7b905d9422"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/src/modules/auth/auth.module.ts": {
+    "mtime": 1786819631.9199653,
+    "hash": "d22f16e2d94c9c2daabeae47c4f27315"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/src/modules/auth/auth.service.ts": {
+    "mtime": 1786820307.1574168,
+    "hash": "c86aa92fcaa54e62d0397bef981eb000"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/src/modules/auth/dto.ts": {
+    "mtime": 1786819614.156432,
+    "hash": "9cac68c4b3763bf9a5b1ff537d179cdb"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/src/modules/auth/jwt.strategy.ts": {
+    "mtime": 1786819551.4829452,
+    "hash": "76eb90db0fd9174b1baf0299373fbf01"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/src/modules/branches/branches.controller.ts": {
+    "mtime": 1786819711.557508,
+    "hash": "7d7e6656c6338f711f0fd1783eb66488"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/src/modules/branches/branches.module.ts": {
+    "mtime": 1786819719.694637,
+    "hash": "d3436252475238e3da425ae42c63cee7"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/src/modules/branches/branches.service.spec.ts": {
+    "mtime": 1786819808.542369,
+    "hash": "b30776fb19a432f5cd23167f785ad00c"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/src/modules/branches/branches.service.ts": {
+    "mtime": 1786819697.3535042,
+    "hash": "a015b299b61cd8a6695320cf9ab4916b"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/src/modules/branches/dto.ts": {
+    "mtime": 1786821315.3021002,
+    "hash": "b80b5b02deda9526d18f82da8a5d6e61"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/src/modules/health/health.controller.ts": {
+    "mtime": 1786819643.1044586,
+    "hash": "ba5240cfdd9207943746b9d201277644"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/src/modules/health/health.module.ts": {
+    "mtime": 1786819649.4353583,
+    "hash": "03285769b71d934ab0c713aa4562b3c8"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/pos/vite.config.ts": {
+    "mtime": 1786872582.1563537,
+    "hash": "ff5414ff102af9c94374390c43d4a771"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/pos/dist-electron/main.js": {
+    "mtime": 1786873998.5884914,
+    "hash": "e17b79b12b2cea128695302feacb0002"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/pos/dist-electron/preload.js": {
+    "mtime": 1786873998.6128778,
+    "hash": "34906928bc5df1a9d42e69a14eb6acc8"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/pos/electron/main.ts": {
+    "mtime": 1786819924.6897068,
+    "hash": "aac2176ec49c9eda65bb16dec6b0a6e6"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/pos/electron/preload.ts": {
+    "mtime": 1786872644.9772923,
+    "hash": "4f5e0650095c5f3ff6d0bbdd8d9f007f"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/pos/electron/db/sqlite.ts": {
+    "mtime": 1786819984.9475543,
+    "hash": "24fc42695f2ffbbc15b5671fbd91703a"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/pos/electron/hardware/index.ts": {
+    "mtime": 1786820020.6754038,
+    "hash": "f3e14dd13a6763ebaa6cefc0c317548c"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/pos/electron/sync/index.ts": {
+    "mtime": 1786820002.4568465,
+    "hash": "0c3a74210097875b7b800288cd788db8"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/pos/src/App.tsx": {
+    "mtime": 1786873232.3553338,
+    "hash": "cf23d80a9a6856bac93f1fd5e6f4b364"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/pos/src/main.tsx": {
+    "mtime": 1786820045.8674414,
+    "hash": "6f364f2a52db628795e8e57e7b19dc87"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/pos/src/components/Dialog.tsx": {
+    "mtime": 1786872904.8300874,
+    "hash": "bb495f94dfb9b34986a9a4ef6b308e76"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/pos/src/components/Keypad.tsx": {
+    "mtime": 1786872920.5962327,
+    "hash": "3d902fbd1259178660c95800985969d8"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/pos/src/components/KeyRail.tsx": {
+    "mtime": 1786872865.0458386,
+    "hash": "390cb31b7c1bcc0db5d05cdcbba2d9be"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/pos/src/components/PaymentDialog.tsx": {
+    "mtime": 1786873872.3721225,
+    "hash": "6f25c8c63c1879bf315926f939110d16"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/pos/src/components/ProductSearch.tsx": {
+    "mtime": 1786872946.7458212,
+    "hash": "111a1e9e6c9e169692c5735278fbf1b1"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/pos/src/components/ReceiptPanel.tsx": {
+    "mtime": 1786873464.329405,
+    "hash": "f730d6f11edacec0684c0f4a86f61d1f"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/pos/src/components/TopBar.tsx": {
+    "mtime": 1786872889.12973,
+    "hash": "71c3165ac08133a75426c315d956580a"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/pos/src/lib/bridge.d.ts": {
+    "mtime": 1786872758.0329838,
+    "hash": "89427a7945695523e22d299140f2b9dc"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/pos/src/lib/keyboard.ts": {
+    "mtime": 1786872798.5811894,
+    "hash": "60b3c67014d897b09d3331d02fa4e745"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/pos/src/lib/money.ts": {
+    "mtime": 1786872775.951192,
+    "hash": "07d2fcd4c29bce93cf3bf53ef73ae76e"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/pos/src/lib/pos-data.ts": {
+    "mtime": 1786872625.5688217,
+    "hash": "610d396edf3a5ab44c8d86309d40c1dc"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/pos/src/pages/CashRegister.tsx": {
+    "mtime": 1786873673.6989133,
+    "hash": "b39394b2f242ae79235a05db4d80d32a"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/pos/src/pages/Login.tsx": {
+    "mtime": 1786873049.6632671,
+    "hash": "746b4735ee75c2892ad7b86f71653a48"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/pos/src/pages/Returns.tsx": {
+    "mtime": 1786873712.6202798,
+    "hash": "612633a37e34b0c83d451d68fe4e1d1d"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/pos/src/pages/Sale.tsx": {
+    "mtime": 1786873464.3301184,
+    "hash": "3d135b15f61d3299e34dab7b058dc347"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/pos/src/pages/Settings.tsx": {
+    "mtime": 1786873212.18765,
+    "hash": "a1cbdc3de66c169313112a9de584d21a"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/pos/src/store/auth.ts": {
+    "mtime": 1786872849.586465,
+    "hash": "90ecb86a6b4c2f0f73b6b4de6953f703"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/pos/src/store/cart.ts": {
+    "mtime": 1786873464.2724497,
+    "hash": "ce9840ea8a81b39b0b78fa745cc1829e"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/docker/postgres/init/01-extensions-and-grants.sql": {
+    "mtime": 1786866994.882535,
+    "hash": "6be36cccdebee4795480e43267906d3d"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/db/drizzle.config.ts": {
+    "mtime": 1786818988.492943,
+    "hash": "ef99904de4683c6d67a89b2a0c974f81"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/db/migrations/0000_freezing_stephen_strange.sql": {
+    "mtime": 1786821218.7170908,
+    "hash": "01f582d8b8247de8714d37cb184b45cc"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/db/scripts/migrate.ts": {
+    "mtime": 1786866865.907532,
+    "hash": "d1b2a50ae5503216777a5f6ef9dc8902"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/db/scripts/reset.ts": {
+    "mtime": 1786866639.28451,
+    "hash": "3a6971fafb450dd21929912659e04844"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/db/scripts/seed.ts": {
+    "mtime": 1786866639.2850173,
+    "hash": "aaa9f3066be771a83afb46a235e8be02"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/db/sql/rls.sql": {
+    "mtime": 1786818446.2275326,
+    "hash": "e35f995a38511513e630379b941a19bf"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/db/sql/triggers.sql": {
+    "mtime": 1786818491.3836887,
+    "hash": "5a72ed016149c845a37b2ab5eb4e22b6"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/db/src/client.ts": {
+    "mtime": 1786818892.7458117,
+    "hash": "56ab4ff22d9a66aa143cf962c9b24ef7"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/db/src/index.ts": {
+    "mtime": 1786866876.9856515,
+    "hash": "8af22d0f9ab404deebcccd332892af5f"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/db/src/migrator.ts": {
+    "mtime": 1786866848.1756055,
+    "hash": "dc0feb755269bdf130a3281da2582c5e"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/db/src/bin/migrate.ts": {
+    "mtime": 1786866857.3863938,
+    "hash": "c345418720780dfbd21d0e0a22de0abe"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/db/src/schema/auth.ts": {
+    "mtime": 1786821178.6071115,
+    "hash": "14483b00065982bdb30665275ee6adea"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/db/src/schema/catalog.ts": {
+    "mtime": 1786821178.607503,
+    "hash": "102c7b72ce4d31dee4d88be85de07f1f"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/db/src/schema/index.ts": {
+    "mtime": 1786818380.7186015,
+    "hash": "94693768ee9df9b8e9b951f0faaa9eff"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/db/src/schema/inventory.ts": {
+    "mtime": 1786821178.6079667,
+    "hash": "fa7cb33943b56fdf2d612535edc21481"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/db/src/schema/partners.ts": {
+    "mtime": 1786821178.6082714,
+    "hash": "710a294d7ce6e8dab2947aed9454def7"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/db/src/schema/payments.ts": {
+    "mtime": 1786821204.9266882,
+    "hash": "ea69044333eae0a2163f355d6216c920"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/db/src/schema/pricing.ts": {
+    "mtime": 1786821178.608869,
+    "hash": "f954cf6d6df18ff83153bd7c8c6b251b"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/db/src/schema/purchasing.ts": {
+    "mtime": 1786821178.6091974,
+    "hash": "28e88b67e1e0619377b38e1a3c768d8d"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/db/src/schema/sales.ts": {
+    "mtime": 1786821204.9264154,
+    "hash": "c99831b93bd560b0cea316f5ddb11234"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/db/src/schema/sync.ts": {
+    "mtime": 1786821178.6099827,
+    "hash": "9c36b4def7fcc9805a7bf59c3d1fce87"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/db/src/schema/tenants.ts": {
+    "mtime": 1786821178.610225,
+    "hash": "904c7b158e9668671a7a06820bd874c5"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/db/src/schema/whatsapp.ts": {
+    "mtime": 1786821178.6104908,
+    "hash": "86e42912685041b9fcb2715b75a9dc05"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/db/src/schema/_shared.ts": {
+    "mtime": 1786821189.336188,
+    "hash": "735f20e3227ddd21ee47b12a0916593e"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/shared-types/src/api.ts": {
+    "mtime": 1786817538.3863535,
+    "hash": "5cc48170603adc7fee9a3f63dc431deb"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/shared-types/src/enums.ts": {
+    "mtime": 1786817465.6195805,
+    "hash": "b53c3bdfec5b737c296f19ec837b5558"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/shared-types/src/index.ts": {
+    "mtime": 1786817584.61929,
+    "hash": "0ab17f2e9be8e2f8ad272b07e67d4c09"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/shared-types/src/permissions.ts": {
+    "mtime": 1786817488.6235986,
+    "hash": "575ae98e8292fa70245588721bc3a745"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/shared-types/src/settings.ts": {
+    "mtime": 1786817516.3529372,
+    "hash": "36115187cd3ac618469fbbc9de5c4eef"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/shared-types/src/sync.ts": {
+    "mtime": 1786817570.5483983,
+    "hash": "8ecf7ad50c851f419202940b47a18492"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/shared-utils/src/document-number.ts": {
+    "mtime": 1786817725.3488328,
+    "hash": "fe03fabe071e135cb00d24ff80420e61"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/shared-utils/src/index.ts": {
+    "mtime": 1786817776.0573099,
+    "hash": "c1c446f459e4b74decdc5e627dd5fcb9"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/shared-utils/src/money.test.ts": {
+    "mtime": 1786817816.3218217,
+    "hash": "01445cca3b03f7dde79c9c2d448a0e1f"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/shared-utils/src/money.ts": {
+    "mtime": 1786817671.6319146,
+    "hash": "95a193d6a1c2e7ff395a4c0c649c99a7"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/shared-utils/src/result.ts": {
+    "mtime": 1786817769.028477,
+    "hash": "a8348561ebd0571ea4d98ad01c6d2d33"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/shared-utils/src/text.ts": {
+    "mtime": 1786817747.2474465,
+    "hash": "4c1261ac235d494f982d3df945a5c616"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/shared-utils/src/totals.test.ts": {
+    "mtime": 1786817837.2740235,
+    "hash": "e2fdf82d8f0bcc1416f6230441f85688"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/shared-utils/src/totals.ts": {
+    "mtime": 1786817708.066225,
+    "hash": "874d206594316a8f8f69410892a2b671"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-admin/next-env.d.ts": {
+    "mtime": 1786871020.5545082,
+    "hash": "8195d2c60ce847a459ae9d308d6a5724"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-admin/next.config.ts": {
+    "mtime": 1786869053.9853346,
+    "hash": "617471c5ca3a7e036bd84b4bb8910a48"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-admin/postcss.config.mjs": {
+    "mtime": 1786869053.9876342,
+    "hash": "a0cc1d073219d2a488673881f06cd111"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-admin/packages/shared-types/src/api.ts": {
+    "mtime": 1786869053.953095,
+    "hash": "5cc48170603adc7fee9a3f63dc431deb"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-admin/packages/shared-types/src/enums.ts": {
+    "mtime": 1786869053.951664,
+    "hash": "b53c3bdfec5b737c296f19ec837b5558"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-admin/packages/shared-types/src/index.ts": {
+    "mtime": 1786869053.9536507,
+    "hash": "0ab17f2e9be8e2f8ad272b07e67d4c09"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-admin/packages/shared-types/src/permissions.ts": {
+    "mtime": 1786869053.9521756,
+    "hash": "575ae98e8292fa70245588721bc3a745"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-admin/packages/shared-types/src/settings.ts": {
+    "mtime": 1786869053.9526267,
+    "hash": "36115187cd3ac618469fbbc9de5c4eef"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-admin/packages/shared-types/src/sync.ts": {
+    "mtime": 1786869053.9534156,
+    "hash": "8ecf7ad50c851f419202940b47a18492"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-admin/packages/shared-utils/src/document-number.ts": {
+    "mtime": 1786869053.9682884,
+    "hash": "fe03fabe071e135cb00d24ff80420e61"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-admin/packages/shared-utils/src/index.ts": {
+    "mtime": 1786869053.969404,
+    "hash": "c1c446f459e4b74decdc5e627dd5fcb9"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-admin/packages/shared-utils/src/money.test.ts": {
+    "mtime": 1786869053.9697058,
+    "hash": "01445cca3b03f7dde79c9c2d448a0e1f"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-admin/packages/shared-utils/src/money.ts": {
+    "mtime": 1786869053.9676754,
+    "hash": "95a193d6a1c2e7ff395a4c0c649c99a7"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-admin/packages/shared-utils/src/result.ts": {
+    "mtime": 1786869053.9689734,
+    "hash": "a8348561ebd0571ea4d98ad01c6d2d33"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-admin/packages/shared-utils/src/text.ts": {
+    "mtime": 1786869053.9685628,
+    "hash": "4c1261ac235d494f982d3df945a5c616"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-admin/packages/shared-utils/src/totals.test.ts": {
+    "mtime": 1786869053.9700923,
+    "hash": "e2fdf82d8f0bcc1416f6230441f85688"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-admin/packages/shared-utils/src/totals.ts": {
+    "mtime": 1786869053.968027,
+    "hash": "874d206594316a8f8f69410892a2b671"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-admin/src/app/layout.tsx": {
+    "mtime": 1786871413.420535,
+    "hash": "67a44f008f90632e9c165be3f093aef0"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-admin/src/app/page.tsx": {
+    "mtime": 1786871449.4207451,
+    "hash": "d655c725490087117a1494a3877021a2"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-admin/src/app/branches/page.tsx": {
+    "mtime": 1786871474.4057539,
+    "hash": "d8d8eb47cc21aa0a0e40187cb8695df1"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-admin/src/app/customers/page.tsx": {
+    "mtime": 1786871603.386819,
+    "hash": "93658536673932a0fa1da5a9bffbc8a9"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-admin/src/app/inventory/page.tsx": {
+    "mtime": 1786871526.3774023,
+    "hash": "2ef7d733c5993be5d2fa65a0e07a3bf3"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-admin/src/app/login/page.tsx": {
+    "mtime": 1786871429.220373,
+    "hash": "26ff04012815b799233c0a64aab69adf"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-admin/src/app/products/page.tsx": {
+    "mtime": 1786871497.5607553,
+    "hash": "adbc6dee6c84e4a99fb142ddc378db85"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-admin/src/app/sales/page.tsx": {
+    "mtime": 1786871582.146571,
+    "hash": "fb75c84b0fa88659dd53bd02ff1a1904"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-admin/src/app/settings/page.tsx": {
+    "mtime": 1786871563.6186037,
+    "hash": "83a7811db816ce6df78bd1dedbaad71f"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-admin/src/app/whatsapp/page.tsx": {
+    "mtime": 1786871546.1375914,
+    "hash": "3cabc03313dbd25eb72df56e81e33752"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-admin/src/components/layout/app-shell.tsx": {
+    "mtime": 1786871401.4852233,
+    "hash": "7ba4099a5eee24ce505cc2ee43ef5cf0"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-admin/src/components/layout/header.tsx": {
+    "mtime": 1786871388.0664403,
+    "hash": "62fabbf5c2243b56ad0c8778225c2d1f"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-admin/src/components/layout/sidebar.tsx": {
+    "mtime": 1786871372.1458585,
+    "hash": "68f66ee37e71ffe689a2a217794961eb"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-admin/src/lib/api-client.ts": {
+    "mtime": 1786869053.9466498,
+    "hash": "f17063a8fed41e37ad4a3499a7982c41"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-admin/src/lib/auth-context.tsx": {
+    "mtime": 1786871345.2757618,
+    "hash": "d7f69cf711c81db4bacb127d71a82e4b"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-admin/src/lib/providers.tsx": {
+    "mtime": 1786871358.6694365,
+    "hash": "90b78c6288ffb287fee82054c8576608"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/vitest.config.ts": {
+    "mtime": 1786868841.5786004,
+    "hash": "4422e02c35e963e325bfeddd0ee1c978"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/docker/postgres/init/01-extensions-and-grants.sql": {
+    "mtime": 1786868841.547676,
+    "hash": "6be36cccdebee4795480e43267906d3d"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/db/drizzle.config.ts": {
+    "mtime": 1786868841.5046747,
+    "hash": "ef99904de4683c6d67a89b2a0c974f81"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/db/migrations/0000_freezing_stephen_strange.sql": {
+    "mtime": 1786868841.509259,
+    "hash": "01f582d8b8247de8714d37cb184b45cc"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/db/scripts/migrate.ts": {
+    "mtime": 1786868841.4757242,
+    "hash": "d1b2a50ae5503216777a5f6ef9dc8902"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/db/scripts/reset.ts": {
+    "mtime": 1786868841.4750898,
+    "hash": "3a6971fafb450dd21929912659e04844"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/db/scripts/seed.ts": {
+    "mtime": 1786868841.4754639,
+    "hash": "aaa9f3066be771a83afb46a235e8be02"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/db/sql/rls.sql": {
+    "mtime": 1786868841.4740963,
+    "hash": "e35f995a38511513e630379b941a19bf"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/db/sql/triggers.sql": {
+    "mtime": 1786868841.4745412,
+    "hash": "5a72ed016149c845a37b2ab5eb4e22b6"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/db/src/client.ts": {
+    "mtime": 1786868841.47243,
+    "hash": "56ab4ff22d9a66aa143cf962c9b24ef7"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/db/src/index.ts": {
+    "mtime": 1786868841.4714897,
+    "hash": "8af22d0f9ab404deebcccd332892af5f"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/db/src/migrator.ts": {
+    "mtime": 1786868841.472776,
+    "hash": "dc0feb755269bdf130a3281da2582c5e"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/db/src/bin/migrate.ts": {
+    "mtime": 1786868841.4733045,
+    "hash": "c345418720780dfbd21d0e0a22de0abe"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/db/src/schema/auth.ts": {
+    "mtime": 1786868841.4658432,
+    "hash": "14483b00065982bdb30665275ee6adea"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/db/src/schema/catalog.ts": {
+    "mtime": 1786868841.466905,
+    "hash": "102c7b72ce4d31dee4d88be85de07f1f"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/db/src/schema/index.ts": {
+    "mtime": 1786868841.46498,
+    "hash": "94693768ee9df9b8e9b951f0faaa9eff"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/db/src/schema/inventory.ts": {
+    "mtime": 1786868841.462155,
+    "hash": "fa7cb33943b56fdf2d612535edc21481"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/db/src/schema/partners.ts": {
+    "mtime": 1786868841.4617517,
+    "hash": "710a294d7ce6e8dab2947aed9454def7"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/db/src/schema/payments.ts": {
+    "mtime": 1786868841.4696069,
+    "hash": "ea69044333eae0a2163f355d6216c920"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/db/src/schema/pricing.ts": {
+    "mtime": 1786868841.461404,
+    "hash": "f954cf6d6df18ff83153bd7c8c6b251b"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/db/src/schema/purchasing.ts": {
+    "mtime": 1786868841.464015,
+    "hash": "28e88b67e1e0619377b38e1a3c768d8d"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/db/src/schema/sales.ts": {
+    "mtime": 1786868841.463158,
+    "hash": "c99831b93bd560b0cea316f5ddb11234"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/db/src/schema/sync.ts": {
+    "mtime": 1786868841.4688044,
+    "hash": "9c36b4def7fcc9805a7bf59c3d1fce87"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/db/src/schema/tenants.ts": {
+    "mtime": 1786868841.4611063,
+    "hash": "904c7b158e9668671a7a06820bd874c5"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/db/src/schema/whatsapp.ts": {
+    "mtime": 1786868841.4676511,
+    "hash": "86e42912685041b9fcb2715b75a9dc05"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/db/src/schema/_shared.ts": {
+    "mtime": 1786868841.470592,
+    "hash": "735f20e3227ddd21ee47b12a0916593e"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/shared-types/src/api.ts": {
+    "mtime": 1786868841.51518,
+    "hash": "5cc48170603adc7fee9a3f63dc431deb"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/shared-types/src/enums.ts": {
+    "mtime": 1786868841.5143538,
+    "hash": "b53c3bdfec5b737c296f19ec837b5558"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/shared-types/src/index.ts": {
+    "mtime": 1786868841.5157547,
+    "hash": "0ab17f2e9be8e2f8ad272b07e67d4c09"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/shared-types/src/permissions.ts": {
+    "mtime": 1786868841.514644,
+    "hash": "575ae98e8292fa70245588721bc3a745"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/shared-types/src/settings.ts": {
+    "mtime": 1786868841.5149174,
+    "hash": "36115187cd3ac618469fbbc9de5c4eef"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/shared-types/src/sync.ts": {
+    "mtime": 1786868841.515484,
+    "hash": "8ecf7ad50c851f419202940b47a18492"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/shared-utils/src/document-number.ts": {
+    "mtime": 1786868841.5281157,
+    "hash": "fe03fabe071e135cb00d24ff80420e61"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/shared-utils/src/index.ts": {
+    "mtime": 1786868841.5290937,
+    "hash": "c1c446f459e4b74decdc5e627dd5fcb9"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/shared-utils/src/money.test.ts": {
+    "mtime": 1786868841.5293968,
+    "hash": "01445cca3b03f7dde79c9c2d448a0e1f"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/shared-utils/src/money.ts": {
+    "mtime": 1786868841.5274534,
+    "hash": "95a193d6a1c2e7ff395a4c0c649c99a7"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/shared-utils/src/result.ts": {
+    "mtime": 1786868841.5288153,
+    "hash": "a8348561ebd0571ea4d98ad01c6d2d33"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/shared-utils/src/text.ts": {
+    "mtime": 1786868841.5284789,
+    "hash": "4c1261ac235d494f982d3df945a5c616"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/shared-utils/src/totals.test.ts": {
+    "mtime": 1786868841.529752,
+    "hash": "e2fdf82d8f0bcc1416f6230441f85688"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/packages/shared-utils/src/totals.ts": {
+    "mtime": 1786868841.5278163,
+    "hash": "874d206594316a8f8f69410892a2b671"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/scripts/verify-rls.mjs": {
+    "mtime": 1786868841.5519097,
+    "hash": "6d01cb743058f79e62d113920feb7e22"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/src/app.module.ts": {
+    "mtime": 1786869009.3130476,
+    "hash": "5b5525669fc1b7995b93e2d65baed53f"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/src/main.ts": {
+    "mtime": 1786868841.455498,
+    "hash": "e9f7cb6fc3ea10b0f66e4071b0a9bf46"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/src/common/context/request-context.ts": {
+    "mtime": 1786868841.4479938,
+    "hash": "722dfb97b6d7d86a17b5c5e9f26454bd"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/src/common/decorators/index.ts": {
+    "mtime": 1786868841.4484258,
+    "hash": "ccec7f707c339568e4ff8f5702441a38"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/src/common/filters/all-exceptions.filter.ts": {
+    "mtime": 1786868841.4495971,
+    "hash": "f4a062c3a2e63dd935ce350b07dbc301"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/src/common/guards/jwt-auth.guard.ts": {
+    "mtime": 1786868841.4490905,
+    "hash": "f78457cc600102fb2a9df17e4c175b7c"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/src/common/guards/permissions.guard.ts": {
+    "mtime": 1786868841.4488566,
+    "hash": "8600b22bbfb72304b368ca82bf05806c"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/src/common/interceptors/transform.interceptor.ts": {
+    "mtime": 1786868841.45007,
+    "hash": "5722a82425cb988243b0a569908eb74c"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/src/common/middleware/request-context.middleware.ts": {
+    "mtime": 1786868841.4505684,
+    "hash": "5d524b1ee15413ee9760131cd9811f9b"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/src/common/pipes/zod-validation.pipe.ts": {
+    "mtime": 1786868841.4510553,
+    "hash": "b966f95cb3d3babb48ecca45f1433cb3"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/src/config/env.ts": {
+    "mtime": 1786868841.445969,
+    "hash": "2923bb786ccec3d93447864817df06c2"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/src/database/database.module.ts": {
+    "mtime": 1786868841.4471252,
+    "hash": "18e40368e500d4fbeeddb3d924b1236e"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/src/database/tenant-database.service.ts": {
+    "mtime": 1786868841.4473488,
+    "hash": "b86b45132a8ccf5b62d9b403679fa5b3"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/src/modules/auth/auth.controller.ts": {
+    "mtime": 1786868841.4528508,
+    "hash": "0deae910a1eb4ea966cb1c7b905d9422"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/src/modules/auth/auth.module.ts": {
+    "mtime": 1786868841.4530976,
+    "hash": "d22f16e2d94c9c2daabeae47c4f27315"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/src/modules/auth/auth.service.ts": {
+    "mtime": 1786868841.4535291,
+    "hash": "c86aa92fcaa54e62d0397bef981eb000"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/src/modules/auth/dto.ts": {
+    "mtime": 1786868841.452625,
+    "hash": "9cac68c4b3763bf9a5b1ff537d179cdb"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/src/modules/auth/jwt.strategy.ts": {
+    "mtime": 1786868841.4524014,
+    "hash": "76eb90db0fd9174b1baf0299373fbf01"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/src/modules/branches/branches.controller.ts": {
+    "mtime": 1786868841.4542763,
+    "hash": "7d7e6656c6338f711f0fd1783eb66488"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/src/modules/branches/branches.module.ts": {
+    "mtime": 1786868841.4544888,
+    "hash": "d3436252475238e3da425ae42c63cee7"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/src/modules/branches/branches.service.spec.ts": {
+    "mtime": 1786868841.4547565,
+    "hash": "b30776fb19a432f5cd23167f785ad00c"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/src/modules/branches/branches.service.ts": {
+    "mtime": 1786868841.454043,
+    "hash": "a015b299b61cd8a6695320cf9ab4916b"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/src/modules/branches/dto.ts": {
+    "mtime": 1786868841.4549997,
+    "hash": "b80b5b02deda9526d18f82da8a5d6e61"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/src/modules/health/health.controller.ts": {
+    "mtime": 1786868841.4517395,
+    "hash": "ba5240cfdd9207943746b9d201277644"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/src/modules/health/health.module.ts": {
+    "mtime": 1786868841.451967,
+    "hash": "03285769b71d934ab0c713aa4562b3c8"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/tools/import/src/import-products.ts": {
+    "mtime": 1786868841.5565307,
+    "hash": "3fdbd53df5ef3d16a4e6fc2599dbf724"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/tools/import/src/profile.ts": {
+    "mtime": 1786868841.5562973,
+    "hash": "3ba9db020fe44a21599e5559fb6c6c86"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-pos/vite.config.ts": {
+    "mtime": 1786869173.3377502,
+    "hash": "8988f9d398b91376d99111434656b4ea"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-pos/dist-electron/main.js": {
+    "mtime": 1786871089.17878,
+    "hash": "e17b79b12b2cea128695302feacb0002"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-pos/dist-electron/preload.js": {
+    "mtime": 1786871089.197541,
+    "hash": "43049e3741c22edb1d5bf5c957b7bac6"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-pos/electron/main.ts": {
+    "mtime": 1786869173.2986479,
+    "hash": "aac2176ec49c9eda65bb16dec6b0a6e6"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-pos/electron/preload.ts": {
+    "mtime": 1786869173.2989311,
+    "hash": "fa4173a2c202f5936ccb8706f0602008"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-pos/electron/db/sqlite.ts": {
+    "mtime": 1786869173.2983925,
+    "hash": "24fc42695f2ffbbc15b5671fbd91703a"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-pos/electron/hardware/index.ts": {
+    "mtime": 1786869173.2978573,
+    "hash": "f3e14dd13a6763ebaa6cefc0c317548c"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-pos/electron/sync/index.ts": {
+    "mtime": 1786869173.2973542,
+    "hash": "0c3a74210097875b7b800288cd788db8"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-pos/packages/shared-types/src/api.ts": {
+    "mtime": 1786869173.3051012,
+    "hash": "5cc48170603adc7fee9a3f63dc431deb"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-pos/packages/shared-types/src/enums.ts": {
+    "mtime": 1786869173.3039916,
+    "hash": "b53c3bdfec5b737c296f19ec837b5558"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-pos/packages/shared-types/src/index.ts": {
+    "mtime": 1786869173.3057606,
+    "hash": "0ab17f2e9be8e2f8ad272b07e67d4c09"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-pos/packages/shared-types/src/permissions.ts": {
+    "mtime": 1786869173.3044,
+    "hash": "575ae98e8292fa70245588721bc3a745"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-pos/packages/shared-types/src/settings.ts": {
+    "mtime": 1786869173.3047526,
+    "hash": "36115187cd3ac618469fbbc9de5c4eef"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-pos/packages/shared-types/src/sync.ts": {
+    "mtime": 1786869173.305485,
+    "hash": "8ecf7ad50c851f419202940b47a18492"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-pos/packages/shared-utils/src/document-number.ts": {
+    "mtime": 1786869173.3205745,
+    "hash": "fe03fabe071e135cb00d24ff80420e61"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-pos/packages/shared-utils/src/index.ts": {
+    "mtime": 1786869173.3215647,
+    "hash": "c1c446f459e4b74decdc5e627dd5fcb9"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-pos/packages/shared-utils/src/money.test.ts": {
+    "mtime": 1786869173.3223212,
+    "hash": "01445cca3b03f7dde79c9c2d448a0e1f"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-pos/packages/shared-utils/src/money.ts": {
+    "mtime": 1786869173.3198955,
+    "hash": "95a193d6a1c2e7ff395a4c0c649c99a7"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-pos/packages/shared-utils/src/result.ts": {
+    "mtime": 1786869173.3212998,
+    "hash": "a8348561ebd0571ea4d98ad01c6d2d33"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-pos/packages/shared-utils/src/text.ts": {
+    "mtime": 1786869173.3208761,
+    "hash": "4c1261ac235d494f982d3df945a5c616"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-pos/packages/shared-utils/src/totals.test.ts": {
+    "mtime": 1786869173.3226748,
+    "hash": "e2fdf82d8f0bcc1416f6230441f85688"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-pos/packages/shared-utils/src/totals.ts": {
+    "mtime": 1786869173.3202634,
+    "hash": "874d206594316a8f8f69410892a2b671"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-pos/src/App.tsx": {
+    "mtime": 1786869173.294135,
+    "hash": "2678e5a8fc60f59da2bd51b6c9af0747"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-pos/src/main.tsx": {
+    "mtime": 1786869173.2938972,
+    "hash": "6f364f2a52db628795e8e57e7b19dc87"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/scripts/check-boundaries.mjs": {
+    "mtime": 1786866670.7397044,
+    "hash": "069e54d3e374ec48c9770b35c805d6be"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/scripts/verify-rls.mjs": {
+    "mtime": 1786867073.8600726,
+    "hash": "6d01cb743058f79e62d113920feb7e22"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/tools/import/src/import-products.ts": {
+    "mtime": 1786820438.2490788,
+    "hash": "3fdbd53df5ef3d16a4e6fc2599dbf724"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/tools/import/src/profile.ts": {
+    "mtime": 1786820421.3710816,
+    "hash": "3ba9db020fe44a21599e5559fb6c6c86"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/CLAUDE.md": {
+    "mtime": 1786821662.8986063,
+    "hash": "3e617eb19782b4e72101b33f8c1667ae"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/docker-compose.yml": {
+    "mtime": 1786817396.9167154,
+    "hash": "517aca7d85a1532df9b1109a82ae1391"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/implementation_plan.md": {
+    "mtime": 1786816991.9461198,
+    "hash": "1e79f9d33d0a06a4748ee20139b6f1dd"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/pnpm-workspace.yaml": {
+    "mtime": 1786820254.6033623,
+    "hash": "c1b88c81e38563a6b96ad634b7c80978"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/README.md": {
+    "mtime": 1786821620.3237634,
+    "hash": "8731800eb29f76d01f55d64ad7d5a77d"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/src/modules/README.md": {
+    "mtime": 1786819740.4510624,
+    "hash": "2da19ea85acc262b22c89917d95dc43c"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/pos/electron-builder.yml": {
+    "mtime": 1786820107.3784063,
+    "hash": "99d9c685dac9ec527e426437f3a66c5c"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/pos/index.html": {
+    "mtime": 1786820041.4351003,
+    "hash": "f44c28400fc739b2f574681e2013976d"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/deploy/docker-compose.prod.yml": {
+    "mtime": 1786866903.3560843,
+    "hash": "9a0f97d81317c3b39441353e3132bb8a"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/docs/DATABASE.md": {
+    "mtime": 1786820636.991709,
+    "hash": "8c72cdd5b649610e101cc828d65d5b6a"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/docs/DECISIONS.md": {
+    "mtime": 1786820525.0014317,
+    "hash": "7ab8e77778a591580f24002bc93d2d89"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/docs/PATTERNS.md": {
+    "mtime": 1786821602.6684875,
+    "hash": "3c982fe299d661e3efcc8dc421558264"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/docs/ROADMAP.md": {
+    "mtime": 1786821613.3560345,
+    "hash": "e72632dca19604129e1f6fc15f0186ac"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-admin/pnpm-workspace.yaml": {
+    "mtime": 1786869482.3612964,
+    "hash": "26c79acc82a2e73c519fa732bae2d9c4"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/docker-compose.yml": {
+    "mtime": 1786868935.372812,
+    "hash": "ebe859a14f7ef6f1f5b5ff9892aa06ea"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/pnpm-workspace.yaml": {
+    "mtime": 1786868908.5184996,
+    "hash": "fceb796c4bb7469a04986a9f8e198c87"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/deploy/docker-compose.prod.yml": {
+    "mtime": 1786868841.567713,
+    "hash": "9a0f97d81317c3b39441353e3132bb8a"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/docs/DATABASE.md": {
+    "mtime": 1786868841.5737226,
+    "hash": "8c72cdd5b649610e101cc828d65d5b6a"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/docs/DECISIONS.md": {
+    "mtime": 1786868841.5740504,
+    "hash": "7ab8e77778a591580f24002bc93d2d89"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/docs/PATTERNS.md": {
+    "mtime": 1786868841.5744443,
+    "hash": "3c982fe299d661e3efcc8dc421558264"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/docs/ROADMAP.md": {
+    "mtime": 1786868841.5747628,
+    "hash": "e72632dca19604129e1f6fc15f0186ac"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-api/src/modules/README.md": {
+    "mtime": 1786868841.455247,
+    "hash": "2da19ea85acc262b22c89917d95dc43c"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-pos/electron-builder.yml": {
+    "mtime": 1786869173.3399918,
+    "hash": "99d9c685dac9ec527e426437f3a66c5c"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-pos/index.html": {
+    "mtime": 1786869173.3427534,
+    "hash": "f44c28400fc739b2f574681e2013976d"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/repos/devsfleet-pos/pnpm-workspace.yaml": {
+    "mtime": 1786869238.102222,
+    "hash": "c3cb442a6a1334e0cf019731fa88a9d1"
+  }
+}

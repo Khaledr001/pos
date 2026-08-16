@@ -29,6 +29,19 @@ and this user is not in the `docker` group. Start Docker Desktop before
 **The repo path contains a space** (`DevsFleet POS`). Quote paths in shell
 commands.
 
+**The repo is on a `fuseblk` (NTFS-3G) mount, where inotify does not fire.**
+File watching therefore has to poll, and every dev script is already configured
+for it — Vite via `server.watch.usePolling`, Next and Nest via
+`WATCHPACK_POLLING` / `CHOKIDAR_USEPOLLING`, tsc via `watchOptions` in
+`apps/api/tsconfig.json`.
+
+The failure mode is silent and expensive: without polling a dev server keeps
+serving the module graph it built at startup, so you edit a file, save, reload,
+and still see the previous version with no error anywhere. **If a change does
+not appear, restart the dev server before debugging the code.** The same mount
+also makes `rm -rf` fail with `ENOTEMPTY` while a server holds a handle on
+`dist/` — stop the server first.
+
 **Git**: the project directory is root-owned, so git needs a path exception.
 Already applied via
 `git config --global --add safe.directory '/media/khaled/Education/DevsFleet/DevsFleet POS'`.

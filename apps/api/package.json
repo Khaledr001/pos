@@ -4,9 +4,9 @@
   "private": true,
   "scripts": {
     "build": "nest build",
-    "dev": "nest start --watch",
+    "dev": "CHOKIDAR_USEPOLLING=true nest start --watch",
     "start": "node dist/main.js",
-    "start:debug": "nest start --debug --watch",
+    "start:debug": "CHOKIDAR_USEPOLLING=true nest start --debug --watch",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",

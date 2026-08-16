@@ -25,5 +25,15 @@
     }
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "test", "**/*.spec.ts"]
+  "exclude": ["node_modules", "dist", "test", "**/*.spec.ts"],
+  /**
+   * tsc runs its own file watcher, separate from chokidar. On this fuseblk
+   * mount inotify never fires, so it must poll or `nest start --watch` will
+   * compile once at startup and then appear to ignore every subsequent edit.
+   */
+  "watchOptions": {
+    "watchFile": "dynamicPriorityPolling",
+    "watchDirectory": "dynamicPriorityPolling",
+    "fallbackPolling": "dynamicPriority"
+  }
 }
