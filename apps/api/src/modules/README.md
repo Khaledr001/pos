@@ -36,8 +36,8 @@ Copying its shape is what keeps twenty modules looking like one codebase.
 | `purchases` | 2 | ⬜ todo | Purchase orders, goods receipts, landed cost |
 | `transfers` | 2 | ⬜ todo | Inter-branch request → approve → ship → receive |
 | `sync` | 3 | ⬜ todo | POS push/pull, idempotency, conflict resolution |
-| `cash-register` | 3 | ⬜ todo | Drawer sessions, movements, close-out variance |
-| `sales` | 3 | ⬜ todo | Sale creation, returns, voids |
+| `cash-register` | 3 | ✅ done | Drawer sessions, movements, close-out variance |
+| `sales` | 3 | ✅ done | Sale creation, returns, voids |
 | `payments` | 3 | ⬜ todo | Split tender, credit settlement, refunds |
 | `whatsapp` | 4 | ⬜ todo | Meta Cloud API webhook, send/receive, templates |
 | `ai` | 4 | ⬜ todo | LLM tools, intent extraction, escalation |

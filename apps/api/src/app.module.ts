@@ -18,9 +18,11 @@ import { BranchesModule } from "./modules/branches/branches.module.js";
 import { HealthModule } from "./modules/health/health.module.js";
 import { PlatformModule } from "./modules/platform/platform.module.js";
 import { TenantsModule } from "./modules/tenants/tenants.module.js";
+import { CashRegisterModule } from "./modules/cash-register/cash-register.module.js";
 import { CatalogModule } from "./modules/catalog/catalog.module.js";
 import { InventoryModule } from "./modules/inventory/inventory.module.js";
 import { ProductsModule } from "./modules/products/products.module.js";
+import { SalesModule } from "./modules/sales/sales.module.js";
 import { UsersModule } from "./modules/users/users.module.js";
 
 /**
@@ -113,6 +115,8 @@ import { UsersModule } from "./modules/users/users.module.js";
     ProductsModule,
     CatalogModule,
     InventoryModule,
+    CashRegisterModule,
+    SalesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
