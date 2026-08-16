@@ -290,6 +290,24 @@ someone removes a join.
 
 Write the outer table name out in full in any correlated subquery.
 
+### Cast parameters into overloaded SQL functions
+
+```sql
+-- ❌ sets the whole subtree's path to NULL
+SET path = $1 || substring(path FROM $2)
+
+-- ✅
+SET path = $1 || substring(path FROM $2::int)
+```
+
+Postgres overloads `substring`. A bare parameter arrives as `unknown`, and the
+planner resolves to `substring(text FROM pattern)` — the **regex** form. A
+pattern that does not match returns NULL rather than erroring, so a category
+move silently nulled `path` for every descendant.
+
+Anywhere a parameter feeds an overloaded function (`substring`, `trim`,
+`overlay`, `position`), cast it. The failure is a wrong answer, not an error.
+
 ### Zod applies checks in declaration order
 
 ```ts

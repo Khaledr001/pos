@@ -19,18 +19,19 @@ Copying its shape is what keeps twenty modules looking like one codebase.
 
 | Module | Phase | Status | Responsibility |
 |---|---|---|---|
+| `platform` | 1 | ✅ done | SuperAdmin console, plans, impersonation |
 | `health` | 1 | ✅ done | Liveness and readiness probes |
 | `auth` | 1 | ✅ done | JWT login, PIN login, refresh rotation |
 | `branches` | 1 | ✅ done | Branch CRUD — **the reference module** |
-| `tenants` | 1 | ⬜ todo | Tenant provisioning, settings (VAT, currency, locales) |
-| `users` | 1 | ⬜ todo | Users, roles, permission assignment |
-| `categories` | 1 | ⬜ todo | Hierarchical tree with materialised `path` |
-| `brands` | 1 | ⬜ todo | Brand CRUD |
-| `units` | 1 | ⬜ todo | Units and packaging conversions |
-| `products` | 1 | ⬜ todo | CRUD, full-text + trigram search, barcode lookup, images |
-| `pricing` | 1 | ⬜ todo | Price lists, customer prices, floor enforcement, history |
+| `tenants` | 1 | ✅ done | Tenant provisioning, settings (VAT, currency, locales) |
+| `users` | 1 | ✅ done | Users, roles, permission assignment |
+| `categories` | 1 | ✅ done | Hierarchical tree with materialised `path` |
+| `brands` | 1 | ✅ done | Brand CRUD |
+| `units` | 1 | ✅ done | Units and packaging conversions |
+| `products` | 1 | ✅ done | CRUD, full-text + trigram search, barcode lookup, images |
+| `pricing` | 1 | ✅ done | Price lists, customer prices, floor enforcement, history |
 | `customers` | 1 | ⬜ todo | Customers, credit limits, balance |
-| `inventory` | 2 | ⬜ todo | Per-branch stock, the append-only ledger, adjustments |
+| `inventory` | 2 | ✅ done | Per-branch stock, the append-only ledger, adjustments |
 | `suppliers` | 2 | ⬜ todo | Supplier CRUD |
 | `purchases` | 2 | ⬜ todo | Purchase orders, goods receipts, landed cost |
 | `transfers` | 2 | ⬜ todo | Inter-branch request → approve → ship → receive |
