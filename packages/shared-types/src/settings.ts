@@ -90,6 +90,16 @@ export interface TenantSettings {
     /** Fire a low-stock alert when quantity - reserved <= reorder_level. */
     lowStockAlerts: boolean;
   };
+
+  loyalty: {
+    enabled: boolean;
+    /** Points earned per whole unit of base currency spent (post-tax, post-discount). */
+    pointsPerCurrencyUnit: number;
+    /** Currency value of ONE point when redeemed, e.g. 0.05 = 20 points per AED 1. */
+    redemptionValue: number;
+    /** Points a customer must hold before any may be redeemed. */
+    minimumRedeemable: number;
+  };
 }
 
 export const DEFAULT_TENANT_SETTINGS: TenantSettings = {
@@ -132,6 +142,12 @@ export const DEFAULT_TENANT_SETTINGS: TenantSettings = {
     reserveOnQuotationConfirm: true,
     lowStockAlerts: true,
   },
+  loyalty: {
+    enabled: false,
+    pointsPerCurrencyUnit: 1,
+    redemptionValue: 0.05,
+    minimumRedeemable: 100,
+  },
 };
 
 /**
@@ -161,5 +177,6 @@ export function resolveTenantSettings(stored: unknown): TenantSettings {
     printing: { ...d.printing, ...s.printing },
     whatsapp: { ...d.whatsapp, ...s.whatsapp },
     inventory: { ...d.inventory, ...s.inventory },
+    loyalty: { ...d.loyalty, ...s.loyalty },
   };
 }

@@ -83,19 +83,19 @@ checks pass.
 - [ ] `products` module — CRUD, full-text + trigram search, barcode lookup
 - [ ] Product images — upload to MinIO, SHA-256 dedup, thumbnail generation
 - [ ] `pricing` module — resolution ladder (customer → tier → default), floor enforcement, history on every change
-- [ ] `customers` module — CRUD, credit limit, balance
+- [x] `customers` module — CRUD, credit limit, balance, loyalty ledger
 - [ ] **Profile the real price list** → `pnpm --filter @devsfleet/import profile -- "<file>"`
 - [ ] Finalise `products` / `categories` / pricing schema against that output
 - [ ] Product importer — dry-run, idempotent on SKU, price changes as history
 
 ## Phase 2 — Inventory (weeks 4–5)
 
-- [ ] `inventory` module — per-branch balance + append-only ledger, `balanceAfter` in-transaction
-- [ ] Stock adjustments with mandatory reason, low-stock alerts
+- [x] `inventory` module — per-branch balance + append-only ledger, `balanceAfter` in-transaction
+- [x] Stock adjustments with mandatory reason, low-stock alerts
 - [x] `suppliers` module
 - [x] `purchases` module — PO → goods receipt → stock in, weighted-average landed cost
 - [ ] `transfers` module — request → approve → ship → receive (stock in transit belongs to neither branch)
-- [ ] Stock counts — count sheet → variance → manager approval → adjustments
+- [x] Stock counts — count sheet → variance → manager approval → adjustments
 
 ## Phase 3 — POS (weeks 6–9)
 

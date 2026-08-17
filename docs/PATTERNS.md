@@ -425,6 +425,34 @@ average would make margin depend on the order things were sold in. The
 out-of-order sale, which would otherwise divide by less than what is arriving
 and produce an average above anything ever paid.
 
+### A server-computed value is not a tender a client may claim
+
+```ts
+// ❌ a terminal could invent this payment with no points ever spent
+{ method: "loyalty_points", amount: "50.00" }
+
+// ✅ the server computes the value FROM the points and writes the ledger row itself
+{ redeemPoints: 100 }   // -> resolved to 5.00 server-side, backed by a
+                         //    loyalty_transactions row and a real deduction
+```
+
+Any tender whose value the server itself derives from other state — loyalty
+points, a stored-value balance, a computed discount — must never be accepted
+as a plain `{ method, amount }` line in the same array as cash and card. If it
+is, the endpoint has to explicitly reject that method when it shows up there,
+or a client can fabricate revenue-reducing payments that correspond to nothing.
+
+### Cap a redemption; don't partially honour it
+
+```
+customer wants to redeem 300 points (worth 15.00) against a 2.00 basket
+```
+
+Silently capping the redeemed VALUE at the total while still deducting all 300
+points burns 260 points of value nobody received. Refusing the request and
+naming the amount actually owed — "redeem fewer points" — is simpler than
+inventing fractional-point rounding, and is what a cashier can act on.
+
 ---
 
 ## Frontend

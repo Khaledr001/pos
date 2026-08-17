@@ -28,6 +28,9 @@ import { HeldCartsModule } from "./modules/held-carts/held-carts.module.js";
 import { PurchasesModule } from "./modules/purchases/purchases.module.js";
 import { QuotationsModule } from "./modules/quotations/quotations.module.js";
 import { ReportsModule } from "./modules/reports/reports.module.js";
+import { CustomersModule } from "./modules/customers/customers.module.js";
+import { PaintModule } from "./modules/paint/paint.module.js";
+import { SerialsModule } from "./modules/serials/serials.module.js";
 import { SalesModule } from "./modules/sales/sales.module.js";
 import { StockTakeModule } from "./modules/stock-take/stock-take.module.js";
 import { SuppliersModule } from "./modules/suppliers/suppliers.module.js";
@@ -126,6 +129,7 @@ import { UsersModule } from "./modules/users/users.module.js";
     InventoryModule,
     CashRegisterModule,
     SalesModule,
+    CustomersModule,
     HeldCartsModule,
     DayCloseModule,
     ExpensesModule,
@@ -134,6 +138,8 @@ import { UsersModule } from "./modules/users/users.module.js";
     StockTakeModule,
     QuotationsModule,
     ReportsModule,
+    SerialsModule,
+    PaintModule,
     SyncModule,
   ],
   providers: [

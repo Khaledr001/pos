@@ -59,6 +59,13 @@ export const customers = pgTable(
     creditOnHold: boolean().notNull().default(false),
 
     /**
+     * Cached, like `creditBalance` — a running total that must reconcile
+     * against SUM(loyalty_transactions.points). Earned and redeemed both move
+     * it inside the same transaction as the sale that caused them.
+     */
+    loyaltyPoints: integer().notNull().default(0),
+
+    /**
      * The number the WhatsApp bot matches an inbound message against, in E.164.
      * Separate from `phone` because the business contact and the person who
      * actually messages are frequently different people.

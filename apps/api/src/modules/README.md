@@ -30,8 +30,9 @@ Copying its shape is what keeps twenty modules looking like one codebase.
 | `units` | 1 | ✅ done | Units and packaging conversions |
 | `products` | 1 | ✅ done | CRUD, full-text + trigram search, barcode lookup, images |
 | `pricing` | 1 | ✅ done | Price lists, customer prices, floor enforcement, history |
-| `customers` | 1 | ⬜ todo | Customers, credit limits, balance |
+| `customers` | 1 | ✅ done | CRUD, credit settlement, loyalty ledger |
 | `inventory` | 2 | ✅ done | Per-branch stock, the append-only ledger, adjustments |
+| `serials` | 2 | ✅ done | Check in at receipt, assign at sale, warranty lookup |
 | `stock-take` | 2 | ✅ done | Count sheet → count → submit → approve, posts variances |
 | `suppliers` | 2 | ✅ done | Supplier CRUD, outstanding balance |
 | `purchases` | 2 | ✅ done | Purchase orders, goods receipts, landed cost |
@@ -48,6 +49,7 @@ Copying its shape is what keeps twenty modules looking like one codebase.
 | `quotations` | 5 | ✅ done | Quote at snapshotted prices, convert to a sale |
 | `orders` | 5 | ⬜ todo | Order lifecycle, POS pickup, fulfilment |
 | `reports` | 6 | ✅ done | Sales, top products, stock health, financial |
+| `paint` | 7 | ✅ done | Formulas, dosages, mix orders that deduct the base can |
 
 ## Rules
 

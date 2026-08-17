@@ -13,6 +13,7 @@ import { RequestContext } from "../../common/context/request-context.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import { StockService } from "../inventory/stock.service.js";
 import { PriceResolverService } from "../pricing/price-resolver.service.js";
+import { SerialsService } from "../serials/serials.service.js";
 import type { CreateSaleDto } from "./dto.js";
 
 /**
@@ -35,6 +36,7 @@ export class SalesService {
     private readonly db: TenantDatabase,
     private readonly stock: StockService,
     private readonly prices: PriceResolverService,
+    private readonly serials: SerialsService,
   ) {}
 
   async create(dto: CreateSaleDto): Promise<unknown> {
@@ -79,6 +81,7 @@ export class SalesService {
           productName: schema.products.name,
           taxRate: schema.products.taxRate,
           isStockTracked: schema.products.isStockTracked,
+          trackSerial: schema.products.trackSerial,
         })
         .from(schema.productVariants)
         .innerJoin(schema.products, eq(schema.productVariants.productId, schema.products.id))
@@ -146,6 +149,23 @@ export class SalesService {
           );
         }
 
+        /**
+         * A serialised product is sold one identified unit at a time — there
+         * is no such thing as half an imei, and no such thing as an anonymous
+         * one either. Checked here, before any stock moves, so a missing
+         * serial refuses the whole sale rather than half-selling it.
+         */
+        if (variant.trackSerial) {
+          const serials = line.serials ?? [];
+          if (!Number.isInteger(line.quantity) || serials.length !== line.quantity) {
+            throw new AppError(
+              ERROR_CODES.VALIDATION_FAILED,
+              `${variant.productName} tracks serial numbers — list exactly ${line.quantity} of them.`,
+              { line: variant.sku, quantity: line.quantity, serialsGiven: serials.length },
+            );
+          }
+        }
+
         return {
           ...line,
           variant,
@@ -194,27 +214,93 @@ export class SalesService {
        * So each tender is ALLOCATED against what is still owed, and only the
        * allocated part becomes a payment row.
        */
+      // Fetched once, up front: credit, loyalty redemption AND loyalty earning
+      // below all need the same row, and a second query would just be a second
+      // chance for it to have changed underneath this transaction.
+      const customer = dto.customerId
+        ? await tx.query.customers.findFirst({ where: (t, { eq: e }) => e(t.id, dto.customerId!) })
+        : null;
+      if (dto.customerId && !customer) {
+        throw new AppError(ERROR_CODES.CUSTOMER_NOT_FOUND, "Customer not found");
+      }
+
+      /**
+       * Loyalty redemption funds the sale exactly like a payment does — it is
+       * applied before any tender, and reduces what is left to pay in cash or
+       * by card.
+       *
+       * Capped at the sale total rather than partially honoured: redeeming 300
+       * points against a 2.00 basket would burn value the customer never
+       * received, and there is no clean way to hand fractional points back.
+       * The fix is asking for fewer points, not silently keeping the rest.
+       */
+      let redemptionValue = 0n;
+      if (dto.redeemPoints) {
+        if (!customer) {
+          throw new AppError(
+            ERROR_CODES.VALIDATION_FAILED,
+            "Redeeming loyalty points needs a customer attached to the sale.",
+          );
+        }
+        if (!settings.loyalty.enabled) {
+          throw new AppError(ERROR_CODES.VALIDATION_FAILED, "Loyalty points are not enabled.");
+        }
+        if (customer.loyaltyPoints < settings.loyalty.minimumRedeemable) {
+          throw new AppError(
+            ERROR_CODES.VALIDATION_FAILED,
+            `${customer.name} needs at least ${settings.loyalty.minimumRedeemable} points before any can be redeemed. They have ${customer.loyaltyPoints}.`,
+          );
+        }
+        if (dto.redeemPoints > customer.loyaltyPoints) {
+          throw new AppError(
+            ERROR_CODES.VALIDATION_FAILED,
+            `${customer.name} only has ${customer.loyaltyPoints} points.`,
+          );
+        }
+
+        redemptionValue = Money.multiplyByQuantity(
+          Money.toMinor(String(settings.loyalty.redemptionValue)),
+          dto.redeemPoints,
+        );
+
+        if (redemptionValue > totals.total) {
+          throw new AppError(
+            ERROR_CODES.VALIDATION_FAILED,
+            `${dto.redeemPoints} points are worth ${Money.toDecimalString(redemptionValue, 2)}, more than the ${Money.toDecimalString(totals.total, 2)} owed. Redeem fewer points.`,
+          );
+        }
+      }
+
+      /**
+       * `loyalty_points` is not a tender a terminal can claim — it is a
+       * server-computed value from `redeemPoints`, backed by a ledger row and
+       * a real deduction. Accepting it here would let any caller fabricate a
+       * payment with no points ever spent.
+       */
+      if ((dto.payments ?? []).some((p) => p.method === "loyalty_points")) {
+        throw new AppError(
+          ERROR_CODES.VALIDATION_FAILED,
+          "loyalty_points is not a tender. Use redeemPoints to spend loyalty points.",
+        );
+      }
+
       const tendered = (dto.payments ?? []).reduce<bigint>(
         (sum, p) => Money.add(sum, Money.toMinor(String(p.amount))),
         0n,
       );
-      const paid = Money.min(tendered, totals.total);
+      const funded = Money.add(redemptionValue, tendered);
+      const paid = Money.min(funded, totals.total);
       const due = Money.max(Money.subtract(totals.total, paid), 0n);
-      const change = Money.max(Money.subtract(tendered, totals.total), 0n);
+      const change = Money.max(Money.subtract(funded, totals.total), 0n);
 
       if (Money.isPositive(due)) {
         // Unpaid means it goes on an account, and a walk-in has none.
-        if (!dto.customerId) {
+        if (!customer) {
           throw new AppError(
             ERROR_CODES.VALIDATION_FAILED,
             "A partly paid sale must be attached to a customer.",
           );
         }
-
-        const customer = await tx.query.customers.findFirst({
-          where: (t, { eq: e }) => e(t.id, dto.customerId!),
-        });
-        if (!customer) throw new AppError(ERROR_CODES.CUSTOMER_NOT_FOUND, "Customer not found");
 
         if (customer.creditOnHold) {
           throw new AppError(
@@ -285,27 +371,30 @@ export class SalesService {
       for (const [index, line] of lines.entries()) {
         const computed = totals.lines[index]!;
 
-        await tx.insert(schema.saleItems).values({
-          tenantId,
-          saleId: sale.id,
-          variantId: line.variantId,
-          // Snapshotted: renaming a product must not rewrite last year's invoice.
-          productName: line.variant.productName,
-          variantName: line.variant.variantName,
-          productSku: line.variant.sku,
-          quantity: String(line.quantity),
-          unitPrice: line.unitPrice,
-          discountPercent: line.discountPercent,
-          discountAmount: Money.toDecimalString(computed.discount, 4),
-          taxPercent: line.taxPercent,
-          taxAmount: Money.toDecimalString(computed.tax, 4),
-          lineSubtotal: Money.toDecimalString(computed.net, 4),
-          total: Money.toDecimalString(computed.total, 4),
-          // Margin must not shift when the next purchase order changes the
-          // average cost, so it is captured here.
-          ...(line.costPrice ? { costPrice: line.costPrice } : {}),
-          sortOrder: index,
-        });
+        const [item] = await tx
+          .insert(schema.saleItems)
+          .values({
+            tenantId,
+            saleId: sale.id,
+            variantId: line.variantId,
+            // Snapshotted: renaming a product must not rewrite last year's invoice.
+            productName: line.variant.productName,
+            variantName: line.variant.variantName,
+            productSku: line.variant.sku,
+            quantity: String(line.quantity),
+            unitPrice: line.unitPrice,
+            discountPercent: line.discountPercent,
+            discountAmount: Money.toDecimalString(computed.discount, 4),
+            taxPercent: line.taxPercent,
+            taxAmount: Money.toDecimalString(computed.tax, 4),
+            lineSubtotal: Money.toDecimalString(computed.net, 4),
+            total: Money.toDecimalString(computed.total, 4),
+            // Margin must not shift when the next purchase order changes the
+            // average cost, so it is captured here.
+            ...(line.costPrice ? { costPrice: line.costPrice } : {}),
+            sortOrder: index,
+          })
+          .returning({ id: schema.saleItems.id });
 
         // Services and labour have no stock to move.
         if (line.variant.isStockTracked) {
@@ -320,9 +409,54 @@ export class SalesService {
             ...(user.deviceId ? { deviceId: user.deviceId } : {}),
           });
         }
+
+        if (line.variant.trackSerial && item) {
+          await this.serials.assignAtSale(tx, {
+            branchId: dto.branchId,
+            variantId: line.variantId,
+            serials: line.serials ?? [],
+            saleItemId: item.id,
+          });
+        }
       }
 
-      let unallocated = totals.total;
+      /**
+       * The redemption becomes its own payment row, method `loyalty_points`,
+       * so a receipt and the tender-split report both show it as a distinct
+       * funding source rather than folding it silently into cash.
+       */
+      if (Money.isPositive(redemptionValue)) {
+        await tx.insert(schema.payments).values({
+          tenantId,
+          branchId: dto.branchId,
+          saleId: sale.id,
+          customerId: dto.customerId ?? null,
+          cashSessionId: dto.cashSessionId ?? null,
+          method: "loyalty_points",
+          amount: Money.toDecimalString(redemptionValue, 4),
+          currency: settings.currency.base,
+          reference: `${dto.redeemPoints} points`,
+          createdBy: user.id,
+          ...(dto.occurredAt ? { occurredAt: new Date(dto.occurredAt) } : {}),
+        });
+
+        await tx.insert(schema.loyaltyTransactions).values({
+          tenantId,
+          customerId: dto.customerId!,
+          points: -dto.redeemPoints!,
+          type: "redeemed",
+          referenceType: "sale",
+          referenceId: sale.id,
+          createdBy: user.id,
+        });
+
+        await tx
+          .update(schema.customers)
+          .set({ loyaltyPoints: sql`${schema.customers.loyaltyPoints} - ${dto.redeemPoints}` })
+          .where(eq(schema.customers.id, dto.customerId!));
+      }
+
+      let unallocated = Money.subtract(totals.total, redemptionValue);
       for (const payment of dto.payments ?? []) {
         const offered = Money.toMinor(String(payment.amount));
         const applied = Money.min(offered, unallocated);
@@ -369,6 +503,38 @@ export class SalesService {
             creditBalance: sql`${schema.customers.creditBalance} + ${Money.toDecimalString(due, 4)}::numeric`,
           })
           .where(eq(schema.customers.id, dto.customerId));
+      }
+
+      /**
+       * Earn points on what the sale actually took, spent points included —
+       * a customer who redeemed part of the total is still a customer whose
+       * business was worth having.
+       *
+       * Computed in BigInt throughout rather than converting to a float: the
+       * rate and the total are both scaled by 10^4, so the product carries
+       * 10^8 and has to come back down by the SAME factor before it is a
+       * plain point count — the identical trap `divideByQuantity` exists for.
+       */
+      if (settings.loyalty.enabled && dto.customerId && !Money.isNegative(totals.total)) {
+        const rateMinor = Money.toMinor(String(settings.loyalty.pointsPerCurrencyUnit));
+        const pointsEarned = Number((totals.total * rateMinor) / (10_000n * 10_000n));
+
+        if (pointsEarned > 0) {
+          await tx.insert(schema.loyaltyTransactions).values({
+            tenantId,
+            customerId: dto.customerId,
+            points: pointsEarned,
+            type: "earned",
+            referenceType: "sale",
+            referenceId: sale.id,
+            createdBy: user.id,
+          });
+
+          await tx
+            .update(schema.customers)
+            .set({ loyaltyPoints: sql`${schema.customers.loyaltyPoints} + ${pointsEarned}` })
+            .where(eq(schema.customers.id, dto.customerId));
+        }
       }
 
       const created = await this.findById(sale.id, tx);

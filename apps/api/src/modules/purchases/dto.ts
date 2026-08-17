@@ -42,6 +42,13 @@ const ReceiptLineSchema = z.object({
   variantId: z.string().uuid(),
   quantity: z.coerce.number().positive(),
   /**
+   * Required, one per SELLABLE unit, when the product tracks serial numbers.
+   * The count must equal quantity - damagedQuantity exactly — a serialised
+   * product with no identity for one of its units is not something a
+   * warranty claim can ever be answered for.
+   */
+  serials: z.array(z.string().trim().min(1)).optional(),
+  /**
    * Required on a direct receipt; on a PO receipt it defaults to the ordered
    * price. Supplied when the invoice differs from the quote, which is common.
    */

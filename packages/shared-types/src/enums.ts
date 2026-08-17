@@ -146,6 +146,8 @@ export const PAYMENT_METHODS = asConst([
   "cheque",
   "credit",
   "store_credit",
+  /** A sale funded, wholly or partly, by spending loyalty points. */
+  "loyalty_points",
 ]);
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
@@ -247,5 +249,16 @@ export type SyncEntity = (typeof SYNC_ENTITIES)[number];
 // -----------------------------------------------------------------------------
 
 /** The POS must support all three — thermal for the counter, A4 for tax invoices. */
+/**
+ * `Available` -> `Sold` -> `Returned` -> `Available`. Any state -> `Damaged`,
+ * which is terminal — a damaged unit never becomes sellable again by changing
+ * its status back.
+ */
+export const SERIAL_NUMBER_STATUSES = asConst(["available", "sold", "returned", "damaged"]);
+export type SerialNumberStatus = (typeof SERIAL_NUMBER_STATUSES)[number];
+
+export const LOYALTY_TYPES = asConst(["earned", "redeemed"]);
+export type LoyaltyType = (typeof LOYALTY_TYPES)[number];
+
 export const PRINT_FORMATS = asConst(["thermal_58", "thermal_80", "a4"]);
 export type PrintFormat = (typeof PRINT_FORMATS)[number];

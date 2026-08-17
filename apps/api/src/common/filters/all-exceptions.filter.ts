@@ -188,6 +188,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
       return "This barcode is already assigned to another product";
     if (constraint.includes("checksum"))
       return "This exact image has already been uploaded";
+    if (constraint.includes("serial"))
+      return "This serial number is already registered";
+    if (constraint.includes("paint_formulas"))
+      return "A formula with this colour code and can size already exists";
     return "A record with these values already exists";
   }
 

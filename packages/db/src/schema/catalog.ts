@@ -1,3 +1,4 @@
+import type { SerialNumberStatus } from "@devsfleet/shared-types";
 import { relations, sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
@@ -368,8 +369,10 @@ export const serialNumbers = pgTable(
       .notNull()
       .references(() => productVariants.id, { onDelete: "restrict" }),
     serial: varchar({ length: 120 }).notNull(),
-    /** available | sold | returned | damaged */
-    status: varchar({ length: 20 }).notNull().default("available"),
+    status: varchar({ length: 20 })
+      .$type<SerialNumberStatus>()
+      .notNull()
+      .default("available"),
     /** Current location while unsold. */
     branchId: uuid(),
     /** Set when sold. */

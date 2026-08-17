@@ -13,6 +13,7 @@ import { assertBranchInScope, requireBranchId } from "../../common/context/branc
 import { RequestContext } from "../../common/context/request-context.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import { StockService } from "../inventory/stock.service.js";
+import { SerialsService } from "../serials/serials.service.js";
 import type {
   CreatePurchaseOrderDto,
   ListPurchaseOrdersDto,
@@ -35,6 +36,7 @@ export class PurchasesService {
   constructor(
     private readonly db: TenantDatabase,
     private readonly stock: StockService,
+    private readonly serials: SerialsService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -248,6 +250,13 @@ export class PurchasesService {
         : [];
       const orderItemsById = new Map(orderItems.map((item) => [item.id, item]));
 
+      // Whether each line's product tracks serial numbers — needed on a
+      // direct receipt too, where there is no purchase-order line to ask.
+      const trackSerialByVariant = await this.loadTrackSerial(
+        tx,
+        dto.lines.map((line) => line.variantId),
+      );
+
       /**
        * Every line's invoice value, used both to allocate freight and to bill
        * the supplier. Falls back to the ordered price when the receipt does not
@@ -381,6 +390,23 @@ export class PurchasesService {
             referenceId: receipt.id,
             unitCost: Money.toDecimalString(landedUnitCost, 4),
           });
+
+          if (trackSerialByVariant.get(line.variantId)) {
+            // A serialised product is sold and received one whole unit at a
+            // time — "2.5 phones" has no identity to assign the half to.
+            const sellableUnits = Money.toDecimalString(sellable, 0);
+            const serials = line.serials ?? [];
+
+            if (serials.length !== Number(sellableUnits)) {
+              throw new AppError(
+                ERROR_CODES.VALIDATION_FAILED,
+                `This product tracks serial numbers — ${sellableUnits} arrived sellable, so exactly that ` +
+                  `many serials must be listed. Got ${serials.length}.`,
+              );
+            }
+
+            await this.serials.checkIn(tx, { branchId, variantId: line.variantId, serials });
+          }
         }
 
         /**
@@ -574,6 +600,19 @@ export class PurchasesService {
     if (!order) throw new AppError(ERROR_CODES.NOT_FOUND, `Purchase order ${id} not found`);
     assertBranchInScope(order.branchId);
     return order;
+  }
+
+  private async loadTrackSerial(
+    tx: Transaction,
+    variantIds: string[],
+  ): Promise<Map<string, boolean>> {
+    const rows = await tx
+      .select({ id: schema.productVariants.id, trackSerial: schema.products.trackSerial })
+      .from(schema.productVariants)
+      .innerJoin(schema.products, eq(schema.productVariants.productId, schema.products.id))
+      .where(inArray(schema.productVariants.id, [...new Set(variantIds)]));
+
+    return new Map(rows.map((row) => [row.id, row.trackSerial]));
   }
 
   private async loadVariants(tx: Transaction, variantIds: string[]) {

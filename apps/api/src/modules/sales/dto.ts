@@ -7,6 +7,13 @@ const SaleLineSchema = z.object({
   /** Omit to take the resolved price. Present = an override, floor-checked. */
   unitPrice: z.string().optional(),
   discountPercent: z.coerce.number().min(0).max(100).optional(),
+  /**
+   * Required, one per unit, when the product tracks serial numbers. Each is
+   * claimed and marked sold at the branch this sale is rung up at — a serial
+   * checked in at a different branch is refused, the same as selling stock a
+   * branch does not physically hold.
+   */
+  serials: z.array(z.string().trim().min(1)).optional(),
 });
 
 const PaymentSchema = z.object({
@@ -25,6 +32,13 @@ export const CreateSaleSchema = z.object({
   payments: z.array(PaymentSchema).default([]),
   documentDiscountPercent: z.coerce.number().min(0).max(100).optional(),
   notes: z.string().trim().max(1000).optional(),
+
+  /**
+   * Loyalty points the customer wants to spend against this sale, funding it
+   * the same way a payment does. Capped server-side at the sale total — see
+   * the service for why an overshoot is refused rather than partially honoured.
+   */
+  redeemPoints: z.coerce.number().int().positive().optional(),
 
   /**
    * Minted on the terminal. The idempotency key — the server upserts on it, so
