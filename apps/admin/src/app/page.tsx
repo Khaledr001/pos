@@ -3,25 +3,34 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import {
-  Store,
   GitBranch,
   Package,
   TrendingUp,
-  ShoppingCart,
   Boxes,
   Users,
   MessageSquare,
   ArrowUpRight,
   Plus,
-  Activity,
   ShieldCheck,
   CheckCircle2,
   Cpu,
+  Sparkles,
 } from "lucide-react";
 import { Money, calculateDocument } from "@devsfleet/shared-utils";
 import { DEFAULT_TENANT_SETTINGS } from "@devsfleet/shared-types";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api-client";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 
 interface BranchItem {
   id: string;
@@ -31,6 +40,69 @@ interface BranchItem {
   address?: string;
   isActive: boolean;
 }
+
+const KPI_CARDS = [
+  {
+    label: "Sales Today",
+    value: "AED 12,840.50",
+    change: "+14.2%",
+    changeType: "positive" as const,
+    icon: TrendingUp,
+    gradient: "from-blue-500 to-indigo-600",
+    bgGlow: "bg-blue-500/10",
+  },
+  {
+    label: "Active Branches",
+    value: "2",
+    change: "Online",
+    changeType: "positive" as const,
+    icon: GitBranch,
+    gradient: "from-emerald-500 to-teal-600",
+    bgGlow: "bg-emerald-500/10",
+  },
+  {
+    label: "Catalog SKUs",
+    value: "5,240",
+    change: "Ready",
+    changeType: "neutral" as const,
+    icon: Package,
+    gradient: "from-amber-500 to-orange-600",
+    bgGlow: "bg-amber-500/10",
+  },
+  {
+    label: "WhatsApp Inquiries",
+    value: "38",
+    change: "Active",
+    changeType: "positive" as const,
+    icon: MessageSquare,
+    gradient: "from-violet-500 to-purple-600",
+    bgGlow: "bg-violet-500/10",
+  },
+];
+
+const QUICK_LINKS = [
+  {
+    label: "Products Catalogue",
+    desc: "5,000+ SKUs, multi-unit conversions, barcode tagging",
+    href: "/products",
+    icon: Package,
+    gradient: "from-blue-500 to-indigo-600",
+  },
+  {
+    label: "Inventory Ledger",
+    desc: "Append-only stock balances and inter-branch transfers",
+    href: "/inventory",
+    icon: Boxes,
+    gradient: "from-emerald-500 to-teal-600",
+  },
+  {
+    label: "WhatsApp AI Agent",
+    desc: "Meta Cloud API, multi-language price quotes",
+    href: "/whatsapp",
+    icon: MessageSquare,
+    gradient: "from-violet-500 to-purple-600",
+  },
+];
 
 export default function DashboardPage() {
   const { user, tokens } = useAuth();
@@ -46,8 +118,22 @@ export default function DashboardPage() {
         setBranches(res.items || []);
       } catch {
         setBranches([
-          { id: "1", name: "Sharjah Main Branch & Warehouse", code: "SHJ", isActive: true, phone: "+971 6 500 0001", address: "Industrial Area 4, Sharjah" },
-          { id: "2", name: "Dubai Deira Retail Store", code: "DXB", isActive: true, phone: "+971 4 200 0002", address: "Al Nakhal Rd, Deira, Dubai" },
+          {
+            id: "1",
+            name: "Sharjah Main Branch & Warehouse",
+            code: "SHJ",
+            isActive: true,
+            phone: "+971 6 500 0001",
+            address: "Industrial Area 4, Sharjah",
+          },
+          {
+            id: "2",
+            name: "Dubai Deira Retail Store",
+            code: "DXB",
+            isActive: true,
+            phone: "+971 4 200 0002",
+            address: "Al Nakhal Rd, Deira, Dubai",
+          },
         ]);
       } finally {
         setLoadingBranches(false);
@@ -67,315 +153,301 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      {/* Welcome Banner */}
-      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[--color-fg]">
-            Welcome back, {user?.name || "Store Owner"}
-          </h1>
-          <p className="text-xs text-[--color-muted]">
-            Here is what is happening across your branches in the UAE today.
-          </p>
-        </div>
+      {/* ═══ Welcome Banner ═══ */}
+      <div className="relative overflow-hidden rounded-2xl gradient-brand p-8 text-white shadow-xl shadow-primary/20">
+        {/* Decorative elements */}
+        <div className="absolute top-0 right-0 w-64 h-64 rounded-full bg-white/10 -translate-y-1/2 translate-x-1/3 blur-2xl" />
+        <div className="absolute bottom-0 left-1/3 w-48 h-48 rounded-full bg-white/5 translate-y-1/2 blur-xl" />
 
-        <div className="flex items-center gap-3">
-          <Link
-            href="/branches"
-            className="flex items-center gap-1.5 rounded-lg border border-[--color-border] bg-[--color-surface] px-3.5 py-2 text-xs font-medium text-[--color-fg] hover:bg-[--color-border]/50 transition-colors shadow-sm"
-          >
-            <GitBranch className="h-4 w-4 text-[--color-brand]" />
-            <span>Manage Branches</span>
-          </Link>
-          <Link
-            href="/products"
-            className="flex items-center gap-1.5 rounded-lg bg-[--color-brand] px-3.5 py-2 text-xs font-semibold text-white hover:opacity-90 transition-opacity shadow-sm"
-          >
-            <Plus className="h-4 w-4" />
-            <span>New Product</span>
-          </Link>
-        </div>
-      </div>
-
-      {/* 4 Top KPI Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {/* Metric 1 */}
-        <div className="rounded-xl border border-[--color-border] bg-[--color-surface] p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-[--color-muted]">
-              Sales Today
-            </span>
-            <div className="rounded-lg bg-[--color-brand]/10 p-2 text-[--color-brand]">
-              <TrendingUp className="h-4 w-4" />
+        <div className="relative flex flex-col justify-between gap-4 md:flex-row md:items-center">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <Sparkles className="h-5 w-5 text-white/80" />
+              <span className="text-xs font-medium text-white/70 uppercase tracking-wider">
+                Business Overview
+              </span>
             </div>
-          </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="tabular text-2xl font-bold text-[--color-fg]">
-              AED 12,840.50
-            </span>
-            <span className="text-[11px] font-medium text-[--color-success]">
-              +14.2%
-            </span>
-          </div>
-          <p className="mt-1 text-[11px] text-[--color-muted]">
-            Across Sharjah & Dubai stores
-          </p>
-        </div>
-
-        {/* Metric 2 */}
-        <div className="rounded-xl border border-[--color-border] bg-[--color-surface] p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-[--color-muted]">
-              Active Branches
-            </span>
-            <div className="rounded-lg bg-[--color-success]/10 p-2 text-[--color-success]">
-              <GitBranch className="h-4 w-4" />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="tabular text-2xl font-bold text-[--color-fg]">
-              {branches.length}
-            </span>
-            <span className="text-[11px] font-medium text-[--color-success]">
-              Online
-            </span>
-          </div>
-          <p className="mt-1 text-[11px] text-[--color-muted]">
-            Multi-branch isolated by RLS
-          </p>
-        </div>
-
-        {/* Metric 3 */}
-        <div className="rounded-xl border border-[--color-border] bg-[--color-surface] p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-[--color-muted]">
-              Catalog Items (SKUs)
-            </span>
-            <div className="rounded-lg bg-[--color-warning]/10 p-2 text-[--color-warning]">
-              <Package className="h-4 w-4" />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="tabular text-2xl font-bold text-[--color-fg]">
-              5,240
-            </span>
-            <span className="text-[11px] font-medium text-[--color-brand]">
-              Ready
-            </span>
-          </div>
-          <p className="mt-1 text-[11px] text-[--color-muted]">
-            Hardware, Electrical, Sanitary
-          </p>
-        </div>
-
-        {/* Metric 4 */}
-        <div className="rounded-xl border border-[--color-border] bg-[--color-surface] p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-[--color-muted]">
-              WhatsApp AI Inquiries
-            </span>
-            <div className="rounded-lg bg-[--color-brand]/10 p-2 text-[--color-brand]">
-              <MessageSquare className="h-4 w-4" />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="tabular text-2xl font-bold text-[--color-fg]">
-              38
-            </span>
-            <span className="text-[11px] font-medium text-[--color-success]">
-              Active
-            </span>
-          </div>
-          <p className="mt-1 text-[11px] text-[--color-muted]">
-            Automatic quotation generation
-          </p>
-        </div>
-      </div>
-
-      {/* Main Grid: Branches Live Status & Engine Demonstration */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Left 2 Cols: Live Branches Status */}
-        <div className="space-y-6 lg:col-span-2">
-          <div className="rounded-xl border border-[--color-border] bg-[--color-surface] p-5 shadow-sm">
-            <div className="flex items-center justify-between border-b border-[--color-border] pb-4">
-              <div>
-                <h2 className="text-base font-semibold text-[--color-fg]">
-                  Active Branch Locations
-                </h2>
-                <p className="text-xs text-[--color-muted]">
-                  Live status synced from PostgreSQL through TenantDatabase
-                </p>
-              </div>
-              <Link
-                href="/branches"
-                className="flex items-center gap-1 text-xs font-medium text-[--color-brand] hover:underline"
-              >
-                <span>View All</span>
-                <ArrowUpRight className="h-3.5 w-3.5" />
-              </Link>
-            </div>
-
-            <div className="mt-4 divide-y divide-[--color-border]">
-              {loadingBranches ? (
-                <div className="py-6 text-center text-xs text-[--color-muted]">
-                  Loading branches from API...
-                </div>
-              ) : branches.length === 0 ? (
-                <div className="py-6 text-center text-xs text-[--color-muted]">
-                  No branches found. Create your first branch.
-                </div>
-              ) : (
-                branches.map((b) => (
-                  <div
-                    key={b.id}
-                    className="flex items-center justify-between py-3.5 first:pt-0 last:pb-0"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[--color-brand]/10 font-mono text-xs font-bold text-[--color-brand]">
-                        {b.code}
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-[--color-fg]">
-                          {b.name}
-                        </p>
-                        <p className="text-xs text-[--color-muted]">
-                          {b.address || "Main retail location"}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <span className="inline-flex items-center gap-1 rounded-full bg-[--color-success]/10 px-2.5 py-0.5 text-[11px] font-medium text-[--color-success]">
-                        <span className="h-1.5 w-1.5 rounded-full bg-[--color-success]" />
-                        Active
-                      </span>
-                      <span className="text-xs font-mono text-[--color-muted]">
-                        {b.phone || "No phone"}
-                      </span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* Feature Quick-Access Cards */}
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Link
-              href="/products"
-              className="group rounded-xl border border-[--color-border] bg-[--color-surface] p-4 transition-all hover:border-[--color-brand] hover:shadow-md"
-            >
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[--color-brand]/10 text-[--color-brand] group-hover:bg-[--color-brand] group-hover:text-white transition-colors">
-                <Package className="h-4 w-4" />
-              </div>
-              <h3 className="mt-3 text-sm font-semibold text-[--color-fg]">
-                Products Catalogue
-              </h3>
-              <p className="mt-1 text-[11px] text-[--color-muted]">
-                5,000+ SKUs, multi-unit conversions, barcode tagging
-              </p>
-            </Link>
-
-            <Link
-              href="/inventory"
-              className="group rounded-xl border border-[--color-border] bg-[--color-surface] p-4 transition-all hover:border-[--color-brand] hover:shadow-md"
-            >
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[--color-success]/10 text-[--color-success] group-hover:bg-[--color-success] group-hover:text-white transition-colors">
-                <Boxes className="h-4 w-4" />
-              </div>
-              <h3 className="mt-3 text-sm font-semibold text-[--color-fg]">
-                Inventory Ledger
-              </h3>
-              <p className="mt-1 text-[11px] text-[--color-muted]">
-                Append-only stock balances and inter-branch transfers
-              </p>
-            </Link>
-
-            <Link
-              href="/whatsapp"
-              className="group rounded-xl border border-[--color-border] bg-[--color-surface] p-4 transition-all hover:border-[--color-brand] hover:shadow-md"
-            >
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[--color-warning]/10 text-[--color-warning] group-hover:bg-[--color-warning] group-hover:text-white transition-colors">
-                <MessageSquare className="h-4 w-4" />
-              </div>
-              <h3 className="mt-3 text-sm font-semibold text-[--color-fg]">
-                WhatsApp AI Agent
-              </h3>
-              <p className="mt-1 text-[11px] text-[--color-muted]">
-                Meta Cloud API, multi-language price quotes
-              </p>
-            </Link>
-          </div>
-        </div>
-
-        {/* Right 1 Col: Shared Calculation Engine & System Info */}
-        <div className="space-y-6">
-          {/* Shared Calculation Engine */}
-          <div className="rounded-xl border border-[--color-border] bg-[--color-surface] p-5 shadow-sm">
-            <div className="flex items-center gap-2 text-sm font-semibold text-[--color-fg]">
-              <Cpu className="h-4 w-4 text-[--color-brand]" />
-              <span>Exact Money & VAT Engine</span>
-            </div>
-            <p className="mt-1 text-xs text-[--color-muted]">
-              Zero float precision errors. Guaranteed by BigInt arithmetic.
+            <h1 className="text-2xl font-bold tracking-tight">
+              Welcome back, {user?.name || "Store Owner"}
+            </h1>
+            <p className="mt-1 text-sm text-white/70 max-w-lg">
+              Here's what's happening across your branches in the UAE today.
+              Everything is running smoothly.
             </p>
-
-            <div className="mt-4 rounded-lg border border-[--color-border] bg-[--color-bg] p-4">
-              <dl className="tabular space-y-2 text-xs">
-                <div className="flex justify-between">
-                  <dt className="text-[--color-muted]">Sample Subtotal (3 Lines)</dt>
-                  <dd className="font-mono font-medium text-[--color-fg]">
-                    AED {calcDemo.subtotal}
-                  </dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-[--color-muted]">UAE VAT (5%)</dt>
-                  <dd className="font-mono font-medium text-[--color-fg]">
-                    AED {calcDemo.taxAmount}
-                  </dd>
-                </div>
-                <div className="border-t border-[--color-border] pt-2 flex justify-between">
-                  <dt className="font-semibold text-[--color-fg]">Total Document</dt>
-                  <dd className="font-mono font-bold text-[--color-brand]">
-                    AED {calcDemo.total}
-                  </dd>
-                </div>
-              </dl>
-            </div>
-
-            <div className="mt-3 flex items-center gap-1.5 text-[11px] text-[--color-success]">
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              <span>calculateDocument() validated from @devsfleet/shared-utils</span>
-            </div>
           </div>
 
-          {/* Security & Architecture Highlights */}
-          <div className="rounded-xl border border-[--color-border] bg-[--color-surface] p-5 shadow-sm">
-            <div className="flex items-center gap-2 text-sm font-semibold text-[--color-fg]">
-              <ShieldCheck className="h-4 w-4 text-[--color-brand]" />
-              <span>Enterprise Guardrails</span>
-            </div>
-
-            <ul className="mt-3 space-y-2.5 text-xs text-[--color-muted]">
-              <li className="flex items-start gap-2">
-                <span className="h-1.5 w-1.5 rounded-full bg-[--color-brand] mt-1.5 shrink-0" />
-                <span>
-                  <strong className="text-[--color-fg]">PostgreSQL RLS:</strong> Every table scoped to tenant ID automatically.
-                </span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="h-1.5 w-1.5 rounded-full bg-[--color-brand] mt-1.5 shrink-0" />
-                <span>
-                  <strong className="text-[--color-fg]">Offline-Ready POS:</strong> Terminal uses SQLite with local checkout queues.
-                </span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="h-1.5 w-1.5 rounded-full bg-[--color-brand] mt-1.5 shrink-0" />
-                <span>
-                  <strong className="text-[--color-fg]">Separate Repos:</strong> Frontend and Backend deployable to separate servers.
-                </span>
-              </li>
-            </ul>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="secondary"
+              size="sm"
+              asChild
+              className="bg-white/15 text-white border-white/20 hover:bg-white/25 backdrop-blur-sm"
+            >
+              <Link href="/branches">
+                <GitBranch className="h-4 w-4" />
+                Manage Branches
+              </Link>
+            </Button>
+            <Button
+              size="sm"
+              asChild
+              className="bg-white text-primary hover:bg-white/90 shadow-lg"
+            >
+              <Link href="/products">
+                <Plus className="h-4 w-4" />
+                New Product
+              </Link>
+            </Button>
           </div>
+        </div>
+      </div>
+
+      {/* ═══ KPI Cards ═══ */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {KPI_CARDS.map((kpi, i) => {
+          const Icon = kpi.icon;
+          return (
+            <Card
+              key={kpi.label}
+              className={cn(
+                "group hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 animate-fade-in-up border-border/50",
+                `stagger-${i + 1}`,
+              )}
+            >
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {kpi.label}
+                  </span>
+                  <div
+                    className={cn(
+                      "flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-sm transition-transform duration-300 group-hover:scale-110",
+                      kpi.gradient,
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                  </div>
+                </div>
+                <div className="mt-3 flex items-baseline gap-2">
+                  <span className="tabular text-2xl font-bold text-foreground">
+                    {kpi.value}
+                  </span>
+                  <Badge
+                    variant={
+                      kpi.changeType === "positive" ? "success" : "secondary"
+                    }
+                    className="text-[10px] px-1.5 py-0"
+                  >
+                    {kpi.change}
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* ═══ Main Grid ═══ */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Left 2 Cols */}
+        <div className="space-y-6 lg:col-span-2">
+          {/* Branches Table */}
+          <Card>
+            <CardHeader className="pb-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base">
+                    Active Branch Locations
+                  </CardTitle>
+                  <CardDescription className="text-xs mt-1">
+                    Live status synced from PostgreSQL
+                  </CardDescription>
+                </div>
+                <Button variant="ghost" size="sm" asChild>
+                  <Link
+                    href="/branches"
+                    className="text-xs text-primary gap-1"
+                  >
+                    View All
+                    <ArrowUpRight className="h-3.5 w-3.5" />
+                  </Link>
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="divide-y divide-border">
+                {loadingBranches ? (
+                  <div className="py-8 text-center text-xs text-muted-foreground">
+                    <div className="h-5 w-5 mx-auto mb-2 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                    Loading branches from API...
+                  </div>
+                ) : branches.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-muted-foreground">
+                    No branches found. Create your first branch.
+                  </div>
+                ) : (
+                  branches.map((b) => (
+                    <div
+                      key={b.id}
+                      className="flex items-center justify-between py-4 first:pt-0 last:pb-0 group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 font-mono text-xs font-bold text-primary transition-colors group-hover:bg-primary group-hover:text-white">
+                          {b.code}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-foreground">
+                            {b.name}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {b.address || "Main retail location"}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <Badge variant="success" className="gap-1.5">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          Active
+                        </Badge>
+                        <span className="text-xs font-mono text-muted-foreground hidden sm:inline">
+                          {b.phone || "No phone"}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Quick Access Cards */}
+          <div className="grid gap-4 sm:grid-cols-3">
+            {QUICK_LINKS.map((item) => {
+              const Icon = item.icon;
+              return (
+                <Link key={item.href} href={item.href}>
+                  <Card className="group h-full hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 cursor-pointer hover:border-primary/30">
+                    <CardContent className="p-5">
+                      <div
+                        className={cn(
+                          "flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-sm transition-transform duration-300 group-hover:scale-110",
+                          item.gradient,
+                        )}
+                      >
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <h3 className="mt-4 text-sm font-semibold text-foreground">
+                        {item.label}
+                      </h3>
+                      <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
+                        {item.desc}
+                      </p>
+                    </CardContent>
+                  </Card>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Right Column */}
+        <div className="space-y-6">
+          {/* Calculation Engine */}
+          <Card className="overflow-hidden">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
+                  <Cpu className="h-4 w-4" />
+                </div>
+                <div>
+                  <CardTitle className="text-sm">
+                    Exact Money & VAT Engine
+                  </CardTitle>
+                  <CardDescription className="text-[11px]">
+                    Zero float precision errors
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-xl border border-border bg-secondary/30 p-4">
+                <dl className="tabular space-y-2.5 text-xs">
+                  <div className="flex justify-between">
+                    <dt className="text-muted-foreground">
+                      Sample Subtotal (3 Lines)
+                    </dt>
+                    <dd className="font-mono font-semibold text-foreground">
+                      AED {calcDemo.subtotal}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt className="text-muted-foreground">UAE VAT (5%)</dt>
+                    <dd className="font-mono font-semibold text-foreground">
+                      AED {calcDemo.taxAmount}
+                    </dd>
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between pt-1">
+                    <dt className="font-semibold text-foreground">
+                      Total Document
+                    </dt>
+                    <dd className="font-mono font-bold gradient-text text-base">
+                      AED {calcDemo.total}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+              <div className="mt-3 flex items-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                <span>
+                  calculateDocument() validated
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Enterprise Guardrails */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white">
+                  <ShieldCheck className="h-4 w-4" />
+                </div>
+                <CardTitle className="text-sm">
+                  Enterprise Guardrails
+                </CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-3 text-xs text-muted-foreground">
+                {[
+                  {
+                    title: "PostgreSQL RLS",
+                    desc: "Every table scoped to tenant ID automatically.",
+                  },
+                  {
+                    title: "Offline-Ready POS",
+                    desc: "Terminal uses SQLite with local checkout queues.",
+                  },
+                  {
+                    title: "Separate Repos",
+                    desc: "Frontend and Backend deployable to separate servers.",
+                  },
+                ].map((item) => (
+                  <li key={item.title} className="flex items-start gap-3">
+                    <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full gradient-brand" />
+                    <span>
+                      <strong className="text-foreground font-medium">
+                        {item.title}:
+                      </strong>{" "}
+                      {item.desc}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>

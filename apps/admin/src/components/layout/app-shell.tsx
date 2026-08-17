@@ -1,13 +1,14 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { usePathname } from "next/navigation";
 import { Sidebar } from "./sidebar";
 import { Header } from "./header";
-import { useAuth } from "@/lib/auth-context";
+import { cn } from "@/lib/utils";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
 
   // If we are on /login, render without shell
   if (pathname === "/login") {
@@ -15,9 +16,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen bg-[--color-bg]">
-      <Sidebar />
-      <div className="flex flex-1 flex-col pl-64">
+    <div className="flex min-h-screen bg-background">
+      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} />
+      <div
+        className={cn(
+          "flex flex-1 flex-col transition-all duration-300 ease-in-out",
+          collapsed ? "pl-[72px]" : "pl-[264px]",
+        )}
+      >
         <Header />
         <main className="flex-1 p-6 md:p-8">{children}</main>
       </div>

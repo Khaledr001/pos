@@ -1,44 +1,240 @@
 @import "tailwindcss";
 
-/**
- * Tailwind v4: design tokens live in CSS, not in a JS config file.
- * `@theme` entries become both CSS custom properties and Tailwind utilities,
- * so `--color-brand` also gives you `bg-brand`, `text-brand`, `border-brand`.
+/*
+ * shadcn/ui design tokens for Tailwind v4.
+ * Light-first with class-based dark mode.
  */
-@theme {
-  --color-bg: #ffffff;
-  --color-fg: #0b0d10;
-  --color-muted: #6b7280;
-  --color-border: #e5e7eb;
-  --color-surface: #f9fafb;
 
-  --color-brand: #0d6efd;
-  --color-brand-fg: #ffffff;
+@custom-variant dark (&:is(.dark *));
 
-  --color-success: #16a34a;
-  --color-warning: #d97706;
-  --color-danger: #dc2626;
+@theme inline {
+  /* ── Typography ── */
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas,
+    monospace;
 
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* ── Radius ── */
+  --radius: 0.625rem;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 
-  --radius-card: 0.75rem;
+  /* ── Light-Mode Colors ── */
+  --color-background: hsl(0 0% 100%);
+  --color-foreground: hsl(224 71% 4%);
+  --color-card: hsl(0 0% 100%);
+  --color-card-foreground: hsl(224 71% 4%);
+  --color-popover: hsl(0 0% 100%);
+  --color-popover-foreground: hsl(224 71% 4%);
+  --color-primary: hsl(220 91% 54%);
+  --color-primary-foreground: hsl(0 0% 100%);
+  --color-secondary: hsl(220 14% 96%);
+  --color-secondary-foreground: hsl(220 9% 46%);
+  --color-muted: hsl(220 14% 96%);
+  --color-muted-foreground: hsl(220 9% 46%);
+  --color-accent: hsl(220 14% 96%);
+  --color-accent-foreground: hsl(224 71% 4%);
+  --color-destructive: hsl(0 84% 60%);
+  --color-destructive-foreground: hsl(0 0% 98%);
+  --color-border: hsl(220 13% 91%);
+  --color-input: hsl(220 13% 91%);
+  --color-ring: hsl(220 91% 54%);
+
+  /* ── Brand Gradient ── */
+  --color-brand-start: hsl(217 91% 60%);
+  --color-brand-end: hsl(263 70% 57%);
+
+  /* ── Semantic ── */
+  --color-success: hsl(142 71% 45%);
+  --color-warning: hsl(38 92% 50%);
+  --color-danger: hsl(0 84% 60%);
+
+  /* ── Sidebar ── */
+  --color-sidebar: hsl(0 0% 98%);
+  --color-sidebar-foreground: hsl(224 71% 4%);
+  --color-sidebar-border: hsl(220 13% 91%);
+  --color-sidebar-accent: hsl(220 14% 96%);
+  --color-sidebar-accent-foreground: hsl(224 71% 4%);
+  --color-sidebar-primary: hsl(220 91% 54%);
+  --color-sidebar-primary-foreground: hsl(0 0% 100%);
+
+  /* ── Chart ── */
+  --color-chart-1: hsl(220 91% 54%);
+  --color-chart-2: hsl(263 70% 57%);
+  --color-chart-3: hsl(142 71% 45%);
+  --color-chart-4: hsl(38 92% 50%);
+  --color-chart-5: hsl(0 84% 60%);
+
+  /* ── Animations ── */
+  --animate-fade-in-up: fade-in-up 0.5s ease-out both;
+  --animate-slide-in-right: slide-in-right 0.3s ease-out both;
+  --animate-shimmer: shimmer 2s linear infinite;
+  --animate-glow-pulse: glow-pulse 2s ease-in-out infinite;
+  --animate-gradient-shift: gradient-shift 6s ease infinite;
+  --animate-float: float 6s ease-in-out infinite;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-bg: #0b0d10;
-    --color-fg: #e6e8eb;
-    --color-muted: #9099a6;
-    --color-border: #232a33;
-    --color-surface: #12161b;
+/* ── Dark Mode ── */
+.dark {
+  --color-background: hsl(224 71% 4%);
+  --color-foreground: hsl(210 20% 98%);
+  --color-card: hsl(224 50% 8%);
+  --color-card-foreground: hsl(210 20% 98%);
+  --color-popover: hsl(224 50% 8%);
+  --color-popover-foreground: hsl(210 20% 98%);
+  --color-primary: hsl(217 91% 60%);
+  --color-primary-foreground: hsl(0 0% 100%);
+  --color-secondary: hsl(215 28% 17%);
+  --color-secondary-foreground: hsl(210 20% 98%);
+  --color-muted: hsl(215 28% 17%);
+  --color-muted-foreground: hsl(217 10% 64%);
+  --color-accent: hsl(215 28% 17%);
+  --color-accent-foreground: hsl(210 20% 98%);
+  --color-destructive: hsl(0 84% 60%);
+  --color-destructive-foreground: hsl(0 0% 98%);
+  --color-border: hsl(215 28% 17%);
+  --color-input: hsl(215 28% 17%);
+  --color-ring: hsl(217 91% 60%);
+
+  --color-sidebar: hsl(224 50% 6%);
+  --color-sidebar-foreground: hsl(210 20% 98%);
+  --color-sidebar-border: hsl(215 28% 17%);
+  --color-sidebar-accent: hsl(215 28% 17%);
+  --color-sidebar-accent-foreground: hsl(210 20% 98%);
+  --color-sidebar-primary: hsl(217 91% 60%);
+  --color-sidebar-primary-foreground: hsl(0 0% 100%);
+}
+
+/* ── Keyframes ── */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
-/**
- * Product tables and the POS-adjacent screens show a lot of numbers in columns.
- * Tabular figures keep the digits aligned so a price list is scannable.
- */
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes glow-pulse {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes gradient-shift {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+/* ── Utilities ── */
 .tabular {
   font-variant-numeric: tabular-nums;
 }
+
+.gradient-text {
+  background: linear-gradient(
+    135deg,
+    var(--color-brand-start),
+    var(--color-brand-end)
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-brand {
+  background: linear-gradient(
+    135deg,
+    var(--color-brand-start),
+    var(--color-brand-end)
+  );
+}
+
+.glass {
+  background: hsl(0 0% 100% / 0.7);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+}
+
+.dark .glass {
+  background: hsl(224 50% 8% / 0.7);
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(220 9% 46% / 0.3);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(220 9% 46% / 0.5);
+}
+
+/* ── Base ── */
+* {
+  border-color: var(--color-border);
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+}
+
+/* Staggered animations for dashboard cards */
+.stagger-1 { animation-delay: 0ms; }
+.stagger-2 { animation-delay: 80ms; }
+.stagger-3 { animation-delay: 160ms; }
+.stagger-4 { animation-delay: 240ms; }
