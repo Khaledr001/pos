@@ -253,6 +253,8 @@ export class PurchasesService {
        * the supplier. Falls back to the ordered price when the receipt does not
        * restate it — the usual case, where the invoice matches the quote.
        */
+      const settings = await this.settings(tx);
+
       const lineValues = dto.lines.map((line) => {
         const ordered = line.purchaseOrderItemId
           ? orderItemsById.get(line.purchaseOrderItemId)
@@ -272,10 +274,13 @@ export class PurchasesService {
           );
         }
 
-        return {
-          unitPrice,
-          value: Money.multiplyByQuantity(unitPrice, line.quantity),
-        };
+        const value = Money.multiplyByQuantity(unitPrice, line.quantity);
+
+        // The rate the order was raised at, so a VAT change between ordering
+        // and delivery does not restate an invoice the supplier already sent.
+        const taxPercent = ordered?.taxPercent ?? String(settings.tax.defaultRate);
+
+        return { unitPrice, value, tax: Money.percentOf(value, taxPercent) };
       });
 
       /**
@@ -322,7 +327,7 @@ export class PurchasesService {
       let payable = 0n;
 
       for (const [index, line] of dto.lines.entries()) {
-        const { unitPrice, value } = lineValues[index]!;
+        const { value, tax } = lineValues[index]!;
         const damaged = Money.toMinor(String(line.damagedQuantity));
         const sellable = Money.subtract(
           Money.toMinor(String(line.quantity)),
@@ -344,9 +349,9 @@ export class PurchasesService {
          * VAT is deliberately excluded — it is recoverable, so it is not part of
          * what the stock cost the business.
          */
-        const landedUnitCost = Money.divideRoundHalfUp(
+        const landedUnitCost = Money.divideByQuantity(
           Money.add(value, freight[index] ?? 0n),
-          Money.toMinor(String(line.quantity)),
+          line.quantity,
         );
 
         await tx.insert(schema.goodsReceiptItems).values({
@@ -378,9 +383,14 @@ export class PurchasesService {
           });
         }
 
-        // The supplier is owed for everything invoiced, damaged included —
-        // that is a claim to raise with them, not a silent deduction.
-        payable = Money.add(payable, value);
+        /**
+         * The supplier is owed the INVOICE figure: goods plus VAT, damaged
+         * units included. VAT is recoverable, which is why it is excluded from
+         * stock cost — but it is still money that leaves the bank, so it
+         * belongs in the payable. Damage is a claim to raise with them, not a
+         * deduction to make unilaterally.
+         */
+        payable = Money.add(payable, value, tax);
 
         if (line.purchaseOrderItemId) {
           await tx
@@ -392,10 +402,13 @@ export class PurchasesService {
         }
       }
 
+      // Freight is on the same invoice in this model, so it is owed too.
+      const invoiceTotal = Money.add(payable, shipping);
+
       await tx
         .update(schema.suppliers)
         .set({
-          outstandingBalance: sql`${schema.suppliers.outstandingBalance} + ${Money.toDecimalString(payable, 4)}::numeric`,
+          outstandingBalance: sql`${schema.suppliers.outstandingBalance} + ${Money.toDecimalString(invoiceTotal, 4)}::numeric`,
         })
         .where(eq(schema.suppliers.id, supplierId));
 

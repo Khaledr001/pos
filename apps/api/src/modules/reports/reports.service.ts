@@ -102,8 +102,8 @@ export class ReportsService {
           productName: schema.saleItems.productName,
           quantity: sql<string>`sum(${schema.saleItems.quantity})::text`,
           revenue: sql<string>`sum(${schema.saleItems.lineSubtotal})::text`,
-          cost: sql<string>`sum(${schema.saleItems.quantity} * coalesce(${schema.saleItems.costPrice}, 0))::text`,
-          margin: sql<string>`sum(${schema.saleItems.lineSubtotal} - (${schema.saleItems.quantity} * coalesce(${schema.saleItems.costPrice}, 0)))::text`,
+          cost: sql<string>`round(sum(${schema.saleItems.quantity} * coalesce(${schema.saleItems.costPrice}, 0)), 4)::text`,
+          margin: sql<string>`round(sum(${schema.saleItems.lineSubtotal} - (${schema.saleItems.quantity} * coalesce(${schema.saleItems.costPrice}, 0))), 4)::text`,
           saleCount: sql<number>`count(DISTINCT ${schema.saleItems.saleId})::int`,
         })
         .from(schema.saleItems)
@@ -140,7 +140,9 @@ export class ReportsService {
           units: sql<string>`coalesce(sum(${schema.inventory.quantity}), 0)::text`,
           // At COST, not at retail. Valuing stock at what you hope to sell it
           // for is how a balance sheet ends up describing an ambition.
-          value: sql<string>`coalesce(sum(${schema.inventory.quantity} * coalesce(${schema.inventory.averageCost}, 0)), 0)::text`,
+          // Rounded: numeric(12,4) x numeric(12,4) is numeric(_,8), and a stock
+          // valuation printed to eight decimal places reads as a bug.
+          value: sql<string>`round(coalesce(sum(${schema.inventory.quantity} * coalesce(${schema.inventory.averageCost}, 0)), 0), 4)::text`,
           outOfStock: sql<number>`count(*) FILTER (WHERE ${schema.inventory.quantity} <= 0)::int`,
         })
         .from(schema.inventory)
@@ -194,7 +196,7 @@ export class ReportsService {
       const [trading] = await tx
         .select({
           revenue: sql<string>`coalesce(sum(${schema.saleItems.lineSubtotal}), 0)::text`,
-          cost: sql<string>`coalesce(sum(${schema.saleItems.quantity} * coalesce(${schema.saleItems.costPrice}, 0)), 0)::text`,
+          cost: sql<string>`round(coalesce(sum(${schema.saleItems.quantity} * coalesce(${schema.saleItems.costPrice}, 0)), 0), 4)::text`,
           unitsSold: sql<string>`coalesce(sum(${schema.saleItems.quantity}), 0)::text`,
         })
         .from(schema.saleItems)
@@ -284,11 +286,20 @@ function shiftDays(date: string, days: number): string {
  * Markup and margin are different numbers, and quoting one while calling it the
  * other is how a business convinces itself a 20% margin covers a 25% overhead.
  */
-function marginPercent(revenue: string, margin: string): string {
+export function marginPercent(revenue: string, margin: string): string {
   const base = Money.toMinor(revenue);
   if (base === 0n) return "0.00";
+
+  /**
+   * `100n * SCALE`, not `SCALE`.
+   *
+   * Dividing two `Minor4` values cancels the scale, so the result is a bare
+   * ratio — one factor of 10^4 restores it to Minor4, and the 100 turns the
+   * ratio into a percentage. Getting this wrong reports a 41.82% margin as
+   * 0.42%, which reads as a plausible-looking disaster rather than an error.
+   */
   return Money.toDecimalString(
-    Money.divideRoundHalfUp(Money.toMinor(margin) * 10000n, base),
+    Money.divideRoundHalfUp(Money.toMinor(margin) * 1_000_000n, base),
     2,
   );
 }

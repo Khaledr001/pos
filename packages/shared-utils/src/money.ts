@@ -116,6 +116,21 @@ export function multiplyByQuantity(amount: Minor4, quantity: MoneyInput): Minor4
   return divideRoundHalfUp(amount * q, SCALE_FACTOR);
 }
 
+/**
+ * Divide an amount by a quantity — the exact inverse of `multiplyByQuantity`.
+ *
+ * Use this for any per-unit figure: landed cost, cost per metre, average price.
+ * Dividing two `Minor4` values directly is WRONG and fails silently: both carry
+ * the 10^4 scale, so it cancels and the answer comes back ten thousand times
+ * too small. A landed cost of 2.8571 turns into 0.0003, which still looks like
+ * money and is off by four orders of magnitude.
+ */
+export function divideByQuantity(amount: Minor4, quantity: MoneyInput): Minor4 {
+  const q = toMinor(quantity);
+  if (q === 0n) throw new RangeError("Cannot divide by a quantity of zero");
+  return divideRoundHalfUp(amount * SCALE_FACTOR, q);
+}
+
 /** Multiply by a percentage, e.g. `percentOf(total, 5)` for 5% VAT. */
 export function percentOf(amount: Minor4, percent: MoneyInput): Minor4 {
   const p = toMinor(percent);

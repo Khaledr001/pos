@@ -32,8 +32,9 @@ Copying its shape is what keeps twenty modules looking like one codebase.
 | `pricing` | 1 | ✅ done | Price lists, customer prices, floor enforcement, history |
 | `customers` | 1 | ⬜ todo | Customers, credit limits, balance |
 | `inventory` | 2 | ✅ done | Per-branch stock, the append-only ledger, adjustments |
-| `suppliers` | 2 | ⬜ todo | Supplier CRUD |
-| `purchases` | 2 | ⬜ todo | Purchase orders, goods receipts, landed cost |
+| `stock-take` | 2 | ✅ done | Count sheet → count → submit → approve, posts variances |
+| `suppliers` | 2 | ✅ done | Supplier CRUD, outstanding balance |
+| `purchases` | 2 | ✅ done | Purchase orders, goods receipts, landed cost |
 | `transfers` | 2 | ⬜ todo | Inter-branch request → approve → ship → receive |
 | `sync` | 3 | ✅ done | POS push/pull, idempotency, per-entity checkpoints |
 | `cash-register` | 3 | ✅ done | Drawer sessions, movements, close-out variance |
@@ -44,9 +45,9 @@ Copying its shape is what keeps twenty modules looking like one codebase.
 | `payments` | 3 | ⬜ todo | Split tender, credit settlement, refunds |
 | `whatsapp` | 4 | ⬜ todo | Meta Cloud API webhook, send/receive, templates |
 | `ai` | 4 | ⬜ todo | LLM tools, intent extraction, escalation |
-| `quotations` | 5 | ⬜ todo | Quotation → PDF → stock reservation → order |
+| `quotations` | 5 | ✅ done | Quote at snapshotted prices, convert to a sale |
 | `orders` | 5 | ⬜ todo | Order lifecycle, POS pickup, fulfilment |
-| `reports` | 6 | ⬜ todo | Sales, margin, stock, cash reporting |
+| `reports` | 6 | ✅ done | Sales, top products, stock health, financial |
 
 ## Rules
 

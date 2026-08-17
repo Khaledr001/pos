@@ -3,6 +3,7 @@ import {
   add,
   allocate,
   allocateByWeight,
+  divideByQuantity,
   divideRoundHalfUp,
   formatMoney,
   multiplyByQuantity,
@@ -114,5 +115,26 @@ describe("roundTo", () => {
 describe("formatMoney", () => {
   it("renders for display", () => {
     expect(formatMoney(toMinor("1234.5"))).toContain("1,234.50");
+  });
+});
+
+describe("divideByQuantity", () => {
+  it("is the exact inverse of multiplyByQuantity", () => {
+    const unit = toMinor("2.8571");
+    expect(divideByQuantity(multiplyByQuantity(unit, 100), 100)).toBe(unit);
+  });
+
+  it("gives a per-unit landed cost, not a scale-cancelled fraction", () => {
+    // 200.00 of goods + 85.7143 of allocated freight over 100 units.
+    const landed = divideByQuantity(add(toMinor("200"), toMinor("85.7143")), 100);
+    expect(toDecimalString(landed, 4)).toBe("2.8571");
+  });
+
+  it("handles a fractional quantity — 12.5 metres of cable", () => {
+    expect(toDecimalString(divideByQuantity(toMinor("43.75"), "12.5"), 4)).toBe("3.5000");
+  });
+
+  it("refuses to divide by zero units", () => {
+    expect(() => divideByQuantity(toMinor("10"), 0)).toThrow(RangeError);
   });
 });

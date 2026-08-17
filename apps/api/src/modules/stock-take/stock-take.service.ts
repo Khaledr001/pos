@@ -88,7 +88,7 @@ export class StockTakeService {
        * A full count on a 5,000-SKU catalogue is 5,000 inserts otherwise, in a
        * transaction that holds while somebody's browser waits.
        */
-      const inserted = await tx.execute<{ inserted: number }>(sql`
+      const inserted = await tx.execute<{ id: string }>(sql`
         INSERT INTO stock_count_items (tenant_id, stock_count_id, variant_id, system_quantity)
         SELECT
           ${tenantId}::uuid,
@@ -103,7 +103,17 @@ export class StockTakeService {
           AND p.deleted_at IS NULL
           AND p.is_stock_tracked = true
           ${dto.categoryId ? sql`AND p.category_id = ${dto.categoryId}::uuid` : sql``}
+        RETURNING id
       `);
+
+      if (inserted.length === 0) {
+        throw new AppError(
+          ERROR_CODES.VALIDATION_FAILED,
+          dto.categoryId
+            ? "Nothing stock-tracked is in that category, so there is nothing to count."
+            : "This branch has no stock-tracked products to count.",
+        );
+      }
 
       return { ...stockCount, itemCount: inserted.length };
     });

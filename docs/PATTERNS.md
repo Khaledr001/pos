@@ -230,7 +230,7 @@ not re-asserted in every service test.
 
 ## Gotchas
 
-Four traps this scaffold already hit. Each one compiles, type-checks, and then
+Traps this scaffold already hit. Each one compiles, type-checks, and then
 fails somewhere unhelpful.
 
 ### Drizzle column groups must be functions
@@ -375,6 +375,55 @@ Not every missing reference is equal. A sale whose drawer cannot be found is
 still a sale — it lands with `applied_with_warning`, because discarding
 takings over missing metadata is the worse failure. A cash movement with no
 drawer *is* nothing, and is rejected.
+
+### Never divide two `Minor4` values
+
+```ts
+Money.divideRoundHalfUp(totalMinor, Money.toMinor(quantity))  // ❌ 2.8571 -> 0.0003
+Money.divideByQuantity(totalMinor, quantity)                  // ✅
+```
+
+Both operands carry the 10^4 scale, so it cancels and the answer comes back
+ten thousand times too small — still shaped like money, and wrong by four
+orders of magnitude. A landed cost of `2.8571` was stored as `0.0003`, which
+then quietly poisoned the weighted-average cost of everything received.
+
+The same trap with a percentage needs `100n * SCALE`, not `SCALE`:
+
+```ts
+Money.divideRoundHalfUp(margin * 1_000_000n, revenue)   // 41.82%
+Money.divideRoundHalfUp(margin * 10_000n, revenue)      // 0.42% — same bug
+```
+
+Reach for a named helper rather than raw division. `multiplyByQuantity`,
+`divideByQuantity`, `percentOf` and `allocateByWeight` all know where the scale
+goes; open-coded arithmetic does not.
+
+### `numeric(12,4) * numeric(12,4)` is `numeric(_,8)`
+
+```sql
+sum(quantity * cost)            -- 28617.27940000
+round(sum(quantity * cost), 4)  -- 28617.2794
+```
+
+Postgres widens the scale on multiplication. Any money figure built by
+multiplying two money columns has to be rounded back, or a stock valuation
+reaches the UI with eight decimal places and reads as a bug.
+
+### Weighted average cost moves only on the way IN
+
+```sql
+new = (GREATEST(onHand, 0) * oldAverage + arriving * arrivingCost)
+      / NULLIF(GREATEST(onHand, 0) + arriving, 0)
+```
+
+Computed in SQL against the row the upsert is already locking, so two receipts
+landing together cannot both read the same "old" average and overwrite each
+other. Selling changes nothing — letting an outbound movement rewrite the
+average would make margin depend on the order things were sold in. The
+`GREATEST(..., 0)` guards a variant whose on-hand went negative through an
+out-of-order sale, which would otherwise divide by less than what is arriving
+and produce an average above anything ever paid.
 
 ---
 

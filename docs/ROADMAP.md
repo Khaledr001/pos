@@ -92,8 +92,8 @@ checks pass.
 
 - [ ] `inventory` module — per-branch balance + append-only ledger, `balanceAfter` in-transaction
 - [ ] Stock adjustments with mandatory reason, low-stock alerts
-- [ ] `suppliers` module
-- [ ] `purchases` module — PO → goods receipt → stock in, weighted-average landed cost
+- [x] `suppliers` module
+- [x] `purchases` module — PO → goods receipt → stock in, weighted-average landed cost
 - [ ] `transfers` module — request → approve → ship → receive (stock in transit belongs to neither branch)
 - [ ] Stock counts — count sheet → variance → manager approval → adjustments
 
