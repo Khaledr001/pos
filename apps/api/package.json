@@ -2,6 +2,7 @@
   "name": "@devsfleet/api",
   "version": "0.1.0",
   "private": true,
+  "main": "dist/main.js",
   "scripts": {
     "build": "nest build",
     "dev": "CHOKIDAR_USEPOLLING=true nest start --watch",

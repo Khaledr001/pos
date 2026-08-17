@@ -83,6 +83,18 @@ export class ProductsService {
               SELECT count(*)::int FROM product_variants v
               WHERE v.product_id = products.id AND v.deleted_at IS NULL
             )`,
+            minPrice: sql<string | null>`(
+              SELECT min(pp.selling_price)::text
+              FROM product_variants v
+              JOIN product_prices pp ON pp.variant_id = v.id
+              WHERE v.product_id = products.id AND v.deleted_at IS NULL
+            )`,
+            maxPrice: sql<string | null>`(
+              SELECT max(pp.selling_price)::text
+              FROM product_variants v
+              JOIN product_prices pp ON pp.variant_id = v.id
+              WHERE v.product_id = products.id AND v.deleted_at IS NULL
+            )`,
           })
           .from(schema.products)
           .leftJoin(schema.categories, eq(schema.products.categoryId, schema.categories.id))

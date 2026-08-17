@@ -89,7 +89,12 @@ BEGIN
 END
 $$;
 
-GRANT EXECUTE ON FUNCTION public.next_document_number(UUID, VARCHAR) TO devsfleet_app;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'devsfleet_app') THEN
+    GRANT EXECUTE ON FUNCTION public.next_document_number(UUID, VARCHAR) TO devsfleet_app;
+  END IF;
+END $$;
 
 -- -----------------------------------------------------------------------------
 -- Immutability guards

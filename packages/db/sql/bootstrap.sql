@@ -37,13 +37,16 @@ RETURNS boolean LANGUAGE sql STABLE PARALLEL SAFE AS $fn$
     SELECT COALESCE(current_setting('app.is_platform_admin', true), 'off') = 'on';
 $fn$;
 
--- Guarded: a deployment that runs everything as one role has no `devsfleet_app`,
--- and an unconditional GRANT would abort the migration on a missing role.
+-- Ensure required application and migrator roles exist
 DO $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'devsfleet_app') THEN
-    GRANT EXECUTE ON FUNCTION public.current_tenant_id() TO devsfleet_app;
-    GRANT EXECUTE ON FUNCTION public.is_platform_admin() TO devsfleet_app;
-    GRANT USAGE ON SCHEMA public TO devsfleet_app;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'devsfleet_app') THEN
+    CREATE ROLE devsfleet_app LOGIN PASSWORD 'app_dev_password' NOBYPASSRLS;
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'devsfleet_migrator') THEN
+    CREATE ROLE devsfleet_migrator LOGIN PASSWORD 'migrator_dev_password';
+  END IF;
+  GRANT EXECUTE ON FUNCTION public.current_tenant_id() TO devsfleet_app;
+  GRANT EXECUTE ON FUNCTION public.is_platform_admin() TO devsfleet_app;
+  GRANT USAGE ON SCHEMA public TO devsfleet_app;
 END $$;

@@ -50,41 +50,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const login = async (email: string, pass: string) => {
+  const login = async (email: string, pass: string, tenantSlug?: string) => {
     setIsLoading(true);
     try {
-      const res = await apiLogin(email, pass);
-      setTokens(res);
-      localStorage.setItem(TOKEN_KEY, JSON.stringify(res));
+      const res = await apiLogin(email, pass, tenantSlug);
+      const tokenPair = {
+        accessToken: res.accessToken,
+        refreshToken: res.refreshToken,
+        expiresIn: res.expiresIn,
+      };
+      setTokens(tokenPair);
+      localStorage.setItem(TOKEN_KEY, JSON.stringify(tokenPair));
 
-      // Fetch user details from /auth/me
-      try {
-        const me = await api.get<UserProfile>("/auth/me", {
-          accessToken: res.accessToken,
-        });
-        setUser(me);
-        localStorage.setItem(USER_KEY, JSON.stringify(me));
-      } catch {
-        const fallbackUser: UserProfile = {
-          id: "user-1",
-          name: email.split("@")[0] || "Admin",
-          email,
-          roleName: "Owner / Admin",
-          permissions: ["*"],
-          tenantId: "tenant-1",
-          tenantName: "DevsFleet Retail",
-          branchId: null,
-          branchName: "All Branches",
+      if (res.user) {
+        const profile: UserProfile = {
+          id: res.user.id,
+          name: res.user.name || email.split("@")[0] || "User",
+          email: res.user.email || email,
+          roleName: res.user.roleName || "User",
+          permissions: (res.user.permissions as string[]) || [],
+          tenantId: res.user.tenantId,
+          tenantName: res.user.tenantName,
+          branchId: res.user.branchId,
+          branchName: res.user.branchName,
         };
-        setUser(fallbackUser);
-        localStorage.setItem(USER_KEY, JSON.stringify(fallbackUser));
+        setUser(profile);
+        localStorage.setItem(USER_KEY, JSON.stringify(profile));
       }
     } finally {
       setIsLoading(false);
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    const currentTokens = tokens;
+    if (currentTokens?.refreshToken) {
+      try {
+        await api.post("/auth/logout", { refreshToken: currentTokens.refreshToken });
+      } catch (err) {
+        console.warn("Could not notify backend of logout:", err);
+      }
+    }
     setTokens(null);
     setUser(null);
     localStorage.removeItem(TOKEN_KEY);

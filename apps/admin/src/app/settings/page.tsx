@@ -1,16 +1,22 @@
 "use client";
 
-import React, { useState } from "react";
-import { ShieldCheck, Coins, Server, Save, CheckCircle2 } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { ShieldCheck, Coins, Server, Save, CheckCircle2, Activity, AlertCircle } from "lucide-react";
 import { DEFAULT_TENANT_SETTINGS } from "@devsfleet/shared-types";
 import { useAuth } from "@/lib/auth-context";
+import { api } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+
+const SETTINGS_KEY = "devsfleet_tenant_settings";
 
 export default function SettingsPage() {
   const { user } = useAuth();
   const [saved, setSaved] = useState(false);
+  const [testingApi, setTestingApi] = useState(false);
+  const [apiStatus, setApiStatus] = useState<"idle" | "connected" | "failed">("idle");
 
   const [companyName, setCompanyName] = useState(user?.tenantName || "DevsFleet Retail LLC");
   const [currency, setCurrency] = useState(DEFAULT_TENANT_SETTINGS.currency.base);
@@ -18,10 +24,53 @@ export default function SettingsPage() {
   const [trn, setTrn] = useState("100234567800003");
   const [apiUrl, setApiUrl] = useState(process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1");
 
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(SETTINGS_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.companyName) setCompanyName(parsed.companyName);
+        if (parsed.currency) setCurrency(parsed.currency);
+        if (parsed.taxRate !== undefined) setTaxRate(parsed.taxRate);
+        if (parsed.trn) setTrn(parsed.trn);
+        if (parsed.apiUrl) setApiUrl(parsed.apiUrl);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const handleTestApi = async () => {
+    setTestingApi(true);
+    setApiStatus("idle");
+    try {
+      await api.get("/health");
+      setApiStatus("connected");
+    } catch {
+      setApiStatus("failed");
+    } finally {
+      setTestingApi(false);
+    }
+  };
+
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+    try {
+      localStorage.setItem(
+        SETTINGS_KEY,
+        JSON.stringify({
+          companyName,
+          currency,
+          taxRate,
+          trn,
+          apiUrl,
+        })
+      );
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch {
+      // ignore
+    }
   };
 
   return (
@@ -115,7 +164,7 @@ export default function SettingsPage() {
               </div>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <div>
               <label className="block text-xs font-medium text-foreground mb-1.5">Central API Endpoint</label>
               <Input value={apiUrl} onChange={(e) => setApiUrl(e.target.value)} className="font-mono" />
@@ -124,6 +173,31 @@ export default function SettingsPage() {
                 <code className="font-mono rounded bg-secondary px-1.5 py-0.5">https://api.devsfleet.com/api/v1</code>
                 ).
               </p>
+            </div>
+            <div className="flex items-center gap-3 pt-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleTestApi}
+                disabled={testingApi}
+                className="text-xs"
+              >
+                <Activity className="h-3.5 w-3.5" />
+                {testingApi ? "Testing..." : "Test Connection"}
+              </Button>
+              {apiStatus === "connected" && (
+                <Badge variant="success" className="text-xs gap-1">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  API is reachable & healthy
+                </Badge>
+              )}
+              {apiStatus === "failed" && (
+                <Badge variant="destructive" className="text-xs gap-1">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  Could not reach API endpoint
+                </Badge>
+              )}
             </div>
           </CardContent>
         </Card>

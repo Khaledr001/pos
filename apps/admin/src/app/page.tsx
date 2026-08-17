@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import {
   GitBranch,
@@ -41,19 +41,19 @@ interface BranchItem {
   isActive: boolean;
 }
 
-const KPI_CARDS = [
-  {
-    label: "Sales Today",
-    value: "AED 12,840.50",
-    change: "+14.2%",
-    changeType: "positive" as const,
-    icon: TrendingUp,
-    gradient: "from-blue-500 to-indigo-600",
-    bgGlow: "bg-blue-500/10",
-  },
+// KPI cards are built dynamically in the component from API data
+const KPI_GRADIENT = [
+  "from-blue-500 to-indigo-600",
+  "from-emerald-500 to-teal-600",
+  "from-amber-500 to-orange-600",
+  "from-violet-500 to-purple-600",
+];
+
+// placeholder for the shape of a dynamic KPI card
+const KPI_DEFS = [
   {
     label: "Active Branches",
-    value: "2",
+    valueKey: "branches" as const,
     change: "Online",
     changeType: "positive" as const,
     icon: GitBranch,
@@ -61,22 +61,20 @@ const KPI_CARDS = [
     bgGlow: "bg-emerald-500/10",
   },
   {
-    label: "Catalog SKUs",
-    value: "5,240",
-    change: "Ready",
+    label: "Catalog Products",
+    valueKey: "products" as const,
+    change: "SKUs",
     changeType: "neutral" as const,
     icon: Package,
     gradient: "from-amber-500 to-orange-600",
-    bgGlow: "bg-amber-500/10",
   },
   {
-    label: "WhatsApp Inquiries",
-    value: "38",
-    change: "Active",
+    label: "Total Customers",
+    valueKey: "customers" as const,
+    change: "Accounts",
     changeType: "positive" as const,
-    icon: MessageSquare,
+    icon: Users,
     gradient: "from-violet-500 to-purple-600",
-    bgGlow: "bg-violet-500/10",
   },
 ];
 
@@ -104,43 +102,51 @@ const QUICK_LINKS = [
   },
 ];
 
+interface KpiCounts {
+  branches: number;
+  products: number;
+  customers: number;
+}
+
 export default function DashboardPage() {
   const { user, tokens } = useAuth();
   const [branches, setBranches] = useState<BranchItem[]>([]);
   const [loadingBranches, setLoadingBranches] = useState(true);
+  const [kpiCounts, setKpiCounts] = useState<KpiCounts>({ branches: 0, products: 0, customers: 0 });
 
-  useEffect(() => {
-    async function loadBranches() {
-      try {
-        const res = await api.get<{ items: BranchItem[] }>("/branches", {
-          accessToken: tokens?.accessToken,
-        });
-        setBranches(res.items || []);
-      } catch {
-        setBranches([
-          {
-            id: "1",
-            name: "Sharjah Main Branch & Warehouse",
-            code: "SHJ",
-            isActive: true,
-            phone: "+971 6 500 0001",
-            address: "Industrial Area 4, Sharjah",
-          },
-          {
-            id: "2",
-            name: "Dubai Deira Retail Store",
-            code: "DXB",
-            isActive: true,
-            phone: "+971 4 200 0002",
-            address: "Al Nakhal Rd, Deira, Dubai",
-          },
-        ]);
-      } finally {
-        setLoadingBranches(false);
+  const loadDashboard = useCallback(async () => {
+    if (!tokens?.accessToken) return;
+    try {
+      const [branchRes, productRes, customerRes] = await Promise.allSettled([
+        api.get<{ items: BranchItem[]; total: number }>("/branches", { accessToken: tokens.accessToken }),
+        api.get<{ items: unknown[]; total: number }>("/products", { accessToken: tokens.accessToken, query: { limit: 1, page: 1 } }),
+        api.get<{ items: unknown[]; total: number }>("/customers", { accessToken: tokens.accessToken, query: { pageSize: 1, page: 1 } }),
+      ]);
+
+      if (branchRes.status === "fulfilled") {
+        const val = branchRes.value as any;
+        const list = Array.isArray(val) ? val : (val?.items ?? []);
+        setBranches(list);
+        setKpiCounts(prev => ({ ...prev, branches: val?.meta?.total ?? val?.total ?? list.length }));
       }
+      if (productRes.status === "fulfilled") {
+        const val = productRes.value as any;
+        const list = Array.isArray(val) ? val : (val?.items ?? []);
+        setKpiCounts(prev => ({ ...prev, products: val?.meta?.total ?? val?.total ?? list.length }));
+      }
+      if (customerRes.status === "fulfilled") {
+        const val = customerRes.value as any;
+        const list = Array.isArray(val) ? val : (val?.items ?? []);
+        setKpiCounts(prev => ({ ...prev, customers: val?.meta?.total ?? val?.total ?? list.length }));
+      }
+    } catch {
+      // silently fall back
+    } finally {
+      setLoadingBranches(false);
     }
-    loadBranches();
   }, [tokens]);
+
+  useEffect(() => { loadDashboard(); }, [loadDashboard]);
 
   const calcDemo = calculateDocument({
     taxMode: DEFAULT_TENANT_SETTINGS.tax.mode,
@@ -203,9 +209,11 @@ export default function DashboardPage() {
       </div>
 
       {/* ═══ KPI Cards ═══ */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {KPI_CARDS.map((kpi, i) => {
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {KPI_DEFS.map((kpi, i) => {
           const Icon = kpi.icon;
+          const value = kpiCounts[kpi.valueKey];
+          const isLoading = loadingBranches && value === 0;
           return (
             <Card
               key={kpi.label}
@@ -229,13 +237,15 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 <div className="mt-3 flex items-baseline gap-2">
-                  <span className="tabular text-2xl font-bold text-foreground">
-                    {kpi.value}
-                  </span>
+                  {isLoading ? (
+                    <div className="h-8 w-16 rounded-lg bg-muted animate-pulse" />
+                  ) : (
+                    <span className="tabular text-2xl font-bold text-foreground">
+                      {value.toLocaleString()}
+                    </span>
+                  )}
                   <Badge
-                    variant={
-                      kpi.changeType === "positive" ? "success" : "secondary"
-                    }
+                    variant={kpi.changeType === "positive" ? "success" : "secondary"}
                     className="text-[10px] px-1.5 py-0"
                   >
                     {kpi.change}
@@ -246,6 +256,7 @@ export default function DashboardPage() {
           );
         })}
       </div>
+
 
       {/* ═══ Main Grid ═══ */}
       <div className="grid gap-6 lg:grid-cols-3">

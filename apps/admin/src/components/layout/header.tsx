@@ -31,9 +31,12 @@ const ROUTE_LABELS: Record<string, string> = {
   "/branches": "Branches & Warehouses",
   "/products": "Product Catalogue",
   "/inventory": "Inventory Ledger",
+  "/suppliers": "Suppliers & Vendors",
   "/sales": "Sales & Tax Invoices",
   "/customers": "Customers & Credit",
+  "/reports": "Analytics & Reports",
   "/whatsapp": "WhatsApp AI",
+  "/users": "Staff & Roles",
   "/settings": "Settings",
 };
 

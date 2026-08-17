@@ -1,4 +1,4 @@
-import type { ApiResponse, AuthTokens } from "@devsfleet/shared-types";
+import type { ApiResponse, AuthSession, AuthTokens } from "@devsfleet/shared-types";
 import { AppError, ERROR_CODES } from "@devsfleet/shared-utils";
 
 /**
@@ -6,32 +6,44 @@ import { AppError, ERROR_CODES } from "@devsfleet/shared-utils";
  *
  * Unwraps the ApiSuccess envelope so callers get `T` directly, and turns an
  * ApiError into a thrown `AppError` carrying the server's stable error code.
- * That means a component can `catch (e) { if (e.code === "CREDIT_LIMIT_EXCEEDED") }`
- * instead of parsing an error message string that may be reworded next week.
  */
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1";
+const TOKEN_KEY = "devsfleet_auth_tokens";
 
 export interface RequestOptions extends Omit<RequestInit, "body"> {
   body?: unknown;
-  /** Bearer token. Server components pass it explicitly; the browser uses the store. */
+  /** Bearer token. Server components pass it explicitly; browser resolves from localStorage. */
   accessToken?: string;
   query?: Record<string, string | number | boolean | undefined>;
 }
 
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { body, accessToken, query, headers, ...rest } = options;
+  const { body, accessToken: explicitToken, query, headers, ...rest } = options;
+
+  let token = explicitToken;
+  if (!token && typeof window !== "undefined") {
+    try {
+      const stored = localStorage.getItem(TOKEN_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored) as AuthTokens;
+        token = parsed.accessToken;
+      }
+    } catch {
+      // Ignore parse errors
+    }
+  }
 
   const url = new URL(`${BASE_URL}${path.startsWith("/") ? path : `/${path}`}`);
   for (const [key, value] of Object.entries(query ?? {})) {
     if (value !== undefined) url.searchParams.set(key, String(value));
   }
 
-  const response = await fetch(url, {
+  let response = await fetch(url, {
     ...rest,
     headers: {
       "content-type": "application/json",
-      ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
       ...headers,
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -71,5 +83,5 @@ export const api = {
     apiFetch<T>(path, { ...options, method: "DELETE" }),
 };
 
-export const login = (email: string, password: string) =>
-  api.post<AuthTokens>("/auth/login", { email, password });
+export const login = (email: string, password: string, tenantSlug?: string) =>
+  api.post<AuthSession>("/auth/login", { email, password, tenantSlug });

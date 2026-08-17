@@ -16,6 +16,9 @@ import {
   Store,
   ChevronLeft,
   ChevronRight,
+  Truck,
+  BarChart3,
+  UserCheck,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
@@ -41,19 +44,24 @@ const NAV_SECTIONS = [
     items: [
       { label: "Products", href: "/products", icon: Package },
       { label: "Inventory", href: "/inventory", icon: Boxes },
+      { label: "Suppliers", href: "/suppliers", icon: Truck },
       { label: "Sales & Orders", href: "/sales", icon: ShoppingCart },
       { label: "Customers", href: "/customers", icon: Users },
     ],
   },
   {
-    label: "Communication",
+    label: "Analytics & Comms",
     items: [
+      { label: "Reports & KPIs", href: "/reports", icon: BarChart3 },
       { label: "WhatsApp AI", href: "/whatsapp", icon: MessageSquare },
     ],
   },
   {
     label: "System",
-    items: [{ label: "Settings", href: "/settings", icon: Settings }],
+    items: [
+      { label: "Staff & Users", href: "/users", icon: UserCheck },
+      { label: "Settings", href: "/settings", icon: Settings },
+    ],
   },
 ];
 
