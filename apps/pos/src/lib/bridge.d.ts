@@ -36,6 +36,14 @@ export interface DevsfleetBridge {
   };
   customers: {
     search(query: string): Promise<PosCustomer[]>;
+    createCustomer?(input: {
+      name: string;
+      phone?: string;
+      company?: string;
+      trn?: string;
+      email?: string;
+      creditLimit?: string;
+    }): Promise<PosCustomer>;
   };
   cash: {
     current(): Promise<PosCashSession | null>;

@@ -123,7 +123,7 @@ export function ProductSearch({
                   "flex w-full items-center gap-4 rounded-lg border px-3.5 py-3 text-left transition-colors",
                   active
                     ? "border-brass/50 bg-brass/8"
-                    : "border-steel-700 bg-steel-850 hover:bg-steel-800",
+                    : "border-pos-border bg-pos-panel hover:bg-pos-raised",
                 ].join(" ")}
               >
                 <div className="min-w-0 flex-1">
@@ -162,7 +162,7 @@ export function ProductSearch({
 
         {!loading && results.length === 0 && (
           <li className="flex flex-col items-center gap-2 py-14 text-center">
-            <Package className="size-7 text-steel-700" aria-hidden />
+            <Package className="size-7 text-pos-border" aria-hidden />
             <p className="text-[13px] text-zinc-500">
               {query ? `Nothing matches "${query}"` : "The catalogue is empty"}
             </p>

@@ -1,8 +1,9 @@
 import type { PrintFormat, SyncStatusSnapshot } from "@devsfleet/shared-types";
-import { Cpu, LogOut, Printer, RefreshCw } from "lucide-react";
+import { Cpu, LogOut, Moon, Printer, RefreshCw, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 import { KeyRail } from "../components/KeyRail.js";
-import { dataMode, hasBridge } from "../lib/pos-data.js";
+import { clearPosApiSession, dataMode, hasBridge } from "../lib/pos-data.js";
+import { applyTheme, type PosTheme } from "../main.js";
 import { useAuth } from "../store/auth.js";
 
 /**
@@ -21,6 +22,20 @@ export function Settings() {
   } | null>(null);
   const [sync, setSync] = useState<SyncStatusSnapshot | null>(null);
   const [printResult, setPrintResult] = useState<string | null>(null);
+  const [theme, setTheme] = useState<PosTheme>(
+    () => (document.documentElement.getAttribute("data-theme") as PosTheme) ?? "light",
+  );
+
+  function toggleTheme() {
+    const next: PosTheme = theme === "light" ? "dark" : "light";
+    applyTheme(next);
+    setTheme(next);
+  }
+
+  function handleSignOut() {
+    clearPosApiSession();
+    signOut();
+  }
 
   useEffect(() => {
     if (!hasBridge()) return;
@@ -53,7 +68,9 @@ export function Settings() {
               value={
                 dataMode === "electron"
                   ? "Local SQLite, via the Electron bridge"
-                  : "In-memory sample data (browser preview)"
+                  : dataMode === "api"
+                    ? "Live API (browser + network)"
+                    : "In-memory sample data (browser preview)"
               }
             />
           </Section>
@@ -117,10 +134,41 @@ export function Settings() {
             )}
           </Section>
 
+          <Section title="Appearance" icon={Sun}>
+            <div className="flex items-center justify-between">
+              <span className="text-[13px]" style={{ color: "var(--pos-text-2)" }}>
+                Theme
+              </span>
+              <button
+                type="button"
+                id="theme-toggle"
+                onClick={toggleTheme}
+                className="btn btn-ghost gap-2 text-[13px]"
+                aria-label={theme === "light" ? "Switch to dark theme" : "Switch to light theme"}
+              >
+                {theme === "light" ? (
+                  <>
+                    <Moon className="size-4" aria-hidden />
+                    Dark mode
+                  </>
+                ) : (
+                  <>
+                    <Sun className="size-4" aria-hidden />
+                    Light mode
+                  </>
+                )}
+              </button>
+            </div>
+            <p className="text-[12px]" style={{ color: "var(--pos-text-3)" }}>
+              Choose the look that works best under your shop lighting. Your
+              preference is saved on this terminal.
+            </p>
+          </Section>
+
           <Section title="Shift" icon={LogOut}>
             <Field label="Signed in as" value={cashier?.name ?? "—"} />
             <Field label="Role" value={cashier?.roleName ?? "—"} />
-            <button type="button" className="btn btn-danger mt-2" onClick={signOut}>
+            <button type="button" className="btn btn-danger mt-2" onClick={handleSignOut}>
               <LogOut className="size-4" aria-hidden />
               End shift and sign out
             </button>

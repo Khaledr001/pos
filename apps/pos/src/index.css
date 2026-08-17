@@ -23,41 +23,104 @@
  */
 
 @theme {
-  /* Surfaces — galvanised steel, cool and blue-shifted */
-  --color-steel-900: #10151a; /* app background */
-  --color-steel-850: #161c23; /* panels */
-  --color-steel-800: #1d242d; /* raised: cards, inputs */
-  --color-steel-750: #232c37; /* hover */
-  --color-steel-700: #2a343f; /* borders */
+  --color-steel-900: #10151a;
+  --color-steel-850: #161c23;
+  --color-steel-800: #1d242d;
+  --color-steel-750: #232c37;
+  --color-steel-700: #2a343f;
 
-  /* Ink */
-  --color-chalk: #edf2f7; /* primary text — chalk marker on steel */
-  --color-zinc-400: #93a1b1; /* secondary text */
-  --color-zinc-500: #6b7987; /* tertiary, disabled */
+  --color-chalk: #edf2f7;
+  --color-zinc-400: #93a1b1;
+  --color-zinc-500: #6b7987;
 
-  /* Brass — the merchandise, and the only accent */
   --color-brass: #e3a733;
   --color-brass-bright: #f5bf52;
   --color-brass-dim: #7a5c1c;
 
-  /* Signals. Borrowed from the safety signage already on a hardware shop wall. */
   --color-signal-green: #3fb950;
   --color-signal-red: #e5484d;
   --color-signal-amber: #d89614;
 
   --font-sans:
     system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  /* Numbers, SKUs, barcodes, the receipt column. */
   --font-mono:
     ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace;
 
   --radius-control: 0.5rem;
   --radius-panel: 0.75rem;
+
+  --color-pos-bg: var(--pos-bg);
+  --color-pos-panel: var(--pos-panel);
+  --color-pos-raised: var(--pos-raised);
+  --color-pos-hover: var(--pos-hover);
+  --color-pos-border: var(--pos-border);
+  --color-pos-text: var(--pos-text);
+  --color-pos-text-2: var(--pos-text-2);
+  --color-pos-text-3: var(--pos-text-3);
+  --color-pos-accent: var(--pos-accent);
 }
 
 @layer base {
-  :root {
+  /**
+   * LIGHT THEME (default)
+   *
+   * Brass on warm white — high contrast for trade counter under daylight or
+   * shop lighting. Pure white (#fff) reflects glare; #f4f6f8 is softer without
+   * looking grey on a calibrated display.
+   *
+   * The brass accent is unchanged — it reads just as well on white as on steel,
+   * and it ties the screen to the merchandise on the shelf behind the cashier.
+   */
+  :root,
+  [data-theme="light"] {
+    color-scheme: light;
+
+    /* Surfaces */
+    --pos-bg:          #f4f6f8; /* app background */
+    --pos-panel:       #ffffff; /* panels, cards */
+    --pos-raised:      #eef1f5; /* inputs, raised elements */
+    --pos-hover:       #e4e9ef; /* hover state */
+    --pos-border:      #d0d8e4; /* borders */
+
+    /* Ink */
+    --pos-text:        #1a202c; /* primary text */
+    --pos-text-2:      #4a5568; /* secondary */
+    --pos-text-3:      #718096; /* tertiary, disabled */
+
+    /* Accent — same brass, same feel */
+    --pos-accent:      #e3a733;
+    --pos-accent-alt:  #f5bf52;
+
+    /* Scrollbar */
+    --pos-scrollbar:   #c4cdd8;
+  }
+
+  /**
+   * DARK THEME
+   *
+   * Galvanised steel — the original palette. Activated by [data-theme="dark"]
+   * on <html>. Cashiers who prefer it can switch in Settings.
+   */
+  [data-theme="dark"] {
     color-scheme: dark;
+
+    --pos-bg:          #10151a;
+    --pos-panel:       #161c23;
+    --pos-raised:      #1d242d;
+    --pos-hover:       #232c37;
+    --pos-border:      #2a343f;
+
+    --pos-text:        #edf2f7;
+    --pos-text-2:      #93a1b1;
+    --pos-text-3:      #6b7987;
+
+    --pos-accent:      #e3a733;
+    --pos-accent-alt:  #f5bf52;
+
+    --pos-scrollbar:   #2a343f;
+  }
+
+  :root {
     /* Touch targets are sized off this. 44px is the accessibility floor; a
        gloved hand on a resistive shop touchscreen wants more. */
     --touch-min: 3rem;
@@ -71,8 +134,8 @@
 
   body {
     margin: 0;
-    background: var(--color-steel-900);
-    color: var(--color-chalk);
+    background: var(--pos-bg);
+    color: var(--pos-text);
     font-family: var(--font-sans);
     font-size: 15px;
     -webkit-font-smoothing: antialiased;
@@ -81,6 +144,7 @@
     user-select: none;
     -webkit-user-select: none;
     overflow: hidden;
+    transition: background-color 180ms ease, color 180ms ease;
   }
 
   input,
@@ -92,7 +156,7 @@
   /* Every focusable control shows focus. On a keyboard-driven till this is not
      an accessibility checkbox — it is how the cashier knows where they are. */
   :focus-visible {
-    outline: 2px solid var(--color-brass);
+    outline: 2px solid var(--pos-accent);
     outline-offset: 2px;
     border-radius: 4px;
   }
@@ -106,11 +170,11 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: var(--color-steel-700);
+    background: var(--pos-scrollbar);
     border-radius: 5px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: var(--color-zinc-500);
+    background: var(--pos-text-3);
   }
 }
 
@@ -134,7 +198,7 @@
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: var(--color-zinc-500);
+    color: var(--pos-text-3);
   }
 
   /**
@@ -144,13 +208,14 @@
    * instead of twice.
    */
   .tear {
-    border-top: 1px dashed var(--color-steel-700);
+    border-top: 1px dashed var(--pos-border);
   }
 
   .panel {
-    background: var(--color-steel-850);
-    border: 1px solid var(--color-steel-700);
+    background: var(--pos-panel);
+    border: 1px solid var(--pos-border);
     border-radius: var(--radius-panel);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.06);
   }
 
   /* Controls sized for a fingertip, not a cursor. */
@@ -176,20 +241,20 @@
   }
 
   .btn-primary {
-    background: var(--color-brass);
+    background: var(--pos-accent);
     color: #1a1205;
   }
   .btn-primary:hover:not(:disabled) {
-    background: var(--color-brass-bright);
+    background: var(--pos-accent-alt);
   }
 
   .btn-ghost {
-    background: var(--color-steel-800);
-    border-color: var(--color-steel-700);
-    color: var(--color-chalk);
+    background: var(--pos-raised);
+    border-color: var(--pos-border);
+    color: var(--pos-text);
   }
   .btn-ghost:hover:not(:disabled) {
-    background: var(--color-steel-750);
+    background: var(--pos-hover);
   }
 
   .btn-danger {
@@ -205,17 +270,17 @@
     width: 100%;
     min-height: var(--touch-min);
     padding: 0.625rem 0.875rem;
-    background: var(--color-steel-800);
-    border: 1px solid var(--color-steel-700);
+    background: var(--pos-raised);
+    border: 1px solid var(--pos-border);
     border-radius: var(--radius-control);
-    color: var(--color-chalk);
+    color: var(--pos-text);
     font-size: 15px;
   }
   .field::placeholder {
-    color: var(--color-zinc-500);
+    color: var(--pos-text-3);
   }
   .field:focus {
-    border-color: var(--color-brass);
+    border-color: var(--pos-accent);
     outline: none;
   }
 }
@@ -230,7 +295,7 @@
     from {
       opacity: 0;
       transform: translateX(-6px);
-      background: color-mix(in srgb, var(--color-brass) 18%, transparent);
+      background: color-mix(in srgb, var(--pos-accent) 18%, transparent);
     }
     to {
       opacity: 1;
@@ -245,10 +310,10 @@
   @keyframes total-pulse {
     0%,
     100% {
-      color: var(--color-brass);
+      color: var(--pos-accent);
     }
     50% {
-      color: var(--color-brass-bright);
+      color: var(--pos-accent-alt);
     }
   }
   .animate-total {

@@ -94,7 +94,7 @@ function SideNav() {
   return (
     <nav
       aria-label="Sections"
-      className="flex w-20 shrink-0 flex-col gap-1 border-r border-steel-700 bg-steel-850 p-2"
+      className="flex w-20 shrink-0 flex-col gap-1 border-r border-pos-border bg-pos-panel p-2"
     >
       {items.map(({ to, label, icon: Icon, end }) => (
         <NavLink
@@ -106,7 +106,7 @@ function SideNav() {
               "flex flex-col items-center gap-1.5 rounded-lg py-3 text-[11px] font-medium transition-colors",
               isActive
                 ? "bg-brass/12 text-brass"
-                : "text-zinc-500 hover:bg-steel-800 hover:text-chalk",
+                : "text-pos-text-3 hover:bg-pos-raised hover:text-pos-text",
             ].join(" ")
           }
         >

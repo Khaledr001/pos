@@ -96,16 +96,17 @@ async function runCycle(): Promise<SyncStatusSnapshot> {
   if (cycleInFlight) return cycleInFlight;
 
   cycleInFlight = (async () => {
-    if (!deviceId()) {
-      return emit({ online: false, lastError: "This terminal has not been activated" });
-    }
-
     emit({ syncing: true, lastError: null });
 
     const reachable = await ping();
     if (!reachable) {
       return emit({ syncing: false, online: false });
     }
+
+    if (!deviceId()) {
+      return emit({ syncing: false, online: true, lastError: "Terminal not yet activated with code" });
+    }
+
     if (!isAuthenticated()) {
       return emit({ syncing: false, online: true, lastError: "Signed out — enter a PIN" });
     }

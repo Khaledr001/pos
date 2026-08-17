@@ -28,21 +28,21 @@ export function ReceiptPanel({
   const violationKeys = new Set(violations.map((line) => line.key));
 
   return (
-    <aside className="flex w-[26rem] shrink-0 flex-col border-l border-steel-700 bg-steel-850">
+    <aside className="flex w-[26rem] shrink-0 flex-col border-l border-pos-border bg-pos-panel">
       {/* Customer. Walk-in is the default; naming one is the exception. */}
-      <div className="border-b border-steel-700 p-3">
+      <div className="border-b border-pos-border p-3">
         {customer ? (
-          <div className="flex items-center gap-3 rounded-lg bg-steel-800 px-3 py-2.5">
+          <div className="flex items-center gap-3 rounded-lg bg-pos-raised px-3 py-2.5">
             <div className="min-w-0 flex-1">
               <div className="truncate text-[13px] font-medium">{customer.name}</div>
               {customer.company && (
-                <div className="truncate text-[11px] text-zinc-500">{customer.company}</div>
+                <div className="truncate text-[11px] text-pos-text-3">{customer.company}</div>
               )}
             </div>
             {Number(customer.creditLimit) > 0 && (
               <div className="text-right">
                 <div className="eyebrow">Credit left</div>
-                <div className="num text-[12px] text-zinc-400">
+                <div className="num text-[12px] text-pos-text-2">
                   {amount(
                     Money.subtract(
                       Money.toMinor(customer.creditLimit),
@@ -56,7 +56,7 @@ export function ReceiptPanel({
               type="button"
               onClick={() => setCustomer(null)}
               aria-label="Remove customer"
-              className="rounded p-1 text-zinc-500 transition-colors hover:bg-steel-750 hover:text-chalk"
+              className="rounded p-1 text-pos-text-3 transition-colors hover:bg-pos-hover hover:text-pos-text"
             >
               <X className="size-3.5" />
             </button>
@@ -65,11 +65,11 @@ export function ReceiptPanel({
           <button
             type="button"
             onClick={onPickCustomer}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-steel-700 px-3 py-2.5 text-[13px] text-zinc-400 transition-colors hover:border-steel-600 hover:text-chalk"
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-pos-border px-3 py-2.5 text-[13px] text-pos-text-3 transition-colors hover:border-pos-text-3 hover:text-pos-text"
           >
             <UserPlus className="size-4" aria-hidden />
             Walk-in customer
-            <kbd className="num ml-1 rounded bg-steel-800 px-1.5 py-0.5 text-[10px]">F2</kbd>
+            <kbd className="num ml-1 rounded bg-pos-raised px-1.5 py-0.5 text-[10px]">F2</kbd>
           </button>
         )}
       </div>
@@ -93,12 +93,12 @@ export function ReceiptPanel({
             <li
               key={line.key}
               className={[
-                "animate-line-in border-b border-steel-800 px-3 py-2.5",
+                "animate-line-in border-b border-pos-border px-3 py-2.5",
                 flagged ? "bg-signal-red/8" : "",
               ].join(" ")}
             >
               <div className="flex items-start gap-2.5">
-                <span className="num mt-0.5 w-5 shrink-0 text-right text-[11px] text-zinc-600">
+                <span className="num mt-0.5 w-5 shrink-0 text-right text-[11px] text-pos-text-3">
                   {index + 1}
                 </span>
 
@@ -113,12 +113,12 @@ export function ReceiptPanel({
                   </button>
 
                   <div className="mt-1.5 flex items-center gap-2">
-                    <div className="flex items-center rounded-md border border-steel-700 bg-steel-800">
+                    <div className="flex items-center rounded-md border border-pos-border bg-pos-raised">
                       <button
                         type="button"
                         onClick={() => adjustQuantity(line.key, -1)}
                         aria-label={`Reduce quantity of ${line.product.name}`}
-                        className="px-2 py-1 text-zinc-400 transition-colors hover:text-chalk"
+                        className="px-2 py-1 text-pos-text-3 transition-colors hover:text-pos-text"
                       >
                         <Minus className="size-3" />
                       </button>
@@ -129,16 +129,16 @@ export function ReceiptPanel({
                         type="button"
                         onClick={() => adjustQuantity(line.key, 1)}
                         aria-label={`Increase quantity of ${line.product.name}`}
-                        className="px-2 py-1 text-zinc-400 transition-colors hover:text-chalk"
+                        className="px-2 py-1 text-pos-text-3 transition-colors hover:text-pos-text"
                       >
                         <Plus className="size-3" />
                       </button>
                     </div>
 
-                    <span className="text-[11px] text-zinc-600">
+                    <span className="text-[11px] text-pos-text-3">
                       {line.product.unitAbbr} ×
                     </span>
-                    <span className="num text-[12px] text-zinc-400">
+                    <span className="num text-[12px] text-pos-text-2">
                       {amount(Money.toMinor(line.unitPrice))}
                     </span>
 
@@ -172,7 +172,7 @@ export function ReceiptPanel({
                     type="button"
                     onClick={() => removeLine(line.key)}
                     aria-label={`Remove ${line.product.name}`}
-                    className="rounded p-1 text-zinc-600 transition-colors hover:bg-signal-red/15 hover:text-signal-red"
+                    className="rounded p-1 text-pos-text-3 transition-colors hover:bg-signal-red/15 hover:text-signal-red"
                   >
                     <Trash2 className="size-3.5" />
                   </button>
@@ -204,7 +204,7 @@ export function ReceiptPanel({
           />
         </dl>
 
-        <div className="mt-3 flex items-baseline justify-between border-t border-steel-700 pt-3">
+        <div className="mt-3 flex items-baseline justify-between border-t border-pos-border pt-3">
           <span className="eyebrow">Total</span>
           <span
             key={totals.total.toString()}
@@ -229,8 +229,8 @@ function Row({
 }) {
   return (
     <div className="flex justify-between">
-      <dt className="text-zinc-400">{label}</dt>
-      <dd className={`num ${tone === "brass" ? "text-brass" : "text-chalk"}`}>{value}</dd>
+      <dt className="text-pos-text-2">{label}</dt>
+      <dd className={`num ${tone === "brass" ? "text-brass" : "text-pos-text"}`}>{value}</dd>
     </div>
   );
 }

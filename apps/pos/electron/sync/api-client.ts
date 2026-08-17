@@ -40,7 +40,7 @@ let tokens: Tokens | null = null;
 let refreshing: Promise<void> | null = null;
 
 export function apiUrl(): string | null {
-  return getState("api_url");
+  return getState("api_url") ?? process.env.VITE_API_URL ?? "http://localhost:3001/api/v1";
 }
 
 export function deviceId(): string | null {

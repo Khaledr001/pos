@@ -1,6 +1,6 @@
 import type { PaymentMethod } from "@devsfleet/shared-types";
 import { Money } from "@devsfleet/shared-utils";
-import { CheckCircle2, Printer, Search as SearchIcon } from "lucide-react";
+import { ArrowLeft, Check, CheckCircle2, Loader2, Plus, Printer, Search as SearchIcon, UserPlus } from "lucide-react";
 import { useCallback, useState } from "react";
 import { Dialog } from "../components/Dialog.js";
 import { HeldCartsDialog } from "../components/HeldCartsDialog.js";
@@ -304,78 +304,269 @@ function CustomerDialog({
   onClose: () => void;
   onPick: (customer: PosCustomer) => void;
 }) {
+  const [mode, setMode] = useState<"search" | "create">("search");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<PosCustomer[]>([]);
+
+  // New customer form state
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [company, setCompany] = useState("");
+  const [trn, setTrn] = useState("");
+  const [creditLimit, setCreditLimit] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const search = useCallback((value: string) => {
     setQuery(value);
     void posData.searchCustomers(value).then(setResults);
   }, []);
 
+  function resetForm() {
+    setMode("search");
+    setName("");
+    setPhone("");
+    setCompany("");
+    setTrn("");
+    setCreditLimit("");
+    setError(null);
+  }
+
+  function handleOpenCreate(prefillName?: string) {
+    setName(prefillName || query || "");
+    setError(null);
+    setMode("create");
+  }
+
+  async function handleCreateCustomer(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) {
+      setError("Please enter a customer name.");
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+
+    try {
+      const created = await posData.createCustomer({
+        name: name.trim(),
+        phone: phone.trim() || undefined,
+        company: company.trim() || undefined,
+        trn: trn.trim() || undefined,
+        creditLimit: creditLimit.trim() || undefined,
+      });
+
+      resetForm();
+      onPick(created);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create customer.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <Dialog
       open={open}
-      onClose={onClose}
-      title="Attach a customer"
-      description="Needed for credit sales and for a TRN on the invoice."
+      onClose={() => {
+        resetForm();
+        onClose();
+      }}
+      title={mode === "create" ? "Add new customer" : "Attach a customer"}
+      description={
+        mode === "create"
+          ? "Create a customer profile and attach them to this sale."
+          : "Needed for credit sales, wholesale pricing, and VAT invoices."
+      }
     >
-      <div className="relative mb-3">
-        <SearchIcon
-          className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-zinc-500"
-          aria-hidden
-        />
-        <input
-          autoFocus
-          value={query}
-          onChange={(e) => search(e.target.value)}
-          onFocus={() => results.length === 0 && search("")}
-          className="field pl-10"
-          placeholder="Name, company, or phone"
-          aria-label="Search customers"
-        />
-      </div>
+      {mode === "search" ? (
+        <>
+          <div className="mb-3 flex items-center gap-2">
+            <div className="relative flex-1">
+              <SearchIcon
+                className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-pos-text-3"
+                aria-hidden
+              />
+              <input
+                autoFocus
+                value={query}
+                onChange={(e) => search(e.target.value)}
+                onFocus={() => results.length === 0 && search("")}
+                className="field pl-10"
+                placeholder="Name, company, or phone"
+                aria-label="Search customers"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => handleOpenCreate()}
+              className="btn btn-primary shrink-0 gap-1.5 px-3 py-2 text-[13px]"
+            >
+              <UserPlus className="size-4" aria-hidden />
+              New
+            </button>
+          </div>
 
-      <ul className="space-y-1.5">
-        {results.map((customer) => {
-          const available = Money.subtract(
-            Money.toMinor(customer.creditLimit),
-            Money.toMinor(customer.creditBalance),
-          );
-          return (
-            <li key={customer.id}>
-              <button
-                type="button"
-                onClick={() => onPick(customer)}
-                className="flex w-full items-center gap-4 rounded-lg border border-steel-700 bg-steel-800 px-3.5 py-3 text-left transition-colors hover:bg-steel-750"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[14px] font-medium">{customer.name}</div>
-                  <div className="num mt-0.5 truncate text-[11px] text-zinc-500">
-                    {customer.company ?? customer.phone ?? "No contact details"}
-                  </div>
-                </div>
-                {Number(customer.creditLimit) > 0 && (
-                  <div className="text-right">
-                    <div className="eyebrow">Credit left</div>
-                    <div
-                      className={`num text-[12px] ${
-                        Money.isPositive(available) ? "text-zinc-300" : "text-signal-red"
-                      }`}
-                    >
-                      {amount(available)}
+          <ul className="max-h-[50vh] space-y-1.5 overflow-y-auto">
+            {results.map((customer) => {
+              const available = Money.subtract(
+                Money.toMinor(customer.creditLimit),
+                Money.toMinor(customer.creditBalance),
+              );
+              return (
+                <li key={customer.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      resetForm();
+                      onPick(customer);
+                    }}
+                    className="flex w-full items-center gap-4 rounded-lg border border-pos-border bg-pos-panel px-3.5 py-3 text-left transition-colors hover:bg-pos-raised"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[14px] font-medium text-pos-text">
+                        {customer.name}
+                      </div>
+                      <div className="num mt-0.5 truncate text-[11px] text-pos-text-3">
+                        {customer.company ?? customer.phone ?? "No contact details"}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </button>
-            </li>
-          );
-        })}
-        {results.length === 0 && query && (
-          <li className="py-8 text-center text-[13px] text-zinc-500">
-            No customer matches "{query}".
-          </li>
-        )}
-      </ul>
+                    {Number(customer.creditLimit) > 0 && (
+                      <div className="text-right">
+                        <div className="eyebrow">Credit left</div>
+                        <div
+                          className={`num text-[12px] ${
+                            Money.isPositive(available)
+                              ? "text-pos-text-2"
+                              : "text-signal-red"
+                          }`}
+                        >
+                          {amount(available)}
+                        </div>
+                      </div>
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+            {results.length === 0 && (
+              <li className="py-8 text-center">
+                <p className="text-[13px] text-pos-text-3">
+                  {query
+                    ? `No customer matches "${query}".`
+                    : "No customers found."}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => handleOpenCreate(query)}
+                  className="btn btn-ghost mt-3 gap-2 text-[13px]"
+                >
+                  <Plus className="size-4 text-brass" />
+                  Add "{query || "New Customer"}"
+                </button>
+              </li>
+            )}
+          </ul>
+        </>
+      ) : (
+        <form onSubmit={handleCreateCustomer} className="space-y-3.5">
+          {error && (
+            <p className="rounded-lg border border-signal-red/30 bg-signal-red/10 px-3.5 py-2 text-[12px] text-signal-red">
+              {error}
+            </p>
+          )}
+
+          <div>
+            <label className="eyebrow block">
+              Customer Name <span className="text-signal-red">*</span>
+            </label>
+            <input
+              autoFocus
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="field mt-1"
+              placeholder="e.g. Al Noor Contracting LLC or Ahmed Ali"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="eyebrow block">Phone Number</label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="field mt-1"
+                placeholder="+971 50 123 4567"
+              />
+            </div>
+            <div>
+              <label className="eyebrow block">Company</label>
+              <input
+                value={company}
+                onChange={(e) => setCompany(e.target.value)}
+                className="field mt-1"
+                placeholder="Company name"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="eyebrow block">TRN (Tax Number)</label>
+              <input
+                value={trn}
+                onChange={(e) => setTrn(e.target.value)}
+                className="field mt-1"
+                placeholder="100XXXXXXXXX003"
+              />
+            </div>
+            <div>
+              <label className="eyebrow block">Credit Limit (AED)</label>
+              <input
+                type="number"
+                min="0"
+                step="100"
+                value={creditLimit}
+                onChange={(e) => setCreditLimit(e.target.value)}
+                className="field num mt-1"
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+
+          <div className="mt-4 flex items-center justify-end gap-2 border-t border-pos-border pt-4">
+            <button
+              type="button"
+              onClick={() => setMode("search")}
+              className="btn btn-ghost text-[13px]"
+              disabled={saving}
+            >
+              <ArrowLeft className="size-4" />
+              Back to search
+            </button>
+            <button
+              type="submit"
+              disabled={saving || !name.trim()}
+              className="btn btn-primary text-[13px]"
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Check className="size-4" />
+                  Save & Attach
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      )}
     </Dialog>
   );
 }

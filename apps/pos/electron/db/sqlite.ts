@@ -19,6 +19,249 @@ import { join } from "node:path";
 
 let db: Database.Database | null = null;
 
+/**
+ * Defensive schema validation.
+ *
+ * Ensures critical columns exist on existing database files regardless of
+ * whether migrations ran or if a database was initialized from an earlier build.
+ */
+function ensureColumns(database: Database.Database): void {
+  try {
+    const pricesInfo = database.pragma("table_info(variant_prices)") as Array<{ name: string }>;
+    if (pricesInfo && pricesInfo.length > 0 && !pricesInfo.some((c) => c.name === "is_default")) {
+      database.exec("ALTER TABLE variant_prices ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0;");
+    }
+  } catch (err) {
+    console.warn("Could not check/add is_default on variant_prices:", err);
+  }
+
+  try {
+    const saleItemsInfo = database.pragma("table_info(local_sale_items)") as Array<{ name: string }>;
+    if (saleItemsInfo && saleItemsInfo.length > 0 && !saleItemsInfo.some((c) => c.name === "unit_abbr")) {
+      database.exec("ALTER TABLE local_sale_items ADD COLUMN unit_abbr TEXT;");
+    }
+  } catch (err) {
+    console.warn("Could not check/add unit_abbr on local_sale_items:", err);
+  }
+}
+
+const DEFAULT_CATALOG = [
+  {
+    id: "v1",
+    productId: "p1",
+    sku: "PVC-ELB-001",
+    barcode: "6291000000017",
+    productName: 'PVC Elbow 1" 90 Degree',
+    variantName: null,
+    unitAbbr: "pcs",
+    categoryName: "Plumbing",
+    taxRate: "5",
+    sellingPrice: "2.75",
+    minSellingPrice: "2.00",
+    stock: "100",
+  },
+  {
+    id: "v2",
+    productId: "p2",
+    sku: "PVC-ELB-002",
+    barcode: "6291000000024",
+    productName: 'PVC Elbow 3/4" 90 Degree',
+    variantName: null,
+    unitAbbr: "pcs",
+    categoryName: "Plumbing",
+    taxRate: "5",
+    sellingPrice: "2.10",
+    minSellingPrice: "1.55",
+    stock: "100",
+  },
+  {
+    id: "v3",
+    productId: "p3",
+    sku: "CBL-25-RED",
+    barcode: "6291000000031",
+    productName: "Electrical Cable 2.5mm Red",
+    variantName: null,
+    unitAbbr: "m",
+    categoryName: "Electrical",
+    taxRate: "5",
+    sellingPrice: "3.50",
+    minSellingPrice: "2.75",
+    stock: "100",
+  },
+  {
+    id: "v4",
+    productId: "p4",
+    sku: "PNT-WHT-4L",
+    barcode: "6291000000048",
+    productName: "Emulsion Paint White 4 Litre",
+    variantName: null,
+    unitAbbr: "ltr",
+    categoryName: "Paint",
+    taxRate: "5",
+    sellingPrice: "48.00",
+    minSellingPrice: "38.00",
+    stock: "40",
+  },
+  {
+    id: "v5",
+    productId: "p5",
+    sku: "TAP-MIX-CHR",
+    barcode: "6291000000055",
+    productName: "Basin Mixer Tap Chrome",
+    variantName: null,
+    unitAbbr: "pcs",
+    categoryName: "Sanitary",
+    taxRate: "5",
+    sellingPrice: "135.00",
+    minSellingPrice: "105.00",
+    stock: "12",
+  },
+  {
+    id: "v6",
+    productId: "p6",
+    sku: "EL-CBL-3CX25",
+    barcode: "6291000000062",
+    productName: "Ducab 3-Core 2.5mm² Flexible Copper Cable",
+    variantName: null,
+    unitAbbr: "m",
+    categoryName: "Electrical",
+    taxRate: "5",
+    sellingPrice: "215.00",
+    minSellingPrice: "190.00",
+    stock: "50",
+  },
+  {
+    id: "v7",
+    productId: "p7",
+    sku: "EL-SW-1G2W",
+    barcode: "6291000000079",
+    productName: "Schneider 1-Gang 2-Way Light Switch",
+    variantName: null,
+    unitAbbr: "pcs",
+    categoryName: "Electrical",
+    taxRate: "5",
+    sellingPrice: "18.50",
+    minSellingPrice: "14.00",
+    stock: "150",
+  },
+  {
+    id: "v8",
+    productId: "p8",
+    sku: "TL-TM-8M",
+    barcode: "6291000000086",
+    productName: "Stanley FatMax Heavy Duty Tape Measure 8m",
+    variantName: null,
+    unitAbbr: "pcs",
+    categoryName: "Hardware & Tools",
+    taxRate: "5",
+    sellingPrice: "45.00",
+    minSellingPrice: "35.00",
+    stock: "30",
+  },
+  {
+    id: "v9",
+    productId: "p9",
+    sku: "SAN-MX-GROHE",
+    barcode: "6291000000093",
+    productName: "Grohe Eurosmart Single-Lever Basin Mixer",
+    variantName: null,
+    unitAbbr: "pcs",
+    categoryName: "Sanitary",
+    taxRate: "5",
+    sellingPrice: "285.00",
+    minSellingPrice: "240.00",
+    stock: "25",
+  },
+  {
+    id: "v10",
+    productId: "p10",
+    sku: "FX-PLUG-UX8",
+    barcode: "6291000000109",
+    productName: "Fischer Wall Plugs UX 8x50mm Universal Box (100pcs)",
+    variantName: null,
+    unitAbbr: "box",
+    categoryName: "Fasteners & Fixings",
+    taxRate: "5",
+    sellingPrice: "32.00",
+    minSellingPrice: "25.00",
+    stock: "80",
+  },
+];
+
+const DEFAULT_CUSTOMERS = [
+  {
+    id: "c1",
+    name: "Al Noor Contracting",
+    company: "Al Noor Contracting LLC",
+    phone: "+971501234567",
+    trn: "100123456700003",
+    creditLimit: "5000.00",
+    creditBalance: "1240.00",
+  },
+  {
+    id: "c2",
+    name: "Walk-in customer",
+    company: null,
+    phone: null,
+    trn: null,
+    creditLimit: "0",
+    creditBalance: "0",
+  },
+];
+
+function seedInitialCatalog(database: Database.Database): void {
+  try {
+    const row = database.prepare("SELECT count(*) as count FROM variants").get() as { count?: number } | undefined;
+    if (row && (row.count ?? 0) > 0) return;
+
+    database.transaction(() => {
+      const insertVariant = database.prepare(`
+        INSERT OR IGNORE INTO variants (id, product_id, sku, barcode, product_name, variant_name, search_key, unit_abbr, category_name, tax_rate, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      `);
+
+      const insertPrice = database.prepare(`
+        INSERT OR IGNORE INTO variant_prices (id, variant_id, price_list_id, selling_price, min_selling_price, is_default, updated_at)
+        VALUES (?, ?, 'default', ?, ?, 1, datetime('now'))
+      `);
+
+      const insertInventory = database.prepare(`
+        INSERT OR IGNORE INTO inventory (id, variant_id, quantity, reserved_qty, local_delta, updated_at)
+        VALUES (?, ?, ?, '0', '0', datetime('now'))
+      `);
+
+      for (const item of DEFAULT_CATALOG) {
+        const searchKey = `${item.productName} ${item.sku} ${item.barcode ?? ""} ${item.categoryName ?? ""}`.toLowerCase();
+        insertVariant.run(
+          item.id,
+          item.productId,
+          item.sku,
+          item.barcode,
+          item.productName,
+          item.variantName,
+          searchKey,
+          item.unitAbbr,
+          item.categoryName,
+          item.taxRate,
+        );
+        insertPrice.run(`pr_${item.id}`, item.id, item.sellingPrice, item.minSellingPrice);
+        insertInventory.run(`inv_${item.id}`, item.id, item.stock);
+      }
+
+      const insertCustomer = database.prepare(`
+        INSERT OR IGNORE INTO customers (id, name, company, phone, trn, credit_limit, credit_balance, credit_on_hold, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 0, datetime('now'))
+      `);
+
+      for (const c of DEFAULT_CUSTOMERS) {
+        insertCustomer.run(c.id, c.name, c.company, c.phone, c.trn, c.creditLimit, c.creditBalance);
+      }
+    })();
+  } catch (err) {
+    console.warn("Could not seed initial catalog into SQLite:", err);
+  }
+}
+
 export function openDatabase(): Database.Database {
   if (db) return db;
 
@@ -43,6 +286,8 @@ export function openDatabase(): Database.Database {
   db.pragma("busy_timeout = 5000");
 
   migrate(db);
+  ensureColumns(db);
+  seedInitialCatalog(db);
   return db;
 }
 
@@ -298,6 +543,7 @@ const MIGRATIONS: Array<{ version: number; sql: string }> = [
         price_list_id     TEXT NOT NULL,
         selling_price     TEXT NOT NULL,
         min_selling_price TEXT,
+        is_default        INTEGER NOT NULL DEFAULT 0,
         updated_at        TEXT NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_variant_prices_variant ON variant_prices(variant_id);

@@ -56,16 +56,16 @@ export function Dialog({
   return (
     <dialog
       ref={ref}
-      className={`panel m-auto w-full ${widths[width]} bg-steel-850 p-0 text-chalk backdrop:bg-black/70 backdrop:backdrop-blur-[2px]`}
+      className={`panel m-auto w-full ${widths[width]} bg-pos-panel p-0 text-pos-text backdrop:bg-black/70 backdrop:backdrop-blur-[2px]`}
       aria-labelledby="dialog-title"
     >
-      <div className="flex items-start justify-between gap-4 border-b border-steel-700 px-5 py-4">
+      <div className="flex items-start justify-between gap-4 border-b border-pos-border px-5 py-4">
         <div>
           <h2 id="dialog-title" className="text-base font-semibold">
             {title}
           </h2>
           {description && (
-            <p className="mt-0.5 text-[13px] text-zinc-400">{description}</p>
+            <p className="mt-0.5 text-[13px] text-pos-text-2">{description}</p>
           )}
         </div>
         {dismissible && (
@@ -73,7 +73,7 @@ export function Dialog({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-steel-800 hover:text-chalk"
+            className="rounded-md p-1.5 text-pos-text-3 transition-colors hover:bg-pos-raised hover:text-pos-text"
           >
             <X className="size-4" />
           </button>
@@ -83,7 +83,7 @@ export function Dialog({
       <div className="max-h-[65vh] overflow-y-auto px-5 py-4">{children}</div>
 
       {footer && (
-        <div className="flex justify-end gap-2 border-t border-steel-700 px-5 py-3.5">
+        <div className="flex justify-end gap-2 border-t border-pos-border px-5 py-3.5">
           {footer}
         </div>
       )}

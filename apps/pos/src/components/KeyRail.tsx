@@ -28,7 +28,7 @@ export function KeyRail({ actions }: { actions: KeyAction[] }) {
   return (
     <nav
       aria-label="Keyboard shortcuts"
-      className="flex shrink-0 items-stretch gap-px border-t border-steel-700 bg-steel-850"
+      className="flex shrink-0 items-stretch gap-px border-t border-pos-border bg-pos-panel"
     >
       {actions.map((action) => (
         <button
@@ -43,19 +43,19 @@ export function KeyRail({ actions }: { actions: KeyAction[] }) {
               ? "cursor-not-allowed opacity-35"
               : action.primary
                 ? "bg-brass/12 hover:bg-brass/20"
-                : "hover:bg-steel-750",
+                : "hover:bg-pos-raised",
           ].join(" ")}
         >
           <kbd
             className={[
               "num rounded px-1.5 py-1 text-[11px] font-semibold leading-none",
               action.disabled
-                ? "bg-steel-800 text-zinc-500"
+                ? "bg-pos-raised text-pos-text-3"
                 : action.primary
                   ? "bg-brass text-[#1a1205]"
                   : action.tone === "danger"
                     ? "bg-signal-red/20 text-signal-red"
-                    : "bg-steel-700 text-zinc-400",
+                    : "bg-pos-border text-pos-text-2",
             ].join(" ")}
           >
             {action.combo}
@@ -63,7 +63,7 @@ export function KeyRail({ actions }: { actions: KeyAction[] }) {
           <span
             className={[
               "truncate text-[12px] font-medium",
-              action.primary ? "text-brass" : "text-zinc-400",
+              action.primary ? "text-brass" : "text-pos-text-2",
               action.tone === "danger" && !action.primary ? "text-signal-red" : "",
             ].join(" ")}
           >
