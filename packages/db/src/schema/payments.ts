@@ -71,8 +71,8 @@ export const payments = pgTable(
     index("idx_payments_branch_occurred").on(t.branchId, t.occurredAt),
     index("idx_payments_cash_session").on(t.cashSessionId),
     uniqueIndex("uq_payments_client_id")
-      .on(t.clientId)
-      .where(sql`client_id IS NOT NULL`),
+      .on(t.localId)
+      .where(sql`local_id IS NOT NULL`),
   ],
 );
 
@@ -119,8 +119,8 @@ export const cashSessions = pgTable(
     index("idx_cash_sessions_branch_status").on(t.branchId, t.status),
     index("idx_cash_sessions_user").on(t.userId, t.openedAt),
     uniqueIndex("uq_cash_sessions_client_id")
-      .on(t.clientId)
-      .where(sql`client_id IS NOT NULL`),
+      .on(t.localId)
+      .where(sql`local_id IS NOT NULL`),
   ],
 );
 
@@ -155,8 +155,8 @@ export const cashMovements = pgTable(
   (t) => [
     index("idx_cash_movements_session").on(t.cashSessionId, t.occurredAt),
     uniqueIndex("uq_cash_movements_client_id")
-      .on(t.clientId)
-      .where(sql`client_id IS NOT NULL`),
+      .on(t.localId)
+      .where(sql`local_id IS NOT NULL`),
   ],
 );
 

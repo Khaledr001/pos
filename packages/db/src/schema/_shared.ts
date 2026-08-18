@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, customType, numeric, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, customType, numeric, timestamp, uuid, integer, varchar } from "drizzle-orm/pg-core";
 
 /**
  * Column builders reused across every table.
@@ -80,6 +80,7 @@ export const timestamps = () => ({
   updatedAt: timestamp({ withTimezone: true, mode: "date" })
     .notNull()
     .default(sql`now()`),
+  version: integer().notNull().default(1),
 });
 
 /**
@@ -112,13 +113,14 @@ export const activeFlag = () => ({
 /**
  * Fields on any record a POS terminal can create while offline.
  *
- * `clientId` is minted on the terminal and is the idempotency key: the server
+ * `localId` is minted on the terminal and is the idempotency key: the server
  * upserts on it, so replaying a push after a timeout cannot double-book a sale.
  * `deviceId` records which terminal, `syncedAt` is null until the row has been
- * acknowledged.
+ * acknowledged. `syncStatus` tracks the sync state.
  */
 export const syncable = () => ({
-  clientId: uuid(),
+  localId: uuid(),
   deviceId: uuid(),
   syncedAt: timestamp({ withTimezone: true, mode: "date" }),
+  syncStatus: varchar({ length: 20 }).notNull().default("pending"),
 });

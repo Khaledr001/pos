@@ -24,7 +24,7 @@ import { users } from "./auth.js";
 import { productVariants, units } from "./catalog.js";
 import { customers } from "./partners.js";
 import { cashSessions } from "./payments.js";
-import { branches, tenantScope } from "./tenants.js";
+import { branches, branchScope, tenantScope } from "./tenants.js";
 
 /**
  * QUOTATION -> ORDER -> SALE
@@ -102,9 +102,7 @@ export const quotations = pgTable(
   {
     id: primaryId(),
     ...tenantScope(),
-    branchId: uuid()
-      .notNull()
-      .references(() => branches.id, { onDelete: "restrict" }),
+    ...branchScope(),
     quotationNumber: varchar({ length: 30 }).notNull(),
     customerId: uuid().references(() => customers.id, { onDelete: "restrict" }),
 
@@ -126,6 +124,7 @@ export const quotations = pgTable(
     createdBy: uuid().references(() => users.id, { onDelete: "set null" }),
     /** Set when the WhatsApp AI built this quotation rather than a person. */
     conversationId: uuid(),
+    ...syncable(),
     ...timestamps(),
   },
   (t) => [
@@ -159,9 +158,7 @@ export const orders = pgTable(
   {
     id: primaryId(),
     ...tenantScope(),
-    branchId: uuid()
-      .notNull()
-      .references(() => branches.id, { onDelete: "restrict" }),
+    ...branchScope(),
     orderNumber: varchar({ length: 30 }).notNull(),
     customerId: uuid().references(() => customers.id, { onDelete: "restrict" }),
     quotationId: uuid().references((): AnyPgColumn => quotations.id, {
@@ -182,6 +179,7 @@ export const orders = pgTable(
     notes: text(),
     createdBy: uuid().references(() => users.id, { onDelete: "set null" }),
     conversationId: uuid(),
+    ...syncable(),
     ...timestamps(),
   },
   (t) => [
@@ -223,9 +221,7 @@ export const sales = pgTable(
   {
     id: primaryId(),
     ...tenantScope(),
-    branchId: uuid()
-      .notNull()
-      .references(() => branches.id, { onDelete: "restrict" }),
+    ...branchScope(),
     /** Assigned by the server, even for a sale created offline. */
     saleNumber: varchar({ length: 30 }).notNull(),
 
@@ -256,7 +252,7 @@ export const sales = pgTable(
     /**
      * OFFLINE ORIGIN
      *
-     * `clientId` is minted on the terminal and is the idempotency key — the
+     * `localId` is minted on the terminal and is the idempotency key — the
      * server upserts on it, so a push retried after a timeout cannot create a
      * second invoice. `occurredAt` is the terminal's wall clock at the moment
      * of sale, which is what belongs on the receipt; `createdAt` is when the
@@ -279,12 +275,12 @@ export const sales = pgTable(
     /**
      * The offline idempotency key. Named explicitly rather than via
      * `.unique()` on the shared builder — see the note in _shared.ts.
-     * Partial, because online sales carry no clientId and NULLs would
-     * otherwise all have to be distinct.
+     * Partial, because online sales carry no localId and NULLs would
+     * otherwise all be distinct.
      */
-    uniqueIndex("uq_sales_client_id")
-      .on(t.clientId)
-      .where(sql`client_id IS NOT NULL`),
+    uniqueIndex("uq_sales_client")
+      .on(t.localId)
+      .where(sql`local_id IS NOT NULL`),
   ],
 );
 

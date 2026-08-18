@@ -179,10 +179,10 @@ export const heldCarts = pgTable(
   (t) => [
     index("idx_held_carts_user").on(t.tenantId, t.branchId, t.userId),
     // Partial, matching every other syncable table: a cart held on the admin
-    // side carries no clientId, and NULLs would otherwise all be distinct.
+    // side carries no localId, and NULLs would otherwise all be distinct.
     uniqueIndex("uq_held_carts_client_id")
-      .on(t.clientId)
-      .where(sql`client_id IS NOT NULL`),
+      .on(t.localId)
+      .where(sql`local_id IS NOT NULL`),
   ],
 );
 

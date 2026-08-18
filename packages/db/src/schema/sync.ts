@@ -99,7 +99,7 @@ export const syncEvents = pgTable(
     entityType: varchar({ length: 30 }).$type<SyncEntity>().notNull(),
     entityId: uuid(),
     /** The terminal's idempotency key for this record. Push only. */
-    clientId: uuid(),
+    localId: uuid(),
     /** Terminal-local monotonic sequence. Orders operations from one device. */
     sequence: bigint({ mode: "number" }),
 
@@ -119,8 +119,8 @@ export const syncEvents = pgTable(
   (t) => [
     /** Replay protection: one applied row per client id. */
     uniqueIndex("uq_sync_events_client")
-      .on(t.deviceId, t.clientId, t.entityType)
-      .where(sql`client_id IS NOT NULL`),
+      .on(t.deviceId, t.localId, t.entityType)
+      .where(sql`local_id IS NOT NULL`),
     index("idx_sync_events_device_created").on(t.deviceId, t.createdAt),
     index("idx_sync_events_status").on(t.tenantId, t.status, t.createdAt),
   ],

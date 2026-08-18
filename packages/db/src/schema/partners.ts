@@ -10,7 +10,7 @@ import {
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
-import { activeFlag, money, primaryId, softDelete, timestamps } from "./_shared.js";
+import { activeFlag, money, primaryId, softDelete, syncable, timestamps } from "./_shared.js";
 import { branches, tenantScope } from "./tenants.js";
 
 /**
@@ -74,6 +74,7 @@ export const customers = pgTable(
 
     notes: text(),
     ...activeFlag(),
+    ...syncable(),
     ...timestamps(),
     ...softDelete(),
   },
@@ -83,6 +84,9 @@ export const customers = pgTable(
     uniqueIndex("uq_customers_tenant_whatsapp")
       .on(t.tenantId, t.whatsappPhone)
       .where(sql`whatsapp_phone IS NOT NULL AND deleted_at IS NULL`),
+    uniqueIndex("uq_customers_client")
+      .on(t.localId)
+      .where(sql`local_id IS NOT NULL`),
     index("idx_customers_tenant_name").on(t.tenantId, t.name),
     index("idx_customers_updated").on(t.tenantId, t.updatedAt),
     /** Report: everyone currently over their limit. */

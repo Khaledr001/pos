@@ -111,6 +111,12 @@ export const tenantScope = () => ({
     .references(() => tenants.id, { onDelete: "restrict" }),
 });
 
+export const branchScope = () => ({
+  branchId: uuid()
+    .notNull()
+    .references(() => branches.id, { onDelete: "restrict" }),
+});
+
 export const tenantsRelations = relations(tenants, ({ many }) => ({
   branches: many(branches),
 }));
