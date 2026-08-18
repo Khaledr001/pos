@@ -58,6 +58,13 @@ export function registerDataHandlers(ipcMain: IpcMain): void {
   ipcMain.handle("sales:recent", (_event, limit?: number) => repo.recentSales(limit));
   ipcMain.handle("sales:find", (_event, reference: string) => repo.findSale(reference ?? ""));
 
+  ipcMain.handle("quotations:save", (_event, draft: repo.SaleDraftInput) => {
+    const receipt = repo.saveQuotation(draft);
+    syncNow();
+    return receipt;
+  });
+  ipcMain.handle("quotations:list", () => repo.listQuotations());
+
   ipcMain.handle("auth:pin-login", async (_event, pin: string) => {
     const user = await loginWithPin(String(pin ?? ""));
     syncNow();

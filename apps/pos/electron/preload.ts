@@ -109,6 +109,11 @@ const api = {
       ipcRenderer.invoke("sales:find", reference),
   },
 
+  quotations: {
+    save: (draft: unknown): Promise<unknown> => ipcRenderer.invoke("quotations:save", draft),
+    list: (): Promise<unknown[]> => ipcRenderer.invoke("quotations:list"),
+  },
+
   sync: {
     /** Force a sync cycle now — the "Sync" button on the status bar. */
     now: (): Promise<SyncStatusSnapshot> => ipcRenderer.invoke("sync:now"),

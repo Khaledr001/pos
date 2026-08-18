@@ -1,4 +1,4 @@
-import { Banknote, Settings2, ShoppingCart, Undo2 } from "lucide-react";
+import { Banknote, Settings2, ShoppingCart, Undo2, FileText } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { HashRouter, NavLink, Navigate, Route, Routes } from "react-router-dom";
 import { TopBar } from "./components/TopBar.js";
@@ -8,6 +8,7 @@ import { hasBridge, posData, type PosCashSession } from "./lib/pos-data.js";
 import { CashRegister } from "./pages/CashRegister.js";
 import { Login } from "./pages/Login.js";
 import { RegisterTerminal } from "./pages/RegisterTerminal.js";
+import { Quotations } from "./pages/Quotations.js";
 import { Returns } from "./pages/Returns.js";
 import { Sale } from "./pages/Sale.js";
 import { Settings } from "./pages/Settings.js";
@@ -67,6 +68,7 @@ function Shell() {
               path="/drawer"
               element={<CashRegister session={session} onChanged={refreshSession} />}
             />
+            <Route path="/quotations" element={<Quotations />} />
             <Route path="/returns" element={<Returns />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="*" element={<Navigate to="/" replace />} />
@@ -87,6 +89,7 @@ function SideNav() {
   const items = [
     { to: "/", label: "Sell", icon: ShoppingCart, end: true },
     { to: "/drawer", label: "Drawer", icon: Banknote },
+    { to: "/quotations", label: "Quotes", icon: FileText },
     { to: "/returns", label: "Returns", icon: Undo2 },
     { to: "/settings", label: "Settings", icon: Settings2 },
   ];
@@ -94,8 +97,9 @@ function SideNav() {
   useHotkeys({
     "ctrl+1": () => (location.hash = "#/"),
     "ctrl+2": () => (location.hash = "#/drawer"),
-    "ctrl+3": () => (location.hash = "#/returns"),
-    "ctrl+4": () => (location.hash = "#/settings"),
+    "ctrl+3": () => (location.hash = "#/quotations"),
+    "ctrl+4": () => (location.hash = "#/returns"),
+    "ctrl+5": () => (location.hash = "#/settings"),
   });
 
   return (

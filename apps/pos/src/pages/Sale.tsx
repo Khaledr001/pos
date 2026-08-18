@@ -98,6 +98,7 @@ export function Sale({ cashSessionId }: { cashSessionId: string | null }) {
     f1: () => setFocusSignal((n) => n + 1),
     f2: () => setCustomerOpen(true),
     f4: charge,
+    f7: () => void saveAsQuote(),
     f8: hold,
     escape: () => {
       if (!empty) cart.clear();
@@ -140,6 +141,42 @@ export function Sale({ cashSessionId }: { cashSessionId: string | null }) {
     setFocusSignal((n) => n + 1);
   }
 
+  async function saveAsQuote() {
+    if (empty) return;
+    const cartState = useCart.getState();
+    if (!cartState.customer) {
+      alert("A quotation requires a customer. Please attach a customer first.");
+      setCustomerOpen(true);
+      return;
+    }
+
+    const draft: Parameters<typeof posData.saveQuotation>[0] = {
+      localId: crypto.randomUUID(),
+      customerId: cartState.customer.id,
+      cashSessionId: cashSessionId ?? "no-session", // Not strictly required for a quote but fits the type
+      lines: cartState.lines.map((line) => ({
+        variantId: line.variant.id,
+        productName: line.variant.name,
+        productSku: line.variant.sku,
+        quantity: line.quantity,
+        unitPrice: line.unitPrice,
+        discountPercent: line.discountPercent,
+        taxPercent: line.variant.taxPercent,
+        total: line.total,
+      })),
+      subtotal: totals.subtotal,
+      taxAmount: totals.taxAmount,
+      discountAmount: totals.discountAmount,
+      total: totals.total,
+      payments: [], // No payments on a quote
+      occurredAt: new Date().toISOString(),
+    };
+
+    await posData.saveQuotation(draft);
+    cart.clear();
+    setFocusSignal((n) => n + 1);
+  }
+
   const railActions: KeyAction[] = [
     { combo: "F1", label: "Search", onPress: () => setFocusSignal((n) => n + 1) },
     { combo: "F2", label: "Customer", onPress: () => setCustomerOpen(true) },
@@ -155,6 +192,12 @@ export function Sale({ cashSessionId }: { cashSessionId: string | null }) {
       onPress: charge,
       disabled: empty || blocked || !cashSessionId,
       primary: true,
+    },
+    {
+      combo: "F7",
+      label: "Save Quote",
+      onPress: () => void saveAsQuote(),
+      disabled: empty,
     },
     {
       combo: "F8",

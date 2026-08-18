@@ -491,6 +491,101 @@ function saleLines(db: Database.Database, localId: string): unknown[] {
 }
 
 // -----------------------------------------------------------------------------
+// Quotations
+// -----------------------------------------------------------------------------
+
+export function saveQuotation(draft: SaleDraftInput): Record<string, unknown> {
+  const db = getDatabase();
+
+  db.transaction(() => {
+    db.prepare(
+      `INSERT INTO local_quotations
+         (local_id, customer_id, subtotal, tax_amount, discount_amount, total, status, occurred_at)
+       VALUES (?, ?, ?, ?, ?, ?, 'draft', ?)`
+    ).run(
+      draft.localId,
+      draft.customerId,
+      draft.subtotal,
+      draft.taxAmount,
+      draft.discountAmount,
+      draft.total,
+      draft.occurredAt
+    );
+
+    const insertItem = db.prepare(
+      `INSERT INTO local_quotation_items
+         (quotation_local_id, variant_id, product_name, product_sku, quantity,
+          unit_price, discount_percent, tax_percent, line_subtotal, tax_amount, total, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    );
+
+    draft.lines.forEach((line, index) => {
+      insertItem.run(
+        draft.localId,
+        line.variantId,
+        line.productName,
+        line.productSku,
+        line.quantity,
+        line.unitPrice,
+        line.discountPercent,
+        line.taxPercent,
+        line.total,
+        "0",
+        line.total,
+        index
+      );
+    });
+
+    enqueue(db, {
+      localId: draft.localId,
+      entity: "quotation",
+      occurredAt: draft.occurredAt,
+      payload: {
+        customerId: draft.customerId,
+        lines: draft.lines.map((line) => ({
+          variantId: line.variantId,
+          quantity: Number(line.quantity),
+          unitPrice: line.unitPrice,
+          ...(Number(line.discountPercent) > 0 ? { discountPercent: Number(line.discountPercent) } : {}),
+        })),
+      },
+    });
+  })();
+
+  return { ...draft, quotationNumber: null, synced: false };
+}
+
+export function listQuotations(): unknown[] {
+  const db = getDatabase();
+  const quotations = db
+    .prepare(
+      `SELECT q.local_id AS localId, q.quotation_number AS quotationNumber,
+              q.customer_id AS customerId,
+              q.subtotal, q.tax_amount AS taxAmount,
+              q.discount_amount AS discountAmount, q.total,
+              q.status, q.occurred_at AS occurredAt, q.synced_at AS syncedAt
+       FROM local_quotations q ORDER BY q.occurred_at DESC`
+    )
+    .all() as any[];
+
+  for (const q of quotations) {
+    q.lines = db
+      .prepare(
+        `SELECT line.variant_id AS variantId, line.product_name AS productName,
+                line.product_sku AS productSku, line.quantity, line.unit_price AS unitPrice,
+                line.discount_percent AS discountPercent, line.tax_percent AS taxPercent,
+                line.line_subtotal AS lineSubtotal, line.tax_amount AS taxAmount, line.total
+         FROM local_quotation_items line
+         WHERE line.quotation_local_id = ?
+         ORDER BY line.sort_order`
+      )
+      .all(q.localId);
+  }
+
+  return quotations;
+}
+
+// -----------------------------------------------------------------------------
 // Held carts
 // -----------------------------------------------------------------------------
 

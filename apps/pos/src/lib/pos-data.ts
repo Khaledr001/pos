@@ -177,6 +177,9 @@ export interface PosDataAdapter {
   commitSale(draft: PosSaleDraft): Promise<PosSaleReceipt>;
   recentSales(limit?: number): Promise<PosSaleReceipt[]>;
   findSale(saleNumberOrClientId: string): Promise<PosSaleReceipt | null>;
+
+  saveQuotation(draft: PosSaleDraft): Promise<PosSaleReceipt>;
+  listQuotations(): Promise<PosSaleReceipt[]>;
 }
 
 // -----------------------------------------------------------------------------
@@ -233,6 +236,8 @@ const electronAdapter: PosDataAdapter = {
   commitSale: (draft) => window.devsfleet.sales.commit(draft),
   recentSales: (limit) => window.devsfleet.sales.recent(limit),
   findSale: (ref) => window.devsfleet.sales.find(ref),
+  saveQuotation: (draft) => (window.devsfleet as any).quotations.save(draft),
+  listQuotations: () => (window.devsfleet as any).quotations.list(),
 };
 
 // -----------------------------------------------------------------------------
@@ -565,6 +570,12 @@ const browserAdapter: PosDataAdapter = {
     return (
       browserState.sales.find((s) => s.saleNumber === ref || s.localId === ref) ?? null
     );
+  },
+  async saveQuotation(draft) {
+    return { ...draft, quotationNumber: null, synced: false };
+  },
+  async listQuotations() {
+    return [];
   },
 };
 
@@ -1004,6 +1015,12 @@ const apiAdapter: PosDataAdapter = {
     } catch {
       return null;
     }
+  },
+  async saveQuotation(draft) {
+    return { ...draft, quotationNumber: null, synced: false };
+  },
+  async listQuotations() {
+    return [];
   },
 };
 
