@@ -229,6 +229,9 @@ importers:
       better-sqlite3:
         specifier: ^12.4.1
         version: 12.11.1
+      date-fns:
+        specifier: ^4.4.0
+        version: 4.4.0
       electron-updater:
         specifier: ^6.6.2
         version: 6.8.9
@@ -3124,6 +3127,9 @@ packages:
 
   dank-do-while@0.1.2:
     resolution: {integrity: sha512-pyMrgXfugjvdernLCcXNixYqGijUZzYxrb+hAeED2EBpNbctCCxdA/O6NIQXn6vIjwzY1IMmV29d2Y6vaayrwQ==}
+
+  date-fns@4.4.0:
+    resolution: {integrity: sha512-+1UMbeh68lH1SegH83CGWwpb6OHHbpSgr3+s5Eww5M4CAgswBpoWS0AjTOfEJ33HiYKz1hdj/KTFprzXHmq/6w==}
 
   dateformat@4.6.3:
     resolution: {integrity: sha512-2P0p0pFGzHS5EMnhdxQi7aJN+iMheud0UhG4dlE1DLAlvL8JHjJJTX/CSm4JXwV0Ka5nGk3zC5mcb5bUQUxxMA==}
@@ -7959,6 +7965,8 @@ snapshots:
   csstype@3.2.3: {}
 
   dank-do-while@0.1.2: {}
+
+  date-fns@4.4.0: {}
 
   dateformat@4.6.3: {}
 

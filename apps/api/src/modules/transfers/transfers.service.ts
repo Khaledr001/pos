@@ -1,12 +1,11 @@
 import { and, count, desc, eq, schema, sql, or } from "@devsfleet/db";
 import type { Paginated } from "@devsfleet/shared-types";
-import { AppError, ERROR_CODES, id } from "@devsfleet/shared-utils";
+import { AppError, ERROR_CODES } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
 import { RequestContext } from "../../common/context/request-context.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import { StockService } from "../inventory/stock.service.js";
 import type { CreateTransferDto, ListTransfersDto } from "./dto.js";
-import { randomUUID } from "node:crypto";
 
 @Injectable()
 export class TransfersService {
@@ -16,36 +15,39 @@ export class TransfersService {
   ) {}
 
   async create(dto: CreateTransferDto): Promise<{ id: string }> {
-    const transferId = randomUUID();
-    const transferNumber = id.generate("TRF-");
-    const tenantId = RequestContext.tenantId();
-    const userId = RequestContext.userId();
+    const transferNumber = "TRF-" + Date.now().toString(36).toUpperCase();
+    const tenantId = RequestContext.requireTenantId();
+    const userId = RequestContext.requireUser().id;
 
-    await this.db.run(async (tx) => {
-      await tx.insert(schema.stockTransfers).values({
-        id: transferId,
-        tenantId,
-        transferNumber,
-        fromBranchId: dto.fromBranchId,
-        toBranchId: dto.toBranchId,
-        status: "requested",
-        notes: dto.notes,
-        createdBy: userId,
-      });
+    return this.db.run(async (tx) => {
+      const [transfer] = await tx
+        .insert(schema.stockTransfers)
+        .values({
+          tenantId,
+          transferNumber,
+          fromBranchId: dto.fromBranchId,
+          toBranchId: dto.toBranchId,
+          status: "requested",
+          notes: dto.notes,
+          requestedBy: userId,
+        })
+        .returning();
+
+      if (!transfer) {
+        throw new AppError(ERROR_CODES.INTERNAL_ERROR, "Transfer creation failed");
+      }
 
       const items = dto.items.map((item) => ({
-        id: randomUUID(),
         tenantId,
-        transferId,
+        transferId: transfer.id,
         variantId: item.variantId,
-        quantity: String(item.quantity),
-        createdBy: userId,
+        requestedQuantity: String(item.quantity),
       }));
 
       await tx.insert(schema.stockTransferItems).values(items);
-    });
 
-    return { id: transferId };
+      return { id: transfer.id };
+    });
   }
 
   async list(query: ListTransfersDto): Promise<Paginated<unknown>> {
@@ -61,9 +63,9 @@ export class TransfersService {
             ? eq(schema.stockTransfers.fromBranchId, branchId)
             : or(
                 eq(schema.stockTransfers.toBranchId, branchId),
-                eq(schema.stockTransfers.fromBranchId, branchId)
+                eq(schema.stockTransfers.fromBranchId, branchId),
               )
-        : undefined
+        : undefined,
     );
 
     return this.db.run(async (tx) => {
@@ -83,41 +85,50 @@ export class TransfersService {
           .orderBy(desc(schema.stockTransfers.createdAt))
           .limit(limit)
           .offset(offset),
-        tx
-          .select({ value: count() })
-          .from(schema.stockTransfers)
-          .where(where),
+        tx.select({ value: count() }).from(schema.stockTransfers).where(where),
       ]);
 
-      const transferIds = items.map(i => i.id);
+      const transferIds = items.map((i) => i.id);
       let lineItems: any[] = [];
-      
+
       if (transferIds.length > 0) {
         lineItems = await tx
           .select({
             transferId: schema.stockTransferItems.transferId,
             variantId: schema.stockTransferItems.variantId,
-            quantity: schema.stockTransferItems.quantity,
+            quantity: schema.stockTransferItems.requestedQuantity,
             productName: schema.products.name,
             sku: schema.productVariants.sku,
           })
           .from(schema.stockTransferItems)
-          .innerJoin(schema.productVariants, eq(schema.stockTransferItems.variantId, schema.productVariants.id))
-          .innerJoin(schema.products, eq(schema.productVariants.productId, schema.products.id))
+          .innerJoin(
+            schema.productVariants,
+            eq(schema.stockTransferItems.variantId, schema.productVariants.id),
+          )
+          .innerJoin(
+            schema.products,
+            eq(schema.productVariants.productId, schema.products.id),
+          )
           .where(sql`${schema.stockTransferItems.transferId} IN ${transferIds}`);
       }
 
       const results = items.map((item) => ({
         ...item,
-        items: lineItems.filter(l => l.transferId === item.id),
+        items: lineItems.filter((l) => l.transferId === item.id),
       }));
 
+      const total = totals?.value ?? 0;
+      const totalPages = Math.ceil(total / limit);
+
       return {
-        data: results,
+        items: results,
         meta: {
-          total: totals?.value ?? 0,
+          total,
           page,
           limit,
+          totalPages,
+          hasNext: page < totalPages,
+          hasPrev: page > 1,
         },
       };
     });
@@ -140,13 +151,19 @@ export class TransfersService {
         .select({
           id: schema.stockTransferItems.id,
           variantId: schema.stockTransferItems.variantId,
-          quantity: schema.stockTransferItems.quantity,
+          quantity: schema.stockTransferItems.requestedQuantity,
           productName: schema.products.name,
           sku: schema.productVariants.sku,
         })
         .from(schema.stockTransferItems)
-        .innerJoin(schema.productVariants, eq(schema.stockTransferItems.variantId, schema.productVariants.id))
-        .innerJoin(schema.products, eq(schema.productVariants.productId, schema.products.id))
+        .innerJoin(
+          schema.productVariants,
+          eq(schema.stockTransferItems.variantId, schema.productVariants.id),
+        )
+        .innerJoin(
+          schema.products,
+          eq(schema.productVariants.productId, schema.products.id),
+        )
         .where(eq(schema.stockTransferItems.transferId, id));
 
       return { ...record, items };
@@ -164,23 +181,26 @@ export class TransfersService {
     await this.db.run(async (tx) => {
       const transfer = await this.getInternal(tx, id);
       if (transfer.status !== "approved" && transfer.status !== "requested") {
-        throw new AppError(ERROR_CODES.INVALID_STATE, "Transfer cannot be shipped from current status");
+        throw new AppError(
+          ERROR_CODES.CONFLICT,
+          "Transfer cannot be shipped from current status",
+        );
       }
 
+      const userId = RequestContext.requireUser().id;
       await tx
         .update(schema.stockTransfers)
-        .set({ status: "shipped" })
+        .set({ status: "shipped", shippedBy: userId, shippedAt: new Date() })
         .where(eq(schema.stockTransfers.id, id));
 
-      // Deduct stock from origin
       for (const item of transfer.items) {
-        await this.stock.transferStock({
+        await this.stock.deductStock({
+          tx,
           variantId: item.variantId,
           branchId: transfer.fromBranchId,
-          quantity: item.quantity,
-          inbound: false, // Stock leaving
+          quantity: item.requestedQuantity,
+          referenceType: "stock_transfer",
           referenceId: id,
-          db: tx,
         });
       }
     });
@@ -192,23 +212,26 @@ export class TransfersService {
     await this.db.run(async (tx) => {
       const transfer = await this.getInternal(tx, id);
       if (transfer.status !== "shipped") {
-        throw new AppError(ERROR_CODES.INVALID_STATE, "Transfer cannot be received unless shipped");
+        throw new AppError(
+          ERROR_CODES.CONFLICT,
+          "Transfer cannot be received unless shipped",
+        );
       }
 
+      const userId = RequestContext.requireUser().id;
       await tx
         .update(schema.stockTransfers)
-        .set({ status: "received" })
+        .set({ status: "received", receivedBy: userId, receivedAt: new Date() })
         .where(eq(schema.stockTransfers.id, id));
 
-      // Add stock to destination
       for (const item of transfer.items) {
-        await this.stock.transferStock({
+        await this.stock.addStock({
+          tx,
           variantId: item.variantId,
           branchId: transfer.toBranchId,
-          quantity: item.quantity,
-          inbound: true, // Stock arriving
+          quantity: item.requestedQuantity,
+          referenceType: "stock_transfer",
           referenceId: id,
-          db: tx,
         });
       }
     });
@@ -221,11 +244,17 @@ export class TransfersService {
       tx
         .update(schema.stockTransfers)
         .set({ status: to })
-        .where(and(eq(schema.stockTransfers.id, id), eq(schema.stockTransfers.status, from as any)))
+        .where(
+          and(
+            eq(schema.stockTransfers.id, id),
+            eq(schema.stockTransfers.status, from as any),
+          ),
+        )
+        .returning(),
     );
 
-    if (result.rowCount === 0) {
-      throw new AppError(ERROR_CODES.INVALID_STATE, `Transfer could not be updated to ${to}`);
+    if (result.length === 0) {
+      throw new AppError(ERROR_CODES.CONFLICT, `Transfer could not be updated to ${to}`);
     }
   }
 
