@@ -78,7 +78,7 @@ export interface PosSaleLine {
 
 export interface PosSaleDraft {
   /** Minted in the renderer. The server's idempotency key — never regenerated. */
-  clientId: string;
+  localId: string;
   customerId: string | null;
   cashSessionId: string | null;
   lines: PosSaleLine[];
@@ -563,7 +563,7 @@ const browserAdapter: PosDataAdapter = {
   },
   async findSale(ref) {
     return (
-      browserState.sales.find((s) => s.saleNumber === ref || s.clientId === ref) ?? null
+      browserState.sales.find((s) => s.saleNumber === ref || s.localId === ref) ?? null
     );
   },
 };
@@ -658,7 +658,7 @@ interface ApiHeldCart {
 interface ApiSale {
   id: string;
   saleNumber: string | null;
-  clientId: string | null;
+  localId: string | null;
   customerId: string | null;
   cashSessionId: string | null;
   lines: Array<{
@@ -736,7 +736,7 @@ function mapHeldCart(h: ApiHeldCart): PosHeldCart {
 
 function mapSale(s: ApiSale): PosSaleReceipt {
   return {
-    clientId: s.clientId ?? s.id,
+    localId: s.localId ?? s.id,
     customerId: s.customerId,
     cashSessionId: s.cashSessionId,
     lines: s.lines ?? [],
@@ -953,7 +953,7 @@ const apiAdapter: PosDataAdapter = {
       customerId: draft.customerId,
       cashSessionId: draft.cashSessionId,
       source: "pos",
-      clientId: draft.clientId,
+      localId: draft.localId,
       occurredAt: draft.occurredAt,
       lines: draft.lines.map((l) => ({
         variantId: l.variantId,

@@ -124,7 +124,7 @@ export function Returns() {
               ) : (
                 <ul>
                   {recent.map((entry) => (
-                    <li key={entry.clientId}>
+                    <li key={entry.localId}>
                       <button
                         type="button"
                         disabled={!allowed}

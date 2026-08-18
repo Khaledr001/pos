@@ -49,7 +49,7 @@ interface SaleLineInput {
 }
 
 export interface SaleDraftInput {
-  clientId: string;
+  localId: string;
   customerId: string | null;
   cashSessionId: string | null;
   lines: SaleLineInput[];
@@ -209,7 +209,7 @@ export function getOpenCashSession(): BridgeCashSession | null {
   const db = getDatabase();
   const row = db
     .prepare(
-      `SELECT client_id AS id, payload
+      `SELECT local_id AS id, payload
        FROM outbox WHERE entity = 'cash_session' AND status IN ('pending','synced')
        ORDER BY sequence DESC LIMIT 1`,
     )
@@ -276,18 +276,18 @@ export function openCashSession(openingAmount: string, branchId: string | null):
   const existing = getOpenCashSession();
   if (existing) return existing;
 
-  const clientId = randomUUID();
+  const localId = randomUUID();
   const openedAt = new Date().toISOString();
 
   enqueue(db, {
-    clientId,
+    localId,
     entity: "cash_session",
     occurredAt: openedAt,
     payload: { branchId, openingAmount, openedAt },
   });
 
   return {
-    id: clientId,
+    id: localId,
     openingAmount,
     openedAt,
     status: "open",
@@ -301,7 +301,7 @@ export function closeCashSession(countedAmount: string, notes?: string): void {
   const db = getDatabase();
   const open = db
     .prepare(
-      `SELECT client_id AS id, payload FROM outbox
+      `SELECT local_id AS id, payload FROM outbox
        WHERE entity = 'cash_session' ORDER BY sequence DESC LIMIT 1`,
     )
     .get() as { id: string; payload: string } | undefined;
@@ -319,7 +319,7 @@ export function closeCashSession(countedAmount: string, notes?: string): void {
    * be split across batches — leaving a drawer that closed at 8pm still open
    * on the server overnight.
    */
-  db.prepare(`UPDATE outbox SET payload = ?, status = 'pending' WHERE client_id = ?`).run(
+  db.prepare(`UPDATE outbox SET payload = ?, status = 'pending' WHERE local_id = ?`).run(
     JSON.stringify(payload),
     open.id,
   );
@@ -335,7 +335,7 @@ export function recordCashMovement(
   if (!session) throw new Error("No drawer is open on this terminal");
 
   enqueue(db, {
-    clientId: randomUUID(),
+    localId: randomUUID(),
     entity: "cash_movement",
     occurredAt: new Date().toISOString(),
     payload: { cashSessionId: session.id, type, amount, reason },
@@ -363,11 +363,11 @@ export function commitSale(draft: SaleDraftInput): Record<string, unknown> {
   db.transaction(() => {
     db.prepare(
       `INSERT INTO local_sales
-         (client_id, customer_id, cash_session_id, subtotal, tax_amount,
+         (local_id, customer_id, cash_session_id, subtotal, tax_amount,
           discount_amount, total, paid_amount, status, occurred_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?)`,
     ).run(
-      draft.clientId,
+      draft.localId,
       draft.customerId,
       draft.cashSessionId,
       draft.subtotal,
@@ -380,7 +380,7 @@ export function commitSale(draft: SaleDraftInput): Record<string, unknown> {
 
     const insertItem = db.prepare(
       `INSERT INTO local_sale_items
-         (sale_client_id, variant_id, product_name, product_sku, quantity,
+         (sale_local_id, variant_id, product_name, product_sku, quantity,
           unit_price, discount_percent, tax_percent, line_subtotal, tax_amount,
           total, sort_order)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -394,7 +394,7 @@ export function commitSale(draft: SaleDraftInput): Record<string, unknown> {
 
     draft.lines.forEach((line, index) => {
       insertItem.run(
-        draft.clientId,
+        draft.localId,
         line.variantId,
         line.productName,
         line.productSku,
@@ -411,7 +411,7 @@ export function commitSale(draft: SaleDraftInput): Record<string, unknown> {
     });
 
     enqueue(db, {
-      clientId: draft.clientId,
+      localId: draft.localId,
       entity: "sale",
       occurredAt: draft.occurredAt,
       payload: {
@@ -441,7 +441,7 @@ export function recentSales(limit = 20): unknown[] {
   const db = getDatabase();
   const sales = db
     .prepare(
-      `SELECT s.client_id AS clientId, s.sale_number AS saleNumber,
+      `SELECT s.local_id AS localId, s.sale_number AS saleNumber,
               s.customer_id AS customerId, s.cash_session_id AS cashSessionId,
               s.subtotal, s.tax_amount AS taxAmount,
               s.discount_amount AS discountAmount, s.total,
@@ -453,7 +453,7 @@ export function recentSales(limit = 20): unknown[] {
   return sales.map((sale) => ({
     ...sale,
     synced: sale.syncedAt !== null,
-    lines: saleLines(db, sale.clientId as string),
+    lines: saleLines(db, sale.localId as string),
     payments: [],
   }));
 }
@@ -462,11 +462,11 @@ export function findSale(reference: string): unknown | null {
   const db = getDatabase();
   const sale = db
     .prepare(
-      `SELECT client_id AS clientId, sale_number AS saleNumber,
+      `SELECT local_id AS localId, sale_number AS saleNumber,
               customer_id AS customerId, cash_session_id AS cashSessionId,
               subtotal, tax_amount AS taxAmount, discount_amount AS discountAmount,
               total, occurred_at AS occurredAt, synced_at AS syncedAt
-       FROM local_sales WHERE sale_number = ? OR client_id = ? LIMIT 1`,
+       FROM local_sales WHERE sale_number = ? OR local_id = ? LIMIT 1`,
     )
     .get(reference.trim(), reference.trim()) as Record<string, unknown> | undefined;
 
@@ -474,20 +474,20 @@ export function findSale(reference: string): unknown | null {
   return {
     ...sale,
     synced: sale.syncedAt !== null,
-    lines: saleLines(db, sale.clientId as string),
+    lines: saleLines(db, sale.localId as string),
     payments: [],
   };
 }
 
-function saleLines(db: Database.Database, clientId: string): unknown[] {
+function saleLines(db: Database.Database, localId: string): unknown[] {
   return db
     .prepare(
       `SELECT variant_id AS variantId, product_name AS productName,
               product_sku AS productSku, quantity, unit_price AS unitPrice,
               discount_percent AS discountPercent, tax_percent AS taxPercent, total
-       FROM local_sale_items WHERE sale_client_id = ? ORDER BY sort_order`,
+       FROM local_sale_items WHERE sale_local_id = ? ORDER BY sort_order`,
     )
-    .all(clientId);
+    .all(localId);
 }
 
 // -----------------------------------------------------------------------------
@@ -584,14 +584,14 @@ function nextSequence(db: Database.Database): number {
 
 function enqueue(
   db: Database.Database,
-  item: { clientId: string; entity: string; occurredAt: string; payload: unknown },
+  item: { localId: string; entity: string; occurredAt: string; payload: unknown },
 ): void {
   db.prepare(
-    `INSERT INTO outbox (client_id, entity, sequence, occurred_at, payload)
+    `INSERT INTO outbox (local_id, entity, sequence, occurred_at, payload)
      VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT(client_id) DO NOTHING`,
+     ON CONFLICT(local_id) DO NOTHING`,
   ).run(
-    item.clientId,
+    item.localId,
     item.entity,
     nextSequence(db),
     item.occurredAt,
@@ -600,7 +600,7 @@ function enqueue(
 }
 
 export function pendingOutbox(limit = 200): Array<{
-  clientId: string;
+  localId: string;
   entity: string;
   sequence: number;
   occurredAt: string;
@@ -609,13 +609,13 @@ export function pendingOutbox(limit = 200): Array<{
   const db = getDatabase();
   const rows = db
     .prepare(
-      `SELECT client_id AS clientId, entity, sequence, occurred_at AS occurredAt, payload
+      `SELECT local_id AS localId, entity, sequence, occurred_at AS occurredAt, payload
        FROM outbox WHERE status = 'pending' ORDER BY sequence LIMIT ?`,
     )
     .all(limit) as Array<Record<string, unknown>>;
 
   return rows.map((row) => ({
-    clientId: row.clientId as string,
+    localId: row.localId as string,
     entity: row.entity as string,
     sequence: row.sequence as number,
     occurredAt: row.occurredAt as string,
@@ -645,7 +645,7 @@ export function outboxCounts(): { pending: number; failed: number } {
  * never lose a sale.
  */
 export function settleOutboxItem(result: {
-  clientId: string;
+  localId: string;
   outcome: string;
   serverId?: string;
   documentNumber?: string;
@@ -657,8 +657,8 @@ export function settleOutboxItem(result: {
     db.transaction(() => {
       db.prepare(
         `UPDATE outbox SET status = 'synced', server_id = ?, document_number = ?, last_error = NULL
-         WHERE client_id = ?`,
-      ).run(result.serverId ?? null, result.documentNumber ?? null, result.clientId);
+         WHERE local_id = ?`,
+      ).run(result.serverId ?? null, result.documentNumber ?? null, result.localId);
 
       /**
        * The local stock delta is released only once the server has the sale.
@@ -667,8 +667,8 @@ export function settleOutboxItem(result: {
        */
       db.prepare(
         `UPDATE local_sales SET server_id = ?, sale_number = ?, synced_at = datetime('now')
-         WHERE client_id = ?`,
-      ).run(result.serverId ?? null, result.documentNumber ?? null, result.clientId);
+         WHERE local_id = ?`,
+      ).run(result.serverId ?? null, result.documentNumber ?? null, result.localId);
     })();
     return;
   }
@@ -678,14 +678,14 @@ export function settleOutboxItem(result: {
     // so it stops here and waits for a human.
     db.prepare(
       `UPDATE outbox SET status = 'rejected', last_error = ?, attempts = attempts + 1
-       WHERE client_id = ?`,
-    ).run(result.message ?? "Rejected by the server", result.clientId);
+       WHERE local_id = ?`,
+    ).run(result.message ?? "Rejected by the server", result.localId);
     return;
   }
 
   db.prepare(
-    `UPDATE outbox SET attempts = attempts + 1, last_error = ? WHERE client_id = ?`,
-  ).run(result.message ?? null, result.clientId);
+    `UPDATE outbox SET attempts = attempts + 1, last_error = ? WHERE local_id = ?`,
+  ).run(result.message ?? null, result.localId);
 }
 
 /**
@@ -701,7 +701,7 @@ export function clearSettledDeltas(): void {
     `UPDATE inventory SET local_delta = '0'
      WHERE variant_id IN (
        SELECT i.variant_id FROM local_sale_items i
-       JOIN local_sales s ON s.client_id = i.sale_client_id
+       JOIN local_sales s ON s.local_id = i.sale_local_id
        WHERE s.synced_at IS NOT NULL
      )`,
   ).run();

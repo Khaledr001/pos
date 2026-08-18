@@ -26,7 +26,7 @@ import { ApiError, authorized, deviceId, isAuthenticated, ping } from "./api-cli
  *
  *   - Only an explicit server outcome moves an outbox item. A timeout leaves it
  *     pending, because the server may have applied it and the reply may have
- *     been lost — and the `clientId` makes a resend harmless.
+ *     been lost — and the `localId` makes a resend harmless.
  *   - A rejected item is never cleared. It needs a human.
  *   - The mirror is disposable; the outbox is not. Never truncate both.
  */
@@ -144,7 +144,7 @@ async function pushOutbox(): Promise<void> {
 
   const response = await authorized<{
     results: Array<{
-      clientId: string;
+      localId: string;
       outcome: string;
       serverId?: string;
       documentNumber?: string;

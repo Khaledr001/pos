@@ -610,6 +610,83 @@ const MIGRATIONS: Array<{ version: number; sql: string }> = [
       CREATE INDEX IF NOT EXISTS idx_held_carts_held_at ON held_carts(held_at DESC);
     `,
   },
+  {
+    version: 6,
+    sql: `
+      -- Sync Engine Schema Updates (API Parity Step 1.2)
+      ALTER TABLE outbox RENAME COLUMN client_id TO local_id;
+      ALTER TABLE local_sales RENAME COLUMN client_id TO local_id;
+      ALTER TABLE local_sale_items RENAME COLUMN sale_client_id TO sale_local_id;
+
+      -- Add version tracking to mirror tables
+      ALTER TABLE variants ADD COLUMN version INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE variant_prices ADD COLUMN version INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE inventory ADD COLUMN version INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE customers ADD COLUMN version INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE customers ADD COLUMN sync_status TEXT NOT NULL DEFAULT 'synced';
+      
+      -- Support for offline orders (Quotations & Sales Orders)
+      CREATE TABLE IF NOT EXISTS local_quotations (
+        local_id        TEXT PRIMARY KEY,
+        server_id       TEXT,
+        quotation_number TEXT,
+        customer_id     TEXT,
+        subtotal        TEXT NOT NULL,
+        tax_amount      TEXT NOT NULL,
+        discount_amount TEXT NOT NULL,
+        total           TEXT NOT NULL,
+        status          TEXT NOT NULL DEFAULT 'draft',
+        occurred_at     TEXT NOT NULL,
+        synced_at       TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS local_quotation_items (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        quotation_local_id TEXT NOT NULL REFERENCES local_quotations(local_id) ON DELETE CASCADE,
+        variant_id      TEXT NOT NULL,
+        product_name    TEXT NOT NULL,
+        product_sku     TEXT NOT NULL,
+        quantity        TEXT NOT NULL,
+        unit_price      TEXT NOT NULL,
+        discount_percent TEXT NOT NULL DEFAULT '0',
+        tax_percent     TEXT NOT NULL DEFAULT '0',
+        line_subtotal   TEXT NOT NULL,
+        tax_amount      TEXT NOT NULL,
+        total           TEXT NOT NULL,
+        sort_order      INTEGER NOT NULL DEFAULT 0
+      );
+
+      CREATE TABLE IF NOT EXISTS local_orders (
+        local_id        TEXT PRIMARY KEY,
+        server_id       TEXT,
+        order_number    TEXT,
+        customer_id     TEXT,
+        subtotal        TEXT NOT NULL,
+        tax_amount      TEXT NOT NULL,
+        discount_amount TEXT NOT NULL,
+        total           TEXT NOT NULL,
+        status          TEXT NOT NULL DEFAULT 'pending',
+        occurred_at     TEXT NOT NULL,
+        synced_at       TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS local_order_items (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_local_id  TEXT NOT NULL REFERENCES local_orders(local_id) ON DELETE CASCADE,
+        variant_id      TEXT NOT NULL,
+        product_name    TEXT NOT NULL,
+        product_sku     TEXT NOT NULL,
+        quantity        TEXT NOT NULL,
+        unit_price      TEXT NOT NULL,
+        discount_percent TEXT NOT NULL DEFAULT '0',
+        tax_percent     TEXT NOT NULL DEFAULT '0',
+        line_subtotal   TEXT NOT NULL,
+        tax_amount      TEXT NOT NULL,
+        total           TEXT NOT NULL,
+        sort_order      INTEGER NOT NULL DEFAULT 0
+      );
+    `,
+  },
 ];
 
 function migrate(database: Database.Database): void {

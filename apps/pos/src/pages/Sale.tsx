@@ -109,7 +109,7 @@ export function Sale({ cashSessionId }: { cashSessionId: string | null }) {
     change: Money.Minor4,
   ) {
     const draft = {
-      clientId: crypto.randomUUID(),
+      localId: crypto.randomUUID(),
       customerId: cart.customer?.id ?? null,
       cashSessionId,
       lines: cart.lines.map((line, index) => ({
