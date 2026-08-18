@@ -1,31 +1,56 @@
 import { Money } from "@devsfleet/shared-utils";
 import { describe, expect, it } from "vitest";
+import { expectedCash } from "./day-close.service.js";
 
 /**
  * The day-close arithmetic, as arithmetic.
  *
- * The service reads it out of Postgres; what is actually easy to get wrong is
- * the sums, and those are worth pinning independently of any database. Each
- * case here corresponds to a way a real drawer has been mis-reconciled.
+ * Imports the REAL `expectedCash` rather than re-deriving the formula in the
+ * test. A hand-duplicated copy here already drifted out of sync once — this
+ * file originally reimplemented a 3-argument version (float + cash sales -
+ * expenses) and kept passing after `expectedCash` grew a manual cash in/out
+ * term, because the test was never exercising the function it claimed to pin.
  */
-describe("day close arithmetic", () => {
-  const expectedCash = (float: string, cashSales: string, cashExpenses: string): string =>
-    Money.toDecimalString(
-      Money.subtract(
-        Money.add(Money.toMinor(float), Money.toMinor(cashSales)),
-        Money.toMinor(cashExpenses),
-      ),
-      2,
-    );
+const totals = (over: Partial<Parameters<typeof expectedCash>[1]> = {}) => ({
+  cashTotal: "0",
+  manualCashIn: "0",
+  manualCashOut: "0",
+  cashExpenses: "0",
+  ...over,
+});
 
+describe("day close arithmetic", () => {
   it("expected cash is the float plus cash taken minus cash spent", () => {
-    expect(expectedCash("500", "5.78", "80")).toBe("425.78");
+    const result = expectedCash(
+      Money.toMinor("500"),
+      totals({ cashTotal: "5.78", cashExpenses: "80" }),
+    );
+    expect(Money.toDecimalString(result, 2)).toBe("425.78");
   });
 
   it("ignores non-cash expenses", () => {
     // 3,000 of rent left by bank transfer. The drawer never saw it, so
     // subtracting it would make every month-end look catastrophically short.
-    expect(expectedCash("500", "5.78", "0")).toBe("505.78");
+    const result = expectedCash(Money.toMinor("500"), totals({ cashTotal: "5.78" }));
+    expect(Money.toDecimalString(result, 2)).toBe("505.78");
+  });
+
+  it("adds manual cash in — a customer settling an invoice in cash", () => {
+    // This is the case that broke: a customer payment reduces credit balance
+    // but was invisible to the day's expected cash until it fed this term.
+    const result = expectedCash(
+      Money.toMinor("500"),
+      totals({ cashTotal: "5.78", manualCashIn: "200" }),
+    );
+    expect(Money.toDecimalString(result, 2)).toBe("705.78");
+  });
+
+  it("subtracts manual cash out — e.g. paying a delivery driver from the till", () => {
+    const result = expectedCash(
+      Money.toMinor("500"),
+      totals({ cashTotal: "5.78", manualCashOut: "50" }),
+    );
+    expect(Money.toDecimalString(result, 2)).toBe("455.78");
   });
 
   it("counting short gives a negative variance", () => {
@@ -45,7 +70,12 @@ describe("day close arithmetic", () => {
     const sales = Array.from({ length: 300 }, () => Money.toMinor("3.33"));
     const total = sales.reduce((sum, amount) => Money.add(sum, amount), 0n);
     expect(Money.toDecimalString(total, 2)).toBe("999.00");
-    expect(expectedCash("500", Money.toDecimalString(total, 4), "0")).toBe("1499.00");
+
+    const result = expectedCash(
+      Money.toMinor("500"),
+      totals({ cashTotal: Money.toDecimalString(total, 4) }),
+    );
+    expect(Money.toDecimalString(result, 2)).toBe("1499.00");
   });
 });
 

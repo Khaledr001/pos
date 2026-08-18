@@ -688,7 +688,7 @@ const MIGRATIONS: Array<{ version: number; sql: string }> = [
     `,
   },
   {
-    version: 4,
+    version: 7,
     sql: `
       CREATE TABLE IF NOT EXISTS local_customer_payments (
         client_id       TEXT PRIMARY KEY,
@@ -701,6 +701,16 @@ const MIGRATIONS: Array<{ version: number; sql: string }> = [
         occurred_at     TEXT NOT NULL,
         synced_at       TEXT
       );
+    `,
+  },
+  {
+    version: 8,
+    sql: `
+      -- version 6 renamed client_id -> local_id everywhere else in the outbox
+      -- family; this table was added in version 7, after that rename, and
+      -- never got it — it still stands out as the one table naming the same
+      -- idempotency key differently.
+      ALTER TABLE local_customer_payments RENAME COLUMN client_id TO local_id;
     `,
   },
 ];

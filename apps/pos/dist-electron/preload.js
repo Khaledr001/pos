@@ -13,7 +13,8 @@ const api = {
     byBarcode: (barcode) => electron.ipcRenderer.invoke("catalog:by-barcode", barcode)
   },
   customers: {
-    search: (query) => electron.ipcRenderer.invoke("customers:search", query)
+    search: (query) => electron.ipcRenderer.invoke("customers:search", query),
+    payment: (input) => electron.ipcRenderer.invoke("customers:payment", input)
   },
   cash: {
     current: () => electron.ipcRenderer.invoke("cash:current"),
@@ -37,6 +38,10 @@ const api = {
     commit: (draft) => electron.ipcRenderer.invoke("sales:commit", draft),
     recent: (limit) => electron.ipcRenderer.invoke("sales:recent", limit),
     find: (reference) => electron.ipcRenderer.invoke("sales:find", reference)
+  },
+  quotations: {
+    save: (draft) => electron.ipcRenderer.invoke("quotations:save", draft),
+    list: () => electron.ipcRenderer.invoke("quotations:list")
   },
   sync: {
     /** Force a sync cycle now — the "Sync" button on the status bar. */
@@ -81,7 +86,8 @@ const api = {
      * refresh token then lives outside the window, so a compromised renderer
      * cannot walk off with a terminal's long-lived credentials.
      */
-    pinLogin: (pin) => electron.ipcRenderer.invoke("auth:pin-login", pin)
+    pinLogin: (pin) => electron.ipcRenderer.invoke("auth:pin-login", pin),
+    managerOverride: (pin, requiredPermission) => electron.ipcRenderer.invoke("auth:manager-override", pin, requiredPermission)
   },
   device: {
     /** Hardware fingerprint + registration state, shown on the settings screen. */

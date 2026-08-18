@@ -453,6 +453,58 @@ points burns 260 points of value nobody received. Refusing the request and
 naming the amount actually owed — "redeem fewer points" — is simpler than
 inventing fractional-point rounding, and is what a cashier can act on.
 
+### A cash payment must move the drawer, or the close-out can't explain itself
+
+```ts
+// A customer settles an old invoice in cash. If this only writes to
+// customer_payments, the day-close and the till close-out have no idea
+// that cash exists — the drawer counts over at the end of the day with
+// nothing in the system to explain why.
+if (dto.method === "cash" && dto.cashSessionId) {
+  await tx.insert(schema.cashMovements).values({ type: "cash_in", ... });
+}
+```
+
+Any code path that puts real cash in a drawer — not just a sale — has to be
+visible to both reconciliation points: the till's own close-out
+(`CashRegisterService`) and the branch's day-close (`DayCloseService`). Both
+already summed `cash_movements` for exactly this reason; a new kind of cash
+receipt that skips writing one is invisible to both, silently, until someone
+counts the drawer.
+
+Do **not** call another service's method to write that row from inside your
+own transaction if that method opens its own transaction (i.e. calls
+`this.db.run(...)` itself) — `TenantDatabase.run()` always starts a fresh
+`db.transaction()`, so a nested call runs on a second connection with no
+shared atomicity. The payment could commit while the drawer entry silently
+doesn't. Either take the caller's `tx` as a parameter (see `StockService`), or
+call the other service as a genuinely separate, subsequent transaction (see
+`QuotationsService.convert`, which calls `SalesService.create` this way on
+purpose) — never nest one `db.run()` inside another.
+
+### `tsc -b --dry` never actually type-checks anything
+
+```json
+"typecheck": "tsc -b --dry"                                              // ❌
+"typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.electron.json --noEmit"  // ✅
+```
+
+`--dry` on a project-references build means "tell me whether a real build
+would run," not "check the types." It prints `A non-dry build would build
+project 'X'` and exits 0 **regardless of how many errors the code has** — it
+is not even reading the diagnostics, let alone failing on them. On a
+multi-tsconfig app (POS has one config for the renderer, one for the Electron
+main process, joined by an empty root solution file) reach for `-p <config>
+--noEmit` per project, the same invocation every other package in this repo
+already uses — not `-b`, which exists for incremental multi-project *builds*
+with real output, not for a plain type-check.
+
+This one is worth taking seriously: it means every "typecheck passed" from
+this script was true only by accident, never by verification. Confirm the fix
+actually catches something — delete the `.tsbuildinfo` files under
+`node_modules/.tmp/` and rerun; a script that still reports clean against code
+you know is broken is not fixed yet.
+
 ---
 
 ## Frontend

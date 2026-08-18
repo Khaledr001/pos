@@ -51,10 +51,23 @@ export const SetCreditSchema = z.object({
 export type SetCreditDto = z.infer<typeof SetCreditSchema>;
 
 export const RecordPaymentSchema = z.object({
+  branchId: z.string().uuid().optional(),
   amount: z.coerce.number().positive(),
   method: z.enum(PAYMENT_METHODS),
+  /**
+   * Which drawer the cash landed in. Not required — a manager settling an
+   * invoice from the office with no till open has nowhere to attribute it —
+   * but a `method: "cash"` payment given one is folded into that session's
+   * cash movements, so the drawer isn't short at close for a reason nobody
+   * can see.
+   */
+  cashSessionId: z.string().uuid().optional(),
   referenceNumber: z.string().trim().max(80).optional(),
   notes: z.string().trim().max(1000).optional(),
+  /** Minted on the terminal when recorded offline. */
+  localId: z.string().uuid().optional(),
+  /** The terminal's clock at the moment of collection. */
+  occurredAt: z.string().datetime().optional(),
 });
 export type RecordPaymentDto = z.infer<typeof RecordPaymentSchema>;
 

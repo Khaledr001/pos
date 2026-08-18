@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import { Money } from "@devsfleet/shared-utils";
 import { randomUUID } from "node:crypto";
 import { getDatabase } from "./sqlite.js";
 
@@ -247,27 +248,34 @@ function movementTotals(
     )
     .all(sessionClientId) as Array<{ payload: string }>;
 
-  let cashIn = 0;
-  let cashOut = 0;
+  let cashIn = 0n;
+  let cashOut = 0n;
   for (const movement of movements) {
     const parsed = JSON.parse(movement.payload) as { type: string; amount: string };
-    if (parsed.type === "cash_in") cashIn += Number(parsed.amount);
-    else cashOut += Number(parsed.amount);
+    const amount = Money.toMinor(parsed.amount);
+    if (parsed.type === "cash_in") cashIn = Money.add(cashIn, amount);
+    else cashOut = Money.add(cashOut, amount);
   }
 
   // Cash sales come from the sales themselves, never from a mirrored movement
-  // row — counting both would double every sale in the close-out.
-  const sales = db
+  // row — counting both would double every sale in the close-out. Summed in
+  // JS via Money rather than SQLite's SUM(CAST(... AS REAL)) — REAL is the
+  // same IEEE754 double a JS Number is, and a shift total is exactly the kind
+  // of running accumulation where that drift shows up on the drawer screen.
+  const salePayments = db
     .prepare(
-      `SELECT COALESCE(SUM(CAST(paid_amount AS REAL)), 0) AS total
-       FROM local_sales WHERE cash_session_id = ? AND status = 'completed'`,
+      `SELECT paid_amount FROM local_sales WHERE cash_session_id = ? AND status = 'completed'`,
     )
-    .get(sessionClientId) as { total: number };
+    .all(sessionClientId) as Array<{ paid_amount: string }>;
+  const cashSales = salePayments.reduce(
+    (sum, row) => Money.add(sum, Money.toMinor(row.paid_amount)),
+    0n,
+  );
 
   return {
-    cashIn: String(cashIn),
-    cashOut: String(cashOut),
-    cashSales: String(sales.total ?? 0),
+    cashIn: Money.toDecimalString(cashIn, 4),
+    cashOut: Money.toDecimalString(cashOut, 4),
+    cashSales: Money.toDecimalString(cashSales, 4),
   };
 }
 
@@ -358,7 +366,14 @@ export function recordCashMovement(
 export function commitSale(draft: SaleDraftInput): Record<string, unknown> {
   const db = getDatabase();
 
-  const paid = draft.payments.reduce((sum, payment) => sum + Number(payment.amount), 0);
+  // Decimal-string arithmetic — same rule as the account-payment balance
+  // below. Two ordinary tenders like 15.99 + 3.98 do not misbehave, but
+  // 19.99 - 15.99 alone already prints as 3.9999999999999982 in a plain JS
+  // float, and paid_amount is read back verbatim for receipt reprints.
+  const paid = Money.toDecimalString(
+    draft.payments.reduce((sum, payment) => Money.add(sum, Money.toMinor(payment.amount)), 0n),
+    4,
+  );
 
   db.transaction(() => {
     db.prepare(
@@ -374,7 +389,7 @@ export function commitSale(draft: SaleDraftInput): Record<string, unknown> {
       draft.taxAmount,
       draft.discountAmount,
       draft.total,
-      String(paid),
+      paid,
       draft.occurredAt,
     );
 
@@ -601,16 +616,15 @@ export interface AccountPaymentInput {
 
 export function recordAccountPayment(input: AccountPaymentInput): Record<string, unknown> {
   const db = getDatabase();
-  const clientId = crypto.randomUUID();
+  const localId = randomUUID();
 
   db.transaction(() => {
-    // 1. Insert into local_customer_payments
     db.prepare(
       `INSERT INTO local_customer_payments
-         (client_id, customer_id, cash_session_id, amount, method, reference, notes, occurred_at)
+         (local_id, customer_id, cash_session_id, amount, method, reference, notes, occurred_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
-      clientId,
+      localId,
       input.customerId,
       input.cashSessionId,
       input.amount,
@@ -620,29 +634,34 @@ export function recordAccountPayment(input: AccountPaymentInput): Record<string,
       input.occurredAt
     );
 
-    // 2. Decrement local customer credit balance (if available locally)
+    // Decimal-string arithmetic, not JS floats — Rule #1. `Number(balance) -
+    // Number(amount)` was landing values like 19.999999999999996 in the local
+    // mirror; harmless until the next pull overwrote it with the server's
+    // exact figure, but the intervening receipt or balance display was wrong.
     const customer = db
       .prepare(`SELECT credit_balance FROM customers WHERE id = ?`)
       .get(input.customerId) as { credit_balance: string } | undefined;
 
     if (customer) {
-      const newBalance = Number(customer.credit_balance) - Number(input.amount);
+      const newBalance = Money.subtract(
+        Money.toMinor(customer.credit_balance),
+        Money.toMinor(input.amount),
+      );
       db.prepare(`UPDATE customers SET credit_balance = ? WHERE id = ?`).run(
-        String(newBalance),
+        Money.toDecimalString(newBalance, 4),
         input.customerId
       );
     }
 
-    // 3. Enqueue sync event
     enqueue(db, {
-      localId: clientId,
+      localId,
       entity: "customer_payment",
       occurredAt: input.occurredAt,
       payload: input,
     });
   })();
 
-  return { clientId, ...input, synced: false };
+  return { localId, ...input, synced: false };
 }
 
 // -----------------------------------------------------------------------------

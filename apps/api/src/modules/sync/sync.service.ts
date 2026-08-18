@@ -19,7 +19,7 @@ import { CreateSaleSchema } from "../sales/dto.js";
 import { SalesService } from "../sales/sales.service.js";
 import { CustomersService } from "../customers/customers.service.js";
 import { QuotationsService } from "../quotations/quotations.service.js";
-import { CreateCustomerSchema } from "../customers/dto.js";
+import { CreateCustomerSchema, RecordPaymentSchema } from "../customers/dto.js";
 import { CreateQuotationSchema } from "../quotations/dto.js";
 
 /**
@@ -597,6 +597,56 @@ export class SyncService {
           outcome: "applied",
           serverId: quotation.id,
           documentNumber: quotation.quotationNumber,
+        };
+      }
+
+      case "customer_payment": {
+        const known = await this.db.run(async (tx) =>
+          tx.query.customerPayments.findFirst({
+            where: (t, { eq: e }) => e(t.localId, item.localId),
+            columns: { id: true },
+          }),
+        );
+        if (known) {
+          return { localId: item.localId, outcome: "duplicate", serverId: known.id };
+        }
+
+        // Same translation sales and cash_movement already do: the terminal
+        // names the drawer by the id it minted offline, not the server's.
+        const rawCashSessionId = payload.cashSessionId;
+        const session = await this.resolveCashSession(rawCashSessionId);
+
+        const { customerId, ...body } = this.parsePayload(
+          RecordPaymentSchema.extend({ customerId: z.string().uuid() }),
+          "customer_payment",
+          {
+            ...payload,
+            // The POS's local field is `reference`; the schema's is
+            // `referenceNumber`. Accepting either means a terminal on an
+            // older build still gets its reference number through, instead
+            // of it being silently dropped by a key the payload never had.
+            referenceNumber: payload.referenceNumber ?? payload.reference,
+            branchId: payload.branchId ?? branchId,
+            ...(session ? { cashSessionId: session } : { cashSessionId: undefined }),
+            localId: item.localId,
+            occurredAt: item.occurredAt,
+          },
+        );
+
+        const payment = (await this.customers.recordPayment(customerId, body)) as { id: string };
+
+        // Same posture as a sale whose drawer cannot be found: the cash was
+        // genuinely received, so the payment still lands. It just cannot be
+        // reconciled to any till, and a manager needs to know that.
+        const detached = rawCashSessionId != null && session === null;
+
+        return {
+          localId: item.localId,
+          outcome: detached ? "applied_with_warning" : "applied",
+          serverId: payment.id,
+          ...(detached
+            ? { message: "Uploaded, but the drawer session it belonged to was not found" }
+            : {}),
         };
       }
 

@@ -2,6 +2,7 @@ import { and, count, desc, eq, ilike, isNull, or, schema, sql } from "@devsfleet
 import type { Customer } from "@devsfleet/db";
 import { AppError, ERROR_CODES, Money } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
+import { requireBranchId } from "../../common/context/branch-scope.js";
 import { RequestContext } from "../../common/context/request-context.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import type {
@@ -120,12 +121,38 @@ export class CustomersService {
    * the two can never disagree. Refuses to take a payment past what is owed —
    * an overpayment is a different transaction (a deposit or a refund), not a
    * bigger version of this one.
+   *
+   * A `method: "cash"` payment given a `cashSessionId` also writes a
+   * `cash_movements` row, in the SAME transaction. Without that, cash a
+   * customer hands over at the counter to settle an old invoice is real money
+   * that neither the till's close-out nor the branch's day-close has any way
+   * to see — the drawer counts over at the end of the day with nothing in the
+   * system to explain why. The insert is written directly against `tx` here
+   * rather than by calling `CashRegisterService.recordMovement()`: that method
+   * opens its OWN transaction via `TenantDatabase.run()`, and calling it from
+   * inside this one would run on a second connection with no shared atomicity
+   * — the payment could commit while the drawer entry silently didn't, or the
+   * reverse. Cross-service composition in this codebase always works this way
+   * (see `QuotationsService.convert`, which calls `SalesService.create` as a
+   * separate top-level transaction for exactly this reason) — services that
+   * must share one transaction take the caller's `tx` as a parameter instead
+   * (see `StockService`).
    */
   async recordPayment(id: string, dto: RecordPaymentDto): Promise<unknown> {
     const tenantId = RequestContext.requireTenantId();
     const user = RequestContext.requireUser();
+    const branchId = requireBranchId(dto.branchId);
 
     return this.db.run(async (tx) => {
+      // Idempotent on the terminal's own id: a push retried after a timeout
+      // resends the same payment, and it must not decrement the balance twice.
+      if (dto.localId) {
+        const known = await tx.query.customerPayments.findFirst({
+          where: (t, { eq: e }) => e(t.localId, dto.localId!),
+        });
+        if (known) return known;
+      }
+
       const customer = await tx.query.customers.findFirst({
         where: (t, { and: a, eq: e, isNull: n }) => a(e(t.id, id), n(t.deletedAt)),
       });
@@ -145,14 +172,45 @@ export class CustomersService {
         .insert(schema.customerPayments)
         .values({
           tenantId,
+          branchId,
           customerId: id,
           amount: String(dto.amount),
           method: dto.method,
+          ...(dto.cashSessionId ? { cashSessionId: dto.cashSessionId } : {}),
           ...(dto.referenceNumber ? { referenceNumber: dto.referenceNumber } : {}),
           ...(dto.notes ? { notes: dto.notes } : {}),
           createdBy: user.id,
+          ...(dto.localId ? { localId: dto.localId } : {}),
+          ...(dto.occurredAt
+            ? { createdAt: new Date(dto.occurredAt), updatedAt: new Date(dto.occurredAt) }
+            : {}),
         })
         .returning();
+
+      if (!payment) throw new AppError(ERROR_CODES.INTERNAL_ERROR, "Could not record the payment");
+
+      if (dto.method === "cash" && dto.cashSessionId) {
+        const session = await tx.query.cashSessions.findFirst({
+          where: (t, { eq: e }) => e(t.id, dto.cashSessionId!),
+        });
+
+        // Silently skip the drawer entry rather than fail the whole payment —
+        // the customer's balance moving is the part that must never be lost.
+        // A closed or missing session means this cash cannot be attributed to
+        // any reconciliation; it does not mean the payment never happened.
+        if (session && session.status === "open") {
+          await tx.insert(schema.cashMovements).values({
+            tenantId,
+            cashSessionId: dto.cashSessionId,
+            type: "cash_in",
+            amount: String(dto.amount),
+            reason: `Account payment from ${customer.name}${dto.referenceNumber ? ` (${dto.referenceNumber})` : ""}`,
+            referenceType: "customer_payment",
+            referenceId: payment.id,
+            createdBy: user.id,
+          });
+        }
+      }
 
       await tx
         .update(schema.customers)

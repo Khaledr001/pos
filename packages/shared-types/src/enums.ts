@@ -243,6 +243,7 @@ export const SYNC_ENTITIES = asConst([
   "expense",
   "quotation",
   "order",
+  "customer_payment",
 ]);
 export type SyncEntity = (typeof SYNC_ENTITIES)[number];
 

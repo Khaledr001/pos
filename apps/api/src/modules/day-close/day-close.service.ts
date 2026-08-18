@@ -46,10 +46,7 @@ export class DayCloseService {
 
       const totals = await this.computeTotals(tx, branchId, date);
       const openingFloat = Money.toMinor(existing?.openingFloat ?? "0");
-      const expected = Money.subtract(
-        Money.add(openingFloat, Money.toMinor(totals.cashTotal)),
-        Money.toMinor(totals.cashExpenses),
-      );
+      const expected = expectedCash(openingFloat, totals);
 
       return {
         id: existing?.id ?? null,
@@ -132,11 +129,7 @@ export class DayCloseService {
       }
 
       const totals = await this.computeTotals(tx, day.branchId, day.closingDate);
-
-      const expected = Money.subtract(
-        Money.add(Money.toMinor(day.openingFloat), Money.toMinor(totals.cashTotal)),
-        Money.toMinor(totals.cashExpenses),
-      );
+      const expected = expectedCash(Money.toMinor(day.openingFloat), totals);
       const counted = Money.toMinor(String(dto.countedCash));
       const variance = Money.subtract(counted, expected);
 
@@ -289,6 +282,8 @@ export class DayCloseService {
     cardTotal: string;
     bankTotal: string;
     creditTotal: string;
+    manualCashIn: string;
+    manualCashOut: string;
     saleCount: number;
   }> {
     const dayBounds = and(
@@ -342,6 +337,36 @@ export class DayCloseService {
         ),
       );
 
+    /**
+     * Manual drawer movements — cash in or out that is not itself a sale or
+     * refund (those are mirrors of `payments`, already counted above via
+     * `cashTotal`; summing them again here would double every cash sale).
+     *
+     * This is also where a customer settling an old invoice in cash shows up:
+     * `CustomersService.recordPayment` writes exactly this kind of row so the
+     * day's expected cash accounts for it, rather than the drawer counting
+     * over at close with nothing in the system to explain why.
+     *
+     * Joined through `cash_sessions` for the branch, because a movement has no
+     * `branch_id` of its own — only the session it belongs to does. Filtered
+     * on the MOVEMENT's own `occurred_at`, not the session's, since a session
+     * opened yesterday can still take a movement today.
+     */
+    const [movements] = await tx
+      .select({
+        cashIn: sql<string>`coalesce(sum(${schema.cashMovements.amount}) FILTER (WHERE ${schema.cashMovements.amount} > 0), 0)::text`,
+        cashOut: sql<string>`coalesce(abs(sum(${schema.cashMovements.amount}) FILTER (WHERE ${schema.cashMovements.amount} < 0)), 0)::text`,
+      })
+      .from(schema.cashMovements)
+      .innerJoin(schema.cashSessions, eq(schema.cashMovements.cashSessionId, schema.cashSessions.id))
+      .where(
+        and(
+          eq(schema.cashSessions.branchId, branchId),
+          sql`${schema.cashMovements.occurredAt}::date = ${date}::date`,
+          sql`${schema.cashMovements.type} NOT IN ('sale', 'refund')`,
+        ),
+      );
+
     return {
       totalSales: sales?.total ?? "0",
       // Refunds are negative rows; reported as a positive figure because
@@ -353,9 +378,33 @@ export class DayCloseService {
       cardTotal: byMethod.get("card") ?? "0",
       bankTotal: byMethod.get("bank_transfer") ?? "0",
       creditTotal: byMethod.get("credit") ?? "0",
+      manualCashIn: movements?.cashIn ?? "0",
+      manualCashOut: movements?.cashOut ?? "0",
       saleCount: sales?.saleCount ?? 0,
     };
   }
+
+}
+
+/**
+ * openingFloat + cash sales + manual cash in - manual cash out - cash expenses.
+ *
+ * A standalone function, not a private method, so it can be pinned by a unit
+ * test independent of Postgres — see day-close.service.spec.ts. A duplicate
+ * copy of this formula living only inside a test would drift the moment this
+ * one changes, which is exactly what happened to the version it replaced.
+ */
+export function expectedCash(
+  openingFloat: Money.Minor4,
+  totals: { cashTotal: string; manualCashIn: string; manualCashOut: string; cashExpenses: string },
+): Money.Minor4 {
+  return Money.add(
+    openingFloat,
+    Money.toMinor(totals.cashTotal),
+    Money.toMinor(totals.manualCashIn),
+    Money.negate(Money.toMinor(totals.manualCashOut)),
+    Money.negate(Money.toMinor(totals.cashExpenses)),
+  );
 }
 
 /**

@@ -551,6 +551,99 @@ const MIGRATIONS = [
       );
       CREATE INDEX IF NOT EXISTS idx_held_carts_held_at ON held_carts(held_at DESC);
     `
+  },
+  {
+    version: 6,
+    sql: `
+      -- Sync Engine Schema Updates (API Parity Step 1.2)
+      ALTER TABLE outbox RENAME COLUMN client_id TO local_id;
+      ALTER TABLE local_sales RENAME COLUMN client_id TO local_id;
+      ALTER TABLE local_sale_items RENAME COLUMN sale_client_id TO sale_local_id;
+
+      -- Add version tracking to mirror tables
+      ALTER TABLE variants ADD COLUMN version INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE variant_prices ADD COLUMN version INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE inventory ADD COLUMN version INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE customers ADD COLUMN version INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE customers ADD COLUMN sync_status TEXT NOT NULL DEFAULT 'synced';
+      
+      -- Support for offline orders (Quotations & Sales Orders)
+      CREATE TABLE IF NOT EXISTS local_quotations (
+        local_id        TEXT PRIMARY KEY,
+        server_id       TEXT,
+        quotation_number TEXT,
+        customer_id     TEXT,
+        subtotal        TEXT NOT NULL,
+        tax_amount      TEXT NOT NULL,
+        discount_amount TEXT NOT NULL,
+        total           TEXT NOT NULL,
+        status          TEXT NOT NULL DEFAULT 'draft',
+        occurred_at     TEXT NOT NULL,
+        synced_at       TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS local_quotation_items (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        quotation_local_id TEXT NOT NULL REFERENCES local_quotations(local_id) ON DELETE CASCADE,
+        variant_id      TEXT NOT NULL,
+        product_name    TEXT NOT NULL,
+        product_sku     TEXT NOT NULL,
+        quantity        TEXT NOT NULL,
+        unit_price      TEXT NOT NULL,
+        discount_percent TEXT NOT NULL DEFAULT '0',
+        tax_percent     TEXT NOT NULL DEFAULT '0',
+        line_subtotal   TEXT NOT NULL,
+        tax_amount      TEXT NOT NULL,
+        total           TEXT NOT NULL,
+        sort_order      INTEGER NOT NULL DEFAULT 0
+      );
+
+      CREATE TABLE IF NOT EXISTS local_orders (
+        local_id        TEXT PRIMARY KEY,
+        server_id       TEXT,
+        order_number    TEXT,
+        customer_id     TEXT,
+        subtotal        TEXT NOT NULL,
+        tax_amount      TEXT NOT NULL,
+        discount_amount TEXT NOT NULL,
+        total           TEXT NOT NULL,
+        status          TEXT NOT NULL DEFAULT 'pending',
+        occurred_at     TEXT NOT NULL,
+        synced_at       TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS local_order_items (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_local_id  TEXT NOT NULL REFERENCES local_orders(local_id) ON DELETE CASCADE,
+        variant_id      TEXT NOT NULL,
+        product_name    TEXT NOT NULL,
+        product_sku     TEXT NOT NULL,
+        quantity        TEXT NOT NULL,
+        unit_price      TEXT NOT NULL,
+        discount_percent TEXT NOT NULL DEFAULT '0',
+        tax_percent     TEXT NOT NULL DEFAULT '0',
+        line_subtotal   TEXT NOT NULL,
+        tax_amount      TEXT NOT NULL,
+        total           TEXT NOT NULL,
+        sort_order      INTEGER NOT NULL DEFAULT 0
+      );
+    `
+  },
+  {
+    version: 7,
+    sql: `
+      CREATE TABLE IF NOT EXISTS local_customer_payments (
+        client_id       TEXT PRIMARY KEY,
+        customer_id     TEXT NOT NULL,
+        cash_session_id TEXT,
+        amount          TEXT NOT NULL,
+        method          TEXT NOT NULL,
+        reference       TEXT,
+        notes           TEXT,
+        occurred_at     TEXT NOT NULL,
+        synced_at       TEXT
+      );
+    `
   }
 ];
 function migrate(database) {
@@ -667,7 +760,7 @@ function searchCustomers(query, limit = 25) {
 function getOpenCashSession() {
   const db2 = getDatabase();
   const row = db2.prepare(
-    `SELECT client_id AS id, payload
+    `SELECT local_id AS id, payload
        FROM outbox WHERE entity = 'cash_session' AND status IN ('pending','synced')
        ORDER BY sequence DESC LIMIT 1`
   ).get();
@@ -715,16 +808,16 @@ function openCashSession(openingAmount, branchId2) {
   const db2 = getDatabase();
   const existing = getOpenCashSession();
   if (existing) return existing;
-  const clientId = node_crypto.randomUUID();
+  const localId = node_crypto.randomUUID();
   const openedAt = (/* @__PURE__ */ new Date()).toISOString();
   enqueue(db2, {
-    clientId,
+    localId,
     entity: "cash_session",
     occurredAt: openedAt,
     payload: { branchId: branchId2, openingAmount, openedAt }
   });
   return {
-    id: clientId,
+    id: localId,
     openingAmount,
     openedAt,
     status: "open",
@@ -736,7 +829,7 @@ function openCashSession(openingAmount, branchId2) {
 function closeCashSession(countedAmount, notes) {
   const db2 = getDatabase();
   const open = db2.prepare(
-    `SELECT client_id AS id, payload FROM outbox
+    `SELECT local_id AS id, payload FROM outbox
        WHERE entity = 'cash_session' ORDER BY sequence DESC LIMIT 1`
   ).get();
   if (!open) return;
@@ -744,7 +837,7 @@ function closeCashSession(countedAmount, notes) {
   payload.closedAt = (/* @__PURE__ */ new Date()).toISOString();
   payload.countedAmount = countedAmount;
   if (notes) payload.notes = notes;
-  db2.prepare(`UPDATE outbox SET payload = ?, status = 'pending' WHERE client_id = ?`).run(
+  db2.prepare(`UPDATE outbox SET payload = ?, status = 'pending' WHERE local_id = ?`).run(
     JSON.stringify(payload),
     open.id
   );
@@ -754,7 +847,7 @@ function recordCashMovement(type, amount, reason) {
   const session = getOpenCashSession();
   if (!session) throw new Error("No drawer is open on this terminal");
   enqueue(db2, {
-    clientId: node_crypto.randomUUID(),
+    localId: node_crypto.randomUUID(),
     entity: "cash_movement",
     occurredAt: (/* @__PURE__ */ new Date()).toISOString(),
     payload: { cashSessionId: session.id, type, amount, reason }
@@ -766,11 +859,11 @@ function commitSale(draft) {
   db2.transaction(() => {
     db2.prepare(
       `INSERT INTO local_sales
-         (client_id, customer_id, cash_session_id, subtotal, tax_amount,
+         (local_id, customer_id, cash_session_id, subtotal, tax_amount,
           discount_amount, total, paid_amount, status, occurred_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?)`
     ).run(
-      draft.clientId,
+      draft.localId,
       draft.customerId,
       draft.cashSessionId,
       draft.subtotal,
@@ -782,7 +875,7 @@ function commitSale(draft) {
     );
     const insertItem = db2.prepare(
       `INSERT INTO local_sale_items
-         (sale_client_id, variant_id, product_name, product_sku, quantity,
+         (sale_local_id, variant_id, product_name, product_sku, quantity,
           unit_price, discount_percent, tax_percent, line_subtotal, tax_amount,
           total, sort_order)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
@@ -794,7 +887,7 @@ function commitSale(draft) {
     );
     draft.lines.forEach((line, index) => {
       insertItem.run(
-        draft.clientId,
+        draft.localId,
         line.variantId,
         line.productName,
         line.productSku,
@@ -810,7 +903,7 @@ function commitSale(draft) {
       decrementStock.run(Number(line.quantity), line.variantId);
     });
     enqueue(db2, {
-      clientId: draft.clientId,
+      localId: draft.localId,
       entity: "sale",
       occurredAt: draft.occurredAt,
       payload: {
@@ -835,7 +928,7 @@ function commitSale(draft) {
 function recentSales(limit = 20) {
   const db2 = getDatabase();
   const sales = db2.prepare(
-    `SELECT s.client_id AS clientId, s.sale_number AS saleNumber,
+    `SELECT s.local_id AS localId, s.sale_number AS saleNumber,
               s.customer_id AS customerId, s.cash_session_id AS cashSessionId,
               s.subtotal, s.tax_amount AS taxAmount,
               s.discount_amount AS discountAmount, s.total,
@@ -845,34 +938,147 @@ function recentSales(limit = 20) {
   return sales.map((sale) => ({
     ...sale,
     synced: sale.syncedAt !== null,
-    lines: saleLines(db2, sale.clientId),
+    lines: saleLines(db2, sale.localId),
     payments: []
   }));
 }
 function findSale(reference) {
   const db2 = getDatabase();
   const sale = db2.prepare(
-    `SELECT client_id AS clientId, sale_number AS saleNumber,
+    `SELECT local_id AS localId, sale_number AS saleNumber,
               customer_id AS customerId, cash_session_id AS cashSessionId,
               subtotal, tax_amount AS taxAmount, discount_amount AS discountAmount,
               total, occurred_at AS occurredAt, synced_at AS syncedAt
-       FROM local_sales WHERE sale_number = ? OR client_id = ? LIMIT 1`
+       FROM local_sales WHERE sale_number = ? OR local_id = ? LIMIT 1`
   ).get(reference.trim(), reference.trim());
   if (!sale) return null;
   return {
     ...sale,
     synced: sale.syncedAt !== null,
-    lines: saleLines(db2, sale.clientId),
+    lines: saleLines(db2, sale.localId),
     payments: []
   };
 }
-function saleLines(db2, clientId) {
+function saleLines(db2, localId) {
   return db2.prepare(
     `SELECT variant_id AS variantId, product_name AS productName,
               product_sku AS productSku, quantity, unit_price AS unitPrice,
               discount_percent AS discountPercent, tax_percent AS taxPercent, total
-       FROM local_sale_items WHERE sale_client_id = ? ORDER BY sort_order`
-  ).all(clientId);
+       FROM local_sale_items WHERE sale_local_id = ? ORDER BY sort_order`
+  ).all(localId);
+}
+function saveQuotation(draft) {
+  const db2 = getDatabase();
+  db2.transaction(() => {
+    db2.prepare(
+      `INSERT INTO local_quotations
+         (local_id, customer_id, subtotal, tax_amount, discount_amount, total, status, occurred_at)
+       VALUES (?, ?, ?, ?, ?, ?, 'draft', ?)`
+    ).run(
+      draft.localId,
+      draft.customerId,
+      draft.subtotal,
+      draft.taxAmount,
+      draft.discountAmount,
+      draft.total,
+      draft.occurredAt
+    );
+    const insertItem = db2.prepare(
+      `INSERT INTO local_quotation_items
+         (quotation_local_id, variant_id, product_name, product_sku, quantity,
+          unit_price, discount_percent, tax_percent, line_subtotal, tax_amount, total, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    );
+    draft.lines.forEach((line, index) => {
+      insertItem.run(
+        draft.localId,
+        line.variantId,
+        line.productName,
+        line.productSku,
+        line.quantity,
+        line.unitPrice,
+        line.discountPercent,
+        line.taxPercent,
+        line.total,
+        "0",
+        line.total,
+        index
+      );
+    });
+    enqueue(db2, {
+      localId: draft.localId,
+      entity: "quotation",
+      occurredAt: draft.occurredAt,
+      payload: {
+        customerId: draft.customerId,
+        lines: draft.lines.map((line) => ({
+          variantId: line.variantId,
+          quantity: Number(line.quantity),
+          unitPrice: line.unitPrice,
+          ...Number(line.discountPercent) > 0 ? { discountPercent: Number(line.discountPercent) } : {}
+        }))
+      }
+    });
+  })();
+  return { ...draft, quotationNumber: null, synced: false };
+}
+function listQuotations() {
+  const db2 = getDatabase();
+  const quotations = db2.prepare(
+    `SELECT q.local_id AS localId, q.quotation_number AS quotationNumber,
+              q.customer_id AS customerId,
+              q.subtotal, q.tax_amount AS taxAmount,
+              q.discount_amount AS discountAmount, q.total,
+              q.status, q.occurred_at AS occurredAt, q.synced_at AS syncedAt
+       FROM local_quotations q ORDER BY q.occurred_at DESC`
+  ).all();
+  for (const q of quotations) {
+    q.lines = db2.prepare(
+      `SELECT line.variant_id AS variantId, line.product_name AS productName,
+                line.product_sku AS productSku, line.quantity, line.unit_price AS unitPrice,
+                line.discount_percent AS discountPercent, line.tax_percent AS taxPercent,
+                line.line_subtotal AS lineSubtotal, line.tax_amount AS taxAmount, line.total
+         FROM local_quotation_items line
+         WHERE line.quotation_local_id = ?
+         ORDER BY line.sort_order`
+    ).all(q.localId);
+  }
+  return quotations;
+}
+function recordAccountPayment(input) {
+  const db2 = getDatabase();
+  const clientId = crypto.randomUUID();
+  db2.transaction(() => {
+    db2.prepare(
+      `INSERT INTO local_customer_payments
+         (client_id, customer_id, cash_session_id, amount, method, reference, notes, occurred_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      clientId,
+      input.customerId,
+      input.cashSessionId,
+      input.amount,
+      input.method,
+      input.reference,
+      input.notes,
+      input.occurredAt
+    );
+    const customer = db2.prepare(`SELECT credit_balance FROM customers WHERE id = ?`).get(input.customerId);
+    if (customer) {
+      const newBalance = Number(customer.credit_balance) - Number(input.amount);
+      db2.prepare(`UPDATE customers SET credit_balance = ? WHERE id = ?`).run(
+        String(newBalance),
+        input.customerId
+      );
+    }
+    enqueue(db2, {
+      localId: clientId,
+      entity: "customer_payment",
+      occurredAt: input.occurredAt,
+      payload: input
+    });
+  })();
+  return { clientId, ...input, synced: false };
 }
 function holdCart(cart) {
   const db2 = getDatabase();
@@ -917,11 +1123,11 @@ function nextSequence(db2) {
 }
 function enqueue(db2, item) {
   db2.prepare(
-    `INSERT INTO outbox (client_id, entity, sequence, occurred_at, payload)
+    `INSERT INTO outbox (local_id, entity, sequence, occurred_at, payload)
      VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT(client_id) DO NOTHING`
+     ON CONFLICT(local_id) DO NOTHING`
   ).run(
-    item.clientId,
+    item.localId,
     item.entity,
     nextSequence(db2),
     item.occurredAt,
@@ -931,11 +1137,11 @@ function enqueue(db2, item) {
 function pendingOutbox(limit = 200) {
   const db2 = getDatabase();
   const rows = db2.prepare(
-    `SELECT client_id AS clientId, entity, sequence, occurred_at AS occurredAt, payload
+    `SELECT local_id AS localId, entity, sequence, occurred_at AS occurredAt, payload
        FROM outbox WHERE status = 'pending' ORDER BY sequence LIMIT ?`
   ).all(limit);
   return rows.map((row) => ({
-    clientId: row.clientId,
+    localId: row.localId,
     entity: row.entity,
     sequence: row.sequence,
     occurredAt: row.occurredAt,
@@ -958,25 +1164,25 @@ function settleOutboxItem(result) {
     db2.transaction(() => {
       db2.prepare(
         `UPDATE outbox SET status = 'synced', server_id = ?, document_number = ?, last_error = NULL
-         WHERE client_id = ?`
-      ).run(result.serverId ?? null, result.documentNumber ?? null, result.clientId);
+         WHERE local_id = ?`
+      ).run(result.serverId ?? null, result.documentNumber ?? null, result.localId);
       db2.prepare(
         `UPDATE local_sales SET server_id = ?, sale_number = ?, synced_at = datetime('now')
-         WHERE client_id = ?`
-      ).run(result.serverId ?? null, result.documentNumber ?? null, result.clientId);
+         WHERE local_id = ?`
+      ).run(result.serverId ?? null, result.documentNumber ?? null, result.localId);
     })();
     return;
   }
   if (result.outcome === "rejected") {
     db2.prepare(
       `UPDATE outbox SET status = 'rejected', last_error = ?, attempts = attempts + 1
-       WHERE client_id = ?`
-    ).run(result.message ?? "Rejected by the server", result.clientId);
+       WHERE local_id = ?`
+    ).run(result.message ?? "Rejected by the server", result.localId);
     return;
   }
   db2.prepare(
-    `UPDATE outbox SET attempts = attempts + 1, last_error = ? WHERE client_id = ?`
-  ).run(result.message ?? null, result.clientId);
+    `UPDATE outbox SET attempts = attempts + 1, last_error = ? WHERE local_id = ?`
+  ).run(result.message ?? null, result.localId);
 }
 function clearSettledDeltas() {
   const db2 = getDatabase();
@@ -984,7 +1190,7 @@ function clearSettledDeltas() {
     `UPDATE inventory SET local_delta = '0'
      WHERE variant_id IN (
        SELECT i.variant_id FROM local_sale_items i
-       JOIN local_sales s ON s.client_id = i.sale_client_id
+       JOIN local_sales s ON s.local_id = i.sale_local_id
        WHERE s.synced_at IS NOT NULL
      )`
   ).run();
@@ -1364,6 +1570,11 @@ function registerDataHandlers(ipcMain) {
     "customers:search",
     (_event, query) => searchCustomers(query ?? "")
   );
+  ipcMain.handle("customers:payment", (_event, input) => {
+    const payment = recordAccountPayment(input);
+    syncNow();
+    return payment;
+  });
   ipcMain.handle("cash:current", () => getOpenCashSession());
   ipcMain.handle(
     "cash:open",
@@ -1393,10 +1604,24 @@ function registerDataHandlers(ipcMain) {
   });
   ipcMain.handle("sales:recent", (_event, limit) => recentSales(limit));
   ipcMain.handle("sales:find", (_event, reference) => findSale(reference ?? ""));
+  ipcMain.handle("quotations:save", (_event, draft) => {
+    const receipt = saveQuotation(draft);
+    syncNow();
+    return receipt;
+  });
+  ipcMain.handle("quotations:list", () => listQuotations());
   ipcMain.handle("auth:pin-login", async (_event, pin) => {
     const user = await loginWithPin(String(pin ?? ""));
     syncNow();
     return user;
+  });
+  ipcMain.handle("auth:manager-override", async (_event, pin, requiredPermission) => {
+    const user = await loginWithPin(String(pin ?? ""));
+    const hasPerm = user.permissions.includes("*") || user.permissions.includes(requiredPermission);
+    if (!hasPerm) {
+      throw new Error(`Manager lacks required permission: ${requiredPermission}`);
+    }
+    return user.name;
   });
   ipcMain.handle("device:info", () => ({
     deviceId: getState("device_id"),
