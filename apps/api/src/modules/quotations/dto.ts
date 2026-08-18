@@ -23,6 +23,8 @@ export const CreateQuotationSchema = z.object({
    */
   validUntil: isoDate.optional(),
   notes: z.string().trim().max(1000).optional(),
+  localId: z.string().uuid().optional(),
+  occurredAt: z.string().datetime().optional(),
 });
 export type CreateQuotationDto = z.infer<typeof CreateQuotationSchema>;
 

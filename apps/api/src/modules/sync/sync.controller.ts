@@ -20,7 +20,7 @@ export class SyncController {
   @Post("push")
   @RequirePermissions("sale:create")
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Upload offline records; idempotent on clientId" })
+  @ApiOperation({ summary: "Upload offline records; idempotent on localId" })
   push(@Body(zodPipe(SyncPushSchema)) dto: SyncPushDto) {
     return this.sync.push(dto);
   }

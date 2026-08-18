@@ -25,7 +25,7 @@ export class SalesController {
   }
 
   /**
-   * Idempotent on `clientId`. A terminal that times out and retries gets the
+   * Idempotent on `localId`. A terminal that times out and retries gets the
    * original sale back, not a second invoice.
    */
   @Post()

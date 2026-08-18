@@ -241,6 +241,8 @@ export const SYNC_ENTITIES = asConst([
   "cash_movement",
   "held_cart",
   "expense",
+  "quotation",
+  "order",
 ]);
 export type SyncEntity = (typeof SYNC_ENTITIES)[number];
 

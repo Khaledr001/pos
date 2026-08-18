@@ -13,7 +13,7 @@ export const SyncPushSchema = z.object({
   items: z
     .array(
       z.object({
-        clientId: z.string().uuid(),
+        localId: z.string().uuid(),
         entity: z.enum(SYNC_ENTITIES),
         sequence: z.coerce.number().int().min(0),
         occurredAt: z.string().datetime(),

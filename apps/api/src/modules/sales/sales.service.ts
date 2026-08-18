@@ -47,17 +47,17 @@ export class SalesService {
       /**
        * IDEMPOTENCY, first.
        *
-       * The POS mints `clientId` when the sale is rung up and resends it on
+       * The POS mints `localId` when the sale is rung up and resends it on
        * every push attempt. A terminal that times out and retries must not
        * create a second invoice — so a known id returns the original sale
        * rather than making another.
        */
-      if (dto.clientId) {
+      if (dto.localId) {
         const existing = await tx.query.sales.findFirst({
-          where: (t, { eq: e }) => e(t.clientId, dto.clientId!),
+          where: (t, { eq: e }) => e(t.localId, dto.localId!),
         });
         if (existing) {
-          this.logger.log({ clientId: dto.clientId }, "Duplicate push — returning the original");
+          this.logger.log({ localId: dto.localId }, "Duplicate push — returning the original");
           return this.findById(existing.id, tx);
         }
       }
@@ -357,7 +357,7 @@ export class SalesService {
           paidAmount: Money.toDecimalString(paid, 4),
           dueAmount: Money.toDecimalString(due, 4),
           createdBy: user.id,
-          ...(dto.clientId ? { clientId: dto.clientId } : {}),
+          ...(dto.localId ? { localId: dto.localId } : {}),
           ...(user.deviceId ? { deviceId: user.deviceId } : {}),
           // The terminal's clock is what belongs on the receipt; createdAt is
           // when the server first saw it. On an offline sale they differ.

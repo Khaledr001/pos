@@ -30,9 +30,9 @@ export class HeldCartsService {
     return this.db.run(async (tx) => {
       // Idempotent on the terminal's own id: a hold retried over a flaky link
       // is one parked cart, not a list of near-identical ones.
-      if (dto.clientId) {
+      if (dto.localId) {
         const known = await tx.query.heldCarts.findFirst({
-          where: (t, { eq: e }) => e(t.clientId, dto.clientId!),
+          where: (t, { eq: e }) => e(t.localId, dto.localId!),
         });
         if (known) return known;
       }
@@ -48,7 +48,7 @@ export class HeldCartsService {
           cartData: dto.cartData,
           lineCount: dto.lineCount,
           total: String(dto.total),
-          ...(dto.clientId ? { clientId: dto.clientId } : {}),
+          ...(dto.localId ? { localId: dto.localId } : {}),
         })
         .returning();
 

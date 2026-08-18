@@ -44,7 +44,7 @@ export const CreateSaleSchema = z.object({
    * Minted on the terminal. The idempotency key — the server upserts on it, so
    * a push retried after a timeout cannot create a second invoice.
    */
-  clientId: z.string().uuid().optional(),
+  localId: z.string().uuid().optional(),
   /** The terminal's clock at the moment of sale. Hours before createdAt offline. */
   occurredAt: z.string().datetime().optional(),
 });

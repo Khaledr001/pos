@@ -17,6 +17,10 @@ import { CashMovementSchema, OpenSessionSchema } from "../cash-register/dto.js";
 import { CashRegisterService } from "../cash-register/cash-register.service.js";
 import { CreateSaleSchema } from "../sales/dto.js";
 import { SalesService } from "../sales/sales.service.js";
+import { CustomersService } from "../customers/customers.service.js";
+import { QuotationsService } from "../quotations/quotations.service.js";
+import { CreateCustomerSchema } from "../customers/dto.js";
+import { CreateQuotationSchema } from "../quotations/dto.js";
 
 /**
  * The POS sync engine, server side.
@@ -27,7 +31,7 @@ import { SalesService } from "../sales/sales.service.js";
  *
  * Two properties carry the whole design:
  *
- *   PUSH is idempotent. Every item carries the `clientId` the terminal minted
+ *   PUSH is idempotent. Every item carries the `localId` the terminal minted
  *   when the record was created, and it is resent unchanged on every attempt.
  *   A retry after a timeout therefore cannot double-book a sale.
  *
@@ -76,6 +80,8 @@ export class SyncService {
     private readonly db: TenantDatabase,
     private readonly sales: SalesService,
     private readonly cash: CashRegisterService,
+    private readonly customers: CustomersService,
+    private readonly quotations: QuotationsService,
   ) {}
 
   /**
@@ -104,7 +110,7 @@ export class SyncService {
          * a human. Anything else is treated as transient and retried.
          */
         results.push({
-          clientId: item.clientId,
+          localId: item.localId,
           outcome: isBusiness ? "rejected" : "deferred",
           code: isBusiness ? (error as AppError).code : ERROR_CODES.INTERNAL_ERROR,
           message:
@@ -112,7 +118,7 @@ export class SyncService {
         });
 
         this.logger.warn(
-          { clientId: item.clientId, entity: item.entity, deviceId: request.deviceId },
+          { localId: item.localId, entity: item.entity, deviceId: request.deviceId },
           `Push item ${isBusiness ? "rejected" : "deferred"}`,
         );
       }
@@ -408,13 +414,13 @@ export class SyncService {
          */
         const known = await this.db.run(async (tx) =>
           tx.query.sales.findFirst({
-            where: (t, { eq: e }) => e(t.clientId, item.clientId),
+            where: (t, { eq: e }) => e(t.localId, item.localId),
             columns: { id: true, saleNumber: true },
           }),
         );
         if (known) {
           return {
-            clientId: item.clientId,
+            localId: item.localId,
             outcome: "duplicate",
             serverId: known.id,
             documentNumber: known.saleNumber,
@@ -436,7 +442,7 @@ export class SyncService {
           ...payload,
           cashSessionId: session,
           branchId: payload.branchId ?? branchId,
-          clientId: item.clientId,
+          localId: item.localId,
           occurredAt: item.occurredAt,
           source: "pos",
         });
@@ -458,7 +464,7 @@ export class SyncService {
         const detached = payload.cashSessionId != null && session === null;
 
         return {
-          clientId: item.clientId,
+          localId: item.localId,
           outcome: detached ? "applied_with_warning" : "applied",
           serverId: sale.id,
           documentNumber: sale.saleNumber,
@@ -483,7 +489,7 @@ export class SyncService {
           {
             ...payload,
             branchId: payload.branchId ?? branchId,
-            clientId: item.clientId,
+            localId: item.localId,
             openedAt: (payload.openedAt as string | undefined) ?? item.occurredAt,
           },
         );
@@ -502,7 +508,7 @@ export class SyncService {
         }
 
         return {
-          clientId: item.clientId,
+          localId: item.localId,
           outcome: "applied",
           serverId: session.id,
           documentNumber: session.sessionNumber,
@@ -528,7 +534,70 @@ export class SyncService {
 
         const movement = (await this.cash.recordMovement(session, body)) as { id: string };
 
-        return { clientId: item.clientId, outcome: "applied", serverId: movement.id };
+        return { localId: item.localId, outcome: "applied", serverId: movement.id };
+      }
+      case "customer": {
+        const known = await this.db.run(async (tx) =>
+          tx.query.customers.findFirst({
+            where: (t, { eq: e }) => e(t.localId, item.localId),
+            columns: { id: true },
+          }),
+        );
+        if (known) {
+          return {
+            localId: item.localId,
+            outcome: "duplicate",
+            serverId: known.id,
+          };
+        }
+
+        const dto = this.parsePayload(CreateCustomerSchema, "customer", {
+          ...payload,
+          branchId: payload.branchId ?? branchId,
+          localId: item.localId,
+          occurredAt: item.occurredAt,
+        });
+
+        const customer = (await this.customers.create(dto)) as { id: string };
+
+        return {
+          localId: item.localId,
+          outcome: "applied",
+          serverId: customer.id,
+        };
+      }
+
+      case "quotation": {
+        const known = await this.db.run(async (tx) =>
+          tx.query.quotations.findFirst({
+            where: (t, { eq: e }) => e(t.localId, item.localId),
+            columns: { id: true, quotationNumber: true },
+          }),
+        );
+        if (known) {
+          return {
+            localId: item.localId,
+            outcome: "duplicate",
+            serverId: known.id,
+            documentNumber: known.quotationNumber,
+          };
+        }
+
+        const dto = this.parsePayload(CreateQuotationSchema, "quotation", {
+          ...payload,
+          branchId: payload.branchId ?? branchId,
+          localId: item.localId,
+          occurredAt: item.occurredAt,
+        });
+
+        const quotation = (await this.quotations.create(dto)) as { id: string; quotationNumber: string };
+
+        return {
+          localId: item.localId,
+          outcome: "applied",
+          serverId: quotation.id,
+          documentNumber: quotation.quotationNumber,
+        };
       }
 
       default:
@@ -538,7 +607,7 @@ export class SyncService {
          * costs.
          */
         return {
-          clientId: item.clientId,
+          localId: item.localId,
           outcome: "rejected",
           code: ERROR_CODES.SYNC_PAYLOAD_INVALID,
           message: `A terminal cannot push "${item.entity}" — that data only travels down.`,
@@ -576,7 +645,7 @@ export class SyncService {
   /**
    * Map a terminal's drawer reference onto the server's id.
    *
-   * Offline records name each other by the `clientId` the terminal minted, so
+   * Offline records name each other by the `localId` the terminal minted, so
    * a reference is checked against both: the server id when the terminal has
    * already been told it, and the client id when this is the first push.
    */
@@ -585,7 +654,7 @@ export class SyncService {
 
     return this.db.run(async (tx) => {
       const session = await tx.query.cashSessions.findFirst({
-        where: (t, { eq: e, or: o }) => o(e(t.id, reference), e(t.clientId, reference)),
+        where: (t, { eq: e, or: o }) => o(e(t.id, reference), e(t.localId, reference)),
         columns: { id: true },
       });
       return session?.id ?? null;

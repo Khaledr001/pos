@@ -50,6 +50,8 @@ export class CustomersService {
           paymentTermDays: dto.paymentTermDays,
           ...(dto.whatsappPhone ? { whatsappPhone: dto.whatsappPhone } : {}),
           ...(dto.notes ? { notes: dto.notes } : {}),
+          ...(dto.localId ? { localId: dto.localId } : {}),
+          ...(dto.occurredAt ? { createdAt: new Date(dto.occurredAt), updatedAt: new Date(dto.occurredAt) } : {}),
         })
         .returning();
 

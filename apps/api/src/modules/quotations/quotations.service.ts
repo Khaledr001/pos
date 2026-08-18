@@ -110,6 +110,8 @@ export class QuotationsService {
           validUntil: dto.validUntil ?? defaultValidUntil(),
           ...(dto.notes ? { notes: dto.notes } : {}),
           createdBy: user.id,
+          ...(dto.localId ? { localId: dto.localId } : {}),
+          ...(dto.occurredAt ? { createdAt: new Date(dto.occurredAt), updatedAt: new Date(dto.occurredAt) } : {}),
         })
         .returning();
 

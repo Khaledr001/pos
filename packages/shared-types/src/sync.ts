@@ -5,9 +5,9 @@ import type { SyncEntity } from "./enums.js";
  *
  * Design rules, fixed here so both sides cannot drift:
  *
- *  1. PUSH is idempotent. The POS mints a v4 UUID (`clientId`) for every
+ *  1. PUSH is idempotent. The POS mints a v4 UUID (`localId`) for every
  *     record it creates offline and sends it every time. The server upserts on
- *     `clientId`, so a retry after a timeout can never double-book a sale.
+ *     `localId`, so a retry after a timeout can never double-book a sale.
  *
  *  2. PUSH is append-only. A POS pushes sales, payments, cash sessions and
  *     cash movements. It never pushes a product or a price — the catalogue is
@@ -29,7 +29,7 @@ import type { SyncEntity } from "./enums.js";
 
 export interface SyncPushItem<TPayload = unknown> {
   /** UUID minted on the terminal. The idempotency key. Never regenerated. */
-  clientId: string;
+  localId: string;
   entity: SyncEntity;
   /** Local monotonic sequence; orders operations from the same device. */
   sequence: number;
@@ -48,7 +48,7 @@ export interface SyncPushRequest {
 export type SyncItemOutcome =
   /** Written for the first time. */
   | "applied"
-  /** Already present with this clientId — a safe retry, nothing changed. */
+  /** Already present with this localId — a safe retry, nothing changed. */
   | "duplicate"
   /** Written, but something needs a human: stock went negative, credit exceeded. */
   | "applied_with_warning"
@@ -58,7 +58,7 @@ export type SyncItemOutcome =
   | "deferred";
 
 export interface SyncPushResult {
-  clientId: string;
+  localId: string;
   outcome: SyncItemOutcome;
   /** Server-assigned id, present when outcome is applied/duplicate/applied_with_warning. */
   serverId?: string;

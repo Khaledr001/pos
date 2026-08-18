@@ -21,7 +21,7 @@ export const HoldCartSchema = z.object({
   total: z.coerce.number().min(0).default(0),
 
   /** Minted by the terminal. Holding a cart twice on a flaky link is one cart. */
-  clientId: z.string().uuid().optional(),
+  localId: z.string().uuid().optional(),
 });
 export type HoldCartDto = z.infer<typeof HoldCartSchema>;
 

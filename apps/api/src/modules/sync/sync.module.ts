@@ -9,8 +9,11 @@ import { SyncService } from "./sync.service.js";
  * through the same services an online request uses. An offline sale and an
  * online sale must be subject to identical rules, or the rules are optional.
  */
+import { CustomersModule } from "../customers/customers.module.js";
+import { QuotationsModule } from "../quotations/quotations.module.js";
+
 @Module({
-  imports: [SalesModule, CashRegisterModule],
+  imports: [SalesModule, CashRegisterModule, CustomersModule, QuotationsModule],
   controllers: [SyncController],
   providers: [SyncService],
 })

@@ -9,7 +9,7 @@ export const OpenSessionSchema = z.object({
    * Minted by the terminal when the drawer was opened offline. The server
    * upserts on it, so a push retried after a timeout reopens nothing.
    */
-  clientId: z.string().uuid().optional(),
+  localId: z.string().uuid().optional(),
   /** The terminal's clock at the moment the drawer opened. */
   openedAt: z.string().datetime().optional(),
 });

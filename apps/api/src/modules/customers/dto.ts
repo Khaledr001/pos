@@ -17,6 +17,10 @@ export const CreateCustomerSchema = z.object({
   /** E.164. What the WhatsApp bot matches an inbound message against. */
   whatsappPhone: z.string().trim().max(20).optional(),
   notes: z.string().trim().max(1000).optional(),
+  /** Minted on the terminal when created offline. */
+  localId: z.string().uuid().optional(),
+  /** The terminal's clock at the moment of creation. */
+  occurredAt: z.string().datetime().optional(),
 });
 export type CreateCustomerDto = z.infer<typeof CreateCustomerSchema>;
 

@@ -76,15 +76,7 @@ const stored = readStored();
 
 export const useAuth = create<AuthState>((set, get) => ({
   cashier: stored.cashier,
-  terminal: stored.terminal ?? {
-    // Development default. Replaced by the real binding once device activation
-    // lands with the sync engine in Phase 3.
-    deviceId: "dev-terminal",
-    deviceName: "DXB-POS-01",
-    branchId: "dev-branch",
-    branchName: "Dubai — Main",
-    tenantName: "DevsFleet Trading",
-  },
+  terminal: stored.terminal ?? null,
   signedInAt: stored.signedInAt,
 
   signIn(cashier) {

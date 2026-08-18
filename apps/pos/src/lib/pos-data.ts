@@ -605,6 +605,24 @@ function getStoredTerminal(): { branchId: string; deviceId: string } | null {
   }
 }
 
+// -----------------------------------------------------------------------------
+// Terminal Registration (Online only)
+// -----------------------------------------------------------------------------
+export async function adminLoginForRegistration(email: string, password: string) {
+  const res = await apiClient.post<{ accessToken: string; refreshToken: string; user: { tenantName: string } }>("/auth/login", { email, password });
+  storeApiTokens({ accessToken: res.accessToken, refreshToken: res.refreshToken });
+  return res.user;
+}
+
+export async function fetchBranchesForRegistration() {
+  const res = await apiClient.get<{ data: Array<{ id: string; name: string }> }>("/branches");
+  return res.data;
+}
+
+export async function registerDeviceOnServer(branchId: string, name: string) {
+  return apiClient.post<{ id: string }>("/devices", { branchId, name });
+}
+
 // API response shapes (may differ slightly from PosXxx interfaces).
 interface ApiVariant {
   id: string;

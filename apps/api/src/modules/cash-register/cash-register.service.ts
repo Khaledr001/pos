@@ -54,14 +54,14 @@ export class CashRegisterService {
       /**
        * A retried push is not a second drawer.
        *
-       * The terminal resends the same `clientId` on every attempt, so this
+       * The terminal resends the same `localId` on every attempt, so this
        * lookup has to come first — otherwise a reply lost to a timeout turns
        * into "a drawer is already open" and the cashier is blocked by their
        * own successful open.
        */
-      if (dto.clientId) {
+      if (dto.localId) {
         const known = await tx.query.cashSessions.findFirst({
-          where: (t, { eq: e }) => e(t.clientId, dto.clientId!),
+          where: (t, { eq: e }) => e(t.localId, dto.localId!),
         });
         if (known) return { ...known, ...(await this.movementTotals(tx, known.id)) };
       }
@@ -113,7 +113,7 @@ export class CashRegisterService {
           }),
           openingAmount: String(dto.openingAmount),
           ...(dto.notes ? { notes: dto.notes } : {}),
-          ...(dto.clientId ? { clientId: dto.clientId } : {}),
+          ...(dto.localId ? { localId: dto.localId } : {}),
           // The drawer opened when the cashier said it did, not when the
           // network came back. A shift that spans a close-out is otherwise
           // attributed to the wrong day.

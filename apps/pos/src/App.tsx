@@ -2,10 +2,12 @@ import { Banknote, Settings2, ShoppingCart, Undo2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { HashRouter, NavLink, Navigate, Route, Routes } from "react-router-dom";
 import { TopBar } from "./components/TopBar.js";
+import { useIdleTimer } from "./lib/idle-timer.js";
 import { useHotkeys } from "./lib/keyboard.js";
 import { hasBridge, posData, type PosCashSession } from "./lib/pos-data.js";
 import { CashRegister } from "./pages/CashRegister.js";
 import { Login } from "./pages/Login.js";
+import { RegisterTerminal } from "./pages/RegisterTerminal.js";
 import { Returns } from "./pages/Returns.js";
 import { Sale } from "./pages/Sale.js";
 import { Settings } from "./pages/Settings.js";
@@ -27,7 +29,9 @@ export function App() {
 }
 
 function Shell() {
+  useIdleTimer(5); // 5 minutes inactivity locks the screen
   const cashier = useAuth((s) => s.cashier);
+  const terminal = useAuth((s) => s.terminal);
   const [session, setSession] = useState<PosCashSession | null>(null);
 
   const refreshSession = useCallback(() => {
@@ -35,6 +39,9 @@ function Shell() {
   }, []);
 
   useEffect(refreshSession, [refreshSession, cashier]);
+
+  // A terminal without a binding cannot sell anything because it doesn't know what branch it is.
+  if (!terminal) return <RegisterTerminal />;
 
   // The whole app is behind sign-in. A till left on the sale screen with no
   // cashier attached is an unattributed transaction waiting to happen.

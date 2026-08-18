@@ -36,6 +36,7 @@ import { StockTakeModule } from "./modules/stock-take/stock-take.module.js";
 import { SuppliersModule } from "./modules/suppliers/suppliers.module.js";
 import { SyncModule } from "./modules/sync/sync.module.js";
 import { UsersModule } from "./modules/users/users.module.js";
+import { DevicesModule } from "./modules/devices/devices.module.js";
 
 /**
  * Application root.
@@ -141,6 +142,7 @@ import { UsersModule } from "./modules/users/users.module.js";
     SerialsModule,
     PaintModule,
     SyncModule,
+    DevicesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
