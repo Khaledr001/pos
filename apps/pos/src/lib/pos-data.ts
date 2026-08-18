@@ -44,8 +44,6 @@ export interface PosProduct {
   unitAbbr: string;
   /** Decimal string, never a float. Feed it to Money.toMinor. */
   sellingPrice: string;
-  /** Fetch stock levels from other branches directly from the API */
-  checkStockInOtherBranches: (sku: string) => Promise<Array<{ branchName: string; available: string }>>;
   /** Floor. Selling below it needs `price:override_floor`. */
   minSellingPrice: string | null;
   /** Per-product override of the tenant VAT rate. */
@@ -95,6 +93,28 @@ export interface PosSaleDraft {
 export interface PosSaleReceipt extends PosSaleDraft {
   /** Assigned by the server on sync; null while the sale is still local. */
   saleNumber: string | null;
+  synced: boolean;
+}
+
+/**
+ * A quotation is not a sale draft with fields ignored — it takes no payment
+ * and is not tied to a drawer session, so it gets its own type rather than
+ * reusing `PosSaleDraft` and leaving `cashSessionId`/`payments` meaningless.
+ */
+export interface PosQuotationDraft {
+  localId: string;
+  customerId: string | null;
+  lines: PosSaleLine[];
+  subtotal: string;
+  taxAmount: string;
+  discountAmount: string;
+  total: string;
+  occurredAt: string;
+}
+
+export interface PosQuotationReceipt extends PosQuotationDraft {
+  /** Assigned by the server on sync; null while the quotation is still local. */
+  quotationNumber: string | null;
   synced: boolean;
 }
 
@@ -193,8 +213,8 @@ export interface PosDataAdapter {
   recentSales(limit?: number): Promise<PosSaleReceipt[]>;
   findSale(saleNumberOrClientId: string): Promise<PosSaleReceipt | null>;
 
-  saveQuotation(draft: PosSaleDraft): Promise<PosSaleReceipt>;
-  listQuotations(): Promise<PosSaleReceipt[]>;
+  saveQuotation(draft: PosQuotationDraft): Promise<PosQuotationReceipt>;
+  listQuotations(): Promise<PosQuotationReceipt[]>;
 }
 
 // -----------------------------------------------------------------------------
@@ -252,10 +272,9 @@ const electronAdapter: PosDataAdapter = {
   closeCashSession: (amount, notes) => window.devsfleet.cash.close(amount, notes),
   recordCashMovement: (type, amount, reason) =>
     window.devsfleet.cash.movement(type, amount, reason),
-  recordAccountPayment: (input) =>
-    (window.devsfleet as any).customers.payment(input),
+  recordAccountPayment: (input) => window.devsfleet.customers.payment(input) as Promise<void>,
   managerOverride: (pin, requiredPermission) =>
-    (window.devsfleet as any).auth.managerOverride(pin, requiredPermission),
+    window.devsfleet.auth.managerOverride(pin, requiredPermission),
   holdCart: (cart) => window.devsfleet.carts.hold(cart),
   listHeldCarts: () => window.devsfleet.carts.list(),
   restoreHeldCart: (id) => window.devsfleet.carts.restore(id),
@@ -263,8 +282,8 @@ const electronAdapter: PosDataAdapter = {
   commitSale: (draft) => window.devsfleet.sales.commit(draft),
   recentSales: (limit) => window.devsfleet.sales.recent(limit),
   findSale: (ref) => window.devsfleet.sales.find(ref),
-  saveQuotation: (draft) => (window.devsfleet as any).quotations.save(draft),
-  listQuotations: () => (window.devsfleet as any).quotations.list(),
+  saveQuotation: (draft) => window.devsfleet.quotations.save(draft),
+  listQuotations: () => window.devsfleet.quotations.list(),
 };
 
 // -----------------------------------------------------------------------------
@@ -615,6 +634,10 @@ const browserAdapter: PosDataAdapter = {
     return { ...draft, quotationNumber: null, synced: false };
   },
   async listQuotations() {
+    return [];
+  },
+  // No live backend in this mode — matches saveQuotation/listQuotations above.
+  async checkStockInOtherBranches() {
     return [];
   },
 };

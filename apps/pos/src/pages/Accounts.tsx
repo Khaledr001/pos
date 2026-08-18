@@ -1,6 +1,8 @@
+import type { PaymentMethod } from "@devsfleet/shared-types";
+import { Money } from "@devsfleet/shared-utils";
 import { Search, Landmark, Banknote, CreditCard } from "lucide-react";
 import { useEffect, useState } from "react";
-import { money } from "../lib/money.js";
+import { amount as fmtAmount, money, parseAmount } from "../lib/money.js";
 import { posData, type PosCustomer } from "../lib/pos-data.js";
 import { Dialog } from "../components/Dialog.js";
 import { Keypad } from "../components/Keypad.js";
@@ -18,7 +20,7 @@ export function Accounts() {
     }
     const timer = setTimeout(async () => {
       const customers = await posData.searchCustomers(q);
-      setResults(customers.filter(c => Number(c.creditLimit) > 0));
+      setResults(customers.filter((c) => Money.isPositive(Money.toMinor(c.creditLimit))));
     }, 150);
     return () => clearTimeout(timer);
   }, [query]);
@@ -68,7 +70,7 @@ export function Accounts() {
                   <div className="font-medium text-white">{customer.name}</div>
                   {customer.company && <div className="text-xs text-zinc-400 mt-0.5">{customer.company}</div>}
                   <div className="mt-2 text-[11px] font-semibold tracking-wider text-chalk">
-                    OWES {money(Number(customer.creditBalance))}
+                    OWES {money(Money.toMinor(customer.creditBalance))}
                   </div>
                 </button>
               </li>
@@ -82,10 +84,11 @@ export function Accounts() {
             <AccountDetails
               customer={selected}
               onPaymentRecorded={(newBalance) => {
-                setSelected({ ...selected, creditBalance: String(newBalance) });
+                const creditBalance = Money.toDecimalString(newBalance, 4);
+                setSelected({ ...selected, creditBalance });
                 // Also update the list silently so it reflects if clicked away and back
                 setResults((current) =>
-                  current.map((c) => (c.id === selected.id ? { ...c, creditBalance: String(newBalance) } : c))
+                  current.map((c) => (c.id === selected.id ? { ...c, creditBalance } : c))
                 );
               }}
             />
@@ -101,13 +104,19 @@ export function Accounts() {
   );
 }
 
-function AccountDetails({ customer, onPaymentRecorded }: { customer: PosCustomer, onPaymentRecorded: (balance: number) => void }) {
+function AccountDetails({
+  customer,
+  onPaymentRecorded,
+}: {
+  customer: PosCustomer;
+  onPaymentRecorded: (balance: Money.Minor4) => void;
+}) {
   const [receiveOpen, setReceiveOpen] = useState(false);
 
-  const balance = Number(customer.creditBalance);
-  const limit = Number(customer.creditLimit);
-  const available = limit - balance;
-  const isOverdue = balance > 0;
+  const balance = Money.toMinor(customer.creditBalance);
+  const limit = Money.toMinor(customer.creditLimit);
+  const available = Money.subtract(limit, balance);
+  const isOverdue = Money.isPositive(balance);
 
   return (
     <div className="max-w-2xl">
@@ -145,9 +154,9 @@ function AccountDetails({ customer, onPaymentRecorded }: { customer: PosCustomer
           customer={customer}
           open={receiveOpen}
           onClose={() => setReceiveOpen(false)}
-          onSuccess={(amount) => {
+          onSuccess={(paid) => {
             setReceiveOpen(false);
-            onPaymentRecorded(balance - amount);
+            onPaymentRecorded(Money.subtract(balance, paid));
           }}
         />
       )}
@@ -164,31 +173,31 @@ function ReceivePaymentDialog({
   customer: PosCustomer;
   open: boolean;
   onClose: () => void;
-  onSuccess: (amount: number) => void;
+  onSuccess: (amount: Money.Minor4) => void;
 }) {
-  const [method, setMethod] = useState<"cash" | "card" | "bank_transfer">("cash");
+  const [method, setMethod] = useState<PaymentMethod>("cash");
   const [input, setInput] = useState("");
   const [reference, setReference] = useState("");
 
-  const pending = Number(input || "0");
-  const max = Number(customer.creditBalance);
+  const pending = parseAmount(input) ?? 0n;
+  const max = Money.toMinor(customer.creditBalance);
 
   async function handleSubmit() {
-    if (pending <= 0 || pending > max) return;
-    
+    if (!Money.isPositive(pending) || pending > max) return;
+
     // Default cash session if cash
     const session = await posData.getOpenCashSession();
-    
+
     await posData.recordAccountPayment({
       customerId: customer.id,
       cashSessionId: method === "cash" ? session?.id || null : null,
-      amount: String(pending),
+      amount: Money.toDecimalString(pending, 2),
       method,
       reference: reference.trim() || null,
       notes: null,
       occurredAt: new Date().toISOString(),
     });
-    
+
     onSuccess(pending);
   }
 
@@ -207,7 +216,7 @@ function ReceivePaymentDialog({
                 <button
                   key={m}
                   type="button"
-                  onClick={() => setMethod(m as any)}
+                  onClick={() => setMethod(m as PaymentMethod)}
                   className={[
                     "flex flex-col items-center gap-1.5 rounded-lg border px-2 py-3 text-[12px] font-medium transition-colors",
                     method === m
@@ -229,7 +238,7 @@ function ReceivePaymentDialog({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               className="field num mt-1.5 text-right text-xl font-semibold"
-              placeholder={String(max)}
+              placeholder={fmtAmount(max)}
             />
             {pending > max && (
               <p className="mt-1 text-xs text-signal-red">Cannot receive more than the outstanding balance.</p>
@@ -256,7 +265,7 @@ function ReceivePaymentDialog({
             <button
               type="button"
               className="btn btn-primary flex-1"
-              disabled={pending <= 0 || pending > max}
+              disabled={!Money.isPositive(pending) || pending > max}
               onClick={handleSubmit}
             >
               Record Payment

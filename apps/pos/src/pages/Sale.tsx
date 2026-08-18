@@ -153,22 +153,20 @@ export function Sale({ cashSessionId }: { cashSessionId: string | null }) {
     const draft: Parameters<typeof posData.saveQuotation>[0] = {
       localId: crypto.randomUUID(),
       customerId: cartState.customer.id,
-      cashSessionId: cashSessionId ?? "no-session", // Not strictly required for a quote but fits the type
-      lines: cartState.lines.map((line) => ({
-        variantId: line.variant.id,
-        productName: line.variant.name,
-        productSku: line.variant.sku,
+      lines: cartState.lines.map((line, index) => ({
+        variantId: line.product.id,
+        productName: line.product.name,
+        productSku: line.product.sku,
         quantity: line.quantity,
         unitPrice: line.unitPrice,
         discountPercent: line.discountPercent,
-        taxPercent: line.variant.taxPercent,
-        total: line.total,
+        taxPercent: line.product.taxPercent,
+        total: Money.toDecimalString(totals.lines[index]?.total ?? 0n, 2),
       })),
-      subtotal: totals.subtotal,
-      taxAmount: totals.taxAmount,
-      discountAmount: totals.discountAmount,
-      total: totals.total,
-      payments: [], // No payments on a quote
+      subtotal: Money.toDecimalString(totals.subtotal, 2),
+      taxAmount: Money.toDecimalString(totals.taxAmount, 2),
+      discountAmount: Money.toDecimalString(totals.discountAmount, 2),
+      total: Money.toDecimalString(totals.total, 2),
       occurredAt: new Date().toISOString(),
     };
 

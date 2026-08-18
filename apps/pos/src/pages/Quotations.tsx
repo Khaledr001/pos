@@ -2,7 +2,7 @@ import { Money } from "@devsfleet/shared-utils";
 import { FileText, Plus, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { money, quantity as fmtQuantity } from "../lib/money.js";
-import { posData, type PosSaleReceipt, type PosCustomer } from "../lib/pos-data.js";
+import { posData, type PosQuotationReceipt, type PosCustomer } from "../lib/pos-data.js";
 import { useAuth } from "../store/auth.js";
 import { useCart } from "../store/cart.js";
 import { useNavigate } from "react-router-dom";
@@ -10,13 +10,13 @@ import { useNavigate } from "react-router-dom";
 export function Quotations() {
   const { can } = useAuth();
   const navigate = useNavigate();
-  const [quotations, setQuotations] = useState<PosSaleReceipt[]>([]);
+  const [quotations, setQuotations] = useState<PosQuotationReceipt[]>([]);
   const [customers, setCustomers] = useState<Record<string, PosCustomer>>({});
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     async function load() {
-      const list = (await posData.listQuotations()) as PosSaleReceipt[];
+      const list = (await posData.listQuotations()) as PosQuotationReceipt[];
       setQuotations(list);
 
       // Preload customers to show names instead of IDs
@@ -30,7 +30,7 @@ export function Quotations() {
     void load();
   }, []);
 
-  async function convertToSale(q: PosSaleReceipt) {
+  async function convertToSale(q: PosQuotationReceipt) {
     if (busy) return;
     setBusy(true);
     try {

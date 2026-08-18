@@ -5,6 +5,8 @@ import type {
   PosCashSession,
   PosCustomer,
   PosProduct,
+  PosQuotationDraft,
+  PosQuotationReceipt,
   PosSaleDraft,
   PosSaleReceipt,
 } from "./pos-data.js";
@@ -29,6 +31,8 @@ export interface DevsfleetBridge {
      * cannot walk off with a terminal's long-lived credentials.
      */
     pinLogin(pin: string): Promise<PosCashier>;
+    /** A supervisor's PIN, checked against a specific permission. Returns their name. */
+    managerOverride(pin: string, requiredPermission: string): Promise<string>;
   };
   catalog: {
     search(query: string, limit?: number): Promise<PosProduct[]>;
@@ -44,6 +48,16 @@ export interface DevsfleetBridge {
       email?: string;
       creditLimit?: string;
     }): Promise<PosCustomer>;
+    /** Settle an old credit invoice. Folded into the drawer when cash and a session are given. */
+    payment(input: {
+      customerId: string;
+      cashSessionId: string | null;
+      amount: string;
+      method: string;
+      reference: string | null;
+      notes: string | null;
+      occurredAt: string;
+    }): Promise<unknown>;
   };
   cash: {
     current(): Promise<PosCashSession | null>;
@@ -72,6 +86,10 @@ export interface DevsfleetBridge {
     commit(draft: PosSaleDraft): Promise<PosSaleReceipt>;
     recent(limit?: number): Promise<PosSaleReceipt[]>;
     find(reference: string): Promise<PosSaleReceipt | null>;
+  };
+  quotations: {
+    save(draft: PosQuotationDraft): Promise<PosQuotationReceipt>;
+    list(): Promise<PosQuotationReceipt[]>;
   };
   sync: {
     now(): Promise<SyncStatusSnapshot>;

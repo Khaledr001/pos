@@ -34,8 +34,9 @@ export function RegisterTerminal() {
       
       const branchList = await fetchBranchesForRegistration();
       setBranches(branchList);
-      if (branchList.length > 0) setSelectedBranch(branchList[0].id);
-      
+      const [firstBranch] = branchList;
+      if (firstBranch) setSelectedBranch(firstBranch.id);
+
       setStep("details");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Invalid credentials");

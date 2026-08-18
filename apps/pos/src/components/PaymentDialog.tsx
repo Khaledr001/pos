@@ -120,7 +120,9 @@ export function PaymentDialog({
     typed ??
     (method === "cash" ? cashSettlement : Money.max(outstanding, 0n));
 
-  const overrideNeeded = method === "credit" && customer && (customer.creditOnHold || pending > creditAvailable);
+  const overrideNeeded = Boolean(
+    method === "credit" && customer && (customer.creditOnHold || pending > creditAvailable),
+  );
 
   const creditBlocked =
     method === "credit" &&

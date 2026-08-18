@@ -53,8 +53,15 @@ export function ManagerOverrideDialog({
           onDigit={(d) => setPin((v) => v + d)}
           onBackspace={() => setPin((v) => v.slice(0, -1))}
           onClear={() => setPin("")}
-          onEnter={handleSubmit}
         />
+        <button
+          type="button"
+          className="btn btn-primary w-full"
+          disabled={pin.length === 0}
+          onClick={() => void handleSubmit()}
+        >
+          Confirm
+        </button>
       </div>
     </Dialog>
   );
