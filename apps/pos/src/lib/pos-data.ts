@@ -161,6 +161,18 @@ export interface PosDataAdapter {
     reason: string,
   ): Promise<void>;
 
+  recordAccountPayment(input: {
+    customerId: string;
+    cashSessionId: string | null;
+    amount: string;
+    method: string;
+    reference: string | null;
+    notes: string | null;
+    occurredAt: string;
+  }): Promise<void>;
+
+  managerOverride(pin: string, requiredPermission: string): Promise<string>;
+
   /**
    * Park a cart, list what is parked, take one back.
    *
@@ -229,6 +241,10 @@ const electronAdapter: PosDataAdapter = {
   closeCashSession: (amount, notes) => window.devsfleet.cash.close(amount, notes),
   recordCashMovement: (type, amount, reason) =>
     window.devsfleet.cash.movement(type, amount, reason),
+  recordAccountPayment: (input) =>
+    (window.devsfleet as any).customers.payment(input),
+  managerOverride: (pin, requiredPermission) =>
+    (window.devsfleet as any).auth.managerOverride(pin, requiredPermission),
   holdCart: (cart) => window.devsfleet.carts.hold(cart),
   listHeldCarts: () => window.devsfleet.carts.list(),
   restoreHeldCart: (id) => window.devsfleet.carts.restore(id),
@@ -524,6 +540,19 @@ const browserAdapter: PosDataAdapter = {
     browserState.session[key] = String(
       Number(browserState.session[key]) + Number(amount),
     );
+  },
+  async recordAccountPayment(input) {
+    const customer = SEED_CUSTOMERS.find((c) => c.id === input.customerId);
+    if (customer) {
+      customer.creditBalance = String(Number(customer.creditBalance) - Number(input.amount));
+    }
+  },
+  async managerOverride(pin, requiredPermission) {
+    const staff = SEED_STAFF.find((s) => s.pin === pin);
+    if (!staff) throw new Error("That PIN was not recognised.");
+    const hasPerm = staff.permissions.includes("*") || staff.permissions.includes(requiredPermission as any);
+    if (!hasPerm) throw new Error(`Manager lacks required permission: ${requiredPermission}`);
+    return staff.name;
   },
   async holdCart(cart) {
     const held = {
@@ -932,16 +961,23 @@ const apiAdapter: PosDataAdapter = {
   },
 
   async recordCashMovement(type, amount, reason) {
-    const terminal = getStoredTerminal();
-    if (!terminal) return;
-    const params = new URLSearchParams({ branchId: terminal.branchId, deviceId: terminal.deviceId });
-    const session = await apiClient.get<ApiSession | null>(`/cash-register/current?${params.toString()}`);
-    if (!session) return;
-    await apiClient.post(`/cash-register/${session.id}/movements`, {
+    const session = await this.getOpenCashSession();
+    if (!session) throw new Error("No open session");
+
+    await apiClient.post(`/cash-registers/sessions/${session.id}/movements`, {
       type,
       amount: Number(amount),
       reason,
     });
+  },
+
+  async recordAccountPayment() {
+    // API direct fallback (browser mode without bridge)
+    throw new Error("Not implemented in direct API mode");
+  },
+
+  async managerOverride() {
+    throw new Error("Not implemented in direct API mode");
   },
 
   async holdCart(cart) {

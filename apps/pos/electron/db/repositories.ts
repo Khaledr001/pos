@@ -586,6 +586,66 @@ export function listQuotations(): unknown[] {
 }
 
 // -----------------------------------------------------------------------------
+// Account Payments
+// -----------------------------------------------------------------------------
+
+export interface AccountPaymentInput {
+  customerId: string;
+  cashSessionId: string | null;
+  amount: string;
+  method: string;
+  reference: string | null;
+  notes: string | null;
+  occurredAt: string;
+}
+
+export function recordAccountPayment(input: AccountPaymentInput): Record<string, unknown> {
+  const db = getDatabase();
+  const clientId = crypto.randomUUID();
+
+  db.transaction(() => {
+    // 1. Insert into local_customer_payments
+    db.prepare(
+      `INSERT INTO local_customer_payments
+         (client_id, customer_id, cash_session_id, amount, method, reference, notes, occurred_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      clientId,
+      input.customerId,
+      input.cashSessionId,
+      input.amount,
+      input.method,
+      input.reference,
+      input.notes,
+      input.occurredAt
+    );
+
+    // 2. Decrement local customer credit balance (if available locally)
+    const customer = db
+      .prepare(`SELECT credit_balance FROM customers WHERE id = ?`)
+      .get(input.customerId) as { credit_balance: string } | undefined;
+
+    if (customer) {
+      const newBalance = Number(customer.credit_balance) - Number(input.amount);
+      db.prepare(`UPDATE customers SET credit_balance = ? WHERE id = ?`).run(
+        String(newBalance),
+        input.customerId
+      );
+    }
+
+    // 3. Enqueue sync event
+    enqueue(db, {
+      localId: clientId,
+      entity: "customer_payment",
+      occurredAt: input.occurredAt,
+      payload: input,
+    });
+  })();
+
+  return { clientId, ...input, synced: false };
+}
+
+// -----------------------------------------------------------------------------
 // Held carts
 // -----------------------------------------------------------------------------
 

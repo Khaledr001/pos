@@ -73,6 +73,8 @@ const api = {
   customers: {
     search: (query: string): Promise<BridgeCustomer[]> =>
       ipcRenderer.invoke("customers:search", query),
+    payment: (input: unknown): Promise<unknown> =>
+      ipcRenderer.invoke("customers:payment", input),
   },
 
   cash: {
@@ -166,6 +168,8 @@ const api = {
      */
     pinLogin: (pin: string): Promise<{ name: string; permissions: string[] }> =>
       ipcRenderer.invoke("auth:pin-login", pin),
+    managerOverride: (pin: string, requiredPermission: string): Promise<string> =>
+      ipcRenderer.invoke("auth:manager-override", pin, requiredPermission),
   },
 
   device: {

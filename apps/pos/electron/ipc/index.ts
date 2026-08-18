@@ -24,6 +24,11 @@ export function registerDataHandlers(ipcMain: IpcMain): void {
   ipcMain.handle("customers:search", (_event, query: string) =>
     repo.searchCustomers(query ?? ""),
   );
+  ipcMain.handle("customers:payment", (_event, input: repo.AccountPaymentInput) => {
+    const payment = repo.recordAccountPayment(input);
+    syncNow();
+    return payment;
+  });
 
   ipcMain.handle("cash:current", () => repo.getOpenCashSession());
   ipcMain.handle("cash:open", (_event, openingAmount: string) =>
@@ -69,6 +74,15 @@ export function registerDataHandlers(ipcMain: IpcMain): void {
     const user = await loginWithPin(String(pin ?? ""));
     syncNow();
     return user;
+  });
+
+  ipcMain.handle("auth:manager-override", async (_event, pin: string, requiredPermission: string) => {
+    const user = await loginWithPin(String(pin ?? ""));
+    const hasPerm = user.permissions.includes("*") || user.permissions.includes(requiredPermission);
+    if (!hasPerm) {
+      throw new Error(`Manager lacks required permission: ${requiredPermission}`);
+    }
+    return user.name;
   });
 
   ipcMain.handle("device:info", () => ({

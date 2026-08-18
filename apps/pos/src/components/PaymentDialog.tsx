@@ -6,6 +6,7 @@ import { amount, money, parseAmount, roundCash } from "../lib/money.js";
 import type { PosCustomer } from "../lib/pos-data.js";
 import { Dialog } from "./Dialog.js";
 import { Keypad } from "./Keypad.js";
+import { ManagerOverrideDialog } from "./ManagerOverrideDialog.js";
 
 /**
  * Take payment.
@@ -73,6 +74,8 @@ export function PaymentDialog({
    * be completed.
    */
   const [rounding, setRounding] = useState<Money.Minor4>(0n);
+  const [creditOverrideAllowed, setCreditOverrideAllowed] = useState(false);
+  const [showOverrideDialog, setShowOverrideDialog] = useState(false);
 
   const paid = useMemo(
     () => tenders.reduce<Money.Minor4>((sum, t) => Money.add(sum, t.amount), 0n),
@@ -104,6 +107,7 @@ export function PaymentDialog({
       setInput("");
       setReference("");
       setRounding(0n);
+      setCreditOverrideAllowed(false);
     }
   }, [open]);
 
@@ -116,13 +120,16 @@ export function PaymentDialog({
     typed ??
     (method === "cash" ? cashSettlement : Money.max(outstanding, 0n));
 
+  const overrideNeeded = method === "credit" && customer && (customer.creditOnHold || pending > creditAvailable);
+
   const creditBlocked =
     method === "credit" &&
-    (!customer || customer.creditOnHold || pending > creditAvailable);
+    (!customer || (overrideNeeded && !creditOverrideAllowed));
 
   function creditRefusal(): string | null {
     if (method !== "credit") return null;
     if (!customer) return "Select a customer before putting a sale on account.";
+    if (creditOverrideAllowed) return null;
     if (customer.creditOnHold) return `${customer.name} is on credit hold.`;
     if (pending > creditAvailable)
       return `Only ${money(creditAvailable)} of credit remains on this account.`;
@@ -265,6 +272,17 @@ export function PaymentDialog({
             </p>
           )}
 
+          {overrideNeeded && !creditOverrideAllowed && (
+            <button
+              type="button"
+              className="btn border border-brass/50 bg-brass/10 text-brass hover:bg-brass/20 w-full"
+              onClick={() => setShowOverrideDialog(true)}
+              disabled={!Money.isPositive(pending)}
+            >
+              Request Manager Override
+            </button>
+          )}
+
           <button
             type="button"
             className="btn btn-ghost w-full"
@@ -340,6 +358,18 @@ export function PaymentDialog({
           </div>
         </div>
       </div>
+
+      {showOverrideDialog && (
+        <ManagerOverrideDialog
+          open={showOverrideDialog}
+          requiredPermission="customer:credit"
+          onClose={() => setShowOverrideDialog(false)}
+          onSuccess={() => {
+            setShowOverrideDialog(false);
+            setCreditOverrideAllowed(true);
+          }}
+        />
+      )}
     </Dialog>
   );
 }

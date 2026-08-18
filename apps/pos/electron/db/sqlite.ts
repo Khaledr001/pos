@@ -687,6 +687,22 @@ const MIGRATIONS: Array<{ version: number; sql: string }> = [
       );
     `,
   },
+  {
+    version: 4,
+    sql: `
+      CREATE TABLE IF NOT EXISTS local_customer_payments (
+        client_id       TEXT PRIMARY KEY,
+        customer_id     TEXT NOT NULL,
+        cash_session_id TEXT,
+        amount          TEXT NOT NULL,
+        method          TEXT NOT NULL,
+        reference       TEXT,
+        notes           TEXT,
+        occurred_at     TEXT NOT NULL,
+        synced_at       TEXT
+      );
+    `,
+  },
 ];
 
 function migrate(database: Database.Database): void {
