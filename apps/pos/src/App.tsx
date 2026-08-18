@@ -1,4 +1,4 @@
-import { Banknote, Settings2, ShoppingCart, Undo2, FileText, Landmark } from "lucide-react";
+import { Banknote, Settings2, ShoppingCart, Undo2, FileText, Landmark, PackageOpen } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { HashRouter, NavLink, Navigate, Route, Routes } from "react-router-dom";
 import { TopBar } from "./components/TopBar.js";
@@ -12,6 +12,7 @@ import { Quotations } from "./pages/Quotations.js";
 import { Returns } from "./pages/Returns.js";
 import { Sale } from "./pages/Sale.js";
 import { Accounts } from "./pages/Accounts.js";
+import { Transfers } from "./pages/Transfers.js";
 import { Settings } from "./pages/Settings.js";
 import { useAuth } from "./store/auth.js";
 
@@ -72,6 +73,7 @@ function Shell() {
             <Route path="/quotations" element={<Quotations />} />
             <Route path="/returns" element={<Returns />} />
             <Route path="/accounts" element={<Accounts />} />
+            <Route path="/transfers" element={<Transfers />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
@@ -93,6 +95,7 @@ function SideNav() {
     { to: "/drawer", label: "Drawer", icon: Banknote },
     { to: "/quotations", label: "Quotes", icon: FileText },
     { to: "/accounts", label: "Accounts", icon: Landmark },
+    { to: "/transfers", label: "Transfers", icon: PackageOpen },
     { to: "/returns", label: "Returns", icon: Undo2 },
     { to: "/settings", label: "Settings", icon: Settings2 },
   ];
@@ -102,8 +105,9 @@ function SideNav() {
     "ctrl+2": () => (location.hash = "#/drawer"),
     "ctrl+3": () => (location.hash = "#/quotations"),
     "ctrl+4": () => (location.hash = "#/accounts"),
-    "ctrl+5": () => (location.hash = "#/returns"),
-    "ctrl+6": () => (location.hash = "#/settings"),
+    "ctrl+5": () => (location.hash = "#/transfers"),
+    "ctrl+6": () => (location.hash = "#/returns"),
+    "ctrl+7": () => (location.hash = "#/settings"),
   });
 
   return (

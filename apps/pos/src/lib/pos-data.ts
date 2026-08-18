@@ -44,6 +44,8 @@ export interface PosProduct {
   unitAbbr: string;
   /** Decimal string, never a float. Feed it to Money.toMinor. */
   sellingPrice: string;
+  /** Fetch stock levels from other branches directly from the API */
+  checkStockInOtherBranches: (sku: string) => Promise<Array<{ branchName: string; available: string }>>;
   /** Floor. Selling below it needs `price:override_floor`. */
   minSellingPrice: string | null;
   /** Per-product override of the tenant VAT rate. */
@@ -151,6 +153,7 @@ export interface PosDataAdapter {
   findByBarcode(barcode: string): Promise<PosProduct | null>;
   searchCustomers(query: string): Promise<PosCustomer[]>;
   createCustomer(input: CreateCustomerInput): Promise<PosCustomer>;
+  checkStockInOtherBranches(sku: string): Promise<Array<{ branchName: string; available: string }>>;
 
   getOpenCashSession(): Promise<PosCashSession | null>;
   openCashSession(openingAmount: string): Promise<PosCashSession>;
@@ -236,6 +239,14 @@ const electronAdapter: PosDataAdapter = {
     hasBridge() && "createCustomer" in (window.devsfleet.customers as unknown as Record<string, unknown>)
       ? (window.devsfleet.customers as unknown as { createCustomer: (i: CreateCustomerInput) => Promise<PosCustomer> }).createCustomer(input)
       : browserAdapter.createCustomer(input),
+  checkStockInOtherBranches: async (sku) => {
+    try {
+      const res = await apiClient.get<{ data: Array<{ branchName: string; available: string }> }>(`/inventory?q=${encodeURIComponent(sku)}`);
+      return res.data || [];
+    } catch {
+      return [];
+    }
+  },
   getOpenCashSession: () => window.devsfleet.cash.current(),
   openCashSession: (amount) => window.devsfleet.cash.open(amount),
   closeCashSession: (amount, notes) => window.devsfleet.cash.close(amount, notes),
@@ -978,6 +989,15 @@ const apiAdapter: PosDataAdapter = {
 
   async managerOverride() {
     throw new Error("Not implemented in direct API mode");
+  },
+
+  async checkStockInOtherBranches(sku) {
+    try {
+      const res = await apiClient.get<{ data: Array<{ branchName: string; available: string }> }>(`/inventory?q=${encodeURIComponent(sku)}`);
+      return res.data || [];
+    } catch {
+      return [];
+    }
   },
 
   async holdCart(cart) {

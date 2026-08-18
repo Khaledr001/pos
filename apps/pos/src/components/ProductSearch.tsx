@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Money } from "@devsfleet/shared-utils";
 import { amount, quantity as fmtQuantity } from "../lib/money.js";
 import { posData, type PosProduct } from "../lib/pos-data.js";
+import { CheckBranchesModal } from "./CheckBranchesModal.js";
 
 /**
  * Catalogue search.
@@ -26,6 +27,7 @@ export function ProductSearch({
   const [results, setResults] = useState<PosProduct[]>([]);
   const [highlighted, setHighlighted] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [checkingProduct, setCheckingProduct] = useState<PosProduct | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
 
@@ -120,7 +122,7 @@ export function ProductSearch({
                 }}
                 onMouseEnter={() => setHighlighted(index)}
                 className={[
-                  "flex w-full items-center gap-4 rounded-lg border px-3.5 py-3 text-left transition-colors",
+                  "flex w-full items-center gap-4 rounded-lg border px-3.5 py-3 text-left transition-colors relative group",
                   active
                     ? "border-brass/50 bg-brass/8"
                     : "border-pos-border bg-pos-panel hover:bg-pos-raised",
@@ -154,6 +156,18 @@ export function ProductSearch({
                     {amount(Money.toMinor(product.sellingPrice))}
                   </div>
                   <div className="text-[10px] text-zinc-500">per {product.unitAbbr}</div>
+                  
+                  {/* Action button appears on hover */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCheckingProduct(product);
+                    }}
+                    className="absolute right-3.5 bottom-2 text-[10px] font-medium text-brass opacity-0 group-hover:opacity-100 transition-opacity bg-brass/10 px-2 py-0.5 rounded"
+                  >
+                    Check other branches
+                  </button>
                 </div>
               </button>
             </li>
@@ -174,6 +188,17 @@ export function ProductSearch({
           </li>
         )}
       </ul>
+
+      {checkingProduct && (
+        <CheckBranchesModal
+          product={checkingProduct}
+          open={!!checkingProduct}
+          onClose={() => {
+            setCheckingProduct(null);
+            inputRef.current?.focus();
+          }}
+        />
+      )}
     </div>
   );
 }

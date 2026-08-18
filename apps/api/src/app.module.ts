@@ -37,6 +37,7 @@ import { SuppliersModule } from "./modules/suppliers/suppliers.module.js";
 import { SyncModule } from "./modules/sync/sync.module.js";
 import { UsersModule } from "./modules/users/users.module.js";
 import { DevicesModule } from "./modules/devices/devices.module.js";
+import { TransfersModule } from "./modules/transfers/transfers.module.js";
 
 /**
  * Application root.
@@ -143,6 +144,7 @@ import { DevicesModule } from "./modules/devices/devices.module.js";
     PaintModule,
     SyncModule,
     DevicesModule,
+    TransfersModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
