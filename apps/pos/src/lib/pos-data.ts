@@ -254,40 +254,59 @@ export interface PosDataAdapter {
 export const hasBridge = (): boolean =>
   typeof window !== "undefined" && typeof window.devsfleet !== "undefined";
 
+/**
+ * `electronAdapter` only runs when `hasBridge()` is already true, so it must
+ * never reach for `browserAdapter` — that would be a real terminal, synced or
+ * not, silently selling from the ten fixed demo SKUs `pnpm dev` ships with.
+ *
+ * A stock quirk that made this look almost reasonable at a glance: a brand
+ * new terminal whose catalogue has not synced yet has an empty local mirror,
+ * so an empty result here is completely normal and not itself an error — the
+ * bug was answering it with fake products instead of an empty list.
+ */
 const electronAdapter: PosDataAdapter = {
   signIn: (pin) => window.devsfleet.auth.pinLogin(pin) as unknown as Promise<PosCashier>,
   searchProducts: async (query, limit) => {
     try {
       const rows = await window.devsfleet.catalog.search(query, limit);
-      if (Array.isArray(rows) && rows.length > 0) return rows;
-      if (!query.trim()) return browserAdapter.searchProducts(query, limit);
       return rows ?? [];
-    } catch {
-      return browserAdapter.searchProducts(query, limit);
+    } catch (err) {
+      console.warn("Local catalogue search failed:", err);
+      return [];
     }
   },
   findByBarcode: async (barcode) => {
     try {
-      const item = await window.devsfleet.catalog.byBarcode(barcode);
-      if (item) return item;
-      return browserAdapter.findByBarcode(barcode);
-    } catch {
-      return browserAdapter.findByBarcode(barcode);
+      return await window.devsfleet.catalog.byBarcode(barcode);
+    } catch (err) {
+      console.warn("Local barcode lookup failed:", err);
+      return null;
     }
   },
   searchCustomers: async (query) => {
     try {
-      const rows = await window.devsfleet.customers.search(query);
-      if (Array.isArray(rows) && rows.length > 0) return rows;
-      return browserAdapter.searchCustomers(query);
-    } catch {
-      return browserAdapter.searchCustomers(query);
+      return await window.devsfleet.customers.search(query);
+    } catch (err) {
+      console.warn("Local customer search failed:", err);
+      return [];
     }
   },
-  createCustomer: (input) =>
-    hasBridge() && "createCustomer" in (window.devsfleet.customers as unknown as Record<string, unknown>)
-      ? (window.devsfleet.customers as unknown as { createCustomer: (i: CreateCustomerInput) => Promise<PosCustomer> }).createCustomer(input)
-      : browserAdapter.createCustomer(input),
+  createCustomer: (input) => {
+    // Feature-detected because the offline path does not exist yet (§11–12
+    // in feature.md) — not a fallback. A caller getting a fake, unpersisted
+    // customer back with no indication it never reached the server is worse
+    // than a clear refusal.
+    if ("createCustomer" in (window.devsfleet.customers as unknown as Record<string, unknown>)) {
+      return (
+        window.devsfleet.customers as unknown as {
+          createCustomer: (i: CreateCustomerInput) => Promise<PosCustomer>;
+        }
+      ).createCustomer(input);
+    }
+    throw new Error(
+      "Creating a customer offline isn't supported yet on this terminal. Connect to the network to add one.",
+    );
+  },
   checkStockInOtherBranches: async (sku) => {
     try {
       const res = await apiClient.get<{ data: Array<{ branchName: string; available: string }> }>(`/inventory?q=${encodeURIComponent(sku)}`);
@@ -883,49 +902,54 @@ function mapSale(s: ApiSale): PosSaleReceipt {
 const apiAdapter: PosDataAdapter = {
   async signIn(pin) {
     const terminal = getStoredTerminal();
-    try {
-      if (terminal && isUuid(terminal.branchId) && isUuid(terminal.deviceId)) {
-        interface PinLoginResponse {
-          accessToken: string;
-          refreshToken: string;
-          user: {
-            id: string;
-            name: string;
-            roleName: string;
-            permissions: PermissionGrant[];
-            branchId: string | null;
-            branchName: string | null;
-            tenantName: string;
-            maxDiscountPercent?: string;
-          };
-        }
-
-        const res = await apiClient.post<PinLoginResponse>("/auth/pin-login", {
-          pin,
-          deviceId: terminal.deviceId,
-          branchId: terminal.branchId,
-        });
-
-        storeApiTokens({ accessToken: res.accessToken, refreshToken: res.refreshToken });
-
-        return {
-          id: res.user.id,
-          name: res.user.name,
-          roleName: res.user.roleName,
-          permissions: res.user.permissions,
-          branchId: res.user.branchId,
-          branchName: res.user.branchName,
-          tenantName: res.user.tenantName ?? null,
-          // Absent means zero, not unlimited: an older server leaves the till
-          // refusing discounts rather than waving them through.
-          maxDiscountPercent: res.user.maxDiscountPercent ?? "0",
-        };
-      }
-    } catch (err) {
-      console.warn("API pin-login failed, checking local staff:", err);
+    if (!terminal || !isUuid(terminal.branchId) || !isUuid(terminal.deviceId)) {
+      throw new Error("This terminal has not been activated yet.");
     }
 
-    return browserAdapter.signIn(pin);
+    interface PinLoginResponse {
+      accessToken: string;
+      refreshToken: string;
+      user: {
+        id: string;
+        name: string;
+        roleName: string;
+        permissions: PermissionGrant[];
+        branchId: string | null;
+        branchName: string | null;
+        tenantName: string;
+        maxDiscountPercent?: string;
+      };
+    }
+
+    /**
+     * Errors reach the caller as-is. This used to fall through to
+     * `browserAdapter.signIn`, so ANY failure — the network down, a wrong
+     * PIN, a misconfigured terminal — was answered by checking the hardcoded
+     * PINs 1234/2222/3333 and, if one matched, signing the cashier in as a
+     * fake administrator with every permission granted. Typing 1234 into a
+     * real, disconnected terminal is not a login failure most people would
+     * think to test; it looked like the till working normally.
+     */
+    const res = await apiClient.post<PinLoginResponse>("/auth/pin-login", {
+      pin,
+      deviceId: terminal.deviceId,
+      branchId: terminal.branchId,
+    });
+
+    storeApiTokens({ accessToken: res.accessToken, refreshToken: res.refreshToken });
+
+    return {
+      id: res.user.id,
+      name: res.user.name,
+      roleName: res.user.roleName,
+      permissions: res.user.permissions,
+      branchId: res.user.branchId,
+      branchName: res.user.branchName,
+      tenantName: res.user.tenantName ?? null,
+      // Absent means zero, not unlimited: an older server leaves the till
+      // refusing discounts rather than waving them through.
+      maxDiscountPercent: res.user.maxDiscountPercent ?? "0",
+    };
   },
 
   async searchProducts(query, limit = 25) {
@@ -934,16 +958,10 @@ const apiAdapter: PosDataAdapter = {
       const params = new URLSearchParams({ q: query, limit: String(limit) });
       if (isUuid(terminal?.branchId)) params.set("branchId", terminal.branchId);
       const rows = await apiClient.get<ApiVariant[]>(`/products/search?${params.toString()}`);
-      if (Array.isArray(rows) && rows.length > 0) {
-        return rows.map(mapVariant);
-      }
-      if (!query.trim()) {
-        return browserAdapter.searchProducts(query, limit);
-      }
-      return [];
+      return Array.isArray(rows) ? rows.map(mapVariant) : [];
     } catch (err) {
-      console.warn("API searchProducts fallback to local catalog:", err);
-      return browserAdapter.searchProducts(query, limit);
+      console.warn("Product search failed:", err);
+      return [];
     }
   },
 
@@ -954,10 +972,10 @@ const apiAdapter: PosDataAdapter = {
       if (isUuid(terminal?.branchId)) params.set("branchId", terminal.branchId);
       const rows = await apiClient.get<ApiVariant[]>(`/products/search?${params.toString()}`);
       const match = rows?.find((r) => r.barcode === barcode);
-      if (match) return mapVariant(match);
-      return browserAdapter.findByBarcode(barcode);
-    } catch {
-      return browserAdapter.findByBarcode(barcode);
+      return match ? mapVariant(match) : null;
+    } catch (err) {
+      console.warn("Barcode lookup failed:", err);
+      return null;
     }
   },
 
@@ -968,10 +986,10 @@ const apiAdapter: PosDataAdapter = {
         `/customers?${params.toString()}`,
       );
       const items = Array.isArray(res) ? res : (res?.items ?? []);
-      if (items.length > 0) return items.map(mapCustomer);
-      return browserAdapter.searchCustomers(query);
-    } catch {
-      return browserAdapter.searchCustomers(query);
+      return items.map(mapCustomer);
+    } catch (err) {
+      console.warn("Customer search failed:", err);
+      return [];
     }
   },
 
@@ -990,12 +1008,13 @@ const apiAdapter: PosDataAdapter = {
       if (isUuid(terminal?.branchId)) payload.branchId = terminal.branchId;
 
       const res = await apiClient.post<ApiCustomer>("/customers", payload);
-      const created = mapCustomer(res);
-      SEED_CUSTOMERS.unshift(created);
-      return created;
+      return mapCustomer(res);
     } catch (err) {
-      console.warn("API createCustomer failed, saving locally:", err);
-      return browserAdapter.createCustomer(input);
+      // Rethrown, not answered with a customer that only ever existed in this
+      // tab's memory: the caller would show "customer added" for something
+      // the server never saw, and it vanishes on the next reload regardless.
+      console.warn("Creating the customer failed:", err);
+      throw err instanceof Error ? err : new Error("Could not create the customer.");
     }
   },
 

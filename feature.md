@@ -120,28 +120,20 @@ RLS proof against a real PostgreSQL 18. Per-app change detection.
 
 ## 2. P0 blockers — fix before any feature work
 
-### B1 💀 A fresh POS install crashes on first launch
+### B1 ✅ A fresh POS install crashed on first launch — FIXED (commit 77969b4)
 
-`apps/pos/electron/db/sqlite.ts`: migration **v3** creates `variant_prices`
-already containing `is_default` (line 546), and migration **v4** then runs
-`ALTER TABLE variant_prices ADD COLUMN is_default` (line 580).
+Migration v4 is now a function step (`up`, not `sql`) that checks
+`table_info` before each statement, so it is correct whichever state a
+database arrives in rather than assuming v3 never created `is_default`.
+`ensureColumns()` — a prior defensive patch that ran AFTER `migrate()` and so
+never actually fired before the crash — is removed as fully redundant.
+`openDatabase()`'s call site now catches a genuine open failure and shows a
+native error dialog instead of quitting with nothing visible.
 
-Replayed against a clean database:
-
-```
-v1: OK   v2: OK   v3: OK   v4: FAIL -> duplicate column name: is_default
-```
-
-`migrate()` (line 733) has no error handling, and `openDatabase()` is unguarded
-at `main.ts:88` — so the app throws before the window opens. Every machine that
-already ran the app is fine; **every new terminal is bricked.**
-
-Cause: commit `5641bb7` edited migration v3 after it had shipped, which the
-file's own comment at line 313 forbids.
-
-Fix: make v4 conditional (or drop the redundant statement), keeping v3 as
-shipped. Add a test that replays every migration against an empty database — this
-class of bug is invisible to every other check in the repo.
+Covered by `apps/pos/electron/db/__tests__/migrations.test.ts`, run via
+`pnpm test:electron` (wired into `pnpm test`): it has to execute through
+Electron's own Node, because the `better-sqlite3` binary this repo builds is
+compiled for Electron's ABI and a plain `vitest run` cannot load it at all.
 
 ### B2 💀 Returns and refunds do not exist, and three documents claim they do
 
@@ -220,30 +212,46 @@ till and is rejected at push. Follow the pattern the discount ceiling now uses �
 carry the value in the session, gate the control, and let the server remain the
 authority.
 
-### B7 🟡 Silent fallback to fake seed data on a real terminal
+### B7 ✅ Silent fallback to fake seed data on a real terminal — FIXED
 
-`pos-data.ts:230-257`: in Electron mode, `searchProducts`, `findByBarcode` and
-`searchCustomers` fall back to `browserAdapter` **on error _or_ on an empty
-result**. A real terminal whose catalogue has not synced shows 10 fake demo SKUs
-and 2 fake customers, priced and sellable. `apiAdapter.signIn` similarly falls
-back to hardcoded PINs 1234/2222/3333 (`pos-data.ts:883`).
+`electronAdapter` and `apiAdapter` no longer call into `browserAdapter` for
+any reason. An empty result is now answered with an empty result — an unsynced
+terminal shows an empty catalogue, not ten fake demo SKUs — and a genuine error
+is answered with an empty result (searches) or a rethrow (sign-in, customer
+creation), never with fake data.
 
-Demo data must never be reachable from a production build.
+The worst instance was `apiAdapter.signIn`: ANY failure reaching the API — the
+network down, a wrong PIN, a misconfigured terminal — fell through to checking
+the hardcoded PINs 1234/2222/3333, and a match signed the cashier in as a fake
+administrator with every permission granted. That path is gone; a failed
+sign-in now surfaces the real reason. `SEED_STAFF`'s PINs are reachable only
+through `browserAdapter` directly, which only runs in `dataMode === "browser"`
+— no bridge and no `VITE_API_URL`, i.e. `pnpm dev:ui` and nothing a real
+terminal can reach.
+
+Found and fixed in the same pass: `Login.tsx`'s sign-in call never threaded
+`maxDiscountPercent` through to the store, so every PIN sign-in read as a 0%
+discount ceiling regardless of the cashier's real one — not a security gap
+(the server was always the actual authority), but it meant the discount
+ceiling built for **B6** asked every cashier for a manager's approval on every
+discount, not just the ones actually over their line.
 
 ---
 
-## 3. Documentation that currently misleads
+## 3. Documentation that currently misleads — CORRECTED
 
-Fix these in the same pass as the code, or the next reader repeats the mistake.
+All six below are fixed. Left here as the record of what was wrong and why it
+mattered, since the next reader who trusted one of these would have repeated
+its mistake.
 
 | File | Claim | Reality |
 |---|---|---|
-| `docs/ROADMAP.md:109` | `[x]` Returns and refunds | Do not exist (**B2**) |
-| `modules/README.md` | `sales` — "Sale creation, returns, voids" | Creation only |
-| `modules/README.md` | `pricing` ✅ done | No module, no controller, no routes |
-| `modules/README.md` | `transfers` ⬜ todo | Implemented and registered |
-| `modules/README.md` | — | `devices` implemented but absent from the table |
-| `serials.service.ts:23` | "`markReturned`/`restock` are written for when it does" | Neither method exists |
+| `docs/ROADMAP.md:109` | `[x]` Returns and refunds | Do not exist (**B2**) — now `[ ]`, with a pointer to B2 |
+| `modules/README.md` | `sales` — "Sale creation, returns, voids" | Creation only — now says so, with a pointer to B2 |
+| `modules/README.md` | `pricing` ✅ done | No module, no controller, no routes — now 🟡 partial, describing exactly what exists (`PriceResolverService`, duplicated three times) and what does not |
+| `modules/README.md` | `transfers` ⬜ todo | Implemented and registered — now ✅ done |
+| `modules/README.md` | — | `devices` implemented but absent from the table — now listed |
+| `serials.service.ts:23` | "`markReturned`/`restock` are written for when it does" | Neither method exists — comment now says so, and says where to build them (alongside the return service, same transaction) |
 | `docs/PATTERNS.md` | — | Now has an **Authorisation** section covering all four checks (permission, branch scope, ABAC ceiling, override grant). Read it before touching a guard. |
 
 ---
@@ -367,10 +375,10 @@ later step to avoid an earlier one.
 
 | # | Work | Accept when |
 |---|---|---|
-| 0.1 | Fix **B1** fresh-install crash | A test replays every POS migration against an empty database and passes; a new terminal boots |
+| 0.1 | ~~Fix **B1** fresh-install crash~~ **DONE** (77969b4) | ~~A test replays every POS migration against an empty database and passes; a new terminal boots~~ — done |
 | 0.2 | ~~Fix **B3** manager-override session hijack~~ **DONE** (194b33d) | ~~Override verifies a PIN without replacing the terminal session; a sale after an override is still attributed to the cashier~~ — done, and the approval now travels with the document so it survives an offline push |
-| 0.3 | Remove **B7** demo-data fallbacks from Electron and API modes | An unsynced terminal shows an empty catalogue, not fake SKUs; seed PINs are unreachable outside browser dev mode |
-| 0.4 | Correct the four false claims in §3 | `ROADMAP.md` and `modules/README.md` match the code |
+| 0.3 | ~~Remove **B7** demo-data fallbacks from Electron and API modes~~ **DONE** | ~~An unsynced terminal shows an empty catalogue, not fake SKUs; seed PINs are unreachable outside browser dev mode~~ — done |
+| 0.4 | ~~Correct the four false claims in §3~~ **DONE** | ~~ROADMAP.md and modules/README.md match the code~~ — done |
 | 0.5 | ~~Add route protection to the admin~~ **DONE** (194b33d) | ~~Signed-out access to any page redirects to `/login`~~ — done, plus per-route permissions, a filtered sidebar, and refresh-on-401 |
 
 ### Stage 1 — Make the offline promise true

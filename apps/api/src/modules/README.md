@@ -29,17 +29,18 @@ Copying its shape is what keeps twenty modules looking like one codebase.
 | `brands` | 1 | ✅ done | Brand CRUD |
 | `units` | 1 | ✅ done | Units and packaging conversions |
 | `products` | 1 | ✅ done | CRUD, full-text + trigram search, barcode lookup, images |
-| `pricing` | 1 | ✅ done | Price lists, customer prices, floor enforcement, history |
+| `pricing` | 1 | 🟡 partial | `PriceResolverService` resolves the ladder and enforces the floor, but has no `@Module`, no controller and no routes — it is duplicated as a provider in three other modules. `price:read`/`price:write` are attached to zero routes: a price is set once, at product creation, and never through a CRUD API. See feature.md Stage 5.1. |
 | `customers` | 1 | ✅ done | CRUD, credit settlement, loyalty ledger |
 | `inventory` | 2 | ✅ done | Per-branch stock, the append-only ledger, adjustments |
 | `serials` | 2 | ✅ done | Check in at receipt, assign at sale, warranty lookup |
 | `stock-take` | 2 | ✅ done | Count sheet → count → submit → approve, posts variances |
 | `suppliers` | 2 | ✅ done | Supplier CRUD, outstanding balance |
 | `purchases` | 2 | ✅ done | Purchase orders, goods receipts, landed cost |
-| `transfers` | 2 | ⬜ todo | Inter-branch request → approve → ship → receive |
+| `transfers` | 2 | ✅ done | Inter-branch request → approve → ship → receive, implemented and registered |
+| `devices` | 3 | ✅ done | Terminal registration, activation, `device:manage` |
 | `sync` | 3 | ✅ done | POS push/pull, idempotency, per-entity checkpoints |
 | `cash-register` | 3 | ✅ done | Drawer sessions, movements, close-out variance |
-| `sales` | 3 | ✅ done | Sale creation, returns, voids |
+| `sales` | 3 | 🟡 partial | Sale creation only — 3 routes, 3 methods. `sale:void`/`sale:return` exist and are attached to zero routes; no return, void or refund of any kind exists yet. See feature.md B2. |
 | `held-carts` | 3 | ✅ done | Park a cart, restore it, discard it |
 | `day-close` | 3 | ✅ done | Per-branch daily reconciliation, frozen at close |
 | `expenses` | 3 | ✅ done | Out-of-pocket spending, cash vs non-cash |

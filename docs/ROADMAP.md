@@ -106,7 +106,7 @@ checks pass.
 - [x] Cash register — open, movements, close with variance
 - [ ] Receipt rendering: thermal 58mm, thermal 80mm (ESC/POS), A4 tax invoice
 - [ ] Cash drawer kick, with reason logged
-- [x] Returns and refunds against an original sale
+- [ ] Returns and refunds against an original sale — UI exists (`Returns.tsx`), writes nothing; see feature.md B2
 - [x] **Sync engine** — push outbox (idempotent on `clientId`), pull by checkpoint, tombstones
 - [x] Offline stock, decremented locally before any sync, released once acknowledged
 - [x] Held carts — park, list, restore, discard

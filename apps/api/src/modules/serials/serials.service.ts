@@ -22,8 +22,10 @@ type Transaction = Parameters<Parameters<TenantDatabase["run"]>[0]>[0];
  *
  * Lifecycle: `available` -> `sold` -> `returned` -> `available`; any state ->
  * `damaged`, which is terminal. The `returned` leg belongs to a returns flow
- * that does not exist yet in this codebase — `markReturned`/`restock` are
- * written for when it does, but nothing calls them today.
+ * that does not exist yet in this codebase (feature.md B2) — neither
+ * `markReturned` nor `restock` exists here either. Write both alongside the
+ * return service, not before it: a serial can only be marked returned as
+ * part of the same transaction that records the return itself.
  */
 @Injectable()
 export class SerialsService {

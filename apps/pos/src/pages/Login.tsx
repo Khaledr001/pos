@@ -44,6 +44,11 @@ export function Login() {
         name: cashier.name,
         roleName: cashier.roleName,
         permissions: cashier.permissions,
+        // Without this every PIN sign-in read as a 0% ceiling regardless of
+        // the cashier's real one, since the store falls back to "0" when it
+        // is absent — a discount ceiling of 0% asks for a manager on every
+        // single discount, not just the ones that are actually over the line.
+        maxDiscountPercent: cashier.maxDiscountPercent,
       });
 
       // The server decides which branch this terminal sells against — a PIN
