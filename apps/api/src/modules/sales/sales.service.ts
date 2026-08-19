@@ -122,6 +122,24 @@ export class SalesService {
         );
       const variantBy = new Map(variants.map((v) => [v.id, v]));
 
+      /**
+       * Packagings named on this sale — a carton, a box — never the base unit,
+       * which needs no row here at all. Fetched for the variants actually
+       * involved, keyed by (variantId, unitId) since the same packaging id
+       * (e.g. "carton") means a different conversion factor per product.
+       */
+      const packagingVariantIds = [
+        ...new Set(dto.lines.filter((l) => l.unitId).map((l) => l.variantId)),
+      ];
+      const packagings =
+        packagingVariantIds.length > 0
+          ? await tx
+              .select()
+              .from(schema.variantUnits)
+              .where(inArray(schema.variantUnits.variantId, packagingVariantIds))
+          : [];
+      const packagingBy = new Map(packagings.map((p) => [`${p.variantId}:${p.unitId}`, p]));
+
       // --- validate every line before writing anything --------------------
       const canOverrideFloor = hasPermission(effectivePermissions, "price:override_floor");
       const canOverridePrice = hasPermission(effectivePermissions, "price:override");
@@ -159,8 +177,49 @@ export class SalesService {
         }
 
         const price = priceBy.get(line.variantId);
+
+        /**
+         * The packaging this line was sold in — a carton, a box — resolved
+         * to what it is worth in base-unit terms, so the rest of this
+         * function (the undercut check, the floor, `calculateDocument`) can
+         * stay written in terms of ONE unit price per line, exactly as it
+         * was before packagings existed.
+         *
+         * `priceOverride` wins outright when the merchant set a flat pack
+         * price; otherwise it is the base price scaled by the conversion
+         * factor, and the floor scales the same way — a product is not
+         * allowed to be sold below cost by the box any more than by the
+         * piece.
+         */
+        const packaging = line.unitId
+          ? packagingBy.get(`${line.variantId}:${line.unitId}`)
+          : null;
+        if (line.unitId && (!packaging || !packaging.isSellable)) {
+          throw new AppError(
+            ERROR_CODES.VALIDATION_FAILED,
+            `${variant.productName} is not sold in that unit.`,
+            { line: variant.sku, unitId: line.unitId },
+          );
+        }
+        const conversionFactor = packaging?.conversionFactor ?? "1";
+
+        const listedUnitPrice = packaging?.priceOverride
+          ? packaging.priceOverride
+          : price?.unitPrice
+            ? Money.toDecimalString(
+                Money.multiplyByQuantity(Money.toMinor(price.unitPrice), conversionFactor),
+                4,
+              )
+            : null;
+        const listedFloor = price?.minSellingPrice
+          ? Money.toDecimalString(
+              Money.multiplyByQuantity(Money.toMinor(price.minSellingPrice), conversionFactor),
+              4,
+            )
+          : null;
+
         // An explicit unit price is an override; otherwise the ladder decides.
-        const unitPrice = line.unitPrice ?? price?.unitPrice;
+        const unitPrice = line.unitPrice ?? listedUnitPrice;
         if (!unitPrice) {
           throw new AppError(
             ERROR_CODES.NO_PRICE_FOR_PRODUCT,
@@ -190,7 +249,7 @@ export class SalesService {
          * a price for it IS the override, whichever direction it goes.
          */
         if (line.unitPrice !== undefined && !canOverridePrice) {
-          const listed = price?.unitPrice;
+          const listed = listedUnitPrice;
           const undercut =
             !listed || Money.toMinor(line.unitPrice) < Money.toMinor(listed);
 
@@ -227,7 +286,7 @@ export class SalesService {
         const floor = this.prices.checkFloor({
           unitPrice,
           discountPercent,
-          minSellingPrice: price?.minSellingPrice ?? null,
+          minSellingPrice: listedFloor,
           canOverrideFloor,
         });
         if (!floor.allowed) {
@@ -271,6 +330,7 @@ export class SalesService {
           taxPercent: variant.taxRate ?? String(settings.tax.defaultRate),
           costPrice: price?.purchasePrice ?? null,
           floorPriceOverriddenBy,
+          conversionFactor,
         };
       });
 
@@ -496,6 +556,11 @@ export class SalesService {
             productSku: line.variant.sku,
             quantity: String(line.quantity),
             unitPrice: line.unitPrice,
+            // Snapshotted for the receipt to say "1 carton" rather than the
+            // 20 pieces that actually left the shelf — see the stock
+            // deduction below, which is the one place that math happens.
+            ...(line.unitId ? { unitId: line.unitId } : {}),
+            unitConversionFactor: line.conversionFactor,
             discountPercent: line.discountPercent,
             discountAmount: Money.toDecimalString(computed.discount, 4),
             taxPercent: line.taxPercent,
@@ -516,11 +581,16 @@ export class SalesService {
 
         // Services and labour have no stock to move.
         if (line.variant.isStockTracked) {
+          // Stock always moves in base units — sell 1 carton of 20 and 20
+          // pieces leave the shelf, whatever the receipt says was sold.
           await this.stock.deductStock({
             tx,
             variantId: line.variantId,
             branchId: dto.branchId,
-            quantity: String(line.quantity),
+            quantity: Money.toDecimalString(
+              Money.multiplyByQuantity(Money.toMinor(String(line.quantity)), line.conversionFactor),
+              4,
+            ),
             referenceType: "sale",
             referenceId: sale.id,
             ...(line.costPrice ? { unitCost: line.costPrice } : {}),
@@ -705,6 +775,7 @@ export class SalesService {
           id: schema.saleItems.id,
           variantId: schema.saleItems.variantId,
           quantity: schema.saleItems.quantity,
+          unitConversionFactor: schema.saleItems.unitConversionFactor,
           isStockTracked: schema.products.isStockTracked,
         })
         .from(schema.saleItems)
@@ -714,11 +785,16 @@ export class SalesService {
 
       for (const item of items) {
         if (!item.isStockTracked) continue;
+        // The line may have been sold by the carton — stock moves in base
+        // units regardless, the same conversion create() applied going out.
         await this.stock.addStock({
           tx,
           variantId: item.variantId,
           branchId: sale.branchId,
-          quantity: item.quantity,
+          quantity: Money.toDecimalString(
+            Money.multiplyByQuantity(Money.toMinor(item.quantity), item.unitConversionFactor),
+            4,
+          ),
           referenceType: "sale",
           referenceId: sale.id,
           ...(user.deviceId ? { deviceId: user.deviceId } : {}),
@@ -828,6 +904,8 @@ export class SalesService {
           taxPercent: schema.saleItems.taxPercent,
           returnedQuantity: schema.saleItems.returnedQuantity,
           costPrice: schema.saleItems.costPrice,
+          unitId: schema.saleItems.unitId,
+          unitConversionFactor: schema.saleItems.unitConversionFactor,
           isStockTracked: schema.products.isStockTracked,
         })
         .from(schema.saleItems)
@@ -938,6 +1016,10 @@ export class SalesService {
           productSku: line.original.productSku,
           quantity: String(-line.quantity),
           unitPrice: line.original.unitPrice,
+          // Same packaging the original line was sold in — a return of "1
+          // carton" must read back as one, not silently become 1 piece.
+          ...(line.original.unitId ? { unitId: line.original.unitId } : {}),
+          unitConversionFactor: line.original.unitConversionFactor,
           discountPercent: line.original.discountPercent,
           discountAmount: Money.toDecimalString(Money.negate(computed.discount), 4),
           taxPercent: line.original.taxPercent,
@@ -957,11 +1039,18 @@ export class SalesService {
           .where(eq(schema.saleItems.id, line.saleItemId));
 
         if (line.disposition === "restock" && line.original.isStockTracked) {
+          // Base units, same conversion the original sale deducted by.
           await this.stock.addStock({
             tx,
             variantId: line.original.variantId,
             branchId: original!.branchId,
-            quantity: String(line.quantity),
+            quantity: Money.toDecimalString(
+              Money.multiplyByQuantity(
+                Money.toMinor(String(line.quantity)),
+                line.original.unitConversionFactor,
+              ),
+              4,
+            ),
             referenceType: "sale",
             referenceId: returnSale.id,
             ...(line.original.costPrice ? { unitCost: line.original.costPrice } : {}),

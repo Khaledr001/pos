@@ -3,7 +3,14 @@ import { z } from "zod";
 
 const SaleLineSchema = z.object({
   variantId: z.string().uuid(),
+  /**
+   * In the SOLD unit — a carton, a box, the base unit if omitted. Never base
+   * units: stock is what always moves in those, and the conversion happens
+   * server-side so a receipt can still say "1 carton" instead of "20 pieces".
+   */
   quantity: z.coerce.number().positive(),
+  /** A packaging from that variant's `variant_units`. Omit to sell the base unit. */
+  unitId: z.string().uuid().optional(),
   /** Omit to take the resolved price. Present = an override, floor-checked. */
   unitPrice: z.string().optional(),
   discountPercent: z.coerce.number().min(0).max(100).optional(),
