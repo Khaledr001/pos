@@ -9,9 +9,11 @@ import { StockService } from "../inventory/stock.service.js";
 import { PriceResolverService } from "../pricing/price-resolver.service.js";
 import type {
   CreateProductDto,
+  CreateVariantUnitDto,
   ListProductsDto,
   SearchVariantsDto,
   UpdateProductDto,
+  UpdateVariantUnitDto,
 } from "./dto.js";
 
 /**
@@ -380,6 +382,115 @@ export class ProductsService {
         .update(schema.products)
         .set({ deletedAt: now, isActive: false })
         .where(eq(schema.products.id, id));
+    });
+  }
+
+  /**
+   * Packagings offered for one variant — a box, a carton.
+   *
+   * Pure configuration, not a document: a sale snapshots its own
+   * `unitConversionFactor` at the moment it happens
+   * (`sale_items.unitConversionFactor`), so editing or removing one of these
+   * rows later never rewrites a past invoice. That is also why this table
+   * carries no `deletedAt` and these are real deletes, not soft ones.
+   */
+  async listVariantUnits(variantId: string): Promise<unknown[]> {
+    return this.db.run(async (tx) =>
+      tx
+        .select({
+          id: schema.variantUnits.id,
+          unitId: schema.variantUnits.unitId,
+          unitName: schema.units.name,
+          unitAbbr: schema.units.abbreviation,
+          conversionFactor: schema.variantUnits.conversionFactor,
+          barcode: schema.variantUnits.barcode,
+          priceOverride: schema.variantUnits.priceOverride,
+          isSellable: schema.variantUnits.isSellable,
+        })
+        .from(schema.variantUnits)
+        .innerJoin(schema.units, eq(schema.variantUnits.unitId, schema.units.id))
+        .where(eq(schema.variantUnits.variantId, variantId))
+        .orderBy(schema.variantUnits.conversionFactor),
+    );
+  }
+
+  async createVariantUnit(
+    variantId: string,
+    dto: CreateVariantUnitDto,
+  ): Promise<unknown> {
+    const tenantId = RequestContext.requireTenantId();
+
+    return this.db.run(async (tx) => {
+      const variant = await tx.query.productVariants.findFirst({
+        where: (t, { eq: e }) => e(t.id, variantId),
+        columns: { id: true },
+      });
+      if (!variant) {
+        throw new AppError(ERROR_CODES.PRODUCT_NOT_FOUND, `Variant ${variantId} not found`);
+      }
+
+      const existing = await tx.query.variantUnits.findFirst({
+        where: (t, { and: a, eq: e }) => a(e(t.variantId, variantId), e(t.unitId, dto.unitId)),
+        columns: { id: true },
+      });
+      if (existing) {
+        throw new AppError(
+          ERROR_CODES.VALIDATION_FAILED,
+          "This variant already has a packaging for that unit.",
+        );
+      }
+
+      const [row] = await tx
+        .insert(schema.variantUnits)
+        .values({
+          tenantId,
+          variantId,
+          unitId: dto.unitId,
+          conversionFactor: String(dto.conversionFactor),
+          ...(dto.barcode ? { barcode: dto.barcode } : {}),
+          ...(dto.priceOverride !== undefined
+            ? { priceOverride: String(dto.priceOverride) }
+            : {}),
+          isSellable: dto.isSellable,
+        })
+        .returning();
+
+      return row;
+    });
+  }
+
+  async updateVariantUnit(id: string, dto: UpdateVariantUnitDto): Promise<unknown> {
+    return this.db.run(async (tx) => {
+      const existing = await tx.query.variantUnits.findFirst({
+        where: (t, { eq: e }) => e(t.id, id),
+        columns: { id: true },
+      });
+      if (!existing) {
+        throw new AppError(ERROR_CODES.NOT_FOUND, `Packaging ${id} not found`);
+      }
+
+      const [row] = await tx
+        .update(schema.variantUnits)
+        .set({
+          ...(dto.conversionFactor !== undefined
+            ? { conversionFactor: String(dto.conversionFactor) }
+            : {}),
+          ...(dto.barcode !== undefined ? { barcode: dto.barcode } : {}),
+          ...(dto.priceOverride !== undefined
+            ? { priceOverride: dto.priceOverride === null ? null : String(dto.priceOverride) }
+            : {}),
+          ...(dto.isSellable !== undefined ? { isSellable: dto.isSellable } : {}),
+        })
+        .where(eq(schema.variantUnits.id, id))
+        .returning();
+
+      return row;
+    });
+  }
+
+  async deleteVariantUnit(id: string): Promise<void> {
+    await this.db.run(async (tx) => {
+      await tx.delete(schema.variantUnits).where(eq(schema.variantUnits.id, id));
     });
   }
 

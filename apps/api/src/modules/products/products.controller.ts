@@ -7,8 +7,10 @@ import { Audited, RequirePermissions } from "../../common/decorators/index.js";
 import { zodPipe } from "../../common/pipes/zod-validation.pipe.js";
 import { ProductsService } from "./products.service.js";
 import {
-  CreateProductSchema, ListProductsSchema, SearchVariantsSchema, UpdateProductSchema,
-  type CreateProductDto, type ListProductsDto, type SearchVariantsDto, type UpdateProductDto,
+  CreateProductSchema, CreateVariantUnitSchema, ListProductsSchema, SearchVariantsSchema,
+  UpdateProductSchema, UpdateVariantUnitSchema,
+  type CreateProductDto, type CreateVariantUnitDto, type ListProductsDto,
+  type SearchVariantsDto, type UpdateProductDto, type UpdateVariantUnitDto,
 } from "./dto.js";
 
 @ApiTags("products")
@@ -71,5 +73,48 @@ export class ProductsController {
   @ApiOperation({ summary: "Soft-delete, or deactivate if it has sales history" })
   remove(@Param("id", ParseUUIDPipe) id: string): Promise<void> {
     return this.products.remove(id);
+  }
+
+  /**
+   * Packagings — a box, a carton. `variants/:variantId/units` and
+   * `variant-units/:id` are distinct literal segments, so neither collides
+   * with `:id` above regardless of registration order.
+   */
+  @Get("variants/:variantId/units")
+  @RequirePermissions("product:read")
+  @ApiOperation({ summary: "Packagings offered for one variant" })
+  listVariantUnits(@Param("variantId", ParseUUIDPipe) variantId: string) {
+    return this.products.listVariantUnits(variantId);
+  }
+
+  @Post("variants/:variantId/units")
+  @RequirePermissions("product:write")
+  @Audited("variant_units", "create")
+  @ApiOperation({ summary: "Add a packaging to a variant" })
+  createVariantUnit(
+    @Param("variantId", ParseUUIDPipe) variantId: string,
+    @Body(zodPipe(CreateVariantUnitSchema)) dto: CreateVariantUnitDto,
+  ) {
+    return this.products.createVariantUnit(variantId, dto);
+  }
+
+  @Patch("variant-units/:id")
+  @RequirePermissions("product:write")
+  @Audited("variant_units", "update")
+  @ApiOperation({ summary: "Update a packaging" })
+  updateVariantUnit(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body(zodPipe(UpdateVariantUnitSchema)) dto: UpdateVariantUnitDto,
+  ) {
+    return this.products.updateVariantUnit(id, dto);
+  }
+
+  @Delete("variant-units/:id")
+  @RequirePermissions("product:write")
+  @Audited("variant_units", "delete")
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: "Remove a packaging — pure configuration, a real delete" })
+  deleteVariantUnit(@Param("id", ParseUUIDPipe) id: string): Promise<void> {
+    return this.products.deleteVariantUnit(id);
   }
 }

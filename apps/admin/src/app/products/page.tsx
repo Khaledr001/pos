@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
-import { Package, Search, Plus, RefreshCw, X, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Package, Search, Plus, RefreshCw, X, AlertCircle, CheckCircle2, Boxes, Trash2 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
@@ -65,6 +65,19 @@ interface Unit {
   abbreviation?: string;
 }
 
+interface VariantUnit {
+  id: string;
+  unitId: string;
+  unitName: string;
+  unitAbbr: string;
+  /** Base units per pack, as a decimal string — "20" for a box of 20. */
+  conversionFactor: string;
+  barcode: string | null;
+  /** Flat price for the pack. null = base price x conversionFactor. */
+  priceOverride: string | null;
+  isSellable: boolean;
+}
+
 interface Category {
   id: string;
   name: string;
@@ -116,6 +129,9 @@ export default function ProductsPage() {
   const [fOpeningStock, setFOpeningStock] = useState("0");
   const [fBranchId, setFBranchId] = useState("");
   const [branches, setBranches] = useState<{ id: string; name: string; code: string }[]>([]);
+
+  // Packagings dialog
+  const [packagingProduct, setPackagingProduct] = useState<Product | null>(null);
 
   // ── Fetch products ──────────────────────────────────────────────────────
 
@@ -299,6 +315,7 @@ export default function ProductsPage() {
                   <th className="px-4 py-3.5 text-right font-medium">Price (AED)</th>
                   <th className="px-4 py-3.5 text-center font-medium">Variants</th>
                   <th className="px-4 py-3.5 text-center font-medium">Status</th>
+                  <th className="px-4 py-3.5 text-center font-medium">Packagings</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -340,6 +357,16 @@ export default function ProductsPage() {
                         <Badge variant={product.isActive ? "success" : "secondary"}>
                           {product.isActive ? "Active" : "Inactive"}
                         </Badge>
+                      </td>
+                      <td className="px-4 py-3.5 text-center">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setPackagingProduct(product)}
+                        >
+                          <Boxes className="h-3.5 w-3.5" />
+                          Manage
+                        </Button>
                       </td>
                     </tr>
                   );
@@ -483,6 +510,310 @@ export default function ProductsPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <PackagingsDialog
+        product={packagingProduct}
+        units={units}
+        accessToken={tokens?.accessToken}
+        onClose={() => setPackagingProduct(null)}
+      />
     </div>
+  );
+}
+
+// ── Packagings ───────────────────────────────────────────────────────────────
+
+/**
+ * Define how a variant is sold in bulk — 1 carton = 20 pieces — without SQL.
+ *
+ * Fetches the product's real variants fresh on open rather than trusting
+ * whatever the list row carries, since the list response never eagerly
+ * includes the full variant array. Packagings are pure configuration, not a
+ * document: a sale snapshots its own conversion factor at the moment it
+ * happens, so editing or removing one here never rewrites a past invoice —
+ * which is also why removing one is a real delete, not a deactivation.
+ */
+function PackagingsDialog({
+  product,
+  units,
+  accessToken,
+  onClose,
+}: {
+  product: Product | null;
+  units: Unit[];
+  accessToken?: string;
+  onClose: () => void;
+}) {
+  const [variants, setVariants] = useState<ProductVariant[]>([]);
+  const [variantId, setVariantId] = useState("");
+  const [packagings, setPackagings] = useState<VariantUnit[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const [newUnitId, setNewUnitId] = useState("");
+  const [newFactor, setNewFactor] = useState("");
+  const [newPrice, setNewPrice] = useState("");
+  const [adding, setAdding] = useState(false);
+
+  const fetchPackagings = useCallback(
+    async (forVariantId: string) => {
+      if (!forVariantId) return;
+      setLoading(true);
+      setError(null);
+      try {
+        const rows = await api.get<VariantUnit[]>(
+          `/products/variants/${forVariantId}/units`,
+          { accessToken },
+        );
+        setPackagings(rows ?? []);
+      } catch (err: any) {
+        setError(err?.message || "Failed to load packagings.");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [accessToken],
+  );
+
+  useEffect(() => {
+    if (!product || !accessToken) return;
+    setError(null);
+    setNewUnitId("");
+    setNewFactor("");
+    setNewPrice("");
+
+    api
+      .get<Product>(`/products/${product.id}`, { accessToken })
+      .then((full) => {
+        const vs = full.variants ?? [];
+        setVariants(vs);
+        const first = vs[0]?.id ?? "";
+        setVariantId(first);
+        if (first) void fetchPackagings(first);
+      })
+      .catch((err: any) => setError(err?.message || "Failed to load the product's variants."));
+    // Re-runs only when a different product is opened — switching the variant
+    // dropdown re-fetches packagings on its own, below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product, accessToken]);
+
+  async function addPackaging(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newUnitId || !newFactor) {
+      setError("Choose a unit and a conversion factor.");
+      return;
+    }
+    setAdding(true);
+    setError(null);
+    try {
+      await api.post(
+        `/products/variants/${variantId}/units`,
+        {
+          unitId: newUnitId,
+          conversionFactor: parseFloat(newFactor),
+          ...(newPrice ? { priceOverride: parseFloat(newPrice) } : {}),
+        },
+        { accessToken },
+      );
+      setNewUnitId("");
+      setNewFactor("");
+      setNewPrice("");
+      await fetchPackagings(variantId);
+    } catch (err: any) {
+      setError(err?.message || "Failed to add the packaging.");
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  async function toggleSellable(row: VariantUnit) {
+    setError(null);
+    try {
+      await api.patch(
+        `/products/variant-units/${row.id}`,
+        { isSellable: !row.isSellable },
+        { accessToken },
+      );
+      await fetchPackagings(variantId);
+    } catch (err: any) {
+      setError(err?.message || "Failed to update the packaging.");
+    }
+  }
+
+  async function removePackaging(row: VariantUnit) {
+    setError(null);
+    try {
+      await api.delete(`/products/variant-units/${row.id}`, { accessToken });
+      await fetchPackagings(variantId);
+    } catch (err: any) {
+      setError(err?.message || "Failed to remove the packaging.");
+    }
+  }
+
+  const availableUnits = units.filter((u) => !packagings.some((p) => p.unitId === u.id));
+
+  return (
+    <Dialog open={product !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-xl">
+        <DialogHeader>
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 text-white">
+              <Boxes className="h-4 w-4" />
+            </div>
+            <div>
+              <DialogTitle>Packagings — {product?.name}</DialogTitle>
+              <DialogDescription>
+                Sell the same variant by the piece, the box, or the carton.
+              </DialogDescription>
+            </div>
+          </div>
+        </DialogHeader>
+
+        {error && (
+          <div className="flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+            <AlertCircle className="h-4 w-4 shrink-0" /><span>{error}</span>
+          </div>
+        )}
+
+        {variants.length > 1 && (
+          <div>
+            <label className="block text-xs font-medium text-foreground mb-1.5">Variant</label>
+            <select
+              value={variantId}
+              onChange={(e) => {
+                setVariantId(e.target.value);
+                void fetchPackagings(e.target.value);
+              }}
+              className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {variants.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.variantName} ({v.sku})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {loading ? (
+          <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div>
+        ) : (
+          <div className="rounded-xl border border-border">
+            {packagings.length === 0 ? (
+              <p className="px-4 py-6 text-center text-xs text-muted-foreground">
+                Only the base unit is sold. Add a packaging below.
+              </p>
+            ) : (
+              <table className="w-full text-left text-xs">
+                <thead className="border-b border-border bg-secondary/50 text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">Unit</th>
+                    <th className="px-3 py-2 text-right font-medium">= base units</th>
+                    <th className="px-3 py-2 text-right font-medium">Price</th>
+                    <th className="px-3 py-2 text-center font-medium">Sellable</th>
+                    <th className="px-3 py-2" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {packagings.map((row) => (
+                    <tr key={row.id}>
+                      <td className="px-3 py-2 font-medium">{row.unitName}</td>
+                      <td className="px-3 py-2 text-right font-mono">{row.conversionFactor}</td>
+                      <td className="px-3 py-2 text-right font-mono">
+                        {row.priceOverride ?? "computed"}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        <button
+                          type="button"
+                          onClick={() => void toggleSellable(row)}
+                          className="cursor-pointer"
+                        >
+                          <Badge variant={row.isSellable ? "success" : "secondary"}>
+                            {row.isSellable ? "Yes" : "No"}
+                          </Badge>
+                        </button>
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <button
+                          type="button"
+                          onClick={() => void removePackaging(row)}
+                          aria-label={`Remove ${row.unitName} packaging`}
+                          className="cursor-pointer text-muted-foreground hover:text-destructive"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+
+        {availableUnits.length > 0 && (
+          <form onSubmit={addPackaging} className="rounded-xl border border-border p-4 space-y-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Add a packaging
+            </p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div>
+                <label className="block text-xs font-medium text-foreground mb-1.5">Unit *</label>
+                <select
+                  value={newUnitId}
+                  onChange={(e) => setNewUnitId(e.target.value)}
+                  className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="">— Select —</option>
+                  {availableUnits.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-foreground mb-1.5">
+                  = base units *
+                </label>
+                <Input
+                  type="number"
+                  min="0.0001"
+                  step="0.0001"
+                  value={newFactor}
+                  onChange={(e) => setNewFactor(e.target.value)}
+                  placeholder="e.g. 20"
+                  className="font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-foreground mb-1.5">
+                  Flat price (optional)
+                </label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={newPrice}
+                  onChange={(e) => setNewPrice(e.target.value)}
+                  placeholder="base x factor"
+                  className="font-mono"
+                />
+              </div>
+            </div>
+            <Button type="submit" size="sm" disabled={adding}>
+              <Plus className="h-3.5 w-3.5" />
+              {adding ? "Adding…" : "Add packaging"}
+            </Button>
+          </form>
+        )}
+
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onClose}>
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

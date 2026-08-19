@@ -99,3 +99,28 @@ export const SearchVariantsSchema = z.object({
   customerId: z.string().uuid().optional(),
 });
 export type SearchVariantsDto = z.infer<typeof SearchVariantsSchema>;
+
+/**
+ * A packaging a variant can be sold in — a box, a carton (Stage 3.4). Pure
+ * live configuration, not a document: the SALE snapshots its own
+ * conversionFactor at the moment of sale (sale_items.unitConversionFactor),
+ * so editing or removing a packaging here never rewrites history.
+ */
+export const CreateVariantUnitSchema = z.object({
+  unitId: z.string().uuid(),
+  /** Base units per pack. Box of 20 -> 20. */
+  conversionFactor: z.coerce.number().positive(),
+  barcode: z.string().trim().max(64).optional(),
+  /** Flat price for the pack. Omit to use base price x conversionFactor. */
+  priceOverride: z.coerce.number().positive().optional(),
+  isSellable: z.boolean().default(true),
+});
+export type CreateVariantUnitDto = z.infer<typeof CreateVariantUnitSchema>;
+
+export const UpdateVariantUnitSchema = CreateVariantUnitSchema.omit({ unitId: true })
+  .partial()
+  .extend({
+    /** Explicit null clears an existing flat price back to the computed default. */
+    priceOverride: z.coerce.number().positive().nullable().optional(),
+  });
+export type UpdateVariantUnitDto = z.infer<typeof UpdateVariantUnitSchema>;
