@@ -374,6 +374,44 @@ export function recordCashMovement(
 export function commitSale(draft: SaleDraftInput): Record<string, unknown> {
   const db = getDatabase();
 
+  /**
+   * This terminal's own offline ceiling: the last-synced quantity, minus
+   * what THIS terminal has already sold offline. Not the full disjoint
+   * cross-terminal allocation the sync contract's `stockAllocation` describes
+   * — that needs a server-side division algorithm across a branch's
+   * terminals that does not exist yet. This catches the far more common
+   * case, a single till selling past what it actually has, which nothing
+   * refused before: `local_delta` only ever tracked the figure, it never
+   * blocked one from going negative.
+   *
+   * Skipped entirely when the tenant has opted into overselling offline
+   * (`sales.allowNegativeStock`, pulled on every sync) — a deliberate choice
+   * this must not quietly override.
+   */
+  if (getState("allow_negative_stock") !== "1") {
+    const available = db.prepare(
+      `SELECT
+         COALESCE(CAST(quantity AS REAL), 0)
+         - COALESCE(CAST(reserved_qty AS REAL), 0)
+         + COALESCE(CAST(local_delta AS REAL), 0) AS available
+       FROM inventory WHERE variant_id = ?`,
+    );
+
+    for (const line of draft.lines) {
+      const row = available.get(line.variantId) as { available: number } | undefined;
+      // No local inventory row at all reads as "nothing known" here, not
+      // "unlimited" — a variant that has never synced its stock figure
+      // should not be sellable past zero any more than one that has.
+      const stock = row?.available ?? 0;
+      if (Number(line.quantity) > stock) {
+        throw new Error(
+          `${line.productName} — only ${stock} left at this terminal. ` +
+            "Check with a manager before selling more offline.",
+        );
+      }
+    }
+  }
+
   // Decimal-string arithmetic — same rule as the account-payment balance
   // below. Two ordinary tenders like 15.99 + 3.98 do not misbehave, but
   // 19.99 - 15.99 alone already prints as 3.9999999999999982 in a plain JS

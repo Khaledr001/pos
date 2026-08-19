@@ -188,6 +188,7 @@ async function pullChanges(): Promise<void> {
       }>;
       checkpoint: string;
       hasMore: boolean;
+      allowNegativeStock: boolean;
     }>("/sync/pull", {
       deviceId: deviceId(),
       since: getState("checkpoint"),
@@ -195,6 +196,10 @@ async function pullChanges(): Promise<void> {
     });
 
     applyChanges(response.changes, response.checkpoint);
+    // Read by the local stock-ceiling check in repositories.ts before it
+    // refuses anything — a tenant that has deliberately opted into
+    // overselling offline must not find a till suddenly blocking it.
+    setState("allow_negative_stock", response.allowNegativeStock ? "1" : "0");
     emit({ lastPullAt: new Date().toISOString(), lastCheckpoint: response.checkpoint });
 
     if (!response.hasMore) return;

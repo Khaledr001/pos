@@ -978,6 +978,24 @@ function recordCashMovement(type, amount, reason) {
 }
 function commitSale(draft) {
   const db2 = getDatabase();
+  if (getState("allow_negative_stock") !== "1") {
+    const available = db2.prepare(
+      `SELECT
+         COALESCE(CAST(quantity AS REAL), 0)
+         - COALESCE(CAST(reserved_qty AS REAL), 0)
+         + COALESCE(CAST(local_delta AS REAL), 0) AS available
+       FROM inventory WHERE variant_id = ?`
+    );
+    for (const line of draft.lines) {
+      const row = available.get(line.variantId);
+      const stock = row?.available ?? 0;
+      if (Number(line.quantity) > stock) {
+        throw new Error(
+          `${line.productName} — only ${stock} left at this terminal. Check with a manager before selling more offline.`
+        );
+      }
+    }
+  }
   const paid = toDecimalString(
     draft.payments.reduce((sum, payment) => add(sum, toMinor(payment.amount)), 0n),
     4
@@ -3405,6 +3423,7 @@ async function pullChanges() {
       limit: PULL_PAGE_LIMIT
     });
     applyChanges(response.changes, response.checkpoint);
+    setState("allow_negative_stock", response.allowNegativeStock ? "1" : "0");
     emit({ lastPullAt: (/* @__PURE__ */ new Date()).toISOString(), lastCheckpoint: response.checkpoint });
     if (!response.hasMore) return;
   }

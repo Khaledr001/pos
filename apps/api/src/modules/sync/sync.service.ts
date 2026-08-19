@@ -493,6 +493,8 @@ export class SyncService {
       checkpoint: this.encodeCheckpoint(marks),
       hasMore,
       serverTime: new Date().toISOString(),
+      // Already resolved above for tax; reused rather than queried twice.
+      allowNegativeStock: settings.sales.allowNegativeStock,
     };
   }
 

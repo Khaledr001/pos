@@ -136,9 +136,22 @@ export function Sale({ cashSessionId }: { cashSessionId: string | null }) {
       overrideGrants: useCart.getState().overrideGrants,
     };
 
-    // Writes locally and returns. It does not wait for the network — the
-    // customer is standing here and the sale has already happened.
-    await posData.commitSale(draft);
+    /**
+     * Writes locally and returns. It does not wait for the network — the
+     * customer is standing here and the sale has already happened.
+     *
+     * It CAN now refuse, though: the local offline stock ceiling blocks a
+     * line that would sell past what this terminal actually has synced. The
+     * payment dialog stays open on a refusal rather than closing as if the
+     * sale went through — the cashier needs to see why and adjust the cart,
+     * not discover a missing sale at reconciliation time.
+     */
+    try {
+      await posData.commitSale(draft);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Could not complete the sale.");
+      return;
+    }
 
     setPaymentOpen(false);
     setCompleted({ change });

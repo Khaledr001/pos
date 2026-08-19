@@ -115,6 +115,13 @@ export interface SyncPullResponse {
   serverTime: string;
   /** Refreshed offline stock ceiling for this terminal. */
   stockAllocation?: OfflineStockAllocation;
+  /**
+   * Whether this tenant permits a cart to go negative on stock. Sent on every
+   * pull rather than as its own sync entity — it is one flag, not a table,
+   * and the terminal needs it before it can decide whether to enforce
+   * anything at all: if true, its own local ceiling must stay a no-op.
+   */
+  allowNegativeStock: boolean;
 }
 
 // -----------------------------------------------------------------------------
