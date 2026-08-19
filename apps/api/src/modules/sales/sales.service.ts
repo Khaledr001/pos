@@ -126,6 +126,19 @@ export class SalesService {
       const canOverrideFloor = hasPermission(effectivePermissions, "price:override_floor");
       const canOverridePrice = hasPermission(effectivePermissions, "price:override");
 
+      /**
+       * Who gets credited on a line that actually needed the floor lifted.
+       *
+       * Separate from `canOverrideFloor`: that flag is true whenever EITHER
+       * the cashier's own role carries `price:override_floor` OR a grant
+       * supplied it, and a cashier who already holds the permission outright
+       * is not being "authorised" by anyone — there is no approval to
+       * attribute. Only a grant-sourced override has an approver worth
+       * naming in `sale_items.floorPriceOverriddenBy`.
+       */
+      const cashierHasFloorOverride = hasPermission(user.permissions, "price:override_floor");
+      const floorOverrideApproval = approvals.find((a) => a.permission === "price:override_floor");
+
       // A manager approving a discount lends their own ceiling to this sale.
       // Granting `sale:discount` while leaving the cashier's 0% cap in place
       // would authorise precisely nothing.
@@ -225,6 +238,14 @@ export class SalesService {
           );
         }
 
+        // Genuinely below floor (not just permitted to be, e.g. a product
+        // with no floor set at all) AND it took a grant, not the cashier's
+        // own permission, to let it through.
+        const belowFloor =
+          floor.floor !== null && Money.toMinor(floor.effectivePrice) < Money.toMinor(floor.floor);
+        const floorPriceOverriddenBy =
+          belowFloor && !cashierHasFloorOverride ? (floorOverrideApproval?.sub ?? null) : null;
+
         /**
          * A serialised product is sold one identified unit at a time — there
          * is no such thing as half an imei, and no such thing as an anonymous
@@ -249,6 +270,7 @@ export class SalesService {
           discountPercent,
           taxPercent: variant.taxRate ?? String(settings.tax.defaultRate),
           costPrice: price?.purchasePrice ?? null,
+          floorPriceOverriddenBy,
         };
       });
 
@@ -483,6 +505,11 @@ export class SalesService {
             // Margin must not shift when the next purchase order changes the
             // average cost, so it is captured here.
             ...(line.costPrice ? { costPrice: line.costPrice } : {}),
+            // Set only when a manager's grant, not the cashier's own
+            // permission, was what let this line sell below its floor.
+            ...(line.floorPriceOverriddenBy
+              ? { floorPriceOverriddenBy: line.floorPriceOverriddenBy }
+              : {}),
             sortOrder: index,
           })
           .returning({ id: schema.saleItems.id });
