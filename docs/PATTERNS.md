@@ -546,6 +546,15 @@ them: the "safe" default was silently the widest possible scope.
 in the token so no check costs a query, and always re-checked server-side — the
 POS greys out the control, but a client can be modified.
 
+A permission and a ceiling are different questions, and gating on only the first
+is a bug that surfaces late. `sale:discount` says a cashier may discount at all;
+`maxDiscountPercent` says how far. The POS gated the button on the permission
+and left the input free, so somebody capped at 5% could type 50%, the receipt
+printed, and the sale was refused when it pushed — hours later.
+
+`AuthSession.user.maxDiscountPercent` therefore travels with the session, purely
+so a client can gate the control. It is the only ABAC attribute that does.
+
 ### 4. Grants — a supervisor approving one action
 
 An override is approved at the counter and the sale may not reach the server for

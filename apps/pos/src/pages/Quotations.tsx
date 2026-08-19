@@ -49,10 +49,23 @@ export function Quotations() {
         
         if (product) {
           cart.addProduct(product, line.quantity);
-          // Set the exact price/discount from the quotation
+
+          /**
+           * The quoted price is restored as quoted — but NOT excused from the
+           * floor check unless this cashier may excuse it.
+           *
+           * The third argument used to be a hardcoded `true`, which meant
+           * converting a quotation laundered any price past the till's own
+           * block: quote low, convert, sell. The server refuses it on push
+           * regardless, so all the flag ever did was move the refusal to after
+           * the goods had gone.
+           *
+           * Below-floor now blocks checkout until a manager approves it, which
+           * is the same gate as typing the price by hand.
+           */
           const key = cart.lines[cart.lines.length - 1]?.key;
           if (key) {
-            cart.setUnitPrice(key, line.unitPrice, true);
+            cart.setUnitPrice(key, line.unitPrice, can("price:override_floor"));
             cart.setLineDiscount(key, line.discountPercent);
           }
         }

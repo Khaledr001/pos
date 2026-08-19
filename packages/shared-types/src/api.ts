@@ -200,6 +200,15 @@ export interface AuthSession extends AuthTokens {
     branchId: string | null;
     branchName: string | null;
     locale: Locale;
+    /**
+     * The user's own discount ceiling, so a client can gate the control rather
+     * than let somebody type a figure the server will refuse.
+     *
+     * The other ABAC attributes stay out of the session on purpose: this is
+     * the only one a till needs before it can decide what to show. The ceiling
+     * is re-checked server-side regardless — see rule 9 in CLAUDE.md.
+     */
+    maxDiscountPercent: string;
   };
 }
 

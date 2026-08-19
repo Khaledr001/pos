@@ -24,6 +24,14 @@ export interface Cashier {
   name: string;
   roleName: string;
   permissions: PermissionGrant[];
+  /**
+   * This cashier's discount ceiling, as a decimal string.
+   *
+   * Optional so a session persisted by an older build still loads — and read
+   * as "0" when absent, because the alternative reading of a missing ceiling
+   * is "no ceiling", which is the wrong way for this to fail.
+   */
+  maxDiscountPercent?: string;
 }
 
 export interface TerminalBinding {
@@ -43,6 +51,8 @@ interface AuthState {
   signOut: () => void;
   bindTerminal: (terminal: TerminalBinding) => void;
   can: (permission: Permission) => boolean;
+  /** The signed-in cashier's discount ceiling. "0" when unknown. */
+  discountCeiling: () => string;
 }
 
 const STORAGE_KEY = "devsfleet.pos.session";
@@ -116,5 +126,9 @@ export const useAuth = create<AuthState>((set, get) => ({
    */
   can(permission) {
     return hasPermission(get().cashier?.permissions, permission);
+  },
+
+  discountCeiling() {
+    return get().cashier?.maxDiscountPercent ?? "0";
   },
 }));

@@ -36,7 +36,15 @@ if (!url) {
 const client = postgres(url, { max: 1, onnotice: () => {} });
 const db = drizzle(client, { schema, casing: "snake_case" });
 
-const BCRYPT_ROUNDS = 10;
+/**
+ * The same cost the API uses, not a cheaper one.
+ *
+ * This was pinned at 10 while `BCRYPT_ROUNDS` defaults to 12, which made every
+ * seeded account — including the administrator a real install signs in with on
+ * day one — four times cheaper to attack offline than one created through the
+ * admin panel.
+ */
+const BCRYPT_ROUNDS = Number(process.env.BCRYPT_ROUNDS ?? 12);
 const DEFAULT_PASSWORD = process.env.SEED_ADMIN_PASSWORD ?? "ChangeMe123!";
 const DEFAULT_PIN = process.env.SEED_ADMIN_PIN ?? "1234";
 

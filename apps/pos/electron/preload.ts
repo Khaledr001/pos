@@ -166,7 +166,9 @@ const api = {
      * refresh token then lives outside the window, so a compromised renderer
      * cannot walk off with a terminal's long-lived credentials.
      */
-    pinLogin: (pin: string): Promise<{ name: string; permissions: string[] }> =>
+    pinLogin: (
+      pin: string,
+    ): Promise<{ name: string; permissions: string[]; maxDiscountPercent: string }> =>
       ipcRenderer.invoke("auth:pin-login", pin),
     managerOverride: (
       pin: string,

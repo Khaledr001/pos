@@ -145,6 +145,17 @@ export interface PosCashier {
   name: string;
   roleName: string;
   permissions: PermissionGrant[];
+  /**
+   * This cashier's own discount ceiling, as a decimal string.
+   *
+   * The till needs it to gate the discount box the way it gates the price box.
+   * Without it a cashier capped at 0% could type 50%, the receipt would print,
+   * and the server would refuse the sale on push — hours later, after the
+   * goods had gone.
+   *
+   * A courtesy, not the control: the server re-checks it on every sale.
+   */
+  maxDiscountPercent: string;
   branchId: string | null;
   branchName: string | null;
   tenantName: string | null;
@@ -244,7 +255,7 @@ export const hasBridge = (): boolean =>
   typeof window !== "undefined" && typeof window.devsfleet !== "undefined";
 
 const electronAdapter: PosDataAdapter = {
-  signIn: (pin) => window.devsfleet.auth.pinLogin(pin) as Promise<PosCashier>,
+  signIn: (pin) => window.devsfleet.auth.pinLogin(pin) as unknown as Promise<PosCashier>,
   searchProducts: async (query, limit) => {
     try {
       const rows = await window.devsfleet.catalog.search(query, limit);
@@ -501,6 +512,7 @@ const SEED_STAFF: Array<PosCashier & { pin: string }> = [
     branchId: "dev-branch",
     branchName: "Dubai — Main",
     tenantName: "DevsFleet Trading",
+    maxDiscountPercent: "100",
     pin: "1234",
   },
   {
@@ -511,6 +523,7 @@ const SEED_STAFF: Array<PosCashier & { pin: string }> = [
     branchId: "dev-branch",
     branchName: "Dubai — Main",
     tenantName: "DevsFleet Trading",
+    maxDiscountPercent: "0",
     pin: "2222",
   },
   {
@@ -521,6 +534,7 @@ const SEED_STAFF: Array<PosCashier & { pin: string }> = [
     branchId: "dev-branch",
     branchName: "Dubai — Main",
     tenantName: "DevsFleet Trading",
+    maxDiscountPercent: "25",
     pin: "3333",
   },
 ];
@@ -882,6 +896,7 @@ const apiAdapter: PosDataAdapter = {
             branchId: string | null;
             branchName: string | null;
             tenantName: string;
+            maxDiscountPercent?: string;
           };
         }
 
@@ -901,6 +916,9 @@ const apiAdapter: PosDataAdapter = {
           branchId: res.user.branchId,
           branchName: res.user.branchName,
           tenantName: res.user.tenantName ?? null,
+          // Absent means zero, not unlimited: an older server leaves the till
+          // refusing discounts rather than waving them through.
+          maxDiscountPercent: res.user.maxDiscountPercent ?? "0",
         };
       }
     } catch (err) {

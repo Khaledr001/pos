@@ -67,7 +67,12 @@ export function forgetTokens(): void {
  * locally so a till that reboots mid-shift comes back without a login prompt,
  * which at a counter is the difference between a queue and a stoppage.
  */
-export async function loginWithPin(pin: string): Promise<{ name: string; permissions: string[] }> {
+export async function loginWithPin(pin: string): Promise<{
+  name: string;
+  permissions: string[];
+  /** The cashier's own discount ceiling. The till needs it to gate the input. */
+  maxDiscountPercent: string;
+}> {
   const base = requireApiUrl();
   const device = deviceId();
   const branch = branchId();
@@ -77,14 +82,16 @@ export async function loginWithPin(pin: string): Promise<{ name: string; permiss
     accessToken: string;
     refreshToken: string;
     expiresIn: number;
-    user: { name: string; permissions: string[] };
+    user: { name: string; permissions: string[]; maxDiscountPercent?: string };
   }>(`${base}/auth/pin-login`, {
     method: "POST",
     body: JSON.stringify({ pin, deviceId: device, branchId: branch }),
   });
 
   storeTokens(response.accessToken, response.refreshToken, response.expiresIn);
-  return response.user;
+  // Absent means zero, not unlimited. An older server that does not send it
+  // leaves the till refusing discounts rather than waving them through.
+  return { ...response.user, maxDiscountPercent: response.user.maxDiscountPercent ?? "0" };
 }
 
 /**

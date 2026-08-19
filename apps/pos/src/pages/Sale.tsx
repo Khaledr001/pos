@@ -27,7 +27,7 @@ export function Sale({ cashSessionId }: { cashSessionId: string | null }) {
   const cart = useCart();
   const totals = useCartTotals();
   const violations = useFloorViolations();
-  const { can } = useAuth();
+  const { can, discountCeiling } = useAuth();
 
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [customerOpen, setCustomerOpen] = useState(false);
@@ -329,6 +329,7 @@ export function Sale({ cashSessionId }: { cashSessionId: string | null }) {
           onClose={() => setEditing(null)}
           canOverrideFloor={can("price:override_floor")}
           canOverridePrice={can("price:override")}
+          discountCeiling={discountCeiling()}
         />
       )}
 
@@ -633,11 +634,14 @@ function LineEditor({
   onClose,
   canOverrideFloor,
   canOverridePrice,
+  discountCeiling,
 }: {
   line: CartLine;
   onClose: () => void;
   canOverrideFloor: boolean;
   canOverridePrice: boolean;
+  /** This cashier's own ABAC ceiling, as a decimal string. */
+  discountCeiling: string;
 }) {
   const { setUnitPrice, setLineDiscount, addOverrideGrant } = useCart();
   const [price, setPrice] = useState(line.unitPrice);
@@ -665,15 +669,34 @@ function LineEditor({
    * control with its own ceiling, checked below.
    */
   const belowList = unit < list;
+
+  /**
+   * The discount box gets the same treatment as the price box.
+   *
+   * `sale:discount` says a cashier may discount at all; `maxDiscountPercent`
+   * says how far. The button was gated on the first and not the second, so
+   * somebody capped at 5% could type 50%, the receipt printed, and the server
+   * refused the sale when it finally pushed. A manager's approval lends THEIR
+   * ceiling to the document — see OverrideGrantsService.discountCeiling.
+   */
+  const overDiscount = Number(discount || "0") > Number(discountCeiling || "0");
+
   const needed: Permission | null = belowFloor
     ? canOverrideFloor
       ? null
       : "price:override_floor"
     : belowList && !canOverridePrice
       ? "price:override"
-      : null;
+      : overDiscount
+        ? "sale:discount"
+        : null;
 
   function commit() {
+    /**
+     * `floorOverridden` means AUTHORISED, not "is below the floor". Reaching
+     * here already establishes that: `apply()` diverts to the approval dialog
+     * whenever `needed` is set, and only calls this once it clears.
+     */
     setUnitPrice(line.key, price, belowFloor);
     setLineDiscount(line.key, discount || "0");
     onClose();
@@ -741,7 +764,7 @@ function LineEditor({
         </span>
       </div>
 
-      {(belowFloor || belowList) && (
+      {(belowFloor || belowList || overDiscount) && (
         <p
           className={`mt-3 rounded-lg border px-3 py-2.5 text-[12px] ${
             needed
@@ -749,13 +772,15 @@ function LineEditor({
               : "border-signal-amber/40 bg-signal-amber/10 text-signal-amber"
           }`}
         >
-          {belowFloor
-            ? needed
-              ? `Below the ${amount(floor!)} floor price. A manager has to approve this.`
-              : `Below the ${amount(floor!)} floor price. Applying this records an override against your name.`
-            : needed
-              ? `Below the ${amount(list)} list price. A manager has to approve this.`
-              : `Below the ${amount(list)} list price. Applying this records an override against your name.`}
+          {overDiscount
+            ? `${discount}% is above your ${discountCeiling}% limit. A manager has to approve it.`
+            : belowFloor
+              ? needed
+                ? `Below the ${amount(floor!)} floor price. A manager has to approve this.`
+                : `Below the ${amount(floor!)} floor price. Applying this records an override against your name.`
+              : needed
+                ? `Below the ${amount(list)} list price. A manager has to approve this.`
+                : `Below the ${amount(list)} list price. Applying this records an override against your name.`}
         </p>
       )}
 

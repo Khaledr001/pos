@@ -66,15 +66,35 @@ const OVERRIDE_GRANT_TTL_SECONDS = 12 * 60 * 60;
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
+  /**
+   * A hash of a random value nothing can match, at the SAME cost as a real
+   * password, so a failed login takes the same time whether or not the account
+   * exists.
+   *
+   * Computed rather than hardcoded, because a literal pins the cost factor.
+   * The one that used to live here was `$2b$12$…` while a deployment running
+   * `BCRYPT_ROUNDS=10` hashed real users four times cheaper — so an unknown
+   * email was measurably SLOWER than a known one, which is the enumeration
+   * oracle the dummy exists to close, just pointing the other way.
+   *
+   * Warmed at construction so the first failed login does not pay for it.
+   */
+  private readonly dummyHash: Promise<string>;
+
   constructor(
     private readonly db: TenantDatabase,
     private readonly jwt: JwtService,
     private readonly config: ConfigService<Env, true>,
-  ) {}
+  ) {
+    this.dummyHash = bcrypt.hash(
+      randomBytes(24).toString("hex"),
+      this.config.get("BCRYPT_ROUNDS", { infer: true }),
+    );
+  }
 
   async login(dto: LoginDto): Promise<AuthSession> {
     // No tenant context yet — the tenant is what we are resolving.
-    const found = await this.db.runAsPlatformAdmin(async (tx) => {
+    const candidates = await this.db.runAsPlatformAdmin(async (tx) => {
       const rows = await tx
         .select({
           user: schema.users,
@@ -94,27 +114,72 @@ export class AuthService {
             dto.tenantSlug ? eq(schema.tenants.slug, dto.tenantSlug) : undefined,
           ),
         )
-        .limit(1);
-      return rows[0];
+        // Two rows is the interesting case, so the query has to be able to see
+        // it. Three is enough to distinguish "one" from "more than one".
+        .limit(3);
+      return rows;
     });
 
     /**
-     * Hash against a dummy even when the user does not exist.
+     * One address, two businesses.
+     *
+     * A contractor who keeps the books for two tenants signs up with the same
+     * email at both. This used to `.limit(1)` with no ORDER BY and no tie-break,
+     * so the same credentials landed them in whichever business the planner
+     * happened to emit first — and the password that "worked yesterday" failed
+     * today because it belonged to the other account.
+     *
+     * The password is therefore checked against EVERY candidate before the
+     * ambiguity is decided. Two accounts at two businesses almost always have
+     * two different passwords, so the usual case resolves to exactly one and
+     * nobody is asked anything. Only a genuine collision — same email, same
+     * password, two tenants — needs `tenantSlug`, and being told about it
+     * requires already knowing a working password, so it is not an enumeration
+     * oracle.
+     *
+     * The cost is one bcrypt round per candidate, so a response time does still
+     * hint at how many businesses share an address. That is a far weaker signal
+     * than "does this account exist", which is the one worth closing, and the
+     * `.limit(3)` above bounds it.
+     */
+    const verified: typeof candidates = [];
+    for (const candidate of candidates) {
+      if (await bcrypt.compare(dto.password, candidate.user.passwordHash)) {
+        verified.push(candidate);
+      }
+    }
+
+    /**
+     * The dummy compare keeps the timing flat.
      *
      * bcrypt takes ~250ms at 12 rounds. Returning early on an unknown email
-     * would make "user exists" measurable from the response time alone, which
-     * hands an attacker a free account-enumeration oracle.
+     * would make "this account exists" measurable from response time alone,
+     * which is a free account-enumeration oracle. The loop above does no work
+     * when there are no candidates, so one comparison is done here instead.
      */
-    /**
-     * Lockout is checked BEFORE the password compare, and the comparison still
-     * runs afterwards on the dummy hash — otherwise "locked" and "wrong
-     * password" would be distinguishable by response time, which tells an
-     * attacker their guessing is working.
-     */
-    const locked = found ? lockoutRemaining(found.user.lockedUntil) : null;
+    if (candidates.length === 0) await bcrypt.compare(dto.password, await this.dummyHash);
 
-    const hash = found?.user.passwordHash ?? DUMMY_HASH;
-    const passwordOk = await bcrypt.compare(dto.password, hash);
+    if (verified.length > 1) {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_FAILED,
+        "That email and password work at more than one business. Name the one you want.",
+      );
+    }
+
+    const found = verified[0];
+    const passwordOk = verified.length === 1;
+
+    /**
+     * Lockout is checked AFTER the compare above but reported before the
+     * credential result, so "locked" and "wrong password" cost the same time —
+     * otherwise the difference tells an attacker their guessing is working.
+     *
+     * Read from every candidate, not just the matched one: a locked account
+     * must stay locked whether or not this particular guess was right.
+     */
+    const locked = (found ? [found] : candidates)
+      .map((c) => lockoutRemaining(c.user.lockedUntil))
+      .find(Boolean);
 
     if (locked) {
       throw new AppError(
@@ -124,7 +189,16 @@ export class AuthService {
     }
 
     if (!found || !passwordOk) {
-      if (found) await this.recordFailedAttempt(found.tenant.id, found.user);
+      /**
+       * Counted against EVERY candidate the guess was tested against.
+       *
+       * Attributing it only to a single candidate would mean an email
+       * registered at two businesses could never be locked out at all — the
+       * guessing would simply never be counted anywhere.
+       */
+      for (const candidate of candidates) {
+        await this.recordFailedAttempt(candidate.tenant.id, candidate.user);
+      }
       throw new AppError(ERROR_CODES.INVALID_CREDENTIALS, "Invalid email or password");
     }
     if (!found.tenant.isActive) {
@@ -161,6 +235,7 @@ export class AuthService {
         branchId: found.branch?.id ?? null,
         branchName: found.branch?.name ?? null,
         locale: found.user.locale,
+        maxDiscountPercent: found.user.maxDiscountPercent,
       },
     };
   }
@@ -237,6 +312,7 @@ export class AuthService {
         branchId: dto.branchId,
         branchName: null,
         locale: match.user.locale,
+        maxDiscountPercent: match.user.maxDiscountPercent,
       },
     };
   }
@@ -600,6 +676,7 @@ export class AuthService {
         branchId: found.branch?.id ?? null,
         branchName: found.branch?.name ?? null,
         locale: found.user.locale,
+        maxDiscountPercent: found.user.maxDiscountPercent,
       },
     };
   }
@@ -769,8 +846,3 @@ function parseDuration(value: string): number {
   return amount * multipliers[match[2] as keyof typeof multipliers];
 }
 
-/**
- * A real bcrypt hash of a value nothing can match, used to keep the timing of a
- * failed login identical whether or not the email exists.
- */
-const DUMMY_HASH = "$2b$12$c8Kt3F6Zt0mBnPq1Z3nJZeQyLwYy6pQ8mTfN1cV2xW3yA4bC5dE6f";
