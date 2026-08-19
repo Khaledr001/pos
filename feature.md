@@ -135,26 +135,30 @@ Covered by `apps/pos/electron/db/__tests__/migrations.test.ts`, run via
 Electron's own Node, because the `better-sqlite3` binary this repo builds is
 compiled for Electron's ABI and a plain `vitest run` cannot load it at all.
 
-### B2 💀 Returns and refunds do not exist, and three documents claim they do
+### B2 🟡 Returns and refunds did not exist — PARTLY FIXED (Stage 2.1–2.5, commits 8e147b5, f50a2dd, 95c6e0e, 8a118c4)
 
-- `sales.controller.ts` has exactly 3 routes: `GET /sales`, `GET /sales/:id`,
-  `POST /sales`. `sales.service.ts` has exactly 3 methods: `create`, `findById`,
-  `list`.
-- Permissions `sale:void` and `sale:return` exist and are attached to **zero**
-  routes.
-- `apps/pos/src/pages/Returns.tsx` is a complete UI — finds the sale, caps return
-  quantity, computes the refund — and its confirm button (line 283) is
-  `// TODO(phase-3): write the linked return to the outbox`. It closes the dialog
-  and discards everything.
-- `sync.service.ts` push handles 6 entity types; none is a return.
-- The database is fully prepared: `sales.voidedAt/voidedBy/voidReason`,
-  `sales.returnOfSaleId`, `saleItems.returnedQuantity`, and `StockService`
-  already emits a `sale_return` ledger reason that nothing produces.
+Void and return are real now, end to end: `POST /sales/:id/void` and
+`POST /sales/returns` (`sale:void`/`sale:return`, previously attached to zero
+routes), a linked negative sale per D15, stock restored via `StockService`,
+payments reversed or refunded as negative rows, the customer's credit balance
+adjusted either direction. `sync.service.ts` accepts a `return` push entity, so
+one created offline reaches the server exactly once. `Returns.tsx`'s confirm
+button — previously `// TODO(phase-3)` — now calls it, with the
+restock/scrap disposition toggle and refund-method selector the UI never had.
+`saleItems.floorPriceOverriddenBy` is written when a below-floor line actually
+needed a grant. All verified live against a real Postgres + running API.
 
-**`docs/ROADMAP.md:109` ticks "[x] Returns and refunds against an original sale"
-and `modules/README.md` describes sales as "Sale creation, returns, voids". Both
-are false.** A cashier can take goods back and hand over cash with no record
-anywhere.
+**Still open**: exchange (2.4 — return plus a new sale in one flow) is not
+built. Cross-terminal returns are not supported — `findSale` has no path to a
+sale rung up on another till until both have synced, so today's return is
+same-till-only; this is a real, documented scope narrowing, not an oversight.
+A printed refund receipt waits on Stage 4 (hardware decisions). The POS UI
+wiring (2.3) was verified by typecheck and production build, not by running it
+in a browser — no browser-automation tool was available when it was built.
+
+`docs/ROADMAP.md:109`'s "[x] Returns and refunds against an original sale" and
+`modules/README.md`'s "Sale creation, returns, voids" are now accurate for the
+core flow; exchange is still not.
 
 ### B3 ✅ Manager override hijacks the terminal's session — FIXED (commit 194b33d)
 
@@ -325,7 +329,7 @@ Numbering follows your list. "Where" cites the strongest evidence.
 | 18 | Hold / suspend | ✅ | Park, list, restore-and-delete atomically, discard. Deliberately not synced. |
 | 19 | Quotations | 🟡 | Create/send/convert-to-sale ✅, prices snapshotted ✅, expiry ✅. **PDF 🔴, email 🔴, WhatsApp 🔴.** Convert→**order** 🔴. In the POS, `local_quotations.synced_at` is never stamped, so quotations display as unsynced forever; and `listQuotations` returns `[]` in both non-Electron modes. |
 | 20 | Sales orders | 📋 | `orders`/`order_items` tables, `OrderStatus`, `stockReserved` column, `order:read`/`order:write` permissions — **no module, no controller, no service, no POS code.** |
-| 21–22 | Returns, exchange | 💀 | See **B2**. Exchange 🔴. |
+| 21–22 | Returns, exchange | 🟡 | Returns ✅ — see **B2**: void, linked-negative return, sync push, POS UI, floor-override attribution, all live-verified. Same-till only until `findSale` gets a cross-terminal path. **Exchange 🔴** (Stage 2.4, not built). |
 | 35 | Credit sales | ✅ | Limit, available credit, hold, block, override path, outstanding balance. |
 | 36 | Customer payment collection | 🟡 | Collection ✅ (API + POS, folds into the drawer and the day close). **Statement 🔴** — payments are not allocated to specific invoices, so a true aged statement cannot be produced. |
 | 37 | Expenses / cash out | ✅ | Category, amount, reason, cash-vs-non-cash, day-close linkage. Receipt attachment 🔴. Not syncable from POS. |
@@ -427,7 +431,7 @@ later step to avoid an earlier one.
 | 2.2 | ~~Add a `return` entity to sync push~~ **DONE** (f50a2dd) | ~~A return created offline reaches the server exactly once~~ — done. `local_returns`/`local_return_items` mirror a return offline, naming each line by its position on the original sale (neither end ever learns a `sale_items.id` for a till-rung sale); `sync.service.ts` resolves that back to a real `saleItemId` server-side and calls the same `createReturn` a direct API caller would. Restocked lines credit `local_delta` back so the unit is sellable again before the next sync; scrapped lines move nothing. Verified live: same-batch push resolves the original by `localId`, retries return the same duplicate, a stale line is permanently rejected. **Not done**: wiring `Returns.tsx`'s own confirm button to this — that is 2.3. Scope note: only a same-till original is supported (`sales:find` has no cross-terminal path yet); a return against another terminal's sale needs 2.3 to actually search one down first. |
 | 2.3 | ~~Wire `Returns.tsx` to it~~ **DONE** (95c6e0e) | ~~Your §21 flow works: 100 AED back, stock restocked or scrapped, cash out of the drawer~~ — done. Confirm button calls `posData.commitReturn`; added the disposition toggle (restock/scrap) and refund-method selector the UI never had; a cash refund records a `cash_out` cash_movement so the drawer total reflects it. Verified: typecheck, production build (non-minified diff reviewed), 9 electron tests. **Not verified**: this UI in a running browser/Electron window — no browser-automation tool available in this environment; the data path it calls was verified live end-to-end in 2.2. **Not done**: cross-terminal returns (same `findSale` limitation as 2.2) and a printed refund receipt (Stage 4, blocked on hardware decisions). |
 | 2.4 | Exchange | Your §22 flow: return 100, take 130, POS charges 30 |
-| 2.5 | Record the price-override authoriser | `sale_items.floorPriceOverriddenBy` is written and visible in the audit log |
+| 2.5 | ~~Record the price-override authoriser~~ **DONE** (8a118c4) | ~~`sale_items.floorPriceOverriddenBy` is written and visible in the audit log~~ — done. Written only when a grant, not the cashier's own permission, was what let a genuinely-below-floor line through — a cashier who already holds `price:override_floor` outright has nobody to attribute. Verified live with a real override grant (stamped with the approving manager's id) and both negative cases (at/above floor; a manager's own permission). `sale:create`'s existing `@Audited` row plus this column together give a reviewer both "a sale happened" and "who approved this specific line" — no separate audit-log entry needed. |
 
 ### Stage 3 — Units of measure (the hardware unlock)
 
@@ -518,11 +522,23 @@ Everything else:
 
 - **Unattached permissions.** Was 18 of 60; commits 194b33d and 63800f6 wired
   up `device:manage`, `price:override` and `price:override_floor`, and
-  `sale:discount` now has a ceiling that means something. Still attached to no
-  route: `product:import`, `price:read`/`price:write`, `order:*` (2),
-  `sale:void`, `sale:return`, `payment:*` (2), `whatsapp:*` (3), `role:write`,
-  `audit:read`. Each is either a missing feature or a missing check — decide
-  which before building on top of it.
+  `sale:discount` now has a ceiling that means something. Stage 2.1 (8e147b5)
+  wired up `sale:void` and `sale:return`. Still attached to no route:
+  `product:import`, `price:read`/`price:write`, `order:*` (2), `payment:*` (2),
+  `whatsapp:*` (3), `role:write`, `audit:read`. Each is either a missing
+  feature or a missing check — decide which before building on top of it.
+- **`PriceResolverService.resolveMany` compares dates across two different
+  clocks.** `product_prices.effective_from` is seeded (and presumably written
+  elsewhere) from Postgres `now()::date`, in the server's session timezone;
+  the resolver's own `asOf` comes from `new Date().toISOString().slice(0, 10)`
+  in Node, which is always UTC. Found live while verifying Stage 2.5: a price
+  row seeded at `2026-08-20` (Gulf Standard Time, UTC+4) failed to resolve at
+  all — `NO_PRICE_FOR_PRODUCT` — for roughly the first four hours after
+  midnight Gulf time, because Node's UTC `asOf` still read `2026-08-19`. Not
+  fixed here — out of scope for that stage — but worth knowing before it reads
+  as "the price list is broken" during a Gulf-timezone morning. Fix is
+  probably `asOf` computed however the DB's `now()::date` would be, or storing
+  `effective_from`/`to` as `timestamptz` instead of `date`.
 - **Missing foreign keys**: `payments.saleId`, `payments.cashSessionId`,
   `customers.priceListId`, `serialNumbers.branchId`, `serialNumbers.saleItemId`
   are plain `uuid` columns with no FK.
