@@ -164,22 +164,25 @@ and `modules/README.md` describes sales as "Sale creation, returns, voids". Both
 are false.** A cashier can take goods back and hand over cash with no record
 anywhere.
 
-### B3 💀 Manager override hijacks the terminal's session, and needs network
+### B3 ✅ Manager override hijacks the terminal's session — FIXED (commit 194b33d)
 
-`apps/pos/electron/ipc/index.ts:79` implements `auth:manager-override` by calling
-`loginWithPin(managerPin)` — which calls `storeTokens(...)`
-(`sync/api-client.ts`), **overwriting the terminal's access and refresh tokens
-with the manager's.** Nothing restores the cashier: `PaymentDialog.tsx:369` only
-sets a local boolean.
+The session-hijack half is closed. `POST /auth/verify-override` verifies the
+PIN, checks the permission server-side, writes the `audit_log` row in the same
+transaction, and **mints no tokens** — the cashier's session continues
+untouched. It returns a short-lived signed grant (12h, `typ: "override"`, bound
+to tenant and branch) which the sale carries in `overrideGrants[]`, so an
+approval given at the counter still counts when the push lands hours later. An
+unverifiable grant is discarded rather than fatal, so a forged one buys nothing.
 
-Consequences: every sale after an override is attributed to the manager on the
-server and carries the manager's permissions, for the rest of the shift. And
-because it is a network call, override does not work offline at all — in an
-offline-first POS.
+Wired through: `price:override`, `price:override_floor`, `sale:discount` (which
+lends the approver's own ceiling), and `customer:credit`.
 
-Fix: verify the manager's PIN **without** mutating the session, record the
-override (who authorised what, on which line), and restore nothing because
-nothing was replaced.
+**Still open: overrides need the network.** That is the same constraint PIN
+login has, for the same documented reason — checking a PIN offline means keeping
+something PIN-equivalent on a machine that sits in a shop. It resolves with B4,
+not before, and the two share one design decision. Until then a terminal with no
+line cannot take a supervisor approval, and the UI says so rather than accepting
+the sale and failing at push.
 
 ### B4 🔴 Offline login is impossible — and login gates the whole app
 
@@ -203,16 +206,19 @@ The renderer never calls it either — `Sale.tsx:744` "Print receipt" is wired t
 `onClose`. A completed sale produces no customer document, online or offline.
 For a VAT-registered UAE business this is a compliance problem, not a nicety.
 
-### B6 🔴 Per-user ABAC limits never reach the POS
+### B6 🟡 Per-user ABAC limits never reach the POS — PARTLY FIXED (commit 63800f6)
 
-`maxDiscountPercent`, `maxSaleAmount`, `canApproveRefund` are enforced in
-`sales.service.create` — but grep for them across `apps/pos/` returns nothing.
-Offline, a cashier's discount ceiling is unenforced; the sale completes, the
-receipt is handed over, and the server rejects it at push time.
+`maxDiscountPercent` now travels in `AuthSession.user`, is held in
+`store/auth.ts`, and gates the discount input in `Sale.tsx`'s line editor:
+above the ceiling the cashier is asked for a manager's approval instead of
+being allowed to type a figure the server will refuse after the receipt has
+printed. Undercutting list price is gated the same way, via `price:override`.
 
-This directly violates the architecture rule: *the API must enforce it when
-online, and the POS must have the same rules locally when offline.* Floor price
-**is** enforced locally (`store/cart.ts:241`) — follow that pattern.
+**Still open:** `maxSaleAmount` and `canApproveRefund` are still enforced only
+server-side, so a sale above a cashier's per-sale ceiling still completes at the
+till and is rejected at push. Follow the pattern the discount ceiling now uses —
+carry the value in the session, gate the control, and let the server remain the
+authority.
 
 ### B7 🟡 Silent fallback to fake seed data on a real terminal
 
@@ -238,6 +244,7 @@ Fix these in the same pass as the code, or the next reader repeats the mistake.
 | `modules/README.md` | `transfers` ⬜ todo | Implemented and registered |
 | `modules/README.md` | — | `devices` implemented but absent from the table |
 | `serials.service.ts:23` | "`markReturned`/`restock` are written for when it does" | Neither method exists |
+| `docs/PATTERNS.md` | — | Now has an **Authorisation** section covering all four checks (permission, branch scope, ABAC ceiling, override grant). Read it before touching a guard. |
 
 ---
 
@@ -325,8 +332,18 @@ Numbering follows your list. "Where" cites the strongest evidence.
 
 ### Admin panel
 
-Twelve pages exist, ~5,700 lines. Real but shallow, and **there is no route
-protection at all** — signed-out users render every page.
+Twelve pages exist, ~5,700 lines. Real but shallow.
+
+**Route protection landed in commit 194b33d** and is no longer a gap: `AppShell`
+wraps every route except `/login` in `RequireAuth`, driven by one reviewable
+`ROUTE_PERMISSIONS` map, the sidebar filters itself by permission, and
+`api-client` does a single-flight refresh on 401 instead of silently breaking
+fifteen minutes into every session. The pre-filled seed credentials are gone,
+as is the `ChangeMe123!` default on new staff. A CSP and the usual security
+headers are set in `next.config.ts`.
+
+Note what that does NOT change: the guard is a courtesy, not a boundary. The
+API decides. See rule 9 in CLAUDE.md.
 
 - **Real:** inventory (best page — balances, ledger, adjust, transfer), suppliers,
   sales list (read-only), branches, products (create-only), customers
@@ -334,8 +351,7 @@ protection at all** — signed-out users render every page.
 - **Mocked or inert:** `/reports` falls back to hardcoded figures and its
   7d/30d/90d selector is never sent to the API; `/whatsapp` is entirely
   fabricated; `/settings` saves to `localStorage` and never reaches the backend;
-  `/branches` substitutes two fake branches on fetch failure; login credentials
-  are pre-filled and displayed on screen.
+  `/branches` substitutes two fake branches on fetch failure.
 - **Absent:** purchase orders, price-list management, category/brand management,
   roles/permissions editor, device management, transfer approval, day-close
   review, audit-log viewer, product edit/delete.
@@ -352,10 +368,10 @@ later step to avoid an earlier one.
 | # | Work | Accept when |
 |---|---|---|
 | 0.1 | Fix **B1** fresh-install crash | A test replays every POS migration against an empty database and passes; a new terminal boots |
-| 0.2 | Fix **B3** manager-override session hijack | Override verifies a PIN without replacing the terminal session; a sale after an override is still attributed to the cashier |
+| 0.2 | ~~Fix **B3** manager-override session hijack~~ **DONE** (194b33d) | ~~Override verifies a PIN without replacing the terminal session; a sale after an override is still attributed to the cashier~~ — done, and the approval now travels with the document so it survives an offline push |
 | 0.3 | Remove **B7** demo-data fallbacks from Electron and API modes | An unsynced terminal shows an empty catalogue, not fake SKUs; seed PINs are unreachable outside browser dev mode |
 | 0.4 | Correct the four false claims in §3 | `ROADMAP.md` and `modules/README.md` match the code |
-| 0.5 | Add route protection to the admin | Signed-out access to any page redirects to `/login` |
+| 0.5 | ~~Add route protection to the admin~~ **DONE** (194b33d) | ~~Signed-out access to any page redirects to `/login`~~ — done, plus per-route permissions, a filtered sidebar, and refresh-on-401 |
 
 ### Stage 1 — Make the offline promise true
 
@@ -450,10 +466,28 @@ API modules and the entire POS have no tests today.**
 
 ## 6. Cross-cutting debt worth fixing opportunistically
 
-- **18 of 60 permissions are attached to zero routes**: `product:import`,
-  `price:*` (4), `order:*` (2), `sale:void`, `sale:return`, `sale:discount`,
-  `payment:*` (2), `whatsapp:*` (3), `role:write`, `device:manage`, `audit:read`.
-  Each is either a missing feature or a missing check.
+Auth-specific debt that survived the audit (commits 194b33d, 63800f6):
+
+- **The POS stores its refresh token in plaintext** in SQLite `device_state`.
+  Electron's `safeStorage` is not used anywhere. A stolen till hands over a
+  90-day credential to anyone who opens the file.
+- **Both clients keep tokens in JS-readable storage** — POS in `localStorage`,
+  admin in `localStorage`. Moving to httpOnly cookies means CSRF protection and
+  a change to how the POS authenticates; it is a design decision, not a patch.
+- **`store/auth.ts` persists `permissions` with no expiry**, so a POS UI gate
+  reflects the role as it was at last sign-in. Harmless while the server is the
+  authority (rule 9), misleading once someone treats it as one.
+- **`maxSaleAmount` and `canApproveRefund` still do not reach the POS** — see B6.
+
+Everything else:
+
+- **Unattached permissions.** Was 18 of 60; commits 194b33d and 63800f6 wired
+  up `device:manage`, `price:override` and `price:override_floor`, and
+  `sale:discount` now has a ceiling that means something. Still attached to no
+  route: `product:import`, `price:read`/`price:write`, `order:*` (2),
+  `sale:void`, `sale:return`, `payment:*` (2), `whatsapp:*` (3), `role:write`,
+  `audit:read`. Each is either a missing feature or a missing check — decide
+  which before building on top of it.
 - **Missing foreign keys**: `payments.saleId`, `payments.cashSessionId`,
   `customers.priceListId`, `serialNumbers.branchId`, `serialNumbers.saleItemId`
   are plain `uuid` columns with no FK.
@@ -470,6 +504,9 @@ API modules and the entire POS have no tests today.**
   close but `/cash-registers/sessions/...` for movements.
 - **Admin form bugs**: `/suppliers` never binds `contactPerson`; `/users` posts
   `canApproveRefund`/`canViewCost` with no controls and hardcodes `roleId`.
+  Note the server now refuses to grant either to somebody who lacks it, so the
+  form silently fails for a non-superuser rather than silently succeeding —
+  give it real controls.
 - **`pricing` has no `@Module`** — `PriceResolverService` is duplicated as a
   provider in three modules.
 
