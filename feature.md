@@ -169,12 +169,25 @@ unverifiable grant is discarded rather than fatal, so a forged one buys nothing.
 Wired through: `price:override`, `price:override_floor`, `sale:discount` (which
 lends the approver's own ceiling), and `customer:credit`.
 
-**Still open: overrides need the network.** That is the same constraint PIN
-login has, for the same documented reason — checking a PIN offline means keeping
-something PIN-equivalent on a machine that sits in a shop. It resolves with B4,
-not before, and the two share one design decision. Until then a terminal with no
-line cannot take a supervisor approval, and the UI says so rather than accepting
-the sale and failing at push.
+**Still open: overrides need the network — and unlike B4, this does not
+resolve by adding a local mirror.** B4 (Stage 1.1) shipped local PIN
+verification for sign-in, which was the same underlying problem for THAT case.
+Overrides looked identical at first glance but are not: verifying the
+approver's identity locally is the easy half. The other half is the sale
+carrying proof the SERVER will trust, and nothing on a terminal can sign a
+grant the server would honour without a device-signing-key architecture that
+does not exist. A local-only "approval" would let a cashier proceed believing
+it worked, and the sale would be refused on push every single time — not
+occasionally, always — discovered only once it lands in the rejected-items
+list Stage 1.4 built, which is worse than refusing at the counter while the
+manager approving it is standing right there. Traced through fully and
+deliberately NOT built for this reason (see Stage 1.3).
+
+The UI now says so, honestly, rather than surfacing a raw connectivity error:
+`auth:manager-override` distinguishes a genuine server refusal (`ApiError` —
+wrong PIN, insufficient permission) from the request never reaching the
+server at all, and gives the latter its own clear message instead of
+whatever a bare failed `fetch` happened to produce.
 
 ### B4 🟡 Offline login is impossible — PARTLY FIXED (Stage 1.1, commit 4cebfd3)
 
@@ -403,7 +416,7 @@ later step to avoid an earlier one.
 | 1.2 | ~~**B6** sync ABAC limits with the user record and enforce them in the cart~~ **DONE** (63800f6, 4cebfd3) | ~~An offline cashier is refused a discount above their ceiling, with the same message the API gives~~ — done for `maxDiscountPercent` (the ceiling now travels through BOTH sign-in paths built in 1.1, gated proactively in the line editor rather than reactively after an attempt — the spirit, not the literal string, matches). `maxSaleAmount`/`canApproveRefund` are unchanged: the latter has nothing to gate until returns exist (**B2**); the former has no server-side override path to sync toward yet, so building POS gating for it now would be gating against a wall. |
 | 1.4 | ~~Surface rejected outbox rows: an IPC channel, a Settings list, retry/discard~~ **DONE** | ~~A rejected sale is visible with its reason and can be acted on~~ — done, and widened to cover `applied_with_warning` too: both are "something a human has to look at", one queue in Settings. Built and shipped BEFORE 1.3, out of the plan's own stated order — see the note below. |
 | 1.5 | ~~Handle `applied_with_warning`; stamp `local_quotations.synced_at`~~ **DONE** | ~~A warned push settles instead of re-pushing forever; a synced quotation stops showing as unsynced~~ — done, and `local_customer_payments.synced_at` fixed alongside it: same bug, same fix, found while touching the same function. |
-| 1.3 | Offline manager override on the local user mirror | Override works with the network unplugged and records who authorised what. **Reordered after 1.4, deliberately**: shipping this first would let a cashier ring up a below-floor sale on a LOCAL-only approval — nothing can sign a grant the server would trust without a device-signing-key architecture that does not exist — and if the sale is then refused on push, 1.4's list is what lets anyone find out. Building the safety net before the feature that needs it. |
+| 1.3 | ~~Offline manager override on the local user mirror~~ **CONCLUDED: not buildable as scoped, honest fallback shipped instead** | Traced through fully rather than attempted: verifying an approver's PIN locally is the easy half; the sale still needs proof the SERVER will trust, and nothing on a terminal can sign a grant it would honour without a device-signing-key architecture that does not exist. A local-only "approval" would fail on push every time, not occasionally — discovered only in 1.4's rejected list, which is worse than refusing at the counter. Shipped instead: `auth:manager-override` now tells a cashier plainly that this needs the network, instead of surfacing a raw connectivity error. Building the real thing is a new device-credential subsystem, not an extension of Stage 1 — see B3. |
 | 1.6 | ~~Restore a per-terminal offline stock ceiling~~ **DONE, narrowed scope (confirmed with the user)** | ~~A disconnected till refuses to oversell past its allocation~~ — done for the SINGLE-terminal case: `commitSale` refuses a line past `quantity - reserved_qty + local_delta` for that variant, skipped when the tenant's own `sales.allowNegativeStock` says to allow it (now pulled on every sync as a top-level `SyncPullResponse` field, the same pattern `stockAllocation` itself uses). **NOT built**: the disjoint cross-terminal slice `devices.offlineStockAllocation` describes — two different offline terminals can still both sell the last unit of one SKU. That needs a server-side division algorithm (equal split? by recent velocity? a walk-in floor?) that is a product decision, not an engineering one, and does not exist. If wanted, it is a new subsystem, not an extension of this fix. |
 
 ### Stage 2 — Returns, and the documents that depend on them

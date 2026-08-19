@@ -3647,12 +3647,19 @@ function registerDataHandlers(ipcMain) {
   ipcMain.handle(
     "auth:manager-override",
     async (_event, pin, requiredPermission, reason) => {
-      const result = await verifyOverride(
-        String(pin ?? ""),
-        String(requiredPermission ?? ""),
-        reason ? String(reason) : void 0
-      );
-      return { managerName: result.approvedBy.name, grant: result.grant };
+      try {
+        const result = await verifyOverride(
+          String(pin ?? ""),
+          String(requiredPermission ?? ""),
+          reason ? String(reason) : void 0
+        );
+        return { managerName: result.approvedBy.name, grant: result.grant };
+      } catch (err) {
+        if (err instanceof ApiError) throw err;
+        throw new Error(
+          "A manager's approval needs the network. Reconnect, or handle this sale once back online."
+        );
+      }
     }
   );
   ipcMain.handle("device:info", () => ({

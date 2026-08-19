@@ -119,14 +119,38 @@ export function registerDataHandlers(ipcMain: IpcMain): void {
   ipcMain.handle(
     "auth:manager-override",
     async (_event, pin: string, requiredPermission: string, reason?: string) => {
-      const result = await verifyOverride(
-        String(pin ?? ""),
-        String(requiredPermission ?? ""),
-        reason ? String(reason) : undefined,
-      );
-      // The grant travels back to the renderer so it can be attached to the
-      // document being approved. It is opaque here and stays opaque there.
-      return { managerName: result.approvedBy.name, grant: result.grant };
+      try {
+        const result = await verifyOverride(
+          String(pin ?? ""),
+          String(requiredPermission ?? ""),
+          reason ? String(reason) : undefined,
+        );
+        // The grant travels back to the renderer so it can be attached to the
+        // document being approved. It is opaque here and stays opaque there.
+        return { managerName: result.approvedBy.name, grant: result.grant };
+      } catch (err) {
+        if (err instanceof ApiError) throw err;
+
+        /**
+         * A genuinely unreachable server, not a refusal — `ApiError` would
+         * have been thrown for anything the server actually answered, wrong
+         * PIN included.
+         *
+         * There is deliberately no local fallback here, unlike PIN sign-in.
+         * Verifying identity locally would be the easy half; the sale still
+         * needs the APPROVAL to reach the server as something it will trust,
+         * and nothing on this terminal can sign a grant the server would
+         * accept — that needs a device-signing-key architecture that does not
+         * exist. A local-only "approval" would let the cashier proceed
+         * believing it worked, and the sale would be refused on push every
+         * single time, discovered only once it lands in the rejected-items
+         * list Stage 1.4 built — worse than refusing here, plainly, while the
+         * manager is still standing at the till and can decide what to do.
+         */
+        throw new Error(
+          "A manager's approval needs the network. Reconnect, or handle this sale once back online.",
+        );
+      }
     },
   );
 
