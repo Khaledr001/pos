@@ -20,7 +20,7 @@ import { StockService } from "../inventory/stock.service.js";
 import { PriceResolverService } from "../pricing/price-resolver.service.js";
 import { OverrideGrantsService } from "../auth/override-grants.service.js";
 import { SerialsService } from "../serials/serials.service.js";
-import type { CreateSaleDto } from "./dto.js";
+import type { CreateReturnDto, CreateSaleDto, VoidSaleDto } from "./dto.js";
 
 /**
  * Creating a sale — the most consequential write in the system.
@@ -630,6 +630,386 @@ export class SalesService {
 
       const created = await this.findById(sale.id, tx);
       return { ...(created as object), change: Money.toDecimalString(change, 2) };
+    });
+  }
+
+  /**
+   * Undo a sale entirely — the document should not have existed at all.
+   *
+   * No linked row, unlike a return: `voidedAt`/`voidedBy`/`voidReason` sit
+   * directly on the sale being voided (D15). Every line is restocked in full
+   * and every payment is reversed automatically, mirrored from what was
+   * actually taken — a void does not ask how to give the money back, because
+   * nothing about the transaction is meant to be renegotiated, only erased.
+   *
+   * Refused once ANY line has a return against it: a sale that is already
+   * partially returned is not "never should have happened", it is a real
+   * transaction with a real adjustment on it, and `createReturn` is the tool
+   * for the remainder.
+   */
+  async void(id: string, dto: VoidSaleDto): Promise<unknown> {
+    const user = RequestContext.requireUser();
+
+    return this.db.run(async (tx) => {
+      const sale = await tx.query.sales.findFirst({
+        where: (t, { eq: e }) => e(t.id, id),
+      });
+      if (!sale) throw new AppError(ERROR_CODES.NOT_FOUND, `Sale ${id} not found`);
+      assertBranchInScope(sale.branchId);
+
+      if (sale.status === "voided") {
+        throw new AppError(ERROR_CODES.SALE_ALREADY_VOIDED, "This sale has already been voided.");
+      }
+      if (sale.returnOfSaleId) {
+        throw new AppError(
+          ERROR_CODES.VALIDATION_FAILED,
+          "A return document cannot be voided. Void the original sale instead.",
+        );
+      }
+      if (sale.status === "returned" || sale.status === "partially_returned") {
+        throw new AppError(
+          ERROR_CODES.SALE_ALREADY_RETURNED,
+          "This sale already has returned lines. Void is only for a sale with nothing returned yet — use a return for what remains.",
+        );
+      }
+
+      const items = await tx
+        .select({
+          id: schema.saleItems.id,
+          variantId: schema.saleItems.variantId,
+          quantity: schema.saleItems.quantity,
+          isStockTracked: schema.products.isStockTracked,
+        })
+        .from(schema.saleItems)
+        .innerJoin(schema.productVariants, eq(schema.saleItems.variantId, schema.productVariants.id))
+        .innerJoin(schema.products, eq(schema.productVariants.productId, schema.products.id))
+        .where(eq(schema.saleItems.saleId, id));
+
+      for (const item of items) {
+        if (!item.isStockTracked) continue;
+        await this.stock.addStock({
+          tx,
+          variantId: item.variantId,
+          branchId: sale.branchId,
+          quantity: item.quantity,
+          referenceType: "sale",
+          referenceId: sale.id,
+          ...(user.deviceId ? { deviceId: user.deviceId } : {}),
+        });
+      }
+
+      // Reverse exactly what was taken — not a fresh choice of tender, unlike
+      // a return, because nothing here is being renegotiated.
+      const payments = await tx
+        .select()
+        .from(schema.payments)
+        .where(eq(schema.payments.saleId, id));
+
+      for (const payment of payments) {
+        await tx.insert(schema.payments).values({
+          tenantId: sale.tenantId,
+          branchId: sale.branchId,
+          saleId: sale.id,
+          customerId: sale.customerId,
+          cashSessionId: payment.cashSessionId,
+          method: payment.method,
+          amount: Money.toDecimalString(Money.negate(Money.toMinor(payment.amount)), 4),
+          currency: payment.currency,
+          reference: payment.reference ? `Void: ${payment.reference}` : "Void",
+          createdBy: user.id,
+        });
+      }
+
+      // The credit this sale extended is withdrawn along with everything else.
+      if (Money.isPositive(Money.toMinor(sale.dueAmount)) && sale.customerId) {
+        await tx
+          .update(schema.customers)
+          .set({
+            creditBalance: sql`${schema.customers.creditBalance} - ${sale.dueAmount}::numeric`,
+          })
+          .where(eq(schema.customers.id, sale.customerId));
+      }
+
+      await tx
+        .update(schema.sales)
+        .set({
+          status: "voided",
+          voidedAt: new Date(),
+          voidedBy: user.id,
+          voidReason: dto.reason,
+          paidAmount: "0",
+          dueAmount: "0",
+        })
+        .where(eq(schema.sales.id, id));
+
+      this.logger.log({ saleId: id, voidedBy: user.id }, "Sale voided");
+      return this.findById(id, tx);
+    });
+  }
+
+  /**
+   * A return: a NEW sale row, negative, pointing back at the original (D15).
+   *
+   * Refunded at the price and tax rate the line was ORIGINALLY sold at, never
+   * today's — the same snapshot principle every document in this system
+   * follows. `calculateDocument` computes it as a normal, POSITIVE document
+   * (the shared engine has never been exercised with negative quantities, and
+   * there is no need to start now); every stored figure is negated once, at
+   * the point of writing, so the arithmetic itself stays identical to an
+   * ordinary sale and only the sign convention differs.
+   */
+  async createReturn(dto: CreateReturnDto): Promise<unknown> {
+    const tenantId = RequestContext.requireTenantId();
+    const user = RequestContext.requireUser();
+
+    return this.db.run(async (tx) => {
+      if (dto.localId) {
+        const existing = await tx.query.sales.findFirst({
+          where: (t, { eq: e }) => e(t.localId, dto.localId!),
+        });
+        if (existing) return this.findById(existing.id, tx);
+      }
+
+      const original = await tx.query.sales.findFirst({
+        where: (t, { eq: e }) => e(t.id, dto.originalSaleId),
+      });
+      if (!original) {
+        throw new AppError(ERROR_CODES.NOT_FOUND, `Sale ${dto.originalSaleId} not found`);
+      }
+      assertBranchInScope(original.branchId);
+
+      if (original.returnOfSaleId) {
+        throw new AppError(
+          ERROR_CODES.CANNOT_RETURN_A_RETURN,
+          "A return document cannot itself be returned.",
+        );
+      }
+      if (original.status === "voided") {
+        throw new AppError(ERROR_CODES.SALE_ALREADY_VOIDED, "This sale was voided — there is nothing to return.");
+      }
+
+      const originalItems = await tx
+        .select({
+          id: schema.saleItems.id,
+          variantId: schema.saleItems.variantId,
+          productName: schema.saleItems.productName,
+          variantName: schema.saleItems.variantName,
+          productSku: schema.saleItems.productSku,
+          quantity: schema.saleItems.quantity,
+          unitPrice: schema.saleItems.unitPrice,
+          discountPercent: schema.saleItems.discountPercent,
+          taxPercent: schema.saleItems.taxPercent,
+          returnedQuantity: schema.saleItems.returnedQuantity,
+          costPrice: schema.saleItems.costPrice,
+          isStockTracked: schema.products.isStockTracked,
+        })
+        .from(schema.saleItems)
+        .innerJoin(schema.productVariants, eq(schema.saleItems.variantId, schema.productVariants.id))
+        .innerJoin(schema.products, eq(schema.productVariants.productId, schema.products.id))
+        .where(
+          and(
+            eq(schema.saleItems.saleId, dto.originalSaleId),
+            inArray(schema.saleItems.id, dto.lines.map((l) => l.saleItemId)),
+          ),
+        );
+
+      const byId = new Map(originalItems.map((item) => [item.id, item]));
+
+      // --- validate every line before writing anything --------------------
+      const lines = dto.lines.map((line) => {
+        const original = byId.get(line.saleItemId);
+        if (!original) {
+          throw new AppError(
+            ERROR_CODES.NOT_FOUND,
+            `Sale item ${line.saleItemId} does not belong to this sale`,
+          );
+        }
+
+        const remaining = Money.toMinor(original.quantity) - Money.toMinor(original.returnedQuantity);
+        const requested = Money.toMinor(String(line.quantity));
+        if (requested > remaining) {
+          throw new AppError(
+            ERROR_CODES.RETURN_QUANTITY_EXCEEDS_REMAINING,
+            `${original.productName} — only ${Money.toDecimalString(remaining, 2)} left to return on this line.`,
+            { line: original.productSku, requested: line.quantity, remaining: Money.toDecimalString(remaining, 2) },
+          );
+        }
+
+        return { ...line, original };
+      });
+
+      const settings = await tx.query.tenants
+        .findFirst({ columns: { settings: true } })
+        .then((t) => resolveTenantSettings(t?.settings));
+
+      // A POSITIVE document — "what is being taken back" — computed exactly
+      // like a sale, at the ORIGINAL line's own snapshot price and tax.
+      const totals = calculateDocument({
+        taxMode: settings.tax.mode,
+        decimals: settings.currency.decimals,
+        lines: lines.map((l) => ({
+          quantity: String(l.quantity),
+          unitPrice: l.original.unitPrice,
+          discountPercent: l.original.discountPercent,
+          taxPercent: l.original.taxPercent,
+        })),
+      });
+
+      const branch = await tx.query.branches.findFirst({
+        where: (t, { eq: e }) => e(t.id, original!.branchId),
+        columns: { code: true },
+      });
+      const year = new Date().getFullYear();
+      const [seq] = await tx.execute<{ next_document_number: number }>(
+        sql`SELECT next_document_number(${tenantId}::uuid, ${sequenceKey("sale", year, branch?.code ?? null)})`,
+      );
+      const returnNumber = formatDocumentNumber({
+        kind: "sale",
+        year,
+        sequence: Number((seq as { next_document_number?: number })?.next_document_number ?? 1),
+        ...(branch?.code ? { branchCode: branch.code } : {}),
+      });
+
+      const [returnSale] = await tx
+        .insert(schema.sales)
+        .values({
+          tenantId,
+          branchId: original!.branchId,
+          saleNumber: returnNumber,
+          customerId: original!.customerId,
+          cashSessionId: dto.cashSessionId ?? null,
+          source: "pos",
+          status: "completed",
+          returnOfSaleId: original!.id,
+          currency: original!.currency,
+          taxMode: original!.taxMode,
+          subtotal: Money.toDecimalString(Money.negate(totals.subtotal), 4),
+          discountAmount: Money.toDecimalString(Money.negate(totals.discountAmount), 4),
+          taxAmount: Money.toDecimalString(Money.negate(totals.taxAmount), 4),
+          total: Money.toDecimalString(Money.negate(totals.total), 4),
+          paidAmount: "0",
+          dueAmount: "0",
+          createdBy: user.id,
+          ...(dto.localId ? { localId: dto.localId } : {}),
+          ...(user.deviceId ? { deviceId: user.deviceId } : {}),
+          ...(dto.occurredAt ? { occurredAt: new Date(dto.occurredAt) } : {}),
+          ...(dto.reason ? { notes: dto.reason } : {}),
+        })
+        .returning();
+
+      if (!returnSale) throw new AppError(ERROR_CODES.INTERNAL_ERROR, "Could not create the return");
+
+      for (const [index, line] of lines.entries()) {
+        const computed = totals.lines[index]!;
+
+        await tx.insert(schema.saleItems).values({
+          tenantId,
+          saleId: returnSale.id,
+          variantId: line.original.variantId,
+          productName: line.original.productName,
+          variantName: line.original.variantName,
+          productSku: line.original.productSku,
+          quantity: String(-line.quantity),
+          unitPrice: line.original.unitPrice,
+          discountPercent: line.original.discountPercent,
+          discountAmount: Money.toDecimalString(Money.negate(computed.discount), 4),
+          taxPercent: line.original.taxPercent,
+          taxAmount: Money.toDecimalString(Money.negate(computed.tax), 4),
+          lineSubtotal: Money.toDecimalString(Money.negate(computed.net), 4),
+          total: Money.toDecimalString(Money.negate(computed.total), 4),
+          ...(line.original.costPrice ? { costPrice: line.original.costPrice } : {}),
+          returnDisposition: line.disposition,
+          sortOrder: index,
+        });
+
+        await tx
+          .update(schema.saleItems)
+          .set({
+            returnedQuantity: sql`${schema.saleItems.returnedQuantity} + ${String(line.quantity)}::numeric`,
+          })
+          .where(eq(schema.saleItems.id, line.saleItemId));
+
+        if (line.disposition === "restock" && line.original.isStockTracked) {
+          await this.stock.addStock({
+            tx,
+            variantId: line.original.variantId,
+            branchId: original!.branchId,
+            quantity: String(line.quantity),
+            referenceType: "sale",
+            referenceId: returnSale.id,
+            ...(line.original.costPrice ? { unitCost: line.original.costPrice } : {}),
+            ...(user.deviceId ? { deviceId: user.deviceId } : {}),
+          });
+        }
+      }
+
+      // Every line now fully accounted for -> the ORIGINAL becomes "returned";
+      // some but not all -> "partially_returned". Read back rather than
+      // computed in memory, so a return that only touches SOME lines still
+      // sees the true state of lines this call did not just update.
+      const allItems = await tx
+        .select({ quantity: schema.saleItems.quantity, returnedQuantity: schema.saleItems.returnedQuantity })
+        .from(schema.saleItems)
+        .where(eq(schema.saleItems.saleId, dto.originalSaleId));
+
+      const fullyReturned = allItems.every(
+        (i) => Money.toMinor(i.returnedQuantity) >= Money.toMinor(i.quantity),
+      );
+      const anyReturned = allItems.some((i) => Money.isPositive(Money.toMinor(i.returnedQuantity)));
+
+      await tx
+        .update(schema.sales)
+        .set({ status: fullyReturned ? "returned" : anyReturned ? "partially_returned" : original!.status })
+        .where(eq(schema.sales.id, dto.originalSaleId));
+
+      // --- refund: a negative payment per tender, same as create() -------
+      const refundTotal = dto.refunds.reduce(
+        (sum, r) => Money.add(sum, Money.toMinor(String(r.amount))),
+        0n,
+      );
+      if (refundTotal > totals.total) {
+        throw new AppError(
+          ERROR_CODES.VALIDATION_FAILED,
+          `Refunding ${Money.toDecimalString(refundTotal, 2)} against a return worth ${Money.toDecimalString(totals.total, 2)}.`,
+        );
+      }
+
+      for (const refund of dto.refunds) {
+        const amount = Money.toMinor(String(refund.amount));
+        if (!Money.isPositive(amount)) continue;
+
+        await tx.insert(schema.payments).values({
+          tenantId,
+          branchId: original!.branchId,
+          saleId: returnSale.id,
+          customerId: original!.customerId,
+          cashSessionId: dto.cashSessionId ?? null,
+          method: refund.method as PaymentMethod,
+          amount: Money.toDecimalString(Money.negate(amount), 4),
+          currency: original!.currency,
+          ...(refund.reference ? { reference: refund.reference } : {}),
+          createdBy: user.id,
+          ...(dto.occurredAt ? { occurredAt: new Date(dto.occurredAt) } : {}),
+        });
+      }
+
+      // Whatever the refund did not cover reduces what the customer owes —
+      // the same balance a sale's own unpaid remainder increases.
+      const uncovered = Money.subtract(totals.total, refundTotal);
+      if (Money.isPositive(uncovered) && original!.customerId) {
+        await tx
+          .update(schema.customers)
+          .set({
+            creditBalance: sql`${schema.customers.creditBalance} - ${Money.toDecimalString(uncovered, 4)}::numeric`,
+          })
+          .where(eq(schema.customers.id, original!.customerId));
+      }
+
+      this.logger.log(
+        { originalSaleId: dto.originalSaleId, returnSaleId: returnSale.id },
+        "Return recorded",
+      );
+      return this.findById(returnSale.id, tx);
     });
   }
 

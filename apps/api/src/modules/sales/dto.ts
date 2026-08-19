@@ -62,6 +62,49 @@ export const CreateSaleSchema = z.object({
 });
 export type CreateSaleDto = z.infer<typeof CreateSaleSchema>;
 
+const RefundSchema = z.object({
+  method: z.enum(PAYMENT_METHODS),
+  amount: z.coerce.number().positive(),
+  reference: z.string().trim().max(100).optional(),
+});
+
+const ReturnLineSchema = z.object({
+  saleItemId: z.string().uuid(),
+  quantity: z.coerce.number().positive(),
+  /**
+   * "restock" puts the units back into sellable inventory; "scrap" records
+   * that they came back damaged and writes them off with no stock movement
+   * at all. There is no default — a cashier taking goods back must say which
+   * one happened, not have the server guess.
+   */
+  disposition: z.enum(["restock", "scrap"]),
+});
+
+export const CreateReturnSchema = z.object({
+  originalSaleId: z.string().uuid(),
+  lines: z.array(ReturnLineSchema).min(1, "A return needs at least one line"),
+  /**
+   * How the refund is being paid out. Deliberately independent of how the
+   * original sale was funded — a customer who paid by card is often refunded
+   * in cash at the counter, and the reverse happens too.
+   *
+   * Optional and defaults to empty: a return against a sale that was on
+   * account can be fully absorbed as a reduction to the customer's credit
+   * balance, with no cash or card movement at all.
+   */
+  refunds: z.array(RefundSchema).default([]),
+  reason: z.string().trim().max(500).optional(),
+  cashSessionId: z.string().uuid().nullable().optional(),
+  localId: z.string().uuid().optional(),
+  occurredAt: z.string().datetime().optional(),
+});
+export type CreateReturnDto = z.infer<typeof CreateReturnSchema>;
+
+export const VoidSaleSchema = z.object({
+  reason: z.string().trim().min(1, "A void needs a reason").max(500),
+});
+export type VoidSaleDto = z.infer<typeof VoidSaleSchema>;
+
 export const ListSalesSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),

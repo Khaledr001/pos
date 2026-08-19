@@ -229,6 +229,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
       case ERROR_CODES.CASH_SESSION_ALREADY_OPEN:
       case ERROR_CODES.DAY_ALREADY_OPEN:
       case ERROR_CODES.DAY_ALREADY_CLOSED:
+      case ERROR_CODES.SALE_ALREADY_VOIDED:
+      case ERROR_CODES.SALE_ALREADY_RETURNED:
+      case ERROR_CODES.CANNOT_RETURN_A_RETURN:
         return HttpStatus.CONFLICT;
       case ERROR_CODES.VALIDATION_FAILED:
         return HttpStatus.BAD_REQUEST;

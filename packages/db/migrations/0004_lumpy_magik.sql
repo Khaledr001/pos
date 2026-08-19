@@ -1,0 +1,1 @@
+ALTER TABLE "sale_items" ADD COLUMN "return_disposition" varchar(10);

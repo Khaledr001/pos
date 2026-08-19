@@ -3,7 +3,16 @@ import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Audited, RequirePermissions } from "../../common/decorators/index.js";
 import { zodPipe } from "../../common/pipes/zod-validation.pipe.js";
 import { SalesService } from "./sales.service.js";
-import { CreateSaleSchema, ListSalesSchema, type CreateSaleDto, type ListSalesDto } from "./dto.js";
+import {
+  CreateReturnSchema,
+  CreateSaleSchema,
+  ListSalesSchema,
+  VoidSaleSchema,
+  type CreateReturnDto,
+  type CreateSaleDto,
+  type ListSalesDto,
+  type VoidSaleDto,
+} from "./dto.js";
 
 @ApiTags("sales")
 @Controller("sales")
@@ -34,5 +43,26 @@ export class SalesController {
   @ApiOperation({ summary: "Complete a sale — deducts stock, takes payment" })
   create(@Body(zodPipe(CreateSaleSchema)) dto: CreateSaleDto) {
     return this.sales.create(dto);
+  }
+
+  /** Undo a sale entirely — restocks every line and reverses every payment. */
+  @Post(":id/void")
+  @RequirePermissions("sale:void")
+  @Audited("sales", "void")
+  @ApiOperation({ summary: "Void a sale" })
+  voidSale(@Param("id", ParseUUIDPipe) id: string, @Body(zodPipe(VoidSaleSchema)) dto: VoidSaleDto) {
+    return this.sales.void(id, dto);
+  }
+
+  /**
+   * Idempotent on `localId`, same as `create` — a terminal pushing a return
+   * after a timeout gets the original return back, not a second one.
+   */
+  @Post("returns")
+  @RequirePermissions("sale:return")
+  @Audited("sales", "return")
+  @ApiOperation({ summary: "Return some or all lines of a sale" })
+  createReturn(@Body(zodPipe(CreateReturnSchema)) dto: CreateReturnDto) {
+    return this.sales.createReturn(dto);
   }
 }

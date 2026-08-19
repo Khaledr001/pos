@@ -308,6 +308,16 @@ export const saleItems = pgTable(
 
     /** Units returned so far. Caps how much of this line can still come back. */
     returnedQuantity: quantity().notNull().default("0"),
+
+    /**
+     * Set only on a RETURN's own line — never on the original sale it points
+     * back to. "restock" moves the units back into sellable inventory
+     * (StockService.addStock, referenceType "sale" — resolves to the
+     * sale_return ledger type); "scrap" records that they came back damaged
+     * and were written off, with no stock movement at all. Nullable because
+     * an ordinary sale line has no disposition — it has not been returned.
+     */
+    returnDisposition: varchar({ length: 10 }).$type<"restock" | "scrap">(),
     ...timestamps(),
   },
   (t) => [
