@@ -226,6 +226,9 @@ importers:
       '@devsfleet/shared-utils':
         specifier: workspace:*
         version: link:../../packages/shared-utils
+      bcryptjs:
+        specifier: ^3.0.2
+        version: 3.0.3
       better-sqlite3:
         specifier: ^12.4.1
         version: 12.11.1

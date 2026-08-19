@@ -3,7 +3,8 @@ import { hostname, networkInterfaces, platform } from "node:os";
 import type { IpcMain } from "electron";
 import { app } from "electron";
 import * as repo from "../db/repositories.js";
-import { loginWithPin, verifyOverride } from "../sync/api-client.js";
+import { verifyPinLocally } from "../db/local-auth.js";
+import { ApiError, loginWithPin, verifyOverride } from "../sync/api-client.js";
 import { syncNow } from "../sync/index.js";
 
 /**
@@ -71,9 +72,35 @@ export function registerDataHandlers(ipcMain: IpcMain): void {
   ipcMain.handle("quotations:list", () => repo.listQuotations());
 
   ipcMain.handle("auth:pin-login", async (_event, pin: string) => {
-    const user = await loginWithPin(String(pin ?? ""));
-    syncNow();
-    return user;
+    const pinValue = String(pin ?? "");
+
+    try {
+      const user = await loginWithPin(pinValue);
+      syncNow();
+      return user;
+    } catch (err) {
+      /**
+       * The server has spoken. Trust it, whatever it said.
+       *
+       * `ApiError` means a real HTTP response came back — wrong PIN, a
+       * locked account, a deactivated device. Falling back to the local
+       * mirror here would mean a server-side lockout or deactivation could
+       * be worked around simply by asking the same wrong question of a
+       * (possibly stale) local copy instead. Only a request that never got
+       * an answer at all — the network genuinely unreachable — falls
+       * through to it.
+       */
+      if (err instanceof ApiError) throw err;
+
+      const branch = repo.getState("branch_id");
+      if (!branch) throw err;
+
+      const user = verifyPinLocally(pinValue, branch);
+      // No fresh token to sync with — this still uses whatever the device
+      // last stored, and simply does nothing useful if that has expired too.
+      syncNow();
+      return user;
+    }
   });
 
   /**

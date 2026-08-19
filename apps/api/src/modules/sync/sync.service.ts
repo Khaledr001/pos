@@ -89,6 +89,19 @@ const PUSH_PERMISSIONS: Partial<
 const PULL_PERMISSIONS: Record<string, Permission> = {
   customer: "customer:read",
   inventory: "inventory:read",
+  /**
+   * `user` is deliberately ABSENT here, not merely permissive.
+   *
+   * This entity is the staff directory a terminal needs to verify a PIN with
+   * no network at all — every cashier signing in offline depends on it having
+   * already been pulled, by WHICHEVER token the device happens to be
+   * authenticated as at the time. Gating it on `user:read` would mean a
+   * device whose stored session belongs to a plain cashier (who does not hold
+   * it) could never pull the very data that lets OTHER cashiers sign in
+   * offline — the feature would work only at branches where a manager
+   * happened to be the last one to sign in online. Every role needs this,
+   * the same way every role needs the catalogue.
+   */
 };
 
 @Injectable()
@@ -423,6 +436,55 @@ export class SyncService {
           .orderBy(schema.inventory.updatedAt, schema.inventory.id)
           .limit(limit);
         collect("inventory", rows, (r) => r, () => false);
+      }
+
+      if (wanted("user")) {
+        /**
+         * The staff a terminal at THIS branch can ever sign in offline —
+         * branch-scoped users, plus tenant-wide ones (`branchId IS NULL`:
+         * owners, area managers), matching exactly who `resolvePinHolder`
+         * considers for an online PIN login at this branch. A user with no
+         * PIN set is included rather than filtered out here — they cannot
+         * sign in either way, and filtering them would mean assigning them
+         * one later never produces a tombstone-free "new row" the terminal
+         * has not seen, since it never appeared in the first place.
+         *
+         * `passwordHash` never appears here — PIN login never needed it, and
+         * a stolen terminal should not be a shortcut to the admin panel too.
+         */
+        const rows = await tx
+          .select({
+            id: schema.users.id,
+            updatedAt: schema.users.updatedAt,
+            updatedAtRaw: sql<string>`users.updated_at::text`,
+            deletedAt: schema.users.deletedAt,
+            isActive: schema.users.isActive,
+            branchId: schema.users.branchId,
+            name: schema.users.name,
+            pinHash: schema.users.pinHash,
+            maxDiscountPercent: schema.users.maxDiscountPercent,
+            roleName: schema.roles.name,
+            permissions: schema.roles.permissions,
+          })
+          .from(schema.users)
+          .innerJoin(schema.roles, eq(schema.users.roleId, schema.roles.id))
+          .where(
+            and(
+              after("user", schema.users),
+              or(eq(schema.users.branchId, device.branchId), isNull(schema.users.branchId)),
+            ),
+          )
+          .orderBy(schema.users.updatedAt, schema.users.id)
+          .limit(limit);
+
+        collect(
+          "user",
+          rows,
+          (r) => r,
+          // Deactivating a cashier must reach the till: an offline sign-in
+          // has no other way to learn their access was withdrawn.
+          (r) => r.deletedAt !== null || !r.isActive,
+        );
       }
     });
 

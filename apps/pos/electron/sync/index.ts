@@ -234,9 +234,13 @@ function applyChanges(
 function applyTombstone(entity: string, id: string): void {
   const db = getDatabase();
 
-  const table = { product: "variants", customer: "customers", category: null, unit: null }[
-    entity
-  ];
+  const table = {
+    product: "variants",
+    customer: "customers",
+    user: "staff",
+    category: null,
+    unit: null,
+  }[entity];
   if (table) db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(id);
 
   db.prepare(
@@ -340,6 +344,37 @@ function applyRecord(entity: string, id: string, record: Record<string, unknown>
         text(record.creditLimit) ?? "0",
         text(record.creditBalance) ?? "0",
         record.creditOnHold ? 1 : 0,
+      );
+      return;
+
+    case "user":
+      /**
+       * A full replace on every pull, on purpose: this row is the server's
+       * current answer to "who may sign in here and with what", and there is
+       * no local edit to preserve underneath it — a terminal never changes a
+       * staff record, only the server does.
+       *
+       * `pin_lockouts` is a SEPARATE table for exactly this reason: an
+       * ordinary sync must never reach into it, or a routine background pull
+       * would quietly clear an active local lockout mid-attack.
+       */
+      db.prepare(
+        `INSERT INTO staff
+           (id, branch_id, name, role_name, permissions, pin_hash, max_discount_percent, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+         ON CONFLICT(id) DO UPDATE SET
+           branch_id = excluded.branch_id, name = excluded.name,
+           role_name = excluded.role_name, permissions = excluded.permissions,
+           pin_hash = excluded.pin_hash, max_discount_percent = excluded.max_discount_percent,
+           updated_at = datetime('now')`,
+      ).run(
+        id,
+        text(record.branchId),
+        text(record.name),
+        text(record.roleName),
+        JSON.stringify(record.permissions ?? []),
+        text(record.pinHash),
+        text(record.maxDiscountPercent) ?? "0",
       );
       return;
 

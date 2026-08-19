@@ -21,6 +21,7 @@
   "dependencies": {
     "@devsfleet/shared-types": "workspace:*",
     "@devsfleet/shared-utils": "workspace:*",
+    "bcryptjs": "^3.0.2",
     "better-sqlite3": "^12.4.1",
     "date-fns": "^4.4.0",
     "electron-updater": "^6.6.2",

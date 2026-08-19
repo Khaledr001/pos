@@ -724,6 +724,50 @@ const MIGRATIONS: Array<
       ALTER TABLE local_customer_payments RENAME COLUMN client_id TO local_id;
     `,
   },
+  {
+    version: 9,
+    sql: `
+      -- The staff directory, mirrored from \`users\` so a PIN can be verified
+      -- with the network unplugged. \`branch_id\` NULL means the same as it does
+      -- server-side: this person may sign in at any branch (an owner, an area
+      -- manager) — not "unassigned".
+      --
+      -- \`permissions\` is the resolved array from their role, not a role id: the
+      -- terminal has no roles table of its own and no use for one, only for the
+      -- grants a role currently carries.
+      CREATE TABLE IF NOT EXISTS staff (
+        id                    TEXT PRIMARY KEY,
+        branch_id             TEXT,
+        name                  TEXT NOT NULL,
+        role_name             TEXT NOT NULL,
+        permissions           TEXT NOT NULL,
+        pin_hash              TEXT,
+        max_discount_percent  TEXT NOT NULL DEFAULT '0',
+        updated_at            TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_staff_branch ON staff(branch_id);
+
+      -- Deliberately NOT part of the \`staff\` mirror above, and never synced.
+      --
+      -- A wrong PIN cannot be attributed to a specific account — it may match
+      -- nobody, and there is no way to tell a mistyped digit from a stranger's
+      -- guess. That is exactly why neither this nor the SERVER's own
+      -- \`pinLogin\` tracks a per-account lockout for it (contrast \`login()\`,
+      -- which resolves the account from the email FIRST and can blame it).
+      --
+      -- What guards a PIN online is the route's rate limit — 20 requests a
+      -- minute, everyone sharing it. Offline there is no route to limit, so
+      -- this is the same idea moved to the till: one counter for the whole
+      -- terminal, not per person, because per-person is not an answer this
+      -- problem has. \`id = 1\` enforces there is ever only one row.
+      CREATE TABLE IF NOT EXISTS pin_throttle (
+        id                  INTEGER PRIMARY KEY CHECK (id = 1),
+        failed_count        INTEGER NOT NULL DEFAULT 0,
+        window_started_at   TEXT,
+        locked_until         TEXT
+      );
+    `,
+  },
 ];
 
 export function migrate(database: Database.Database): void {

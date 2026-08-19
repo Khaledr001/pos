@@ -244,6 +244,13 @@ export const SYNC_ENTITIES = asConst([
   "quotation",
   "order",
   "customer_payment",
+  /**
+   * The staff directory, pulled so a terminal can verify a PIN with no
+   * network at all. Every terminal pulls it, regardless of the signed-in
+   * principal's own permissions — see PULL_PERMISSIONS in sync.service.ts for
+   * why this one is deliberately not `user:read`-gated.
+   */
+  "user",
 ]);
 export type SyncEntity = (typeof SYNC_ENTITIES)[number];
 
