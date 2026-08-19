@@ -1,15 +1,16 @@
 import { DEFAULT_TENANT_SETTINGS, type PaymentMethod } from "@devsfleet/shared-types";
 import { Money, calculateDocument } from "@devsfleet/shared-utils";
-import { Banknote, CreditCard, Landmark, Receipt, Search, Undo2 } from "lucide-react";
+import { Banknote, CreditCard, Landmark, Plus, Receipt, Search, Trash2, Undo2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Dialog } from "../components/Dialog.js";
 import { KeyRail } from "../components/KeyRail.js";
+import { ProductSearch } from "../components/ProductSearch.js";
 import { amount, money, quantity as fmtQuantity } from "../lib/money.js";
-import { posData, type PosSaleReceipt } from "../lib/pos-data.js";
+import { posData, type PosProduct, type PosSaleReceipt } from "../lib/pos-data.js";
 import { useAuth } from "../store/auth.js";
 
 /**
- * Returns.
+ * Returns, and exchanges.
  *
  * A return is always against an original sale — never a free-standing negative
  * amount. That constraint is the whole control: it caps what can come back at
@@ -21,12 +22,21 @@ import { useAuth } from "../store/auth.js";
  *
  * Only a same-till original is supported — `posData.findSale` has no path to
  * a sale from another terminal until both have synced.
+ *
+ * EXCHANGE is a return plus a new sale, not a third kind of document — there
+ * is no server concept of one. Both sides are recorded in full (the return
+ * refunds its whole value, the new sale is paid in full) rather than netted
+ * into a single partial tender: each document stays self-contained and
+ * independently auditable, and a walk-in customer needs nothing extra to
+ * support it. The net figure shown to the cashier — what actually changes
+ * hands — is exactly the same number either way; only the bookkeeping behind
+ * it differs from a single blended payment.
  */
 
 const TAX_MODE = DEFAULT_TENANT_SETTINGS.tax.mode;
 const DECIMALS = DEFAULT_TENANT_SETTINGS.currency.decimals;
 
-const REFUND_METHODS: Array<{
+const PAYMENT_METHODS_UI: Array<{
   method: PaymentMethod;
   label: string;
   icon: typeof Banknote;
@@ -36,6 +46,12 @@ const REFUND_METHODS: Array<{
   { method: "card", label: "Card", icon: CreditCard, needsReference: true },
   { method: "bank_transfer", label: "Transfer", icon: Landmark, needsReference: true },
 ];
+
+interface ExchangeLine {
+  key: string;
+  product: PosProduct;
+  quantity: string;
+}
 
 export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
   const { can } = useAuth();
@@ -50,6 +66,11 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
   const [refundReference, setRefundReference] = useState("");
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  const [exchangeLines, setExchangeLines] = useState<ExchangeLine[]>([]);
+  const [addItemOpen, setAddItemOpen] = useState(false);
+  const [saleMethod, setSaleMethod] = useState<PaymentMethod>("cash");
+  const [saleReference, setSaleReference] = useState("");
 
   const allowed = can("sale:return");
 
@@ -71,6 +92,9 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
     setReason("");
     setRefundMethod("cash");
     setRefundReference("");
+    setExchangeLines([]);
+    setSaleMethod("cash");
+    setSaleReference("");
   }
 
   async function find() {
@@ -102,13 +126,48 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
   });
   const refund = totals.total;
   const anySelected = Money.isPositive(refund);
-  const activeMethod = REFUND_METHODS.find((m) => m.method === refundMethod);
+  const activeRefundMethod = PAYMENT_METHODS_UI.find((m) => m.method === refundMethod);
 
-  async function submitReturn() {
-    if (!sale || !anySelected || submitting) return;
+  const exchangeTotals = calculateDocument({
+    taxMode: TAX_MODE,
+    decimals: DECIMALS,
+    lines: exchangeLines.map((l) => ({
+      quantity: l.quantity,
+      unitPrice: l.product.sellingPrice,
+      taxPercent: l.product.taxPercent,
+    })),
+  });
+  const exchangeTotal = exchangeTotals.total;
+  const isExchange = exchangeLines.length > 0;
+  /** Positive = the customer owes more; negative = they are still owed money. */
+  const net = Money.subtract(exchangeTotal, refund);
+  const activeSaleMethod = PAYMENT_METHODS_UI.find((m) => m.method === saleMethod);
+
+  // An exchange still needs an actual return leg — the server refuses a
+  // return with zero lines, and "buy something new, return nothing" is just
+  // a sale, which belongs on the Sale screen instead.
+  const canConfirm = anySelected;
+
+  function addExchangeItem(product: PosProduct) {
+    setExchangeLines((lines) => [...lines, { key: crypto.randomUUID(), product, quantity: "1" }]);
+    setAddItemOpen(false);
+  }
+
+  function removeExchangeItem(key: string) {
+    setExchangeLines((lines) => lines.filter((l) => l.key !== key));
+  }
+
+  function setExchangeQuantity(key: string, raw: string) {
+    setExchangeLines((lines) =>
+      lines.map((l) => (l.key === key ? { ...l, quantity: raw === "" ? "" : raw } : l)),
+    );
+  }
+
+  async function submit() {
+    if (!sale || !canConfirm || submitting) return;
     setSubmitting(true);
 
-    const draft = {
+    const returnDraft = {
       localId: crypto.randomUUID(),
       originalSaleLocalId: sale.localId,
       customerId: sale.customerId,
@@ -126,23 +185,80 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
       taxAmount: Money.toDecimalString(totals.taxAmount, 2),
       discountAmount: Money.toDecimalString(totals.discountAmount, 2),
       total: Money.toDecimalString(totals.total, 2),
-      refunds: [
-        {
-          method: refundMethod,
-          amount: Money.toDecimalString(refund, 2),
-          ...(refundReference.trim() ? { reference: refundReference.trim() } : {}),
-        },
-      ],
+      refunds: anySelected
+        ? [
+            {
+              method: refundMethod,
+              amount: Money.toDecimalString(refund, 2),
+              ...(refundReference.trim() ? { reference: refundReference.trim() } : {}),
+            },
+          ]
+        : [],
       ...(reason.trim() ? { reason: reason.trim() } : {}),
       occurredAt: new Date().toISOString(),
     };
 
     try {
-      await posData.commitReturn(draft);
+      await posData.commitReturn(returnDraft);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Could not record this return.");
       setSubmitting(false);
       return;
+    }
+
+    if (isExchange) {
+      const saleDraft = {
+        localId: crypto.randomUUID(),
+        customerId: sale.customerId,
+        cashSessionId,
+        lines: exchangeLines.map((l) => ({
+          variantId: l.product.id,
+          productName: l.product.name,
+          productSku: l.product.sku,
+          quantity: l.quantity,
+          unitPrice: l.product.sellingPrice,
+          discountPercent: "0",
+          taxPercent: l.product.taxPercent,
+          total: Money.toDecimalString(
+            Money.multiplyByQuantity(Money.toMinor(l.product.sellingPrice), l.quantity),
+            2,
+          ),
+        })),
+        subtotal: Money.toDecimalString(exchangeTotals.subtotal, 2),
+        taxAmount: Money.toDecimalString(exchangeTotals.taxAmount, 2),
+        discountAmount: Money.toDecimalString(exchangeTotals.discountAmount, 2),
+        total: Money.toDecimalString(exchangeTotals.total, 2),
+        payments: [
+          {
+            method: saleMethod,
+            amount: Money.toDecimalString(exchangeTotal, 2),
+            ...(saleReference.trim() ? { reference: saleReference.trim() } : {}),
+          },
+        ],
+        occurredAt: new Date().toISOString(),
+      };
+
+      try {
+        await posData.commitSale(saleDraft);
+      } catch (err) {
+        // The return already went through — do not let the cashier think
+        // NOTHING happened and retry the whole exchange from scratch, which
+        // would return the same lines twice.
+        alert(
+          `The return was recorded, but the new items could not be rung up: ${
+            err instanceof Error ? err.message : "unknown error"
+          }. Ring up the new items as a separate sale.`,
+        );
+        setSubmitting(false);
+        setConfirming(false);
+        setSale(null);
+        setReference("");
+        setQuantities({});
+        setDispositions({});
+        setExchangeLines([]);
+        void posData.recentSales(8).then(setRecent);
+        return;
+      }
     }
 
     setSubmitting(false);
@@ -151,6 +267,7 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
     setReference("");
     setQuantities({});
     setDispositions({});
+    setExchangeLines([]);
     void posData.recentSales(8).then(setRecent);
   }
 
@@ -368,6 +485,75 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
               </div>
             </div>
           )}
+
+          {sale && (
+            <div className="panel overflow-hidden">
+              <div className="flex items-center justify-between border-b border-steel-700 px-5 py-3.5">
+                <h2 className="text-[13px] font-semibold">Exchange for something else</h2>
+                <button
+                  type="button"
+                  className="btn btn-ghost gap-1.5 py-1.5! px-2.5! text-[12px]"
+                  onClick={() => setAddItemOpen(true)}
+                  disabled={!allowed}
+                >
+                  <Plus className="size-3.5" aria-hidden />
+                  Add item
+                </button>
+              </div>
+
+              {exchangeLines.length === 0 ? (
+                <p className="px-5 py-6 text-center text-[12px] text-zinc-500">
+                  Optional. Add new items here to exchange instead of just
+                  refunding — the till settles only the difference.
+                </p>
+              ) : (
+                <ul>
+                  {exchangeLines.map((line) => (
+                    <li
+                      key={line.key}
+                      className="flex items-center gap-4 border-b border-steel-800 px-5 py-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-[13px] font-medium">
+                          {line.product.name}
+                        </div>
+                        <div className="num mt-0.5 text-[11px] text-zinc-500">
+                          {line.product.sku} · {amount(Money.toMinor(line.product.sellingPrice))}{" "}
+                          each
+                        </div>
+                      </div>
+                      <input
+                        value={line.quantity}
+                        onChange={(e) => setExchangeQuantity(line.key, e.target.value)}
+                        inputMode="decimal"
+                        className="field num w-20 text-right"
+                        aria-label={`Quantity of ${line.product.name}`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeExchangeItem(line.key)}
+                        aria-label={`Remove ${line.product.name}`}
+                        className="rounded p-1.5 text-zinc-600 hover:bg-signal-red/15 hover:text-signal-red"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {isExchange && (
+                <div className="tear flex items-baseline justify-between px-5 py-4">
+                  <span className="eyebrow">
+                    {Money.isNegative(net) ? "Refund due" : "Customer pays"}
+                  </span>
+                  <span className="num text-3xl font-bold text-brass">
+                    {money(Money.abs(net))}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -376,9 +562,17 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
           { combo: "Enter", label: "Find sale", onPress: find, disabled: !allowed },
           {
             combo: "F4",
-            label: anySelected ? `Refund ${money(refund)}` : "Refund",
+            label: !canConfirm
+              ? "Refund"
+              : isExchange
+                ? Money.isNegative(net)
+                  ? `Refund ${money(Money.abs(net))}`
+                  : Money.isZero(net)
+                    ? "Even exchange"
+                    : `Charge ${money(net)}`
+                : `Refund ${money(refund)}`,
             onPress: () => setConfirming(true),
-            disabled: !anySelected || !allowed,
+            disabled: !canConfirm || !allowed,
             primary: true,
           },
         ]}
@@ -387,7 +581,7 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
       <Dialog
         open={confirming}
         onClose={() => !submitting && setConfirming(false)}
-        title="Confirm the refund"
+        title={isExchange ? "Confirm the exchange" : "Confirm the refund"}
         description="This creates a linked return. The original invoice is not modified."
         width="sm"
         footer={
@@ -403,57 +597,110 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
             <button
               type="button"
               className="btn btn-primary"
-              onClick={() => void submitReturn()}
+              onClick={() => void submit()}
               disabled={submitting}
             >
               <Undo2 className="size-4" aria-hidden />
-              {submitting ? "Recording…" : `Refund ${money(refund)}`}
+              {submitting
+                ? "Recording…"
+                : isExchange
+                  ? Money.isNegative(net)
+                    ? `Refund ${money(Money.abs(net))}`
+                    : Money.isZero(net)
+                      ? "Confirm"
+                      : `Charge ${money(net)}`
+                  : `Refund ${money(refund)}`}
             </button>
           </>
         }
       >
         <div className="space-y-4">
           <p className="text-[13px] text-zinc-400">
-            {money(refund)} goes back to the customer. Restocked lines return to
-            sellable inventory at this branch; scrapped lines are written off.
+            {anySelected
+              ? `${money(refund)} goes back to the customer. Restocked lines return to sellable inventory at this branch; scrapped lines are written off.`
+              : "No lines are being refunded in cash."}
+            {isExchange &&
+              " The new items are rung up as their own sale, priced today."}
           </p>
 
-          <div>
-            <span className="eyebrow">Refund method</span>
-            <div className="mt-2 grid grid-cols-3 gap-2">
-              {REFUND_METHODS.map(({ method, label, icon: Icon }) => (
-                <button
-                  key={method}
-                  type="button"
-                  onClick={() => setRefundMethod(method)}
-                  className={[
-                    "flex flex-col items-center gap-1.5 rounded-lg border px-2 py-3 text-[12px] font-medium transition-colors",
-                    refundMethod === method
-                      ? "border-brass bg-brass/12 text-brass"
-                      : "border-steel-700 bg-steel-800 text-zinc-400 hover:bg-steel-750",
-                  ].join(" ")}
-                >
-                  <Icon className="size-4" aria-hidden />
-                  {label}
-                </button>
-              ))}
+          {anySelected && (
+            <div>
+              <span className="eyebrow">Refund method</span>
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                {PAYMENT_METHODS_UI.map(({ method, label, icon: Icon }) => (
+                  <button
+                    key={method}
+                    type="button"
+                    onClick={() => setRefundMethod(method)}
+                    className={[
+                      "flex flex-col items-center gap-1.5 rounded-lg border px-2 py-3 text-[12px] font-medium transition-colors",
+                      refundMethod === method
+                        ? "border-brass bg-brass/12 text-brass"
+                        : "border-steel-700 bg-steel-800 text-zinc-400 hover:bg-steel-750",
+                    ].join(" ")}
+                  >
+                    <Icon className="size-4" aria-hidden />
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 text-[11px] text-zinc-500">
+                Independent of how the sale was paid — a card sale can be refunded
+                in cash, and the reverse happens too.
+              </p>
             </div>
-            <p className="mt-2 text-[11px] text-zinc-500">
-              Independent of how the sale was paid — a card sale can be refunded
-              in cash, and the reverse happens too.
-            </p>
-          </div>
+          )}
 
-          {activeMethod?.needsReference && (
+          {anySelected && activeRefundMethod?.needsReference && (
             <div>
               <label htmlFor="refund-ref" className="eyebrow">
-                Reference
+                Refund reference
               </label>
               <input
                 id="refund-ref"
                 value={refundReference}
                 onChange={(e) => setRefundReference(e.target.value)}
                 placeholder={refundMethod === "card" ? "Auth code" : "Transfer reference"}
+                className="field mt-1.5"
+                autoComplete="off"
+              />
+            </div>
+          )}
+
+          {isExchange && (
+            <div>
+              <span className="eyebrow">New items — payment method</span>
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                {PAYMENT_METHODS_UI.map(({ method, label, icon: Icon }) => (
+                  <button
+                    key={method}
+                    type="button"
+                    onClick={() => setSaleMethod(method)}
+                    className={[
+                      "flex flex-col items-center gap-1.5 rounded-lg border px-2 py-3 text-[12px] font-medium transition-colors",
+                      saleMethod === method
+                        ? "border-brass bg-brass/12 text-brass"
+                        : "border-steel-700 bg-steel-800 text-zinc-400 hover:bg-steel-750",
+                    ].join(" ")}
+                  >
+                    <Icon className="size-4" aria-hidden />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {isExchange && activeSaleMethod?.needsReference && (
+            <div>
+              <label htmlFor="sale-ref-input" className="eyebrow">
+                Sale reference
+              </label>
+              <input
+                id="sale-ref-input"
+                value={saleReference}
+                onChange={(e) => setSaleReference(e.target.value)}
+                placeholder={saleMethod === "card" ? "Auth code" : "Transfer reference"}
                 className="field mt-1.5"
                 autoComplete="off"
               />
@@ -473,6 +720,17 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
               autoComplete="off"
             />
           </div>
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={addItemOpen}
+        onClose={() => setAddItemOpen(false)}
+        title="Add an exchange item"
+        width="lg"
+      >
+        <div className="flex h-[28rem] flex-col">
+          <ProductSearch onPick={addExchangeItem} />
         </div>
       </Dialog>
     </>

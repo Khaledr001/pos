@@ -1023,7 +1023,19 @@ export class SalesService {
       // Whatever the refund did not cover reduces what the customer owes —
       // the same balance a sale's own unpaid remainder increases.
       const uncovered = Money.subtract(totals.total, refundTotal);
-      if (Money.isPositive(uncovered) && original!.customerId) {
+      if (Money.isPositive(uncovered)) {
+        // A walk-in has no account for the shortfall to land in — same rule
+        // create() enforces for an unpaid sale, mirrored here so an
+        // uncovered refund cannot go untracked. An exchange is exactly the
+        // case this exists for: the return is left uncovered on purpose,
+        // to be absorbed by the new sale, and that bridge only exists
+        // through a customer's credit balance.
+        if (!original!.customerId) {
+          throw new AppError(
+            ERROR_CODES.VALIDATION_FAILED,
+            "A return not fully refunded in cash must be attached to a customer.",
+          );
+        }
         await tx
           .update(schema.customers)
           .set({
