@@ -88,6 +88,8 @@ export interface PosSaleDraft {
   total: string;
   payments: Array<{ method: PaymentMethod; amount: string; reference?: string }>;
   occurredAt: string;
+  /** Signed supervisor approvals, forwarded to the server with the sale. */
+  overrideGrants?: string[];
 }
 
 export interface PosSaleReceipt extends PosSaleDraft {
@@ -148,6 +150,12 @@ export interface PosCashier {
   tenantName: string | null;
 }
 
+export interface ManagerApproval {
+  managerName: string;
+  /** Opaque to the terminal. Attach it, never inspect it. */
+  grant: string;
+}
+
 export interface CreateCustomerInput {
   name: string;
   phone?: string;
@@ -194,7 +202,17 @@ export interface PosDataAdapter {
     occurredAt: string;
   }): Promise<void>;
 
-  managerOverride(pin: string, requiredPermission: string): Promise<string>;
+  /**
+   * Ask a supervisor to authorise one action.
+   *
+   * Returns their name for the receipt AND a signed grant. The grant is what
+   * the sale carries to the server: an approval given at the counter has to
+   * survive a push that may not happen for hours, and the push goes out on the
+   * CASHIER's session. Without it the manager's decision is simply absent at
+   * the moment the server makes up its mind, and the sale is refused after the
+   * goods have left.
+   */
+  managerOverride(pin: string, requiredPermission: string): Promise<ManagerApproval>;
 
   /**
    * Park a cart, list what is parked, take one back.
@@ -580,9 +598,14 @@ const browserAdapter: PosDataAdapter = {
   async managerOverride(pin, requiredPermission) {
     const staff = SEED_STAFF.find((s) => s.pin === pin);
     if (!staff) throw new Error("That PIN was not recognised.");
-    const hasPerm = staff.permissions.includes("*") || staff.permissions.includes(requiredPermission as any);
+    const hasPerm =
+      staff.permissions.includes("*") ||
+      staff.permissions.includes(requiredPermission as never);
     if (!hasPerm) throw new Error(`Manager lacks required permission: ${requiredPermission}`);
-    return staff.name;
+    // No server, so no signature to produce. The grant is empty rather than
+    // faked: browser mode never pushes, and a fabricated one would be a
+    // credential-shaped string in a development build.
+    return { managerName: staff.name, grant: "" };
   },
   async holdCart(cart) {
     const held = {
@@ -1010,8 +1033,18 @@ const apiAdapter: PosDataAdapter = {
     throw new Error("Not implemented in direct API mode");
   },
 
-  async managerOverride() {
-    throw new Error("Not implemented in direct API mode");
+  async managerOverride(pin, requiredPermission) {
+    /**
+     * Returns the approver's NAME, and nothing else, because that is all the
+     * server returns. The endpoint mints no token: the session making this
+     * call is the cashier's and stays the cashier's, which is the difference
+     * between an override and a login.
+     */
+    const result = await apiClient.post<{
+      approvedBy: { id: string; name: string };
+      grant: string;
+    }>("/auth/verify-override", { pin, permission: requiredPermission });
+    return { managerName: result.approvedBy.name, grant: result.grant };
   },
 
   async checkStockInOtherBranches(sku) {
@@ -1125,5 +1158,14 @@ export const dataMode: "electron" | "api" | "browser" = hasBridge()
  * The Zustand signOut already wipes the session; this handles the API tokens.
  */
 export function clearPosApiSession(): void {
-  if (dataMode === "api") clearApiTokens();
+  /**
+   * Unconditional, not `if (dataMode === "api")`.
+   *
+   * The renderer holds API tokens in EVERY mode, because terminal registration
+   * signs in as an administrator over HTTP before the Electron bridge is ever
+   * used, and Transfers/Receiving call the API directly afterwards. Gating the
+   * cleanup on api-mode meant that on a real Electron till — the only kind that
+   * ships — signing out never cleared anything.
+   */
+  clearApiTokens();
 }

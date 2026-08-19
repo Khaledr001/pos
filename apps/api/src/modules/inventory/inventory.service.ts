@@ -3,7 +3,7 @@ import type { Paginated } from "@devsfleet/shared-types";
 import { AppError, ERROR_CODES, Money } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
-import { RequestContext } from "../../common/context/request-context.js";
+import { assertBranchInScope } from "../../common/context/branch-scope.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import { StockService } from "./stock.service.js";
 import type {
@@ -37,7 +37,7 @@ export class InventoryService {
   async listStock(query: ListStockDto): Promise<Paginated<unknown>> {
     const { page, limit, q, branchId, categoryId, lowStockOnly } = query;
     const offset = (page - 1) * limit;
-    this.assertBranchInScope(branchId);
+    assertBranchInScope(branchId);
 
     const where = and(
       branchId ? eq(schema.inventory.branchId, branchId) : undefined,
@@ -118,7 +118,7 @@ export class InventoryService {
   async listTransactions(query: ListTransactionsDto): Promise<Paginated<unknown>> {
     const { page, limit, variantId, branchId, type, from, to } = query;
     const offset = (page - 1) * limit;
-    this.assertBranchInScope(branchId);
+    assertBranchInScope(branchId);
 
     const where = and(
       variantId ? eq(schema.inventoryTransactions.variantId, variantId) : undefined,
@@ -176,7 +176,7 @@ export class InventoryService {
 
   /** Set an absolute quantity. The reason is mandatory and lands in the ledger. */
   async adjust(dto: AdjustStockDto): Promise<{ delta: string; newQuantity: string }> {
-    this.assertBranchInScope(dto.branchId);
+    assertBranchInScope(dto.branchId);
 
     return this.db.run(async (tx) => {
       const { delta } = await this.stock.adjustStock({
@@ -202,8 +202,8 @@ export class InventoryService {
    * cannot be held accountable for.
    */
   async transfer(dto: TransferStockDto): Promise<{ referenceId: string }> {
-    this.assertBranchInScope(dto.fromBranchId);
-    this.assertBranchInScope(dto.toBranchId);
+    assertBranchInScope(dto.fromBranchId);
+    assertBranchInScope(dto.toBranchId);
 
     return this.db.run(async (tx) => {
       const { referenceId } = await this.stock.transferStock({
@@ -226,7 +226,7 @@ export class InventoryService {
    * list should hit the items closest to stocking out first.
    */
   async lowStock(branchId?: string): Promise<unknown[]> {
-    this.assertBranchInScope(branchId);
+    assertBranchInScope(branchId);
 
     return this.db.run(async (tx) =>
       tx
@@ -274,7 +274,7 @@ export class InventoryService {
    * price — what the stock actually cost, not what replacing it would cost.
    */
   async valuation(branchId?: string): Promise<{ branches: unknown[]; total: string }> {
-    this.assertBranchInScope(branchId);
+    assertBranchInScope(branchId);
 
     const rows = await this.db.run(async (tx) =>
       tx
@@ -292,29 +292,5 @@ export class InventoryService {
 
     const total = rows.reduce<bigint>((sum, r) => sum + Money.toMinor(r.value), 0n);
     return { branches: rows, total: Money.toDecimalString(total, 2) };
-  }
-
-  /**
-   * Refuse a branch the user is not scoped to.
-   *
-   * An empty `allowedBranchIds` means every branch — that is how an owner is
-   * represented, and treating empty as "none" would lock them out of their own
-   * business.
-   */
-  private assertBranchInScope(branchId?: string): void {
-    if (!branchId) return;
-
-    const user = RequestContext.get()?.user;
-    if (!user || user.isPlatformAdmin) return;
-
-    const allowed = user.abac.allowedBranchIds;
-    if (allowed.length === 0) return;
-
-    if (!allowed.includes(branchId)) {
-      throw new AppError(
-        ERROR_CODES.INSUFFICIENT_PERMISSIONS,
-        "You do not have access to that branch",
-      );
-    }
   }
 }

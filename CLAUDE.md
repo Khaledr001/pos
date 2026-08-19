@@ -172,6 +172,22 @@ try/catch, no business `if`.
 `JwtAuthGuard` is global, so authentication is automatic and `@Public()` is the
 exception. Authorisation is explicit, so a missing line is visible in review.
 
+A permission is not the whole check. A route that names a branch also calls
+`assertBranchInScope`, a route that LISTS filters by `branchScope()`, and a
+route that hands out authority calls `assertMayGrantPermissions` — nobody grants
+what they do not hold. See [docs/PATTERNS.md](docs/PATTERNS.md#authorisation).
+
+### 9. A client-side check is never the control
+
+The POS greys out a button and the admin panel hides a nav item so the interface
+tells the truth about what the person in front of it can do. Neither decides
+anything: the same rule is enforced in the service, because a terminal in a shop
+can be modified and the sync push arrives on the same API as everything else.
+
+Where a supervisor approves something at the counter, the approval travels to
+the server as a signed grant on the document — not as a user id in the body, and
+not as a session swapped underneath the cashier.
+
 ---
 
 ## Adding a module

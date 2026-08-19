@@ -60,6 +60,14 @@ export interface SaleDraftInput {
   total: string;
   payments: Array<{ method: string; amount: string; reference?: string }>;
   occurredAt: string;
+  /**
+   * Signed supervisor approvals collected while ringing this sale up.
+   *
+   * They go into the outbox payload with everything else, because the sale may
+   * not reach the server for hours and the approval has to still be there when
+   * it does. Nothing local reads them — they are opaque to the terminal.
+   */
+  overrideGrants?: string[];
 }
 
 // -----------------------------------------------------------------------------
@@ -445,6 +453,9 @@ export function commitSale(draft: SaleDraftInput): Record<string, unknown> {
           amount: Number(payment.amount),
           ...(payment.reference ? { reference: payment.reference } : {}),
         })),
+        ...(draft.overrideGrants?.length
+          ? { overrideGrants: draft.overrideGrants }
+          : {}),
       },
     });
   })();

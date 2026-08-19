@@ -1,4 +1,14 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+} from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Audited, RequirePermissions } from "../../common/decorators/index.js";
 import { zodPipe } from "../../common/pipes/zod-validation.pipe.js";
@@ -20,7 +30,7 @@ export class TransfersController {
   @Get(":id")
   @RequirePermissions("transfer:read")
   @ApiOperation({ summary: "Get transfer details" })
-  get(@Param("id") id: string) {
+  get(@Param("id", ParseUUIDPipe) id: string) {
     return this.transfers.get(id);
   }
 
@@ -37,16 +47,23 @@ export class TransfersController {
   @Audited("inventory", "transfer_approve")
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: "Approve a stock transfer request" })
-  approve(@Param("id") id: string) {
+  approve(@Param("id", ParseUUIDPipe) id: string) {
     return this.transfers.approve(id);
   }
 
+  /**
+   * `transfer:request`, because the warehouse that raised the request is the
+   * one that packs and sends it. Separation of duties is preserved by the
+   * SERVICE, which now refuses to ship anything that has not been approved —
+   * it used to accept `requested` as well, so `transfer:approve` was decorative
+   * and one permission could move stock between branches unreviewed.
+   */
   @Post(":id/ship")
-  @RequirePermissions("transfer:request") // Shippers usually fulfill the request
+  @RequirePermissions("transfer:request")
   @Audited("inventory", "transfer_ship")
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: "Ship a stock transfer (deducts from source)" })
-  ship(@Param("id") id: string) {
+  ship(@Param("id", ParseUUIDPipe) id: string) {
     return this.transfers.ship(id);
   }
 
@@ -55,7 +72,7 @@ export class TransfersController {
   @Audited("inventory", "transfer_receive")
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: "Receive a stock transfer (adds to destination)" })
-  receive(@Param("id") id: string) {
+  receive(@Param("id", ParseUUIDPipe) id: string) {
     return this.transfers.receive(id);
   }
 }

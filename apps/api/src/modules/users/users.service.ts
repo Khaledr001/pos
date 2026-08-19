@@ -4,6 +4,10 @@ import { AppError, ERROR_CODES } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import bcrypt from "bcryptjs";
+import {
+  assertMayGrantAbac,
+  assertMayGrantPermissions,
+} from "../../common/context/authority.js";
 import { RequestContext } from "../../common/context/request-context.js";
 import { PlanLimitService } from "../../common/guards/plan-limit.service.js";
 import type { Env } from "../../config/env.js";
@@ -130,6 +134,11 @@ export class UsersService {
       });
       if (!role) throw new AppError(ERROR_CODES.VALIDATION_FAILED, "That role does not exist");
 
+      // Without this, `user:write` was the only permission anybody needed:
+      // create an account holding the owner's role, then sign in as it.
+      assertMayGrantPermissions(role.permissions, "That role");
+      assertMayGrantAbac(dto);
+
       const [user] = await tx
         .insert(schema.users)
         .values({
@@ -162,6 +171,19 @@ export class UsersService {
     if (Object.keys(dto).length === 0) return this.findById(id);
 
     return this.db.run(async (tx) => {
+      // You may not edit somebody who outranks you — otherwise a manager
+      // demotes the owner, or promotes themselves by editing their own row.
+      await this.assertMayManage(tx, id);
+
+      if (dto.roleId) {
+        const role = await tx.query.roles.findFirst({
+          where: (t, { eq: e }) => e(t.id, dto.roleId!),
+        });
+        if (!role) throw new AppError(ERROR_CODES.VALIDATION_FAILED, "That role does not exist");
+        assertMayGrantPermissions(role.permissions, "That role");
+      }
+      assertMayGrantAbac(dto);
+
       // Losing the last administrator means nobody can create another one, and
       // recovery needs a platform operator. Refuse both routes into it.
       if (dto.isActive === false || dto.roleId) {
@@ -218,6 +240,7 @@ export class UsersService {
     }
 
     await this.db.run(async (tx) => {
+      await this.assertMayManage(tx, id);
       await this.assertNotLastAdmin(tx, id, { isActive: false });
 
       const [user] = await tx
@@ -244,6 +267,13 @@ export class UsersService {
     const passwordHash = await bcrypt.hash(dto.password, rounds);
 
     await this.db.run(async (tx) => {
+      /**
+       * The shortest escalation path of the lot: with `user:write` and no check
+       * here, a branch manager reset the owner's password and signed in as
+       * them. No new account, no role change, nothing to notice in a user list.
+       */
+      await this.assertMayManage(tx, id);
+
       const [user] = await tx
         .update(schema.users)
         .set({ passwordHash, failedLoginCount: 0, lockedUntil: null })
@@ -268,6 +298,10 @@ export class UsersService {
     const pinHash = dto.pin ? await bcrypt.hash(dto.pin, rounds) : null;
 
     await this.db.run(async (tx) => {
+      // A PIN is a credential like any other: setting the owner's would let a
+      // manager sign in as them at any till.
+      await this.assertMayManage(tx, id);
+
       const [user] = await tx
         .update(schema.users)
         .set({ pinHash })
@@ -276,6 +310,29 @@ export class UsersService {
 
       if (!user) throw new AppError(ERROR_CODES.NOT_FOUND, `User ${id} not found`);
     });
+  }
+
+  /**
+   * Refuse acting on a user who holds more than the caller does.
+   *
+   * Read inside the caller's transaction so a concurrent role change cannot
+   * slip between the check and the write.
+   */
+  private async assertMayManage(
+    tx: Parameters<Parameters<TenantDatabase["run"]>[0]>[0],
+    userId: string,
+  ): Promise<void> {
+    const [target] = await tx
+      .select({ permissions: schema.roles.permissions })
+      .from(schema.users)
+      .innerJoin(schema.roles, eq(schema.users.roleId, schema.roles.id))
+      .where(and(eq(schema.users.id, userId), isNull(schema.users.deletedAt)))
+      .limit(1);
+
+    // Absent is not a permission problem; the caller's own query reports 404.
+    if (!target) return;
+
+    assertMayGrantPermissions(target.permissions, "That user");
   }
 
   /**

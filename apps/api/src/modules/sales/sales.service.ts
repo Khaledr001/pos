@@ -1,5 +1,9 @@
-import { and, desc, eq, schema, sql } from "@devsfleet/db";
-import { resolveTenantSettings, type PaymentMethod } from "@devsfleet/shared-types";
+import { and, desc, eq, inArray, schema, sql } from "@devsfleet/db";
+import {
+  hasPermission,
+  resolveTenantSettings,
+  type PaymentMethod,
+} from "@devsfleet/shared-types";
 import {
   AppError,
   ERROR_CODES,
@@ -9,10 +13,12 @@ import {
   sequenceKey,
 } from "@devsfleet/shared-utils";
 import { Injectable, Logger } from "@nestjs/common";
+import { assertBranchInScope, branchScope } from "../../common/context/branch-scope.js";
 import { RequestContext } from "../../common/context/request-context.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import { StockService } from "../inventory/stock.service.js";
 import { PriceResolverService } from "../pricing/price-resolver.service.js";
+import { OverrideGrantsService } from "../auth/override-grants.service.js";
 import { SerialsService } from "../serials/serials.service.js";
 import type { CreateSaleDto } from "./dto.js";
 
@@ -37,11 +43,35 @@ export class SalesService {
     private readonly stock: StockService,
     private readonly prices: PriceResolverService,
     private readonly serials: SerialsService,
+    private readonly grants: OverrideGrantsService,
   ) {}
 
   async create(dto: CreateSaleDto): Promise<unknown> {
     const tenantId = RequestContext.requireTenantId();
     const user = RequestContext.requireUser();
+
+    /**
+     * The branch comes from the body, so it has to be checked against the
+     * caller's scope. Without this a cashier at one shop could book a sale —
+     * and the stock deduction that goes with it — against another shop's
+     * inventory, which reads afterwards as shrinkage at a branch they never
+     * visited.
+     */
+    assertBranchInScope(dto.branchId);
+
+    /**
+     * Approvals given at the counter, verified before anything is decided.
+     *
+     * Done outside the transaction: it is signature checking, not a query, and
+     * a forged or expired grant simply contributes nothing rather than failing
+     * the sale — the refusal the cashier then gets is the same one they would
+     * have got without an approval, which is the honest message.
+     */
+    const approvals = await this.grants.verify(dto.overrideGrants);
+    const effectivePermissions = OverrideGrantsService.permissionsWith(
+      user.permissions,
+      approvals,
+    );
 
     return this.db.run(async (tx) => {
       /**
@@ -93,9 +123,18 @@ export class SalesService {
       const variantBy = new Map(variants.map((v) => [v.id, v]));
 
       // --- validate every line before writing anything --------------------
-      const canOverrideFloor = user.permissions.includes("*") ||
-        user.permissions.includes("price:override_floor");
-      const maxDiscount = Money.toMinor(user.abac.maxDiscountPercent);
+      const canOverrideFloor = hasPermission(effectivePermissions, "price:override_floor");
+      const canOverridePrice = hasPermission(effectivePermissions, "price:override");
+
+      // A manager approving a discount lends their own ceiling to this sale.
+      // Granting `sale:discount` while leaving the cashier's 0% cap in place
+      // would authorise precisely nothing.
+      const discountCeiling = OverrideGrantsService.discountCeiling(
+        user.abac.maxDiscountPercent,
+        approvals,
+        "sale:discount",
+      );
+      const maxDiscount = Money.toMinor(discountCeiling);
 
       const lines = dto.lines.map((line) => {
         const variant = variantBy.get(line.variantId);
@@ -116,6 +155,43 @@ export class SalesService {
           );
         }
 
+        /**
+         * `price:override` was declared and never enforced.
+         *
+         * Every POS line carries a `unitPrice` and the server simply took it.
+         * The floor check was all that stood behind it, so on the many products
+         * with no `minSellingPrice` set — the default — a cashier could type any
+         * figure and the sale was accepted at it. It does not even read as a
+         * discount afterwards: the line looks like list price, because it
+         * became list price.
+         *
+         * Only a price BELOW the resolved one is refused, and that asymmetry is
+         * deliberate. A terminal that has been offline since before a price
+         * change pushes the figure it last synced, and the server cannot tell
+         * that apart from a cashier typing it. Refusing the cheaper direction
+         * catches what costs the business money; refusing the dearer direction
+         * would reject honest sales rung up on a stale price list, hours after
+         * the receipt was printed and the goods handed over.
+         *
+         * A product the ladder cannot price at all is a different case: naming
+         * a price for it IS the override, whichever direction it goes.
+         */
+        if (line.unitPrice !== undefined && !canOverridePrice) {
+          const listed = price?.unitPrice;
+          const undercut =
+            !listed || Money.toMinor(line.unitPrice) < Money.toMinor(listed);
+
+          if (undercut) {
+            throw new AppError(
+              ERROR_CODES.INSUFFICIENT_PERMISSIONS,
+              listed
+                ? `${variant.productName} is priced at ${listed}. Selling it for less needs a manager's approval.`
+                : `${variant.productName} has no set price. Pricing it needs a manager's approval.`,
+              { line: variant.sku, requested: line.unitPrice, listed: listed ?? null },
+            );
+          }
+        }
+
         const discountPercent = String(line.discountPercent ?? 0);
 
         /**
@@ -128,8 +204,8 @@ export class SalesService {
         if (Money.toMinor(discountPercent) > maxDiscount) {
           throw new AppError(
             ERROR_CODES.DISCOUNT_EXCEEDS_LIMIT,
-            `You may discount up to ${user.abac.maxDiscountPercent}%. This line is ${discountPercent}%.`,
-            { line: variant.sku, requested: discountPercent, allowed: user.abac.maxDiscountPercent },
+            `You may discount up to ${discountCeiling}%. This line is ${discountPercent}%.`,
+            { line: variant.sku, requested: discountPercent, allowed: discountCeiling },
           );
         }
 
@@ -309,7 +385,22 @@ export class SalesService {
           );
         }
 
-        if (settings.sales.enforceCreditLimit) {
+        /**
+         * A supervisor may take a good customer past their limit, and the POS
+         * already asked for that approval at the counter. Without honouring
+         * the grant here the sale would be refused on push anyway, hours after
+         * the manager said yes and the goods went out of the door.
+         *
+         * Grants only, not the caller's own permissions: holding
+         * `customer:credit` is authority to APPROVE going over a limit, not a
+         * standing exemption from every limit on every sale you ring up.
+         */
+        const creditApproved = hasPermission(
+          OverrideGrantsService.permissionsWith([], approvals),
+          "customer:credit",
+        );
+
+        if (settings.sales.enforceCreditLimit && !creditApproved) {
           const after = Money.add(Money.toMinor(customer.creditBalance), due);
           if (after > Money.toMinor(customer.creditLimit)) {
             throw new AppError(
@@ -551,6 +642,7 @@ export class SalesService {
         where: (t, { eq: e }) => e(t.id, id),
       });
       if (!sale) throw new AppError(ERROR_CODES.NOT_FOUND, `Sale ${id} not found`);
+      assertBranchInScope(sale.branchId);
 
       const [items, payments] = await Promise.all([
         tx
@@ -585,8 +677,16 @@ export class SalesService {
   }): Promise<unknown> {
     const offset = (query.page - 1) * query.limit;
 
+    if (query.branchId) assertBranchInScope(query.branchId);
+
+    // The UI's default call names no branch. Unfiltered, that returned every
+    // sale in the business — takings, customers and cashier names included —
+    // to anybody with `sale:read` at one shop.
+    const scope = branchScope();
+
     return this.db.run(async (tx) => {
       const where = and(
+        scope ? inArray(schema.sales.branchId, scope) : undefined,
         query.branchId ? eq(schema.sales.branchId, query.branchId) : undefined,
         query.customerId ? eq(schema.sales.customerId, query.customerId) : undefined,
         query.from ? sql`${schema.sales.occurredAt} >= ${query.from}::date` : undefined,

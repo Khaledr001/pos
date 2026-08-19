@@ -1,5 +1,6 @@
 import { hasPermission, type Permission, type PermissionGrant } from "@devsfleet/shared-types";
 import { create } from "zustand";
+import { clearApiTokens } from "../lib/api-client.js";
 
 /**
  * Terminal session.
@@ -88,6 +89,20 @@ export const useAuth = create<AuthState>((set, get) => ({
   signOut() {
     set({ cashier: null, signedInAt: null });
     persist({ cashier: null, terminal: get().terminal, signedInAt: null });
+
+    /**
+     * Clearing the local session is not clearing the credential.
+     *
+     * `devsfleet.pos.api_tokens` is written by terminal registration and by the
+     * screens that call the API directly, and it survived this function
+     * entirely — so the idle timer, which calls nothing but `signOut`, dropped
+     * an unattended till back to the PIN screen while leaving a working refresh
+     * token in localStorage for the next person to read out of devtools.
+     *
+     * Done here rather than in the two callers because there is no sign-out
+     * path where keeping the tokens is correct.
+     */
+    clearApiTokens();
   },
 
   bindTerminal(terminal) {

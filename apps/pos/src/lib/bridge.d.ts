@@ -32,7 +32,10 @@ export interface DevsfleetBridge {
      */
     pinLogin(pin: string): Promise<PosCashier>;
     /** A supervisor's PIN, checked against a specific permission. Returns their name. */
-    managerOverride(pin: string, requiredPermission: string): Promise<string>;
+    managerOverride(
+      pin: string,
+      requiredPermission: string,
+    ): Promise<{ managerName: string; grant: string }>;
   };
   catalog: {
     search(query: string, limit?: number): Promise<PosProduct[]>;

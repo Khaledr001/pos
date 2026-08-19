@@ -9,6 +9,7 @@ import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter.js";
 import { JwtAuthGuard } from "./common/guards/jwt-auth.guard.js";
 import { PermissionsGuard } from "./common/guards/permissions.guard.js";
 import { PlatformGuard } from "./common/guards/platform.guard.js";
+import { AuditInterceptor } from "./common/interceptors/audit.interceptor.js";
 import { TransformInterceptor } from "./common/interceptors/transform.interceptor.js";
 import { RequestContextMiddleware } from "./common/middleware/request-context.middleware.js";
 import { validateEnv } from "./config/env.js";
@@ -151,7 +152,14 @@ import { TransfersModule } from "./modules/transfers/transfers.module.js";
     { provide: APP_GUARD, useClass: PermissionsGuard },
     { provide: APP_GUARD, useClass: PlatformGuard },
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    /**
+     * Order matters: AuditInterceptor must see the handler's own return value,
+     * so it has to sit INSIDE TransformInterceptor's envelope. Nest runs
+     * interceptors outside-in on the way down and inside-out on the way back,
+     * so the one listed second unwraps first on the response path.
+     */
     { provide: APP_INTERCEPTOR, useClass: TransformInterceptor },
+    { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
   ],
 })

@@ -51,8 +51,17 @@ export class InventoryController {
     return this.inventory.adjust(dto);
   }
 
+  /**
+   * `transfer:approve`, not `transfer:request`.
+   *
+   * This moves stock between branches IMMEDIATELY — no request, no approval,
+   * no shipped/received states. It is a second door into the same cupboard the
+   * transfers module guards with four, and it was open to `transfer:request`,
+   * which the warehouse role holds. Whoever may use it is exercising exactly
+   * the authority `transfer:approve` names.
+   */
   @Post("transfer")
-  @RequirePermissions("transfer:request")
+  @RequirePermissions("transfer:approve")
   @Audited("inventory", "transfer")
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: "Move stock between branches" })

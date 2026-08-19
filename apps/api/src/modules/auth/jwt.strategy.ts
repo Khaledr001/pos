@@ -36,6 +36,22 @@ export class JwtStrategy extends PassportStrategy(Strategy, "jwt") {
       throw new UnauthorizedException("Access token names no business");
     }
 
+    /**
+     * A token with no ABAC claims is refused outright.
+     *
+     * It used to be defaulted instead, and the default was described as failing
+     * closed — but `allowedBranchIds: []` is the encoding of EVERY branch (see
+     * assertBranchInScope), so the "safe" fallback silently handed a legacy
+     * token access to the whole estate while capping its discount at zero.
+     *
+     * There is no value of `allowedBranchIds` that means "nowhere", so the
+     * honest fallback is not to have one. Access tokens live fifteen minutes;
+     * the cost of this is one refresh after a deploy.
+     */
+    if (!payload.abac || !Array.isArray(payload.abac.allowedBranchIds)) {
+      throw new UnauthorizedException("Access token is missing its authorisation claims");
+    }
+
     return {
       id: payload.sub,
       tenantId: payload.tenantId,
@@ -43,19 +59,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, "jwt") {
       roleId: payload.roleId,
       roleName: payload.roleName,
       permissions: payload.permissions ?? [],
-      /**
-       * Defaulted rather than assumed present: a token minted before these
-       * claims existed would otherwise yield `undefined` ceilings, and an
-       * undefined ceiling compares as "no limit". Failing closed means an old
-       * token grants nothing instead of everything.
-       */
-      abac: payload.abac ?? {
-        maxDiscountPercent: "0",
-        maxSaleAmount: "0",
-        canApproveRefund: false,
-        canViewCost: false,
-        allowedBranchIds: [],
-      },
+      abac: payload.abac,
       isPlatformAdmin: payload.isPlatformAdmin ?? false,
       planId: payload.planId ?? "free",
       trialEndsAt: payload.trialEndsAt ?? null,

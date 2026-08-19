@@ -1,3 +1,4 @@
+import type { Permission } from "@devsfleet/shared-types";
 import { useState } from "react";
 import { posData } from "../lib/pos-data.js";
 import { Dialog } from "./Dialog.js";
@@ -11,9 +12,17 @@ export function ManagerOverrideDialog({
   onSuccess,
 }: {
   open: boolean;
-  requiredPermission: string;
+  requiredPermission: Permission;
   onClose: () => void;
-  onSuccess: (managerName: string) => void;
+  /**
+   * The grant is the half that matters.
+   *
+   * A name is for the receipt; the grant is what the server checks when the
+   * sale finally reaches it — possibly hours later, on the cashier's session,
+   * long after this dialog closed. A caller that ignores it has collected an
+   * approval nobody downstream will ever see.
+   */
+  onSuccess: (managerName: string, grant: string) => void;
 }) {
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -22,11 +31,13 @@ export function ManagerOverrideDialog({
     if (pin.length === 0) return;
     try {
       setError(null);
-      const name = await posData.managerOverride(pin, requiredPermission);
+      const approval = await posData.managerOverride(pin, requiredPermission);
       setPin("");
-      onSuccess(name);
-    } catch (err: any) {
-      setError(err.message || "Invalid PIN or lacking permissions.");
+      onSuccess(approval.managerName, approval.grant);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Invalid PIN, or that PIN cannot approve this.",
+      );
       setPin("");
     }
   }

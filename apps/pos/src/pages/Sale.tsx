@@ -1,10 +1,11 @@
-import type { PaymentMethod } from "@devsfleet/shared-types";
+import type { PaymentMethod, Permission } from "@devsfleet/shared-types";
 import { Money } from "@devsfleet/shared-utils";
 import { ArrowLeft, Check, CheckCircle2, Loader2, Plus, Printer, Search as SearchIcon, UserPlus } from "lucide-react";
 import { useCallback, useState } from "react";
 import { Dialog } from "../components/Dialog.js";
 import { HeldCartsDialog } from "../components/HeldCartsDialog.js";
 import { KeyRail, type KeyAction } from "../components/KeyRail.js";
+import { ManagerOverrideDialog } from "../components/ManagerOverrideDialog.js";
 import { PaymentDialog } from "../components/PaymentDialog.js";
 import { ProductSearch } from "../components/ProductSearch.js";
 import { ReceiptPanel } from "../components/ReceiptPanel.js";
@@ -129,6 +130,10 @@ export function Sale({ cashSessionId }: { cashSessionId: string | null }) {
       total: Money.toDecimalString(totals.total, 2),
       payments,
       occurredAt: new Date().toISOString(),
+      // The supervisor approvals this cart collected. They travel with the
+      // sale because the push may be hours away and goes out on the cashier's
+      // session — the server has no other way to know a manager said yes.
+      overrideGrants: useCart.getState().overrideGrants,
     };
 
     // Writes locally and returns. It does not wait for the network — the
@@ -323,6 +328,7 @@ export function Sale({ cashSessionId }: { cashSessionId: string | null }) {
           line={editing}
           onClose={() => setEditing(null)}
           canOverrideFloor={can("price:override_floor")}
+          canOverridePrice={can("price:override")}
         />
       )}
 
@@ -626,26 +632,59 @@ function LineEditor({
   line,
   onClose,
   canOverrideFloor,
+  canOverridePrice,
 }: {
   line: CartLine;
   onClose: () => void;
   canOverrideFloor: boolean;
+  canOverridePrice: boolean;
 }) {
-  const { setUnitPrice, setLineDiscount } = useCart();
+  const { setUnitPrice, setLineDiscount, addOverrideGrant } = useCart();
   const [price, setPrice] = useState(line.unitPrice);
   const [discount, setDiscount] = useState(line.discountPercent);
+  const [approving, setApproving] = useState<Permission | null>(null);
 
   const floor = line.product.minSellingPrice
     ? Money.toMinor(line.product.minSellingPrice)
     : null;
+  const list = Money.toMinor(line.product.sellingPrice);
   const unit = Money.toMinor(price || "0");
   const effective = Money.subtract(unit, Money.percentOf(unit, discount || "0"));
   const belowFloor = floor !== null && effective < floor;
 
-  function apply() {
-    setUnitPrice(line.key, price, belowFloor && canOverrideFloor);
+  /**
+   * Undercutting list needs `price:override`, which a cashier role does not
+   * carry — and the server enforces the same rule when the sale is pushed.
+   *
+   * Asking here rather than only at checkout is not a courtesy: the sale is
+   * committed locally and the receipt prints before anything reaches the
+   * server, so a refusal at push time arrives after the goods have gone. The
+   * till is the only place where "no" is still actionable.
+   *
+   * The line's own price, not the effective one: a discount is a separate
+   * control with its own ceiling, checked below.
+   */
+  const belowList = unit < list;
+  const needed: Permission | null = belowFloor
+    ? canOverrideFloor
+      ? null
+      : "price:override_floor"
+    : belowList && !canOverridePrice
+      ? "price:override"
+      : null;
+
+  function commit() {
+    setUnitPrice(line.key, price, belowFloor);
     setLineDiscount(line.key, discount || "0");
     onClose();
+  }
+
+  function apply() {
+    if (needed) {
+      setApproving(needed);
+      return;
+    }
+    commit();
   }
 
   return (
@@ -659,13 +698,8 @@ function LineEditor({
           <button type="button" className="btn btn-ghost" onClick={onClose}>
             Cancel
           </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={apply}
-            disabled={belowFloor && !canOverrideFloor}
-          >
-            Apply
+          <button type="button" className="btn btn-primary" onClick={apply}>
+            {needed ? "Get approval" : "Apply"}
           </button>
         </>
       }
@@ -707,19 +741,36 @@ function LineEditor({
         </span>
       </div>
 
-      {belowFloor && (
+      {(belowFloor || belowList) && (
         <p
           className={`mt-3 rounded-lg border px-3 py-2.5 text-[12px] ${
-            canOverrideFloor
-              ? "border-signal-amber/40 bg-signal-amber/10 text-signal-amber"
-              : "border-signal-red/40 bg-signal-red/10 text-signal-red"
+            needed
+              ? "border-signal-red/40 bg-signal-red/10 text-signal-red"
+              : "border-signal-amber/40 bg-signal-amber/10 text-signal-amber"
           }`}
         >
-          {canOverrideFloor
-            ? `Below the ${amount(floor!)} floor price. Applying this records an override against your name.`
-            : `Below the ${amount(floor!)} floor price. A manager has to approve this.`}
+          {belowFloor
+            ? needed
+              ? `Below the ${amount(floor!)} floor price. A manager has to approve this.`
+              : `Below the ${amount(floor!)} floor price. Applying this records an override against your name.`
+            : needed
+              ? `Below the ${amount(list)} list price. A manager has to approve this.`
+              : `Below the ${amount(list)} list price. Applying this records an override against your name.`}
         </p>
       )}
+
+      <ManagerOverrideDialog
+        open={approving !== null}
+        requiredPermission={approving ?? "price:override"}
+        onClose={() => setApproving(null)}
+        onSuccess={(_managerName, grant) => {
+          // The grant is what the server will believe. Recording it before
+          // committing the line keeps the two from separating.
+          addOverrideGrant(grant);
+          setApproving(null);
+          commit();
+        }}
+      />
     </Dialog>
   );
 }

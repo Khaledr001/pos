@@ -41,6 +41,18 @@ export const CreateSaleSchema = z.object({
   redeemPoints: z.coerce.number().int().positive().optional(),
 
   /**
+   * Supervisor approvals collected at the till, as signed grants from
+   * `POST /auth/verify-override`.
+   *
+   * They travel WITH the sale because that is the only way an approval given
+   * at 09:40 survives to a push at 14:00 from a terminal that was offline in
+   * between. Each one is verified here, not trusted: an unverifiable grant is
+   * discarded and the cashier's own permissions decide, which is the same
+   * answer as no approval at all.
+   */
+  overrideGrants: z.array(z.string().min(1)).max(20).optional(),
+
+  /**
    * Minted on the terminal. The idempotency key — the server upserts on it, so
    * a push retried after a timeout cannot create a second invoice.
    */

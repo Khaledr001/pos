@@ -68,6 +68,21 @@ export function RegisterTerminal() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to register terminal");
     } finally {
+      /**
+       * The administrator's tokens leave with them.
+       *
+       * Registration is the one moment a shop-floor terminal ever holds a
+       * tenant-admin session, and it was keeping it: the refresh token stayed
+       * in renderer localStorage indefinitely — not cleared on success, not on
+       * sign-out, not on the idle timer. Every till in the estate ended up
+       * holding a long-lived admin credential readable from devtools, and the
+       * screens that call the API directly transacted with it, attributing a
+       * cashier's goods receipts to whoever installed the machine.
+       *
+       * In `finally` rather than after the success path, because a failure
+       * mid-registration leaves exactly the same credential behind.
+       */
+      clearApiTokens();
       setLoading(false);
     }
   }

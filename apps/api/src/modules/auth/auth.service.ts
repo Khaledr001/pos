@@ -1,5 +1,12 @@
 import { and, eq, isNull, schema } from "@devsfleet/db";
-import type { AuthSession, AuthTokens, JwtPayload } from "@devsfleet/shared-types";
+import {
+  hasPermission,
+  type AuthSession,
+  type Permission,
+  type AuthenticatedUser,
+  type AuthTokens,
+  type JwtPayload,
+} from "@devsfleet/shared-types";
 import { AppError, ERROR_CODES } from "@devsfleet/shared-utils";
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
@@ -7,8 +14,39 @@ import { JwtService } from "@nestjs/jwt";
 import bcrypt from "bcryptjs";
 import { createHash, randomBytes } from "node:crypto";
 import type { Env } from "../../config/env.js";
+import { RequestContext } from "../../common/context/request-context.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
-import type { LoginDto, PinLoginDto, RefreshDto } from "./dto.js";
+import type { LoginDto, ManagerOverrideDto, PinLoginDto, RefreshDto } from "./dto.js";
+
+/** A user row joined to the role that carries their permissions. */
+interface PinHolder {
+  user: typeof schema.users.$inferSelect;
+  role: typeof schema.roles.$inferSelect;
+}
+
+/**
+ * What a terminal learns from an approved override.
+ *
+ * A name and an id. Not a token, not a permission list — the terminal is being
+ * told the answer to one question, not handed the approver's authority.
+ */
+export interface ManagerOverrideResult {
+  approvedBy: { id: string; name: string };
+  permission: Permission;
+  /** Signed proof, for the terminal to attach to whatever it was approving. */
+  grant: string;
+  /** Seconds until `grant` stops being accepted. */
+  expiresIn: number;
+}
+
+/**
+ * How long an approval remains attachable.
+ *
+ * One shift. The sale it authorises may sit in an offline terminal's outbox
+ * for hours, so minutes are useless; days would turn a single approval into a
+ * standing permission somebody could keep reusing.
+ */
+const OVERRIDE_GRANT_TTL_SECONDS = 12 * 60 * 60;
 
 /**
  * Authentication.
@@ -67,10 +105,26 @@ export class AuthService {
      * would make "user exists" measurable from the response time alone, which
      * hands an attacker a free account-enumeration oracle.
      */
+    /**
+     * Lockout is checked BEFORE the password compare, and the comparison still
+     * runs afterwards on the dummy hash — otherwise "locked" and "wrong
+     * password" would be distinguishable by response time, which tells an
+     * attacker their guessing is working.
+     */
+    const locked = found ? lockoutRemaining(found.user.lockedUntil) : null;
+
     const hash = found?.user.passwordHash ?? DUMMY_HASH;
     const passwordOk = await bcrypt.compare(dto.password, hash);
 
+    if (locked) {
+      throw new AppError(
+        ERROR_CODES.ACCOUNT_LOCKED,
+        `Too many failed attempts. Try again in ${locked}.`,
+      );
+    }
+
     if (!found || !passwordOk) {
+      if (found) await this.recordFailedAttempt(found.tenant.id, found.user);
       throw new AppError(ERROR_CODES.INVALID_CREDENTIALS, "Invalid email or password");
     }
     if (!found.tenant.isActive) {
@@ -87,7 +141,10 @@ export class AuthService {
     await this.db.runAs(found.tenant.id, async (tx) => {
       await tx
         .update(schema.users)
-        .set({ lastLoginAt: new Date() })
+        // A successful login clears the failure counter. Leaving it to decay
+        // would lock out someone who mistyped twice this morning and twice
+        // this afternoon.
+        .set({ lastLoginAt: new Date(), failedLoginCount: 0, lockedUntil: null })
         .where(eq(schema.users.id, found.user.id));
     });
 
@@ -129,67 +186,240 @@ export class AuthService {
       );
     }
 
-    const candidates = await this.db.runAs(device.tenantId, async (tx) =>
+    /**
+     * A suspended business cannot sell.
+     *
+     * `login()` has always checked this; this path did not, so a tenant
+     * suspended for non-payment kept trading at every till — the one place
+     * that actually takes money.
+     */
+    const tenantRow = await this.db.runAsPlatformAdmin(async (tx) =>
+      tx.query.tenants.findFirst({ where: (t, { eq: e }) => e(t.id, device.tenantId) }),
+    );
+    if (!tenantRow) {
+      throw new AppError(ERROR_CODES.TENANT_INACTIVE, "This business is no longer active");
+    }
+    if (!tenantRow.isActive) {
+      throw new AppError(ERROR_CODES.TENANT_SUSPENDED, "This business is suspended");
+    }
+
+    const match = await this.resolvePinHolder(device.tenantId, dto.branchId, dto.pin);
+    if (!match) throw new AppError(ERROR_CODES.INVALID_CREDENTIALS, "Incorrect PIN");
+
+    await this.db.runAs(device.tenantId, async (tx) => {
+      await tx
+        .update(schema.users)
+        .set({ lastLoginAt: new Date(), failedLoginCount: 0, lockedUntil: null })
+        .where(eq(schema.users.id, match.user.id));
+    });
+
+    const tokens = await this.issueTokens({
+      user: match.user,
+      role: match.role,
+      tenant: tenantRow,
+      isPos: true,
+      deviceId: device.id,
+      // A POS session is always pinned to the terminal's branch, even for a
+      // user who normally has tenant-wide access.
+      branchIdOverride: dto.branchId,
+    });
+
+    return {
+      ...tokens,
+      user: {
+        id: match.user.id,
+        name: match.user.name,
+        email: match.user.email,
+        roleName: match.role.name,
+        permissions: match.role.permissions,
+        tenantId: device.tenantId,
+        tenantName: tenantRow.name,
+        branchId: dto.branchId,
+        branchName: null,
+        locale: match.user.locale,
+      },
+    };
+  }
+
+  /**
+   * A supervisor approving one action at somebody else's till.
+   *
+   * This exists because the POS used to implement an override by calling
+   * pin-login: the manager's PIN minted a full token pair and the terminal
+   * stored it, so the cashier's session was silently REPLACED by the manager's.
+   * Every sale, drawer movement and audit row for the rest of that shift was
+   * then attributed to the manager, and the manager's refresh token — a
+   * credential with approval rights — was left on the shop floor.
+   *
+   * So this mints nothing. It answers one question, "may this PIN authorise
+   * <permission> here", and writes the trail. The caller's own session carries
+   * on unchanged, which is what an override is supposed to mean.
+   *
+   * The branch and device come from the caller's token, never the body: the
+   * one thing worth protecting here is which branch's staff PINs an attacker
+   * gets to test, and a body field would let them choose.
+   */
+  async verifyOverride(
+    dto: ManagerOverrideDto,
+    caller: AuthenticatedUser,
+  ): Promise<ManagerOverrideResult> {
+    if (!caller.tenantId || !caller.branchId) {
+      throw new AppError(
+        ERROR_CODES.INSUFFICIENT_PERMISSIONS,
+        "Overrides can only be approved from a terminal signed in to a branch",
+      );
+    }
+
+    const match = await this.resolvePinHolder(caller.tenantId, caller.branchId, dto.pin);
+    if (!match) throw new AppError(ERROR_CODES.INVALID_CREDENTIALS, "Incorrect PIN");
+
+    /**
+     * The permission is checked HERE, not by the terminal.
+     *
+     * The old flow returned the approver's full permission list to the renderer
+     * and let it decide — which made the decision a client-side one, changeable
+     * from devtools by anybody holding any valid PIN.
+     */
+    if (!hasPermission(match.role.permissions, dto.permission)) {
+      throw new AppError(
+        ERROR_CODES.INSUFFICIENT_PERMISSIONS,
+        `${match.user.name} is not authorised to approve this`,
+      );
+    }
+
+    /**
+     * Written inside the transaction, not left to AuditInterceptor.
+     *
+     * For an override the trail IS the deliverable — it is the only record that
+     * a below-floor price or a refund was authorised by somebody senior. An
+     * after-the-fact row that can go missing is not good enough here.
+     */
+    const store = RequestContext.get();
+    await this.db.run(async (tx) => {
+      await tx.insert(schema.auditLog).values({
+        tenantId: caller.tenantId!,
+        branchId: caller.branchId,
+        // Who was ACTING. The approver is the entity, below.
+        userId: caller.id,
+        entityType: "user",
+        entityId: match.user.id,
+        action: "override",
+        reason: dto.reason
+          ? `${dto.permission} approved by ${match.user.name}: ${dto.reason}`
+          : `${dto.permission} approved by ${match.user.name}`,
+        ...(store?.ipAddress ? { ipAddress: store.ipAddress } : {}),
+        requestId: RequestContext.requestId,
+      });
+    });
+
+    this.logger.log(
+      {
+        approverId: match.user.id,
+        cashierId: caller.id,
+        branchId: caller.branchId,
+        permission: dto.permission,
+      },
+      "Manager override approved",
+    );
+
+    /**
+     * The grant is what makes the approval survive the trip to the server.
+     *
+     * It is scoped to ONE permission, one tenant and one branch, and it is not
+     * a session: it authenticates nothing, cannot be refreshed, and carries no
+     * permission list. `typ` separates it from an access token signed with the
+     * same secret, and jwt.strategy would reject it anyway for having no role.
+     */
+    const grant = await this.jwt.signAsync(
+      {
+        typ: "override",
+        sub: match.user.id,
+        name: match.user.name,
+        tenantId: caller.tenantId,
+        branchId: caller.branchId,
+        permission: dto.permission,
+        abac: {
+          maxDiscountPercent: match.user.maxDiscountPercent,
+          maxSaleAmount: match.user.maxSaleAmount,
+        },
+      },
+      {
+        secret: this.config.get("JWT_ACCESS_SECRET", { infer: true }),
+        expiresIn: OVERRIDE_GRANT_TTL_SECONDS,
+      },
+    );
+
+    // Deliberately narrow otherwise: a name to print on the receipt and an id
+    // for the sale to carry. No permission list, no session, nothing to replay
+    // as the approver.
+    return {
+      approvedBy: { id: match.user.id, name: match.user.name },
+      permission: dto.permission,
+      grant,
+      expiresIn: OVERRIDE_GRANT_TTL_SECONDS,
+    };
+  }
+
+  /**
+   * The one person at this branch whose PIN this is.
+   *
+   * Shared by pinLogin and verifyOverride so the ambiguity rule below cannot be
+   * enforced in one path and forgotten in the other.
+   *
+   * Returns null when nothing matches. THROWS when the account is locked out,
+   * and when more than one person answers to the PIN: nothing stops two
+   * cashiers choosing 1234, and returning whichever row the planner happened to
+   * emit first would attribute a whole shift — every sale, drawer count and
+   * audit entry — to the wrong person, silently and unreproducibly. Refusing is
+   * recoverable; a manager changes one of the PINs.
+   */
+  private async resolvePinHolder(
+    tenantId: string,
+    branchId: string,
+    pin: string,
+  ): Promise<PinHolder | null> {
+    const candidates = await this.db.runAs(tenantId, async (tx) =>
       tx
         .select({ user: schema.users, role: schema.roles })
         .from(schema.users)
         .innerJoin(schema.roles, eq(schema.users.roleId, schema.roles.id))
-        .where(
-          and(
-            eq(schema.users.isActive, true),
-            isNull(schema.users.deletedAt),
-            // Branch staff, plus tenant-wide users (branchId null) such as the owner.
-            // Postgres `IS NOT DISTINCT FROM` would be tidier but drizzle has no
-            // helper, and the candidate set here is small.
-          ),
-        ),
+        .where(and(eq(schema.users.isActive, true), isNull(schema.users.deletedAt))),
     );
 
     // A PIN is not unique, so every candidate has to be checked. The set is one
-    // branch's staff — a handful of rows, not a scan.
+    // branch's staff plus tenant-wide users such as the owner — a handful of
+    // rows, not a scan.
+    const matches: PinHolder[] = [];
     for (const candidate of candidates) {
       if (!candidate.user.pinHash) continue;
-      if (candidate.user.branchId !== null && candidate.user.branchId !== dto.branchId) {
-        continue;
-      }
-      if (!(await bcrypt.compare(dto.pin, candidate.user.pinHash))) continue;
-
-      const tenantRow = await this.db.runAsPlatformAdmin(async (tx) =>
-        tx.query.tenants.findFirst({ where: (t, { eq: e }) => e(t.id, device.tenantId) }),
-      );
-      if (!tenantRow) {
-        throw new AppError(ERROR_CODES.TENANT_INACTIVE, "This business is no longer active");
-      }
-
-      const tokens = await this.issueTokens({
-        user: candidate.user,
-        role: candidate.role,
-        tenant: tenantRow,
-        isPos: true,
-        deviceId: device.id,
-        // A POS session is always pinned to the terminal's branch, even for a
-        // user who normally has tenant-wide access.
-        branchIdOverride: dto.branchId,
-      });
-
-      return {
-        ...tokens,
-        user: {
-          id: candidate.user.id,
-          name: candidate.user.name,
-          email: candidate.user.email,
-          roleName: candidate.role.name,
-          permissions: candidate.role.permissions,
-          tenantId: device.tenantId,
-          tenantName: tenantRow.name,
-          branchId: dto.branchId,
-          branchName: null,
-          locale: candidate.user.locale,
-        },
-      };
+      if (candidate.user.branchId !== null && candidate.user.branchId !== branchId) continue;
+      if (!(await bcrypt.compare(pin, candidate.user.pinHash))) continue;
+      matches.push(candidate);
     }
 
-    throw new AppError(ERROR_CODES.INVALID_CREDENTIALS, "Incorrect PIN");
+    if (matches.length > 1) {
+      this.logger.error(
+        { branchId, count: matches.length },
+        "Two staff share a PIN at this branch — refusing to guess which one signed in",
+      );
+      throw new AppError(
+        ERROR_CODES.INVALID_CREDENTIALS,
+        "More than one person at this branch uses that PIN. Ask a manager to change it.",
+      );
+    }
+
+    const [match] = matches;
+    if (!match) return null;
+
+    const locked = lockoutRemaining(match.user.lockedUntil);
+    if (locked) {
+      throw new AppError(
+        ERROR_CODES.ACCOUNT_LOCKED,
+        `Too many failed attempts. Try again in ${locked}.`,
+      );
+    }
+
+    return match;
   }
 
   /**
@@ -235,6 +465,39 @@ export class AuthService {
 
     if (stored.expiresAt.getTime() < Date.now()) {
       throw new AppError(ERROR_CODES.TOKEN_EXPIRED, "Refresh token has expired");
+    }
+
+    /**
+     * A session bound to a terminal dies with the terminal.
+     *
+     * Without this, "deactivate device" was decorative: `pinLogin` and the sync
+     * routes check `devices.isActive`, but nothing stopped the terminal's
+     * existing refresh token — POS tokens live 90 days by default — from
+     * minting fresh access tokens and calling every other endpoint. A stolen
+     * till stayed usable for three months after being switched off in the admin.
+     *
+     * Checking here, rather than on every request, matches the revocation model
+     * this file already documents: the holder is out within one access-token
+     * lifetime (15 minutes) rather than instantly, at no per-request cost.
+     */
+    if (stored.deviceId) {
+      const device = await this.db.runAsPlatformAdmin(async (tx) =>
+        tx.query.devices.findFirst({
+          where: (t, { eq: e }) => e(t.id, stored.deviceId!),
+          columns: { id: true, isActive: true },
+        }),
+      );
+
+      if (!device?.isActive) {
+        // Revoke the whole family rather than just refusing: a terminal that
+        // has been switched off should not be one restart away from trying
+        // again with the same token.
+        await this.revokeTokensForDevice(stored.tenantId, stored.deviceId);
+        throw new AppError(
+          ERROR_CODES.DEVICE_NOT_REGISTERED,
+          "This terminal has been deactivated",
+        );
+      }
     }
 
     const found = await this.db.runAs(stored.tenantId, async (tx) => {
@@ -341,7 +604,62 @@ export class AuthService {
     };
   }
 
+  /**
+   * Kill every session belonging to a terminal.
+   *
+   * Called when a device is deactivated, so "disable this till" takes effect on
+   * the next refresh instead of waiting out a 90-day token.
+   */
+  async revokeTokensForDevice(tenantId: string, deviceId: string): Promise<void> {
+    await this.db.runAs(tenantId, async (tx) => {
+      await tx
+        .update(schema.refreshTokens)
+        .set({ revokedAt: new Date() })
+        .where(
+          and(
+            eq(schema.refreshTokens.deviceId, deviceId),
+            isNull(schema.refreshTokens.revokedAt),
+          ),
+        );
+    });
+  }
+
   // ---------------------------------------------------------------------------
+
+  /**
+   * Count a failed password attempt, and lock the account once they pile up.
+   *
+   * Only reachable where the user is IDENTIFIED — i.e. the password path. A
+   * failed PIN names nobody, so locking on it would let anyone lock out every
+   * cashier in a branch by typing wrong numbers; that path is defended by the
+   * per-route rate limit instead.
+   */
+  private async recordFailedAttempt(
+    tenantId: string,
+    user: typeof schema.users.$inferSelect,
+  ): Promise<void> {
+    const attempts = user.failedLoginCount + 1;
+    const lock = attempts >= MAX_FAILED_ATTEMPTS;
+
+    await this.db.runAs(tenantId, async (tx) => {
+      await tx
+        .update(schema.users)
+        .set({
+          // Reset the counter as the lock is applied, so the next lock needs a
+          // fresh run of failures rather than tripping on the very next typo.
+          failedLoginCount: lock ? 0 : attempts,
+          ...(lock ? { lockedUntil: new Date(Date.now() + LOCKOUT_MS) } : {}),
+        })
+        .where(eq(schema.users.id, user.id));
+    });
+
+    if (lock) {
+      this.logger.warn(
+        { userId: user.id, tenantId },
+        `Account locked after ${MAX_FAILED_ATTEMPTS} failed login attempts`,
+      );
+    }
+  }
 
   private async issueTokens(input: {
     user: typeof schema.users.$inferSelect;
@@ -409,6 +727,32 @@ export class AuthService {
 
     return { accessToken, refreshToken, expiresIn: Math.floor(accessTtlMs / 1000) };
   }
+}
+
+/** Failures before a password account locks. */
+const MAX_FAILED_ATTEMPTS = 5;
+
+/**
+ * Fifteen minutes. Long enough that guessing is hopeless, short enough that a
+ * cashier who fat-fingered their password is not sent home — a lockout nobody
+ * can wait out becomes a support call, and support calls become a shared
+ * password taped to the till.
+ */
+const LOCKOUT_MS = 15 * 60_000;
+
+/**
+ * Human-readable time left on a lock, or null if it is not locked.
+ *
+ * Returns null for a lock that has expired, so the row heals itself on the next
+ * attempt without needing a sweep job.
+ */
+function lockoutRemaining(lockedUntil: Date | null): string | null {
+  if (!lockedUntil) return null;
+  const ms = lockedUntil.getTime() - Date.now();
+  if (ms <= 0) return null;
+
+  const minutes = Math.ceil(ms / 60_000);
+  return minutes === 1 ? "1 minute" : `${minutes} minutes`;
 }
 
 /** SHA-256 is right here: the input is 48 random bytes, so there is nothing to brute-force. */

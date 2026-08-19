@@ -1,11 +1,18 @@
-import { and, count, desc, eq, schema, sql, or } from "@devsfleet/db";
+import { and, count, desc, eq, inArray, schema, sql, or } from "@devsfleet/db";
 import type { Paginated } from "@devsfleet/shared-types";
 import { AppError, ERROR_CODES } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
+import { assertBranchInScope, branchScope } from "../../common/context/branch-scope.js";
 import { RequestContext } from "../../common/context/request-context.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import { StockService } from "../inventory/stock.service.js";
 import type { CreateTransferDto, ListTransfersDto } from "./dto.js";
+
+/** Scope test that answers rather than throws — `get` needs either end to pass. */
+function inScope(branchId: string | null): boolean {
+  const scope = branchScope();
+  return scope === null || (branchId !== null && scope.includes(branchId));
+}
 
 @Injectable()
 export class TransfersService {
@@ -15,6 +22,21 @@ export class TransfersService {
   ) {}
 
   async create(dto: CreateTransferDto): Promise<{ id: string }> {
+    /**
+     * Both ends are checked. Requesting stock INTO a branch you do not run is
+     * not a transfer, it is a way to empty someone else's shelves; requesting
+     * it OUT of one you do not run is the same thing from the other side.
+     */
+    assertBranchInScope(dto.fromBranchId);
+    assertBranchInScope(dto.toBranchId);
+
+    if (dto.fromBranchId === dto.toBranchId) {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_FAILED,
+        "A transfer needs two different branches",
+      );
+    }
+
     const transferNumber = "TRF-" + Date.now().toString(36).toUpperCase();
     const tenantId = RequestContext.requireTenantId();
     const userId = RequestContext.requireUser().id;
@@ -54,8 +76,17 @@ export class TransfersService {
     const { page, limit, status, branchId, direction } = query;
     const offset = (page - 1) * limit;
 
+    // A scoped user sees transfers that touch one of their branches, at either
+    // end. Without this an unfiltered list showed the whole estate's movements.
+    const scope = branchScope();
     const where = and(
       status ? eq(schema.stockTransfers.status, status) : undefined,
+      scope
+        ? or(
+            inArray(schema.stockTransfers.fromBranchId, scope),
+            inArray(schema.stockTransfers.toBranchId, scope),
+          )
+        : undefined,
       branchId
         ? direction === "incoming"
           ? eq(schema.stockTransfers.toBranchId, branchId)
@@ -146,6 +177,10 @@ export class TransfersService {
       if (!record) {
         throw new AppError(ERROR_CODES.NOT_FOUND, "Transfer not found");
       }
+      // Scoped at either end: both branches are party to the movement.
+      if (!inScope(record.fromBranchId) && !inScope(record.toBranchId)) {
+        assertBranchInScope(record.fromBranchId);
+      }
 
       const items = await tx
         .select({
@@ -173,6 +208,11 @@ export class TransfersService {
   }
 
   async approve(id: string) {
+    // The source branch is the one giving up stock, so that is the scope that
+    // matters for approval.
+    const transfer = await this.db.run((tx) => this.getInternal(tx, id));
+    assertBranchInScope(transfer.fromBranchId);
+
     await this.updateStatus(id, "requested", "approved");
     return { id };
   }
@@ -180,12 +220,24 @@ export class TransfersService {
   async ship(id: string) {
     await this.db.run(async (tx) => {
       const transfer = await this.getInternal(tx, id);
-      if (transfer.status !== "approved" && transfer.status !== "requested") {
+
+      /**
+       * Approved only.
+       *
+       * `requested` used to be accepted here, which meant `transfer:approve`
+       * never had to be held by anybody: the same person could raise a request
+       * and ship against it, moving stock between branches with no second pair
+       * of eyes and no record that anyone reviewed it.
+       */
+      if (transfer.status !== "approved") {
         throw new AppError(
-          ERROR_CODES.CONFLICT,
-          "Transfer cannot be shipped from current status",
+          ERROR_CODES.TRANSFER_INVALID_STATUS,
+          transfer.status === "requested"
+            ? "This transfer has not been approved yet"
+            : "Transfer cannot be shipped from its current status",
         );
       }
+      assertBranchInScope(transfer.fromBranchId);
 
       const userId = RequestContext.requireUser().id;
       await tx
@@ -213,10 +265,11 @@ export class TransfersService {
       const transfer = await this.getInternal(tx, id);
       if (transfer.status !== "shipped") {
         throw new AppError(
-          ERROR_CODES.CONFLICT,
+          ERROR_CODES.TRANSFER_INVALID_STATUS,
           "Transfer cannot be received unless shipped",
         );
       }
+      assertBranchInScope(transfer.toBranchId);
 
       const userId = RequestContext.requireUser().id;
       await tx

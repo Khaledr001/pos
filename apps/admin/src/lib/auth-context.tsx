@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import type { AuthTokens } from "@devsfleet/shared-types";
-import { api, login as apiLogin } from "./api-client";
+import { api, clearSession, login as apiLogin } from "./api-client";
 
 export interface UserProfile {
   id: string;
@@ -88,13 +88,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         await api.post("/auth/logout", { refreshToken: currentTokens.refreshToken });
       } catch (err) {
+        // Revoking server-side is best effort; the local session goes either
+        // way. Leaving it behind because the network blinked would be the
+        // worse of the two failures.
         console.warn("Could not notify backend of logout:", err);
       }
     }
     setTokens(null);
     setUser(null);
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
+    clearSession();
+
+    /**
+     * A full navigation, not `router.push`.
+     *
+     * Signing out has to discard the React tree as well as the tokens: a
+     * client-side transition keeps every page's cached state in memory, so the
+     * next person at the same machine can still read the previous user's
+     * customer list out of a component that never unmounted.
+     */
+    if (typeof window !== "undefined") window.location.href = "/login";
   };
 
   return (

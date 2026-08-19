@@ -1,6 +1,7 @@
-import { and, eq, schema } from "@devsfleet/db";
+import { and, eq, inArray, schema } from "@devsfleet/db";
 import { AppError, ERROR_CODES } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
+import { assertBranchInScope, branchScope } from "../../common/context/branch-scope.js";
 import { RequestContext } from "../../common/context/request-context.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import type { CreateDeviceDto, ListDevicesDto, UpdateDeviceDto } from "./dto.js";
@@ -10,21 +11,20 @@ export class DevicesService {
   constructor(private readonly db: TenantDatabase) {}
 
   async list(query: ListDevicesDto) {
-    return this.db.run(async (tx) => {
-      let q = tx.select().from(schema.devices);
-      
-      if (query.branchId) {
-        // Drizzle builder doesn't let us conditionally append where easily without a builder instance,
-        // but since we only have one optional filter, we can just do this:
-        return tx
-          .select()
-          .from(schema.devices)
-          .where(eq(schema.devices.branchId, query.branchId))
-          .orderBy(schema.devices.name);
-      }
+    if (query.branchId) assertBranchInScope(query.branchId);
 
-      return tx.select().from(schema.devices).orderBy(schema.devices.name);
-    });
+    // Without the scope clause an unfiltered call — which is what the UI sends
+    // by default — listed every terminal in the business to a manager who runs
+    // one shop.
+    const scope = branchScope();
+    const where = and(
+      query.branchId ? eq(schema.devices.branchId, query.branchId) : undefined,
+      scope ? inArray(schema.devices.branchId, scope) : undefined,
+    );
+
+    return this.db.run(async (tx) =>
+      tx.select().from(schema.devices).where(where).orderBy(schema.devices.name),
+    );
   }
 
   async findById(id: string) {
@@ -37,11 +37,14 @@ export class DevicesService {
       if (!device) {
         throw new AppError(ERROR_CODES.NOT_FOUND, "Device not found");
       }
+      assertBranchInScope(device.branchId);
       return device;
     });
   }
 
   async create(dto: CreateDeviceDto) {
+    assertBranchInScope(dto.branchId);
+
     return this.db.run(async (tx) => {
       const [branch] = await tx
         .select()
@@ -99,6 +102,9 @@ export class DevicesService {
       if (!existing) {
         throw new AppError(ERROR_CODES.NOT_FOUND, "Device not found");
       }
+      // Deactivating a terminal ends every session on it, so it is a branch
+      // action, not a global one.
+      assertBranchInScope(existing.branchId);
 
       if (dto.name && dto.name !== existing.name) {
         const [existingName] = await tx

@@ -168,7 +168,10 @@ const api = {
      */
     pinLogin: (pin: string): Promise<{ name: string; permissions: string[] }> =>
       ipcRenderer.invoke("auth:pin-login", pin),
-    managerOverride: (pin: string, requiredPermission: string): Promise<string> =>
+    managerOverride: (
+      pin: string,
+      requiredPermission: string,
+    ): Promise<{ managerName: string; grant: string }> =>
       ipcRenderer.invoke("auth:manager-override", pin, requiredPermission),
   },
 

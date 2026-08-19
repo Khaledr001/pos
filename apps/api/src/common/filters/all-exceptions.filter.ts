@@ -93,7 +93,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
       return {
         status,
         code: this.codeForStatus(status),
-        message: Array.isArray(message) ? message.join("; ") : message,
+        message:
+          status === HttpStatus.TOO_MANY_REQUESTS
+            ? "Too many attempts. Wait a moment and try again."
+            : Array.isArray(message)
+              ? message.join("; ")
+              : message,
       };
     }
 
@@ -207,6 +212,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       case ERROR_CODES.DEVICE_NOT_REGISTERED:
         return HttpStatus.FORBIDDEN;
       case ERROR_CODES.ACCOUNT_LOCKED:
+      case ERROR_CODES.TOO_MANY_REQUESTS:
         // 429: the credentials may well be right; the caller is rate-limited.
         return HttpStatus.TOO_MANY_REQUESTS;
       case ERROR_CODES.DUPLICATE_SLUG:
@@ -245,6 +251,14 @@ export class AllExceptionsFilter implements ExceptionFilter {
         return ERROR_CODES.INVALID_CREDENTIALS;
       case HttpStatus.FORBIDDEN:
         return ERROR_CODES.INSUFFICIENT_PERMISSIONS;
+      /**
+       * Rate limiting reached the client as INTERNAL_ERROR, so the POS could
+       * not tell "you are going too fast" from "the server is broken" — and a
+       * sync engine that reads a 429 as a server fault retries harder, which
+       * is the opposite of what the limit is asking for.
+       */
+      case HttpStatus.TOO_MANY_REQUESTS:
+        return ERROR_CODES.TOO_MANY_REQUESTS;
       default:
         return ERROR_CODES.INTERNAL_ERROR;
     }

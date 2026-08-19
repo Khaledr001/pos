@@ -126,15 +126,50 @@ export function validateEnv(raw: Record<string, unknown>): Env {
     }
   }
 
-  if (env.NODE_ENV === "production") {
-    if (env.JWT_ACCESS_SECRET === env.JWT_REFRESH_SECRET) {
+  /**
+   * Secret hygiene, in EVERY environment.
+   *
+   * These checks used to run only when `NODE_ENV === "production"`, which meant
+   * a staging box — the one most likely to hold real data and be reachable from
+   * the internet — was exempt purely because of how it labelled itself. The
+   * cost of holding the rule everywhere is that a developer generates two
+   * strings once; the cost of not holding it is a shared or placeholder signing
+   * key somewhere nobody thought counted.
+   */
+  if (env.JWT_ACCESS_SECRET === env.JWT_REFRESH_SECRET) {
+    throw new Error(
+      "JWT_ACCESS_SECRET and JWT_REFRESH_SECRET must differ: sharing them lets " +
+        "an access token be replayed as a refresh token.",
+    );
+  }
+
+  for (const [name, value] of [
+    ["JWT_ACCESS_SECRET", env.JWT_ACCESS_SECRET],
+    ["JWT_REFRESH_SECRET", env.JWT_REFRESH_SECRET],
+  ] as const) {
+    /**
+     * Length alone is not entropy: a 32-character run of one letter satisfies
+     * `min(32)`. Counting distinct characters is a crude floor, but it catches
+     * the real failure — somebody padding a string to get past the validator.
+     * Enforced everywhere, because a weak key is weak wherever it runs.
+     */
+    if (new Set(value).size < 12) {
       throw new Error(
-        "JWT_ACCESS_SECRET and JWT_REFRESH_SECRET must differ in production: " +
-          "sharing them lets an access token be replayed as a refresh token.",
+        `${name} is not random enough. Generate one with: openssl rand -base64 48`,
       );
     }
-    if (env.JWT_ACCESS_SECRET.includes("change-me")) {
-      throw new Error("JWT secrets still hold their .env.example placeholder values.");
+
+    /**
+     * The placeholder check stays production-only, and BOTH secrets are now
+     * inspected — previously only the access secret was, so a refresh secret
+     * left as `change-me-…` booted cleanly in production.
+     *
+     * Development keeps the placeholders on purpose: a fresh clone should run
+     * `pnpm dev` without a key-generation ritual, and a dev database holds
+     * nothing worth signing for.
+     */
+    if (env.NODE_ENV === "production" && value.includes("change-me")) {
+      throw new Error(`${name} still holds its .env.example placeholder value.`);
     }
   }
 

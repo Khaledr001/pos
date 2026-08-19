@@ -17,8 +17,15 @@ import {
 export class DevicesController {
   constructor(private readonly devices: DevicesService) {}
 
+  /**
+   * Reads stay on `branch:read` — a manager who can see a branch can see its
+   * terminals. Writes are `device:manage`, which until now was declared in
+   * PERMISSIONS and enforced nowhere: registering a device creates the identity
+   * that PIN logins are accepted against, so it is not the same authority as
+   * renaming a branch.
+   */
   @Get()
-  @RequirePermissions("branch:read") // Re-using branch:read since devices belong to branches
+  @RequirePermissions("branch:read")
   @ApiOperation({ summary: "List devices" })
   list(@Query(zodPipe(ListDevicesSchema)) query: ListDevicesDto) {
     return this.devices.list(query);
@@ -32,7 +39,7 @@ export class DevicesController {
   }
 
   @Post()
-  @RequirePermissions("branch:write")
+  @RequirePermissions("device:manage")
   @Audited("devices", "create")
   @ApiOperation({ summary: "Register a new POS terminal" })
   create(@Body(zodPipe(CreateDeviceSchema)) dto: CreateDeviceDto) {
@@ -40,7 +47,7 @@ export class DevicesController {
   }
 
   @Patch(":id")
-  @RequirePermissions("branch:write")
+  @RequirePermissions("device:manage")
   @Audited("devices", "update")
   @ApiOperation({ summary: "Update a device" })
   update(

@@ -1,7 +1,8 @@
-import { and, desc, eq, isNull, schema, sql } from "@devsfleet/db";
+import { and, desc, eq, inArray, isNull, schema, sql } from "@devsfleet/db";
 import { formatDocumentNumber, sequenceKey } from "@devsfleet/shared-utils";
 import { AppError, ERROR_CODES, Money } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
+import { assertBranchInScope, branchScope } from "../../common/context/branch-scope.js";
 import { RequestContext } from "../../common/context/request-context.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import type { CloseSessionDto, CashMovementDto, OpenSessionDto } from "./dto.js";
@@ -23,6 +24,8 @@ export class CashRegisterService {
 
   /** The caller's currently open session, if any. */
   async current(branchId: string, deviceId?: string): Promise<unknown | null> {
+    assertBranchInScope(branchId);
+
     return this.db.run(async (tx) => {
       const session = await tx.query.cashSessions.findFirst({
         where: (t, { and: a, eq: e }) =>
@@ -49,6 +52,9 @@ export class CashRegisterService {
   async open(dto: OpenSessionDto): Promise<unknown> {
     const tenantId = RequestContext.requireTenantId();
     const user = RequestContext.requireUser();
+
+    // The branch is a body field, so it is the caller's claim until checked.
+    assertBranchInScope(dto.branchId);
 
     return this.db.run(async (tx) => {
       /**
@@ -142,6 +148,9 @@ export class CashRegisterService {
         where: (t, { eq: e }) => e(t.id, sessionId),
       });
       if (!session) throw new AppError(ERROR_CODES.NOT_FOUND, "Session not found");
+      // A session id is a plain uuid in the path; scope is what stops one
+      // branch closing another branch's drawer and owning its variance.
+      assertBranchInScope(session.branchId);
       if (session.status !== "open") {
         throw new AppError(ERROR_CODES.CONFLICT, "This drawer is already closed");
       }
@@ -199,6 +208,7 @@ export class CashRegisterService {
         where: (t, { eq: e }) => e(t.id, sessionId),
       });
       if (!session) throw new AppError(ERROR_CODES.NOT_FOUND, "Session not found");
+      assertBranchInScope(session.branchId);
       if (session.status !== "open") {
         throw new AppError(
           ERROR_CODES.CASH_SESSION_NOT_OPEN,
@@ -230,6 +240,12 @@ export class CashRegisterService {
 
   /** History, newest first. Variance is what a manager scans for. */
   async history(branchId?: string, limit = 30): Promise<unknown[]> {
+    if (branchId) assertBranchInScope(branchId);
+
+    // Drawer variance by cashier, for every shop, was readable by anyone with
+    // `cash:close` at one of them until this filter existed.
+    const scope = branchScope();
+
     return this.db.run(async (tx) =>
       tx
         .select({
@@ -248,7 +264,12 @@ export class CashRegisterService {
         .from(schema.cashSessions)
         .innerJoin(schema.branches, eq(schema.cashSessions.branchId, schema.branches.id))
         .innerJoin(schema.users, eq(schema.cashSessions.userId, schema.users.id))
-        .where(branchId ? eq(schema.cashSessions.branchId, branchId) : undefined)
+        .where(
+          and(
+            scope ? inArray(schema.cashSessions.branchId, scope) : undefined,
+            branchId ? eq(schema.cashSessions.branchId, branchId) : undefined,
+          ),
+        )
         .orderBy(desc(schema.cashSessions.openedAt))
         .limit(limit),
     );

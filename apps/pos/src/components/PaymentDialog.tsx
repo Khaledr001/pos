@@ -4,6 +4,7 @@ import { Banknote, CreditCard, Landmark, Trash2, UserCheck } from "lucide-react"
 import { useEffect, useMemo, useState } from "react";
 import { amount, money, parseAmount, roundCash } from "../lib/money.js";
 import type { PosCustomer } from "../lib/pos-data.js";
+import { useCart } from "../store/cart.js";
 import { Dialog } from "./Dialog.js";
 import { Keypad } from "./Keypad.js";
 import { ManagerOverrideDialog } from "./ManagerOverrideDialog.js";
@@ -366,7 +367,12 @@ export function PaymentDialog({
           open={showOverrideDialog}
           requiredPermission="customer:credit"
           onClose={() => setShowOverrideDialog(false)}
-          onSuccess={() => {
+          onSuccess={(_managerName, grant) => {
+            // Recorded on the cart, not just in local state: the server
+            // re-checks the credit limit when the sale is pushed, and without
+            // the grant the approval given here would not be there when it
+            // does.
+            useCart.getState().addOverrideGrant(grant);
             setShowOverrideDialog(false);
             setCreditOverrideAllowed(true);
           }}

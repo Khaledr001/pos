@@ -118,6 +118,8 @@ export const ERROR_CODES = {
   VALIDATION_FAILED: "VALIDATION_FAILED",
   NOT_FOUND: "NOT_FOUND",
   CONFLICT: "CONFLICT",
+  /** Rate limited. Distinct from INTERNAL_ERROR so a client can back off. */
+  TOO_MANY_REQUESTS: "TOO_MANY_REQUESTS",
   INTERNAL_ERROR: "INTERNAL_ERROR",
 } as const;
 

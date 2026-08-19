@@ -507,6 +507,102 @@ you know is broken is not fixed yet.
 
 ---
 
+## Authorisation
+
+Four separate things decide whether a request may proceed. They are not
+interchangeable, and most of the holes found in the audit came from one being
+used where another was meant.
+
+### 1. Permissions — what a role may do
+
+`@RequirePermissions("product:write")` on every route. `JwtAuthGuard` is global
+so authentication is automatic; authorisation is explicit, so a missing line is
+visible in review.
+
+Enforce with `hasPermission(...)`, never `permissions.includes("*") || ...` by
+hand — the superuser grant is one place, not a pattern to reproduce.
+
+### 2. Branch scope — which shops a user may act on
+
+```ts
+assertBranchInScope(dto.branchId);   // a branch the caller NAMED
+const scope = branchScope();         // a filter for a list they did NOT
+const where = and(..., scope ? inArray(table.branchId, scope) : undefined);
+```
+
+Both are needed. `assertBranchInScope` guards an explicit `branchId`; it does
+nothing about the far more common case of a list called with no filter, which
+is what the UI sends by default. Several endpoints returned the whole estate
+that way — every sale, every drawer count, every terminal.
+
+**An empty `allowedBranchIds` means EVERY branch.** That is how an owner is
+represented. There is therefore no value that means "nowhere", which is why
+`jwt.strategy.ts` refuses a token with no ABAC claims rather than defaulting
+them: the "safe" default was silently the widest possible scope.
+
+### 3. ABAC ceilings — how far a user may go
+
+`maxDiscountPercent`, `maxSaleAmount`, `canApproveRefund`, `canViewCost`. Carried
+in the token so no check costs a query, and always re-checked server-side — the
+POS greys out the control, but a client can be modified.
+
+### 4. Grants — a supervisor approving one action
+
+An override is approved at the counter and the sale may not reach the server for
+hours, on a terminal that was offline in between. It arrives on the CASHIER's
+token. Without something verifiable travelling with the document, the manager's
+approval is simply not present when the decision is made, and the sale is
+refused after the goods have gone.
+
+```
+POST /auth/verify-override  { pin, permission }
+  → { approvedBy: { id, name }, grant, expiresIn }     // no tokens, ever
+
+POST /sales  { ..., overrideGrants: [grant] }
+  → OverrideGrantsService.verify() → extra authority, this request only
+```
+
+The grant is a short-lived JWT: signature, `typ: "override"`, tenant and branch
+all checked. An unverifiable one is **discarded, not fatal** — the caller's own
+permissions then decide, so a forged grant buys nothing and an expired one
+produces the same refusal as no approval at all.
+
+Never accept an `approvedBy` user id in a request body. That is not an approval,
+it is a field where a terminal names the owner and inherits their authority.
+
+### Never grant more than you hold
+
+`user:write` was a complete escalation on its own: assign the owner's role to a
+new account, or reset the owner's password, and sign in. Both routes now go
+through `common/context/authority.ts`:
+
+```ts
+assertMayGrantPermissions(role.permissions, "That role");  // GRANT
+assertMayGrantAbac(dto);                                   // ceilings
+await this.assertMayManage(tx, targetUserId);              // MANAGE
+```
+
+The consequence is deliberate: **a role that manages staff must hold every
+permission it hands out.** An "HR" role that creates cashiers without being able
+to do anything a cashier does is not supportable without a separate "may grant
+these roles" concept — and it is exactly the shape that opened the hole.
+
+### Separation of duties
+
+A permission that gates an approval is worthless if another route reaches the
+same effect. Two examples the audit found:
+
+- `transfers ship` accepted status `requested` as well as `approved`, so one
+  permission could move stock between branches unreviewed.
+- `POST /inventory/transfer` moved stock immediately under `transfer:request` —
+  a second door into the cupboard `transfers` guards with four.
+
+When you add a route that reaches an approved outcome by a shorter path, it
+needs the permission that names the authority being exercised, not the one that
+names the shape of the request.
+
+---
+
 ## Frontend
 
 ### Admin (Next.js 16, App Router)

@@ -10,6 +10,54 @@ import { AppError, ERROR_CODES } from "@devsfleet/shared-utils";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1";
 const TOKEN_KEY = "devsfleet_auth_tokens";
+const USER_KEY = "devsfleet_auth_user";
+
+/**
+ * One refresh at a time.
+ *
+ * A dashboard fires half a dozen requests on mount. If each of them noticed a
+ * 401 and refreshed independently, the first rotation would revoke the token
+ * the others are holding — and the server treats a reused rotated token as a
+ * captured one and kills EVERY session for that user. Concurrent refreshes
+ * would therefore log the admin out rather than keep them in.
+ */
+let refreshing: Promise<string | null> | null = null;
+
+function readTokens(): AuthTokens | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const stored = localStorage.getItem(TOKEN_KEY);
+    return stored ? (JSON.parse(stored) as AuthTokens) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Wipes the session and sends the browser to the login screen. */
+export function clearSession(): void {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+}
+
+async function refreshAccessToken(): Promise<string | null> {
+  const current = readTokens();
+  if (!current?.refreshToken) return null;
+
+  const response = await fetch(`${BASE_URL}/auth/refresh`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ refreshToken: current.refreshToken }),
+  });
+
+  if (!response.ok) return null;
+
+  const payload = (await response.json()) as ApiResponse<AuthTokens>;
+  if (!payload.success) return null;
+
+  localStorage.setItem(TOKEN_KEY, JSON.stringify(payload.data));
+  return payload.data.accessToken;
+}
 
 export interface RequestOptions extends Omit<RequestInit, "body"> {
   body?: unknown;
@@ -21,33 +69,55 @@ export interface RequestOptions extends Omit<RequestInit, "body"> {
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { body, accessToken: explicitToken, query, headers, ...rest } = options;
 
-  let token = explicitToken;
-  if (!token && typeof window !== "undefined") {
-    try {
-      const stored = localStorage.getItem(TOKEN_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored) as AuthTokens;
-        token = parsed.accessToken;
-      }
-    } catch {
-      // Ignore parse errors
-    }
-  }
+  let token = explicitToken ?? readTokens()?.accessToken;
 
   const url = new URL(`${BASE_URL}${path.startsWith("/") ? path : `/${path}`}`);
   for (const [key, value] of Object.entries(query ?? {})) {
     if (value !== undefined) url.searchParams.set(key, String(value));
   }
 
-  let response = await fetch(url, {
-    ...rest,
-    headers: {
-      "content-type": "application/json",
-      ...(token ? { authorization: `Bearer ${token}` } : {}),
-      ...headers,
-    },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  });
+  const send = (bearer: string | undefined) =>
+    fetch(url, {
+      ...rest,
+      headers: {
+        "content-type": "application/json",
+        ...(bearer ? { authorization: `Bearer ${bearer}` } : {}),
+        ...headers,
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+
+  let response = await send(token);
+
+  /**
+   * One silent refresh, then one retry.
+   *
+   * An access token lives fifteen minutes. Without this the admin panel simply
+   * broke a quarter of an hour into every session — requests failing with
+   * "unauthorised" while a perfectly good refresh token sat in storage — and
+   * the only cure the user could find was to log in again.
+   *
+   * Skipped when the caller supplied its own token: that is a server component
+   * passing a token it owns, and rewriting browser storage on its behalf would
+   * be wrong.
+   */
+  if (response.status === 401 && !explicitToken && typeof window !== "undefined") {
+    refreshing ??= refreshAccessToken().finally(() => {
+      refreshing = null;
+    });
+    const fresh = await refreshing;
+
+    if (fresh) {
+      token = fresh;
+      response = await send(fresh);
+    } else {
+      // The refresh token is dead too. Anything else would leave the app
+      // rendering a shell it can no longer fill.
+      clearSession();
+      window.location.href = `/login?next=${encodeURIComponent(window.location.pathname)}`;
+      throw new AppError(ERROR_CODES.TOKEN_EXPIRED, "Your session has expired. Sign in again.");
+    }
+  }
 
   // 204 has no body to parse.
   if (response.status === 204) return undefined as T;

@@ -2,19 +2,45 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Store, Lock, Mail, ArrowRight, AlertCircle, CheckCircle2, Sparkles } from "lucide-react";
+import { Store, Lock, Mail, ArrowRight, AlertCircle, CheckCircle2 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
+/**
+ * Where to land after signing in.
+ *
+ * Read from `window.location` rather than `useSearchParams`, which forces the
+ * page into a Suspense boundary at build time for a value only ever needed
+ * inside a click handler.
+ *
+ * Relative paths only. Accepting an absolute URL here would make the login page
+ * an open redirect — the classic phishing primitive, because the link that
+ * lands the victim on a real login form is the one they trust.
+ */
+function nextPath(): string {
+  if (typeof window === "undefined") return "/";
+  const next = new URLSearchParams(window.location.search).get("next");
+  return next?.startsWith("/") && !next.startsWith("//") ? next : "/";
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
 
-  const [email, setEmail] = useState("admin@devsfleet.com");
-  const [password, setPassword] = useState("ChangeMe123!");
+  /**
+   * Empty, and no demo panel below.
+   *
+   * This page shipped with the seeded administrator's real email and password
+   * pre-filled AND printed on screen under "Demo Credentials". The seed is what
+   * a first install actually runs, and `ChangeMe123!` is what a great many of
+   * them will still be using — so every deployment of this panel published a
+   * working credential for its own tenant to anyone who loaded the login page.
+   */
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,10 +51,12 @@ export default function LoginPage() {
 
     try {
       await login(email, password);
-      router.push("/");
-    } catch (err: any) {
+      router.push(nextPath());
+    } catch (err) {
       setError(
-        err?.message || "Failed to authenticate. Please check your credentials.",
+        err instanceof Error
+          ? err.message
+          : "Failed to authenticate. Please check your credentials.",
       );
     } finally {
       setLoading(false);
@@ -58,18 +86,6 @@ export default function LoginPage() {
               <p className="mt-1.5 text-sm text-muted-foreground">
                 Multi-Tenant Business Platform · Admin Console
               </p>
-            </div>
-
-            {/* ── Demo Credentials ── */}
-            <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
-              <div className="flex items-center gap-2 text-xs font-semibold text-primary">
-                <Sparkles className="h-3.5 w-3.5" />
-                <span>Demo Credentials Pre-filled</span>
-              </div>
-              <div className="mt-2 flex flex-col gap-1 font-mono text-[11px] text-muted-foreground">
-                <span>Email: admin@devsfleet.com</span>
-                <span>Pass: ChangeMe123!</span>
-              </div>
             </div>
 
             {/* ── Error ── */}

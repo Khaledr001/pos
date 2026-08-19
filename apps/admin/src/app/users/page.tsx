@@ -78,8 +78,16 @@ export default function UsersPage() {
   const [fEmail, setFEmail] = useState("");
   const [fPhone, setFPhone] = useState("");
   const [fBranchId, setFBranchId] = useState("");
-  const [fPassword, setFPassword] = useState("ChangeMe123!");
-  const [fPin, setFPin] = useState("1234");
+  /**
+   * Blank, not a default.
+   *
+   * Every staff member this screen created got `ChangeMe123!` and PIN `1234`
+   * unless the administrator noticed and changed them — and both were the
+   * seeded values, so they are the first two guesses anybody would make. A
+   * defaulted credential is a credential everyone in the building knows.
+   */
+  const [fPassword, setFPassword] = useState("");
+  const [fPin, setFPin] = useState("");
   const [fMaxDiscount, setFMaxDiscount] = useState("10");
   const [fCanApproveRefund, setFCanApproveRefund] = useState(false);
   const [fCanViewCost, setFCanViewCost] = useState(true);
@@ -157,8 +165,8 @@ export default function UsersPage() {
       setFEmail("");
       setFPhone("");
       setFBranchId("");
-      setFPassword("ChangeMe123!");
-      setFPin("1234");
+      setFPassword("");
+      setFPin("");
       fetchUsers();
     } catch (err: any) {
       setActionError(err?.message || "Failed to add staff member. Verify password complexity (uppercase, lowercase, number).");
@@ -379,7 +387,7 @@ export default function UsersPage() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-foreground mb-1.5">POS Quick PIN (4-6 digits)</label>
-                <Input value={fPin} onChange={(e) => setFPin(e.target.value)} placeholder="1234" maxLength={6} className="font-mono" />
+                <Input value={fPin} onChange={(e) => setFPin(e.target.value)} placeholder="4-6 digits" maxLength={6} className="font-mono" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-foreground mb-1.5">Max Discount Ceiling (%)</label>

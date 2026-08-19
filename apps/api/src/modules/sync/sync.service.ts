@@ -7,7 +7,7 @@ import type {
   SyncPushResponse,
   SyncPushResult,
 } from "@devsfleet/shared-types";
-import { resolveTenantSettings } from "@devsfleet/shared-types";
+import { hasPermission, resolveTenantSettings, type Permission } from "@devsfleet/shared-types";
 import { AppError, ERROR_CODES } from "@devsfleet/shared-utils";
 import { Injectable, Logger } from "@nestjs/common";
 import { z } from "zod";
@@ -61,6 +61,34 @@ interface Mark {
 const EPOCH: Mark = {
   at: "1970-01-01T00:00:00Z",
   id: "00000000-0000-0000-0000-000000000000",
+};
+
+/**
+ * What each pushable entity costs, mirroring the permission its own HTTP route
+ * declares. Keep this table in step with those controllers — a new push entity
+ * without an entry here silently inherits the route's `sale:create` and nothing
+ * more.
+ */
+const PUSH_PERMISSIONS: Partial<
+  Record<SyncPushRequest["items"][number]["entity"], Permission[]>
+> = {
+  sale: ["sale:create"],
+  cash_session: ["cash:open"],
+  cash_movement: ["cash:movement"],
+  customer: ["customer:write"],
+  quotation: ["quotation:write"],
+  customer_payment: ["customer:credit"],
+};
+
+/**
+ * Entities on the way DOWN that need more than the route's `product:read`.
+ *
+ * Anything absent here is catalogue data every till needs to sell — products,
+ * prices, units, categories — and is covered by the route's own permission.
+ */
+const PULL_PERMISSIONS: Record<string, Permission> = {
+  customer: "customer:read",
+  inventory: "inventory:read",
 };
 
 @Injectable()
@@ -181,8 +209,23 @@ export class SyncService {
     });
     const defaultTaxRate = String(settings.tax.defaultRate);
 
-    const wanted = (entity: string) =>
-      !request.entities || request.entities.includes(entity as never);
+    /**
+     * Wanted by the terminal AND permitted to this principal.
+     *
+     * The route is gated on `product:read`, which is right for the catalogue
+     * but not for everything pull can return. Asking for `entities:
+     * ["customer"]` used to hand back the whole customer list — names, phones,
+     * TRNs, credit balances — to any role that could read a product. The
+     * warehouse role is exactly that: `product:read` and `inventory:read`, and
+     * deliberately no `customer:read`.
+     */
+    const user = RequestContext.requireUser();
+    const wanted = (entity: string) => {
+      if (request.entities && !request.entities.includes(entity as never)) return false;
+
+      const required = PULL_PERMISSIONS[entity];
+      return !required || hasPermission(user.permissions, required);
+    };
 
     await this.db.run(async (tx) => {
       /**
@@ -401,6 +444,8 @@ export class SyncService {
     // build can send anything, and `parsePayload` is what decides it is a sale.
     const payload = (item.payload ?? {}) as Record<string, unknown>;
 
+    this.assertMayPush(item.entity);
+
     switch (item.entity) {
       case "sale": {
         /**
@@ -441,7 +486,7 @@ export class SyncService {
         const dto = this.parsePayload(CreateSaleSchema, "sale", {
           ...payload,
           cashSessionId: session,
-          branchId: payload.branchId ?? branchId,
+          branchId,
           localId: item.localId,
           occurredAt: item.occurredAt,
           source: "pos",
@@ -488,7 +533,7 @@ export class SyncService {
           "cash_session",
           {
             ...payload,
-            branchId: payload.branchId ?? branchId,
+            branchId,
             localId: item.localId,
             openedAt: (payload.openedAt as string | undefined) ?? item.occurredAt,
           },
@@ -553,7 +598,7 @@ export class SyncService {
 
         const dto = this.parsePayload(CreateCustomerSchema, "customer", {
           ...payload,
-          branchId: payload.branchId ?? branchId,
+          branchId,
           localId: item.localId,
           occurredAt: item.occurredAt,
         });
@@ -585,7 +630,7 @@ export class SyncService {
 
         const dto = this.parsePayload(CreateQuotationSchema, "quotation", {
           ...payload,
-          branchId: payload.branchId ?? branchId,
+          branchId,
           localId: item.localId,
           occurredAt: item.occurredAt,
         });
@@ -626,7 +671,7 @@ export class SyncService {
             // older build still gets its reference number through, instead
             // of it being silently dropped by a key the payload never had.
             referenceNumber: payload.referenceNumber ?? payload.reference,
-            branchId: payload.branchId ?? branchId,
+            branchId,
             ...(session ? { cashSessionId: session } : { cashSessionId: undefined }),
             localId: item.localId,
             occurredAt: item.occurredAt,
@@ -662,6 +707,34 @@ export class SyncService {
           code: ERROR_CODES.SYNC_PAYLOAD_INVALID,
           message: `A terminal cannot push "${item.entity}" — that data only travels down.`,
         };
+    }
+  }
+
+  /**
+   * A pushed item needs the same permission its HTTP route would.
+   *
+   * `POST /sync/push` is gated on `sale:create` alone, because that is what a
+   * till mostly does. But push also opens and closes cash drawers, records
+   * drawer movements, creates customers and quotations, and — the sharp one —
+   * takes a payment against a customer's credit account, which
+   * `POST /customers/:id/payments` reserves for `customer:credit`.
+   *
+   * Without this, every one of those actions was reachable with `sale:create`:
+   * the offline path was a strictly weaker gate than the online one, so the way
+   * to bypass a permission was to route around it through sync.
+   */
+  private assertMayPush(entity: SyncPushRequest["items"][number]["entity"]): void {
+    const required = PUSH_PERMISSIONS[entity];
+    if (!required) return;
+
+    const user = RequestContext.requireUser();
+    const missing = required.filter((permission) => !hasPermission(user.permissions, permission));
+
+    if (missing.length > 0) {
+      throw new AppError(
+        ERROR_CODES.INSUFFICIENT_PERMISSIONS,
+        `Uploading a ${entity.replace("_", " ")} needs: ${missing.join(", ")}`,
+      );
     }
   }
 

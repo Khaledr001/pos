@@ -30,6 +30,24 @@ async function bootstrap(): Promise<void> {
     exclude: ["health", "ready"],
   });
 
+  /**
+   * Trust exactly one reverse proxy in front of us.
+   *
+   * Without this, `req.ip` is the proxy's address for every caller, so the rate
+   * limiter buckets the entire internet together: the per-IP limits on login
+   * and pin-login become one shared quota, and a single client can exhaust
+   * signup for everybody. `audit_log.ipAddress` records the proxy too, making
+   * the trail useless for "where did this come from".
+   *
+   * The count is `1`, not `true`. Trusting the whole chain lets a caller
+   * prepend their own `X-Forwarded-For` and choose which IP gets rate-limited —
+   * which hands back exactly the bypass this is meant to close. If a second
+   * proxy is ever added, this number changes with it.
+   */
+  if (isProd) {
+    app.getHttpAdapter().getInstance().set("trust proxy", 1);
+  }
+
   app.use(
     helmet({
       // The API serves JSON only; CSP belongs on the admin panel, which does

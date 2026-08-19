@@ -37,6 +37,16 @@ export interface CartSnapshot {
   customer: PosCustomer | null;
   documentDiscountPercent: string;
   note: string;
+  /**
+   * Optional, so a cart parked by an older build still restores.
+   *
+   * Parked with the cart because the approval belongs to the transaction, and
+   * a cart brought back an hour later is the same transaction — without them a
+   * restored below-floor line would sail through the till and be refused by
+   * the server, long after the customer left. The grants expire on their own,
+   * which is what bounds this.
+   */
+  overrideGrants?: string[];
 }
 
 interface CartState {
@@ -46,10 +56,25 @@ interface CartState {
   documentDiscountPercent: string;
   note: string;
 
+  /**
+   * Signed supervisor approvals collected while ringing this cart up.
+   *
+   * Kept on the CART rather than the line because that is the lifetime that
+   * matches: an approval belongs to the transaction in front of the manager,
+   * and clearing the cart must throw it away. Leaving one lying around between
+   * customers would turn a single approval into a standing permission.
+   *
+   * Opaque strings. The terminal attaches them to the sale and never reads
+   * them — the server is what decides what they authorise.
+   */
+  overrideGrants: string[];
+
   addProduct: (product: PosProduct, quantity?: string) => void;
   setQuantity: (key: string, quantity: string) => void;
   adjustQuantity: (key: string, delta: number) => void;
   setUnitPrice: (key: string, unitPrice: string, overrideFloor?: boolean) => void;
+  /** Record an approval a supervisor gave for this cart. */
+  addOverrideGrant: (grant: string) => void;
   setLineDiscount: (key: string, percent: string) => void;
   removeLine: (key: string) => void;
   setCustomer: (customer: PosCustomer | null) => void;
@@ -92,6 +117,7 @@ export const useCart = create<CartState>((set, get) => ({
   customer: null,
   documentDiscountPercent: "0",
   note: "",
+  overrideGrants: [],
 
   /**
    * Scanning the same item twice increments the existing line rather than
@@ -160,6 +186,15 @@ export const useCart = create<CartState>((set, get) => ({
     }));
   },
 
+  addOverrideGrant(grant) {
+    if (!grant) return;
+    set((state) =>
+      state.overrideGrants.includes(grant)
+        ? state
+        : { overrideGrants: [...state.overrideGrants, grant] },
+    );
+  },
+
   setLineDiscount(key, percent) {
     set((state) => ({
       lines: state.lines.map((line) =>
@@ -185,12 +220,20 @@ export const useCart = create<CartState>((set, get) => ({
   },
 
   clear() {
-    set({ lines: [], customer: null, documentDiscountPercent: "0", note: "" });
+    // Grants go with the cart. An approval outliving the customer it was given
+    // for is an approval nobody authorised.
+    set({
+      lines: [],
+      customer: null,
+      documentDiscountPercent: "0",
+      note: "",
+      overrideGrants: [],
+    });
   },
 
   snapshot() {
-    const { lines, customer, documentDiscountPercent, note } = get();
-    return { version: 1, lines, customer, documentDiscountPercent, note };
+    const { lines, customer, documentDiscountPercent, note, overrideGrants } = get();
+    return { version: 1, lines, customer, documentDiscountPercent, note, overrideGrants };
   },
 
   restore(snapshot) {
@@ -205,6 +248,9 @@ export const useCart = create<CartState>((set, get) => ({
       customer: snapshot.customer ?? null,
       documentDiscountPercent: snapshot.documentDiscountPercent ?? "0",
       note: snapshot.note ?? "",
+      // Replaced, never merged: the cart being restored is a different
+      // transaction to whatever was on screen a moment ago.
+      overrideGrants: snapshot.overrideGrants ?? [],
     });
   },
 

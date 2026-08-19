@@ -5,6 +5,7 @@ import { PassportModule } from "@nestjs/passport";
 import { AuthController } from "./auth.controller.js";
 import { AuthService } from "./auth.service.js";
 import { JwtStrategy } from "./jwt.strategy.js";
+import { OverrideGrantsService } from "./override-grants.service.js";
 
 @Module({
   imports: [
@@ -15,7 +16,7 @@ import { JwtStrategy } from "./jwt.strategy.js";
     JwtModule.register({}),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
-  exports: [AuthService],
+  providers: [AuthService, JwtStrategy, OverrideGrantsService],
+  exports: [AuthService, OverrideGrantsService],
 })
 export class AuthModule {}

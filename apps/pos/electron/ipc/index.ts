@@ -3,7 +3,7 @@ import { hostname, networkInterfaces, platform } from "node:os";
 import type { IpcMain } from "electron";
 import { app } from "electron";
 import * as repo from "../db/repositories.js";
-import { loginWithPin } from "../sync/api-client.js";
+import { loginWithPin, verifyOverride } from "../sync/api-client.js";
 import { syncNow } from "../sync/index.js";
 
 /**
@@ -76,14 +76,32 @@ export function registerDataHandlers(ipcMain: IpcMain): void {
     return user;
   });
 
-  ipcMain.handle("auth:manager-override", async (_event, pin: string, requiredPermission: string) => {
-    const user = await loginWithPin(String(pin ?? ""));
-    const hasPerm = user.permissions.includes("*") || user.permissions.includes(requiredPermission);
-    if (!hasPerm) {
-      throw new Error(`Manager lacks required permission: ${requiredPermission}`);
-    }
-    return user.name;
-  });
+  /**
+   * An override approves ONE action. It does not change who is signed in.
+   *
+   * The previous implementation called `loginWithPin`, which stores tokens —
+   * so approving a discount silently swapped the cashier's session for the
+   * manager's, and every sale, drawer movement and audit row after it named
+   * the wrong person. The server now answers without minting anything.
+   *
+   * This needs the network, like PIN login itself, and for the same reason:
+   * checking a PIN offline means keeping something PIN-equivalent on a machine
+   * that sits in a shop. Callers must treat a rejection as "ask a manager to
+   * come to the till", not as a failure to retry.
+   */
+  ipcMain.handle(
+    "auth:manager-override",
+    async (_event, pin: string, requiredPermission: string, reason?: string) => {
+      const result = await verifyOverride(
+        String(pin ?? ""),
+        String(requiredPermission ?? ""),
+        reason ? String(reason) : undefined,
+      );
+      // The grant travels back to the renderer so it can be attached to the
+      // document being approved. It is opaque here and stays opaque there.
+      return { managerName: result.approvedBy.name, grant: result.grant };
+    },
+  );
 
   ipcMain.handle("device:info", () => ({
     deviceId: repo.getState("device_id"),

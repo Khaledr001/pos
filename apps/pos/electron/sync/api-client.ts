@@ -87,6 +87,31 @@ export async function loginWithPin(pin: string): Promise<{ name: string; permiss
   return response.user;
 }
 
+/**
+ * Ask the server whether a supervisor PIN authorises one action.
+ *
+ * This used to be `loginWithPin` with the result inspected locally, which had
+ * two consequences nobody wanted: the manager's token pair REPLACED the
+ * cashier's, so the rest of the shift was recorded against the manager and
+ * their credential stayed on the terminal; and the permission decision was
+ * made in the renderer, where it can be edited.
+ *
+ * `/auth/verify-override` mints nothing and decides server-side. It runs on the
+ * cashier's own session — hence `authorized`, not a bare request.
+ */
+export async function verifyOverride(
+  pin: string,
+  permission: string,
+  reason?: string,
+): Promise<{
+  approvedBy: { id: string; name: string };
+  permission: string;
+  grant: string;
+  expiresIn: number;
+}> {
+  return authorized("/auth/verify-override", { pin, permission, ...(reason ? { reason } : {}) });
+}
+
 function storeTokens(accessToken: string, refreshToken: string, expiresIn: number): void {
   tokens = {
     accessToken,

@@ -1,5 +1,11 @@
 import type { AuthenticatedUser } from "@devsfleet/shared-types";
-import { resolvePlan, trialStatus, PLANS } from "@devsfleet/shared-types";
+import {
+  hasPermission,
+  resolvePlan,
+  resolveTenantSettings,
+  trialStatus,
+  PLANS,
+} from "@devsfleet/shared-types";
 import {
   Body,
   Controller,
@@ -65,17 +71,33 @@ export class TenantsController {
     return Object.values(PLANS);
   }
 
+  /**
+   * Deliberately has no `@RequirePermissions`.
+   *
+   * Every signed-in user needs their own business's currency, tax rate, locale
+   * and receipt format to render a price correctly — a cashier who cannot read
+   * the VAT rate cannot be shown a total. Requiring `settings:read` here would
+   * gate the shop floor out of the numbers it prints.
+   *
+   * What it does NOT hand out unconditionally is the back-office configuration.
+   * `whatsapp` carries greeting templates and business hours, which nothing at
+   * the counter needs, so it travels only to `settings:read`.
+   */
   @Get("tenant")
   @ApiOperation({ summary: "The current business, its plan and trial state" })
   async current(@CurrentUser() user: AuthenticatedUser) {
     const tenant = await this.tenants.current();
     const plan = resolvePlan(tenant.planId);
+    const settings = resolveTenantSettings(tenant.settings);
+    const mayReadSettings = hasPermission(user.permissions, "settings:read");
 
     return {
       id: tenant.id,
       name: tenant.name,
       slug: tenant.slug,
-      settings: tenant.settings,
+      settings: mayReadSettings
+        ? settings
+        : { ...settings, whatsapp: undefined },
       plan,
       trial: trialStatus(tenant.planId, tenant.trialEndsAt, new Date()),
       subscriptionEndsAt: tenant.subscriptionEndsAt,

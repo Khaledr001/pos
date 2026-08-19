@@ -31,6 +31,28 @@ export function assertBranchInScope(branchId?: string | null): void {
 }
 
 /**
+ * The branches this request may see, or null when that is all of them.
+ *
+ * `assertBranchInScope` guards a branch the caller NAMED. It does nothing
+ * about the far more common case: a list endpoint called with no branch filter
+ * at all, which is the default the UI sends. Several of them were returning
+ * the whole estate to a manager scoped to one shop — every sale, every drawer
+ * count, every terminal.
+ *
+ * Use it as a filter, not a check:
+ *
+ *   const scope = branchScope();
+ *   const where = and(..., scope ? inArray(table.branchId, scope) : undefined);
+ */
+export function branchScope(): string[] | null {
+  const user = RequestContext.get()?.user;
+  if (!user || user.isPlatformAdmin) return null;
+
+  const allowed = user.abac.allowedBranchIds;
+  return allowed.length === 0 ? null : [...allowed];
+}
+
+/**
  * The branch a request acts on when it does not name one.
  *
  * A POS token is pinned to its terminal's branch, so the common case needs no

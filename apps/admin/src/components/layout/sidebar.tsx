@@ -20,6 +20,7 @@ import {
   BarChart3,
   UserCheck,
 } from "lucide-react";
+import { hasPermission, type Permission } from "@devsfleet/shared-types";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -31,36 +32,51 @@ import {
   TooltipContent,
 } from "@/components/ui/tooltip";
 
-const NAV_SECTIONS = [
+/**
+ * `permission` mirrors the route map in AppShell.
+ *
+ * The nav used to list every screen to everybody, so a warehouse account was
+ * invited into Staff & Users and Settings and met a permission error on
+ * arrival — which reads as a broken app rather than as a boundary.
+ */
+const NAV_SECTIONS: Array<{
+  label: string;
+  items: Array<{
+    label: string;
+    href: string;
+    icon: typeof LayoutDashboard;
+    permission?: Permission;
+  }>;
+}> = [
   {
     label: "Main",
     items: [
       { label: "Dashboard", href: "/", icon: LayoutDashboard },
-      { label: "Branches", href: "/branches", icon: GitBranch },
+      { label: "Branches", href: "/branches", icon: GitBranch, permission: "branch:read" },
     ],
   },
   {
     label: "Commerce",
     items: [
-      { label: "Products", href: "/products", icon: Package },
-      { label: "Inventory", href: "/inventory", icon: Boxes },
-      { label: "Suppliers", href: "/suppliers", icon: Truck },
-      { label: "Sales & Orders", href: "/sales", icon: ShoppingCart },
-      { label: "Customers", href: "/customers", icon: Users },
+      { label: "Products", href: "/products", icon: Package, permission: "product:read" },
+      { label: "Inventory", href: "/inventory", icon: Boxes, permission: "inventory:read" },
+      { label: "Suppliers", href: "/suppliers", icon: Truck, permission: "supplier:read" },
+      { label: "Sales & Orders", href: "/sales", icon: ShoppingCart, permission: "sale:read" },
+      { label: "Customers", href: "/customers", icon: Users, permission: "customer:read" },
     ],
   },
   {
     label: "Analytics & Comms",
     items: [
-      { label: "Reports & KPIs", href: "/reports", icon: BarChart3 },
-      { label: "WhatsApp AI", href: "/whatsapp", icon: MessageSquare },
+      { label: "Reports & KPIs", href: "/reports", icon: BarChart3, permission: "report:read" },
+      { label: "WhatsApp AI", href: "/whatsapp", icon: MessageSquare, permission: "whatsapp:read" },
     ],
   },
   {
     label: "System",
     items: [
-      { label: "Staff & Users", href: "/users", icon: UserCheck },
-      { label: "Settings", href: "/settings", icon: Settings },
+      { label: "Staff & Users", href: "/users", icon: UserCheck, permission: "user:read" },
+      { label: "Settings", href: "/settings", icon: Settings, permission: "settings:read" },
     ],
   },
 ];
@@ -73,6 +89,14 @@ interface SidebarProps {
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+
+  const permissions = (user?.permissions ?? []) as Permission[];
+  const sections = NAV_SECTIONS.map((section) => ({
+    ...section,
+    items: section.items.filter(
+      (item) => !item.permission || hasPermission(permissions, item.permission),
+    ),
+  })).filter((section) => section.items.length > 0);
 
   return (
     <aside
@@ -100,7 +124,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
       {/* ── Navigation ── */}
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-6">
-        {NAV_SECTIONS.map((section) => (
+        {sections.map((section) => (
           <div key={section.label}>
             {!collapsed && (
               <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70">

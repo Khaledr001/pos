@@ -1,4 +1,4 @@
-import type { Locale, PermissionGrant } from "./index.js";
+import type { Locale, Permission, PermissionGrant } from "./index.js";
 
 /**
  * Wire contracts shared by apps/api, apps/admin and apps/pos.
@@ -136,6 +136,36 @@ export interface AuthenticatedUser {
   planId: string;
   trialEndsAt: string | null;
   deviceId?: string;
+}
+
+/**
+ * A supervisor's approval, in a form the server will believe later.
+ *
+ * An override happens at the till, minutes or hours before the sale reaches the
+ * server — a terminal can be offline in between. Without something carried on
+ * the sale itself, the approval simply evaporates: the push arrives on the
+ * CASHIER's token, the cashier still lacks the permission, and the sale is
+ * refused with the manager standing right there having approved it.
+ *
+ * So `POST /auth/verify-override` returns a short-lived JWT signed with the
+ * access secret, and the sale carries it. The server re-derives the approver's
+ * authority from the grant rather than trusting a user id in the body, which
+ * would otherwise be a self-service escalation field.
+ */
+export interface OverrideGrantPayload {
+  /** Distinguishes a grant from an access token signed with the same secret. */
+  typ: "override";
+  /** users.id of the approver. */
+  sub: string;
+  name: string;
+  tenantId: string;
+  branchId: string;
+  /** The single permission this grant confers. */
+  permission: Permission;
+  /** The approver's own ceilings, so an override can lift a discount cap too. */
+  abac: Pick<AbacAttributes, "maxDiscountPercent" | "maxSaleAmount">;
+  iat: number;
+  exp: number;
 }
 
 export interface LoginRequest {
