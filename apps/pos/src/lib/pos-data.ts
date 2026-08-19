@@ -82,11 +82,16 @@ export interface PosSaleLine {
   variantId: string;
   productName: string;
   productSku: string;
+  /** In the SOLD unit — "1" box, not the 20 pieces it converts to. */
   quantity: string;
   unitPrice: string;
   discountPercent: string;
   taxPercent: string;
   total: string;
+  /** A packaging from variant_units. Omit to sell the base unit. */
+  unitId?: string;
+  /** Base units per pack, snapshotted at sale time. "1" for the base unit. */
+  unitConversionFactor?: string;
 }
 
 export interface PosSaleDraft {

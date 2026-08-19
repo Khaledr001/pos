@@ -54,11 +54,16 @@ interface SaleLineInput {
   variantId: string;
   productName: string;
   productSku: string;
+  /** In the SOLD unit — "1" box, not the 20 pieces it converts to. */
   quantity: string;
   unitPrice: string;
   discountPercent: string;
   taxPercent: string;
   total: string;
+  /** A packaging from variant_units. Omit to sell the base unit. */
+  unitId?: string;
+  /** Base units per pack, snapshotted at sale time. Defaults to "1". */
+  unitConversionFactor?: string;
 }
 
 export interface SaleDraftInput {
@@ -461,7 +466,10 @@ export function commitSale(draft: SaleDraftInput): Record<string, unknown> {
       // "unlimited" — a variant that has never synced its stock figure
       // should not be sellable past zero any more than one that has.
       const stock = row?.available ?? 0;
-      if (Number(line.quantity) > stock) {
+      // A line sold by the box asks the shelf for boxes x conversion factor,
+      // in base units — the same terms `stock` is already expressed in.
+      const baseQuantity = Number(line.quantity) * Number(line.unitConversionFactor ?? "1");
+      if (baseQuantity > stock) {
         throw new Error(
           `${line.productName} — only ${stock} left at this terminal. ` +
             "Check with a manager before selling more offline.",
@@ -501,8 +509,8 @@ export function commitSale(draft: SaleDraftInput): Record<string, unknown> {
       `INSERT INTO local_sale_items
          (sale_local_id, variant_id, product_name, product_sku, quantity,
           unit_price, discount_percent, tax_percent, line_subtotal, tax_amount,
-          total, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          total, sort_order, unit_id, unit_conversion_factor)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
 
     const decrementStock = db.prepare(
@@ -512,6 +520,7 @@ export function commitSale(draft: SaleDraftInput): Record<string, unknown> {
     );
 
     draft.lines.forEach((line, index) => {
+      const conversionFactor = line.unitConversionFactor ?? "1";
       insertItem.run(
         draft.localId,
         line.variantId,
@@ -525,8 +534,12 @@ export function commitSale(draft: SaleDraftInput): Record<string, unknown> {
         "0",
         line.total,
         index,
+        line.unitId ?? null,
+        conversionFactor,
       );
-      decrementStock.run(Number(line.quantity), line.variantId);
+      // Stock always moves in base units — a box of 20 sold is 20 leaving
+      // the shelf, whatever the receipt says was sold.
+      decrementStock.run(Number(line.quantity) * Number(conversionFactor), line.variantId);
     });
 
     enqueue(db, {
@@ -543,6 +556,10 @@ export function commitSale(draft: SaleDraftInput): Record<string, unknown> {
           ...(Number(line.discountPercent) > 0
             ? { discountPercent: Number(line.discountPercent) }
             : {}),
+          // The server re-resolves the conversion factor itself from
+          // variant_units — it is not trusted from the terminal, only which
+          // packaging was chosen.
+          ...(line.unitId ? { unitId: line.unitId } : {}),
         })),
         payments: draft.payments.map((payment) => ({
           method: payment.method,
@@ -722,7 +739,8 @@ function saleLines(db: Database.Database, localId: string): unknown[] {
     .prepare(
       `SELECT variant_id AS variantId, product_name AS productName,
               product_sku AS productSku, quantity, unit_price AS unitPrice,
-              discount_percent AS discountPercent, tax_percent AS taxPercent, total
+              discount_percent AS discountPercent, tax_percent AS taxPercent, total,
+              unit_id AS unitId, unit_conversion_factor AS unitConversionFactor
        FROM local_sale_items WHERE sale_local_id = ? ORDER BY sort_order`,
     )
     .all(localId);

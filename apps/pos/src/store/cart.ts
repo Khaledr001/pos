@@ -2,7 +2,7 @@ import { DEFAULT_TENANT_SETTINGS } from "@devsfleet/shared-types";
 import { Money, calculateDocument, type DocumentTotals } from "@devsfleet/shared-utils";
 import { useMemo } from "react";
 import { create } from "zustand";
-import type { PosCustomer, PosProduct } from "../lib/pos-data.js";
+import type { PosCustomer, PosProduct, PosVariantUnit } from "../lib/pos-data.js";
 
 /**
  * The cart.
@@ -28,6 +28,13 @@ export interface CartLine {
   floorOverridden: boolean;
   /** Drives the entry animation, so a scan is visibly confirmed. */
   addedAt: number;
+  /**
+   * The packaging this line is sold in — a box, a carton. `null` means the
+   * base unit. Snapshotted onto the line (not re-resolved) for the same
+   * reason `product` is: a cart parked and restored later must still ring up
+   * in the unit it was quoted in.
+   */
+  unit: PosVariantUnit | null;
 }
 
 /** What a held cart stores. Versioned, so an older build can decline politely. */
@@ -73,6 +80,15 @@ interface CartState {
   setQuantity: (key: string, quantity: string) => void;
   adjustQuantity: (key: string, delta: number) => void;
   setUnitPrice: (key: string, unitPrice: string, overrideFloor?: boolean) => void;
+  /**
+   * Switch which packaging a line is sold in, recomputing its listed price —
+   * the packaging's own flat price if the merchant set one, otherwise the
+   * base price scaled by the conversion factor. Matches create()'s own
+   * resolution exactly, so what the cashier sees is what the server will
+   * charge. Clears any floor override: it was an approval for a different
+   * number, and the new price needs its own fresh check.
+   */
+  setLineUnit: (key: string, unit: PosVariantUnit | null) => void;
   /** Record an approval a supervisor gave for this cart. */
   addOverrideGrant: (grant: string) => void;
   setLineDiscount: (key: string, percent: string) => void;
@@ -111,6 +127,33 @@ interface CartState {
 
 const TAX_MODE = DEFAULT_TENANT_SETTINGS.tax.mode;
 const DECIMALS = DEFAULT_TENANT_SETTINGS.currency.decimals;
+
+/**
+ * A line's floor, scaled to whatever it is sold in — a box cannot go below
+ * cost any more than a single piece can, so the base floor scales by the
+ * same conversion factor the listed price does. Mirrors create()'s own
+ * scaling exactly.
+ */
+export function scaledFloor(line: CartLine): Money.Minor4 | null {
+  const floor = line.product.minSellingPrice;
+  if (!floor) return null;
+  return Money.multiplyByQuantity(Money.toMinor(floor), line.unit?.conversionFactor ?? "1");
+}
+
+/**
+ * A line's LIST price, in whatever it is sold in — the packaging's own flat
+ * price if the merchant set one, otherwise the base price scaled by the
+ * conversion factor. What "undercutting" is measured against; without this a
+ * cashier typing a price below the PACKAGING's real list, but above the raw
+ * base price, would read as an undercut against the wrong number.
+ */
+export function scaledListPrice(line: CartLine): Money.Minor4 {
+  if (line.unit?.priceOverride) return Money.toMinor(line.unit.priceOverride);
+  return Money.multiplyByQuantity(
+    Money.toMinor(line.product.sellingPrice),
+    line.unit?.conversionFactor ?? "1",
+  );
+}
 
 export const useCart = create<CartState>((set, get) => ({
   lines: [],
@@ -151,6 +194,7 @@ export const useCart = create<CartState>((set, get) => ({
           discountPercent: "0",
           floorOverridden: false,
           addedAt: Date.now(),
+          unit: null,
         },
       ],
     }));
@@ -183,6 +227,27 @@ export const useCart = create<CartState>((set, get) => ({
           ? { ...line, unitPrice, floorOverridden: overrideFloor }
           : line,
       ),
+    }));
+  },
+
+  setLineUnit(key, unit) {
+    set((state) => ({
+      lines: state.lines.map((line) => {
+        if (line.key !== key) return line;
+
+        const listedPrice = unit
+          ? (unit.priceOverride ??
+            Money.toDecimalString(
+              Money.multiplyByQuantity(
+                Money.toMinor(line.product.sellingPrice),
+                unit.conversionFactor,
+              ),
+              4,
+            ))
+          : line.product.sellingPrice;
+
+        return { ...line, unit, unitPrice: listedPrice, floorOverridden: false };
+      }),
     }));
   },
 
@@ -244,6 +309,9 @@ export const useCart = create<CartState>((set, get) => ({
         ...line,
         key: crypto.randomUUID(),
         addedAt: Date.now(),
+        // A cart parked by a build before packagings existed carries no
+        // `unit` at all — the base unit, same as it always was.
+        unit: line.unit ?? null,
       })),
       customer: snapshot.customer ?? null,
       documentDiscountPercent: snapshot.documentDiscountPercent ?? "0",
@@ -287,14 +355,14 @@ export const useCart = create<CartState>((set, get) => ({
   floorViolations() {
     return get().lines.filter((line) => {
       if (line.floorOverridden) return false;
-      const floor = line.product.minSellingPrice;
-      if (!floor) return false;
+      const floor = scaledFloor(line);
+      if (floor === null) return false;
 
       const unit = Money.toMinor(line.unitPrice);
       const discount = Money.percentOf(unit, line.discountPercent || "0");
       const effective = unit - discount;
 
-      return effective < Money.toMinor(floor);
+      return effective < floor;
     });
   },
 }));
@@ -344,12 +412,12 @@ export function useFloorViolations(): CartLine[] {
     () =>
       lines.filter((line) => {
         if (line.floorOverridden) return false;
-        const floor = line.product.minSellingPrice;
-        if (!floor) return false;
+        const floor = scaledFloor(line);
+        if (floor === null) return false;
 
         const unit = Money.toMinor(line.unitPrice);
         const discount = Money.percentOf(unit, line.discountPercent || "0");
-        return unit - discount < Money.toMinor(floor);
+        return unit - discount < floor;
       }),
     [lines],
   );

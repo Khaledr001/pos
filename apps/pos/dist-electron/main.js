@@ -778,6 +778,18 @@ const MIGRATIONS = [
       );
       CREATE INDEX IF NOT EXISTS idx_variant_units_variant ON variant_units(variant_id);
     `
+  },
+  {
+    version: 12,
+    sql: `
+      -- Which packaging a locally-rung sale line was actually sold in (Stage
+      -- 3.3) — quantity/unit_price on the row stay in that SOLD unit, exactly
+      -- as sale_items does server-side; conversion_factor is what the offline
+      -- stock ceiling and the local_delta decrement scale by to reach base
+      -- units. NULL unit_id / '1' factor is the base unit, same as always.
+      ALTER TABLE local_sale_items ADD COLUMN unit_id TEXT;
+      ALTER TABLE local_sale_items ADD COLUMN unit_conversion_factor TEXT NOT NULL DEFAULT '1';
+    `
   }
 ];
 function migrate(database) {
@@ -1074,7 +1086,8 @@ function commitSale(draft) {
     for (const line of draft.lines) {
       const row = available.get(line.variantId);
       const stock = row?.available ?? 0;
-      if (Number(line.quantity) > stock) {
+      const baseQuantity = Number(line.quantity) * Number(line.unitConversionFactor ?? "1");
+      if (baseQuantity > stock) {
         throw new Error(
           `${line.productName} — only ${stock} left at this terminal. Check with a manager before selling more offline.`
         );
@@ -1106,8 +1119,8 @@ function commitSale(draft) {
       `INSERT INTO local_sale_items
          (sale_local_id, variant_id, product_name, product_sku, quantity,
           unit_price, discount_percent, tax_percent, line_subtotal, tax_amount,
-          total, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          total, sort_order, unit_id, unit_conversion_factor)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
     const decrementStock = db2.prepare(
       `UPDATE inventory
@@ -1115,6 +1128,7 @@ function commitSale(draft) {
        WHERE variant_id = ?`
     );
     draft.lines.forEach((line, index) => {
+      const conversionFactor = line.unitConversionFactor ?? "1";
       insertItem.run(
         draft.localId,
         line.variantId,
@@ -1127,9 +1141,11 @@ function commitSale(draft) {
         line.total,
         "0",
         line.total,
-        index
+        index,
+        line.unitId ?? null,
+        conversionFactor
       );
-      decrementStock.run(Number(line.quantity), line.variantId);
+      decrementStock.run(Number(line.quantity) * Number(conversionFactor), line.variantId);
     });
     enqueue(db2, {
       localId: draft.localId,
@@ -1142,7 +1158,11 @@ function commitSale(draft) {
           variantId: line.variantId,
           quantity: Number(line.quantity),
           unitPrice: line.unitPrice,
-          ...Number(line.discountPercent) > 0 ? { discountPercent: Number(line.discountPercent) } : {}
+          ...Number(line.discountPercent) > 0 ? { discountPercent: Number(line.discountPercent) } : {},
+          // The server re-resolves the conversion factor itself from
+          // variant_units — it is not trusted from the terminal, only which
+          // packaging was chosen.
+          ...line.unitId ? { unitId: line.unitId } : {}
         })),
         payments: draft.payments.map((payment) => ({
           method: payment.method,
@@ -1279,7 +1299,8 @@ function saleLines(db2, localId) {
   return db2.prepare(
     `SELECT variant_id AS variantId, product_name AS productName,
               product_sku AS productSku, quantity, unit_price AS unitPrice,
-              discount_percent AS discountPercent, tax_percent AS taxPercent, total
+              discount_percent AS discountPercent, tax_percent AS taxPercent, total,
+              unit_id AS unitId, unit_conversion_factor AS unitConversionFactor
        FROM local_sale_items WHERE sale_local_id = ? ORDER BY sort_order`
   ).all(localId);
 }

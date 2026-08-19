@@ -844,6 +844,18 @@ const MIGRATIONS: Array<
       CREATE INDEX IF NOT EXISTS idx_variant_units_variant ON variant_units(variant_id);
     `,
   },
+  {
+    version: 12,
+    sql: `
+      -- Which packaging a locally-rung sale line was actually sold in (Stage
+      -- 3.3) — quantity/unit_price on the row stay in that SOLD unit, exactly
+      -- as sale_items does server-side; conversion_factor is what the offline
+      -- stock ceiling and the local_delta decrement scale by to reach base
+      -- units. NULL unit_id / '1' factor is the base unit, same as always.
+      ALTER TABLE local_sale_items ADD COLUMN unit_id TEXT;
+      ALTER TABLE local_sale_items ADD COLUMN unit_conversion_factor TEXT NOT NULL DEFAULT '1';
+    `,
+  },
 ];
 
 export function migrate(database: Database.Database): void {

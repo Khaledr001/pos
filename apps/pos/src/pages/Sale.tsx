@@ -12,7 +12,14 @@ import { ReceiptPanel } from "../components/ReceiptPanel.js";
 import { useBarcodeScanner, useHotkeys } from "../lib/keyboard.js";
 import { amount, money } from "../lib/money.js";
 import { hasBridge, posData, type PosCustomer } from "../lib/pos-data.js";
-import { useCart, useCartTotals, useFloorViolations, type CartLine } from "../store/cart.js";
+import {
+  scaledFloor,
+  scaledListPrice,
+  useCart,
+  useCartTotals,
+  useFloorViolations,
+  type CartLine,
+} from "../store/cart.js";
 import { useAuth } from "../store/auth.js";
 
 /**
@@ -123,6 +130,9 @@ export function Sale({ cashSessionId }: { cashSessionId: string | null }) {
         discountPercent: line.discountPercent,
         taxPercent: line.product.taxPercent,
         total: Money.toDecimalString(totals.lines[index]?.total ?? 0n, 2),
+        ...(line.unit
+          ? { unitId: line.unit.unitId, unitConversionFactor: line.unit.conversionFactor }
+          : {}),
       })),
       subtotal: Money.toDecimalString(totals.subtotal, 2),
       taxAmount: Money.toDecimalString(totals.taxAmount, 2),
@@ -661,10 +671,8 @@ function LineEditor({
   const [discount, setDiscount] = useState(line.discountPercent);
   const [approving, setApproving] = useState<Permission | null>(null);
 
-  const floor = line.product.minSellingPrice
-    ? Money.toMinor(line.product.minSellingPrice)
-    : null;
-  const list = Money.toMinor(line.product.sellingPrice);
+  const floor = scaledFloor(line);
+  const list = scaledListPrice(line);
   const unit = Money.toMinor(price || "0");
   const effective = Money.subtract(unit, Money.percentOf(unit, discount || "0"));
   const belowFloor = floor !== null && effective < floor;
@@ -728,7 +736,7 @@ function LineEditor({
       open
       onClose={onClose}
       title={line.product.name}
-      description={`${line.product.sku} · list ${amount(Money.toMinor(line.product.sellingPrice))}`}
+      description={`${line.product.sku}${line.unit ? ` · ${line.unit.unitAbbr}` : ""} · list ${amount(scaledListPrice(line))}`}
       footer={
         <>
           <button type="button" className="btn btn-ghost" onClick={onClose}>

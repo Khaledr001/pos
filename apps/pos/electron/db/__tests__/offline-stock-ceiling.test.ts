@@ -23,7 +23,7 @@ function seedInventory(variantId: string, quantity: number, localDelta = 0): voi
   ).run(`inv-${variantId}`, variantId, String(quantity), String(localDelta));
 }
 
-function draft(variantId: string, quantity: string) {
+function draft(variantId: string, quantity: string, unitConversionFactor?: string) {
   return {
     localId: `sale-${Math.random()}`,
     customerId: null,
@@ -38,6 +38,7 @@ function draft(variantId: string, quantity: string) {
         discountPercent: "0",
         taxPercent: "5",
         total: "10.00",
+        ...(unitConversionFactor ? { unitId: "unit-box", unitConversionFactor } : {}),
       },
     ],
     subtotal: "10.00",
@@ -94,5 +95,41 @@ describe("offline stock ceiling", () => {
     seedInventory("v1", 1);
     setState("allow_negative_stock", "1");
     expect(() => commitSale(draft("v1", "50"))).not.toThrow();
+  });
+
+  it("checks the ceiling in BASE units when a line is sold by a packaging", () => {
+    // 1 box = 20 pieces. 30 on the shelf -> 1 box fits, a 2nd does not.
+    seedInventory("v1", 30);
+    expect(() => commitSale(draft("v1", "1", "20"))).not.toThrow();
+    expect(() => commitSale(draft("v1", "1", "20"))).toThrow(/only 10 left/i);
+  });
+
+  it("decrements local_delta in base units for a packaged sale", () => {
+    seedInventory("v1", 30);
+    commitSale(draft("v1", "1", "20"));
+    const row = db.prepare(`SELECT local_delta FROM inventory WHERE variant_id = 'v1'`).get() as {
+      local_delta: string;
+    };
+    expect(row.local_delta).toBe("-20.0");
+  });
+
+  it("stores quantity in the SOLD unit, with unit_id/unit_conversion_factor snapshotted", () => {
+    seedInventory("v1", 30);
+    const attempt = draft("v1", "1", "20");
+    commitSale(attempt);
+    const item = db
+      .prepare(`SELECT quantity, unit_id AS unitId, unit_conversion_factor AS factor FROM local_sale_items WHERE sale_local_id = ?`)
+      .get(attempt.localId) as { quantity: string; unitId: string; factor: string };
+    expect(item).toMatchObject({ quantity: "1", unitId: "unit-box", factor: "20" });
+  });
+
+  it("defaults unit_conversion_factor to 1 for an ordinary, unpackaged sale", () => {
+    seedInventory("v1", 30);
+    const attempt = draft("v1", "3");
+    commitSale(attempt);
+    const item = db
+      .prepare(`SELECT unit_id AS unitId, unit_conversion_factor AS factor FROM local_sale_items WHERE sale_local_id = ?`)
+      .get(attempt.localId) as { unitId: string | null; factor: string };
+    expect(item).toEqual({ unitId: null, factor: "1" });
   });
 });
