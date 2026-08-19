@@ -4,6 +4,7 @@ import { clearApiTokens } from "../lib/api-client.js";
 import {
   adminLoginForRegistration,
   fetchBranchesForRegistration,
+  hasBridge,
   registerDeviceOnServer,
 } from "../lib/pos-data.js";
 import { useAuth } from "../store/auth.js";
@@ -55,6 +56,28 @@ export function RegisterTerminal() {
     try {
       const device = await registerDeviceOnServer(selectedBranch, deviceName.trim());
       const branchName = branches.find((b) => b.id === selectedBranch)?.name ?? "";
+
+      /**
+       * Tell the MAIN process, not just this window.
+       *
+       * `registerDeviceOnServer` only creates the row on the API, over the
+       * renderer's own fetch client. `bindTerminal` below only updates this
+       * window's own state, persisted to localStorage. Neither one reaches the
+       * Electron main process — which is what `auth:pin-login` actually asks —
+       * so without this call `device_state` stayed empty forever: the terminal
+       * looked registered (the app stopped showing this screen) while every
+       * PIN, on every account, failed with "This terminal has not been
+       * activated yet".
+       *
+       * `device:activate` is IPC-only and has always existed for this; nothing
+       * before now ever called it.
+       */
+      if (hasBridge()) {
+        const apiUrl =
+          (import.meta.env.VITE_API_URL as string | undefined)?.trim() ||
+          "http://localhost:3001/api/v1";
+        await window.devsfleet.device.activate(`${device.id}:${selectedBranch}`, apiUrl);
+      }
 
       bindTerminal({
         deviceId: device.id,
