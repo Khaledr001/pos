@@ -172,6 +172,34 @@ HTTP parsing.
 `output: "standalone"` so the server bundle is self-contained. POS auto-updates
 are served from `https://pos.devsfleet.com/releases`.
 
+## D15 — A return is a linked negative sale, not a first-class document
+
+**Decided**, going into Stage 2 (returns, voids, refunds — see feature.md).
+
+A return is a new row in `sales`: `returnOfSaleId` points at the original,
+its total is negative, and it is assigned its own `saleNumber` in the SAME
+sequence as an ordinary sale (D11's gapless counter, not a second series). The
+original sale's own `status` moves to `returned` or `partially_returned`, and
+`saleItems.returnedQuantity` tracks how much of each line has come back —
+supporting a partial return without a second table. A void is a separate
+mechanism already: `voidedAt`/`voidedBy`/`voidReason` sit directly on the
+sale being voided, no linked row involved, because a void means the document
+should not have existed at all, where a return means it did.
+
+Chosen over a first-class `sale_returns` table with its own number series and
+per-line restock-vs-scrap disposition because the schema already commits to
+this shape — `returnOfSaleId`, `returnedQuantity`, and a `SaleStatus` enum
+that already distinguishes `returned`/`partially_returned`/`voided` were
+shipped before Stage 2 was ever built against them. Building the alternative
+would mean discarding real, already-migrated schema work and adding a second
+number series with no user-facing requirement driving it.
+
+**Open a new decision if UAE VAT credit-note numbering turns out to require a
+distinguishable series** (a separate prefix/sequence a return document must
+carry for FTA reporting) — that would favour the first-class-table design D15
+rejected. Not confirmed either way at the time of this decision; revisit
+before Stage 2 ships if it matters for this tenant's actual VAT reporting.
+
 ---
 
 ## Still open

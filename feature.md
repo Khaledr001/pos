@@ -423,7 +423,7 @@ later step to avoid an earlier one.
 
 | # | Work | Accept when |
 |---|---|---|
-| 2.1 | API: return + void + refund. Decide whether a return is a linked negative sale (the schema's current design) or a first-class `sale_returns` table with its own number series and per-line restock-vs-scrap disposition. **Write this decision into `docs/DECISIONS.md` before coding.** | `sale:return`/`sale:void` gate real routes; stock returns via `StockService`; refund is a negative payment; day close and drawer both see it |
+| 2.1 | API: return + void + refund, as a linked negative sale — **decision made, see D15 in docs/DECISIONS.md.** | `sale:return`/`sale:void` gate real routes; stock returns via `StockService`; refund is a negative payment; day close and drawer both see it |
 | 2.2 | Add a `return` entity to sync push | A return created offline reaches the server exactly once |
 | 2.3 | Wire `Returns.tsx` to it | Your §21 flow works: 100 AED back, stock restocked or scrapped, cash out of the drawer |
 | 2.4 | Exchange | Your §22 flow: return 100, take 130, POS charges 30 |
@@ -558,8 +558,9 @@ From `docs/DECISIONS.md`. Resolve before the dependent stage, not during it.
 | 3 | Thermal printer models (58 mm / 80 mm) | Stage 4 — receipt rendering |
 | 4 | LLM provider | Stage 8 — AI module |
 
-New decision needed:
+~~New decision needed~~ — resolved, confirmed with the user, written into
+`docs/DECISIONS.md` as **D15**:
 
-| # | Question | Blocks |
+| # | Question | Resolution |
 |---|---|---|
-| 5 | Is a return a linked negative sale, or a first-class `sale_returns` document with its own number series? | Stage 2 — everything about returns, credit notes and VAT reporting |
+| 5 | Is a return a linked negative sale, or a first-class `sale_returns` document with its own number series? | **Linked negative sale**, per the existing schema (`returnOfSaleId`, `returnedQuantity`, the `SaleStatus` enum) — see D15. Reopen if UAE VAT credit-note numbering turns out to require a distinguishable series; not confirmed either way yet. |
