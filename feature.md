@@ -176,17 +176,31 @@ not before, and the two share one design decision. Until then a terminal with no
 line cannot take a supervisor approval, and the UI says so rather than accepting
 the sale and failing at push.
 
-### B4 🔴 Offline login is impossible — and login gates the whole app
+### B4 🟡 Offline login is impossible — PARTLY FIXED (Stage 1.1, commit 4cebfd3)
 
-There is no local `users` table, no PIN hash, no permissions in SQLite. Grep
-across `apps/pos/electron/` for `users|pin_hash|permission|role` returns no
-schema and no queries. `user` is not in `SYNC_ENTITIES`, so the server has no way
-to send them.
+A cold-start, fully offline terminal can now sign a cashier in and sell.
+`user` joined `SYNC_ENTITIES`; the API pulls branch-scoped staff plus
+tenant-wide ones (owners, area managers), gated on nothing beyond the pull
+route's own `product:read` — every terminal needs this to let any of its staff
+sign in offline. `electron/db/local-auth.ts` verifies a PIN against the
+mirrored hash with the same ambiguous-PIN refusal `resolvePinHolder` uses
+online, and a per-terminal throttle (not a per-account lockout — a wrong PIN
+identifies nobody, same reason the server doesn't track one either) stands in
+for the route rate limit that has nothing to bind to offline.
+`auth:pin-login` tries the network first and only falls back to the mirror
+when the request never got an answer at all — a definitive server response
+(wrong PIN, a lockout, a deactivated device) is trusted as-is.
 
-A signed-in till survives a restart (the renderer persists the cashier in
-`localStorage`, with permissions frozen at last login and no expiry). But a
-**cold-start offline terminal cannot be used at all**, and a shift change offline
-is impossible. This defeats the primary premise of the product.
+**Scope was deliberately narrowed, confirmed with the user before building:**
+sale attribution while fully offline is NOT solved. The local outbox still
+never records who rang up a sale — attribution comes entirely from whichever
+token the terminal is authenticated as when a sale eventually pushes, exactly
+as it did before this fix. A sale rung up offline by cashier B, on a terminal
+whose stored token belongs to cashier A, is still attributed to A. Fixing that
+needs a device-level credential architecture that does not exist today: the
+outbox would have to carry who rang each sale up, and the server would have
+to trust a device to attest to it — a real, additive trust boundary, not a
+patch. Worth its own decision and its own stage if it's wanted.
 
 ### B5 🔴 Receipt printing does not exist
 
@@ -264,7 +278,7 @@ Numbering follows your list. "Where" cites the strongest evidence.
 
 | # | Area | Status | Notes |
 |---|---|---|---|
-| 1 | POS auth & security | 🟡 | Login/PIN/roles/branch/device-auth/session/auto-logout ✅ (`useIdleTimer(5)`, `App.tsx:36`). Screen lock 🔴. Manager approval 💀 **B3**. Offline auth 🔴 **B4**. Failed-login tracking ✅ (`users.failedLoginCount`). |
+| 1 | POS auth & security | 🟡 | Login/PIN/roles/branch/device-auth/session/auto-logout ✅ (`useIdleTimer(5)`, `App.tsx:36`). Screen lock 🔴. Manager approval ✅ **B3**. Offline auth 🟡 **B4** — sign-in works, offline sale attribution does not. Failed-login tracking ✅ (`users.failedLoginCount`). |
 | 2 | Terminal management | 🟡 | Registration, device id, branch, status, last sync, version ✅. Default printer/receipt-format/price-list per terminal 🔴. Remote disable 🔴 (no route). No admin UI. |
 | 3 | POS dashboard | 🟡 | Cashier/branch/drawer/online/sync status ✅ in `TopBar`. Today's sales, transaction count, pending-order count, low-stock warnings, notifications 🔴. |
 | 27–30 | Offline mode, local DB, sync, conflicts | 🟡 | Transaction core offline ✅. Auth 🔴 **B4**. Conflict resolution 🔴 — pull is blind last-writer-wins upsert; `version` columns exist and are never compared. No backoff. `applied_with_warning` unhandled (`repositories.ts:830`). Rejected rows have no UI or retry path. |
@@ -385,7 +399,7 @@ later step to avoid an earlier one.
 
 | # | Work | Accept when |
 |---|---|---|
-| 1.1 | **B4** offline auth: add a `user` sync entity; mirror users, PIN hashes (never plaintext) and permissions to SQLite; verify PIN locally | A terminal with the network unplugged from cold start can sign a cashier in and sell |
+| 1.1 | ~~**B4** offline auth~~ **DONE** (4cebfd3) | ~~A terminal with the network unplugged from cold start can sign a cashier in and sell~~ — done. Offline sale attribution is a separate, still-open decision — see B4. |
 | 1.2 | **B6** sync ABAC limits with the user record and enforce them in the cart | An offline cashier is refused a discount above their ceiling, with the same message the API gives |
 | 1.3 | Offline manager override on the local user mirror | Override works with the network unplugged and records who authorised what |
 | 1.4 | Surface rejected outbox rows: an IPC channel, a Settings list, retry/discard | A rejected sale is visible with its reason and can be acted on |
