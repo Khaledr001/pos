@@ -70,7 +70,7 @@ function baseReturnDraft() {
     localId: "return-1",
     originalSaleLocalId: "sale-1",
     customerId: "cust-1",
-    cashSessionId: null,
+    cashSessionId: null as string | null,
     lines: [
       {
         originalLineIndex: 0,
@@ -86,7 +86,11 @@ function baseReturnDraft() {
     taxAmount: "1.00",
     discountAmount: "0",
     total: "21.00",
-    refunds: [{ method: "cash", amount: "21.00" }],
+    refunds: [{ method: "cash", amount: "21.00" }] as Array<{
+      method: string;
+      amount: string;
+      reference?: string;
+    }>,
     reason: "Customer changed mind",
     occurredAt: new Date(1000).toISOString(),
   };
@@ -127,6 +131,31 @@ describe("offline returns", () => {
       { lineIndex: 0, variantId: "v1", quantity: 2, disposition: "restock" },
     ]);
     expect(payload.refunds).toEqual([{ method: "cash", amount: 21 }]);
+  });
+
+  it("records a cash_out movement for a cash refund against an open drawer", () => {
+    commitReturn(returnDraft({ cashSessionId: "cash-1" }));
+
+    const movements = db
+      .prepare(`SELECT payload FROM outbox WHERE entity = 'cash_movement'`)
+      .all() as Array<{ payload: string }>;
+    expect(movements).toHaveLength(1);
+    const payload = JSON.parse(movements[0]!.payload);
+    expect(payload).toMatchObject({ cashSessionId: "cash-1", type: "cash_out", amount: "21.0000" });
+  });
+
+  it("records no drawer movement when the refund is not cash", () => {
+    commitReturn(
+      returnDraft({ cashSessionId: "cash-1", refunds: [{ method: "card", amount: "21.00" }] }),
+    );
+    const movements = db.prepare(`SELECT 1 FROM outbox WHERE entity = 'cash_movement'`).all();
+    expect(movements).toHaveLength(0);
+  });
+
+  it("records no drawer movement when no drawer is open", () => {
+    commitReturn(returnDraft({ cashSessionId: null }));
+    const movements = db.prepare(`SELECT 1 FROM outbox WHERE entity = 'cash_movement'`).all();
+    expect(movements).toHaveLength(0);
   });
 
   it("credits local_delta back for a restocked line, so the unit is sellable again offline", () => {

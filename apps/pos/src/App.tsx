@@ -72,7 +72,10 @@ function Shell() {
               element={<CashRegister session={session} onChanged={refreshSession} />}
             />
             <Route path="/quotations" element={<Quotations />} />
-            <Route path="/returns" element={<Returns />} />
+            <Route
+              path="/returns"
+              element={<Returns cashSessionId={session?.id ?? null} />}
+            />
             <Route path="/accounts" element={<Accounts />} />
             <Route path="/transfers" element={<Transfers />} />
             <Route path="/receiving" element={<Receiving />} />

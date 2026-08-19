@@ -702,6 +702,56 @@ const MIGRATIONS = [
         locked_until         TEXT
       );
     `
+  },
+  {
+    version: 10,
+    sql: `
+      -- A return recorded offline, against a sale THIS terminal rang up.
+      --
+      -- Only same-till originals are supported: \`sales:find\` has no path to a
+      -- sale from another terminal until both have synced (see Returns.tsx), so
+      -- \`original_sale_local_id\` always resolves against this till's own
+      -- \`local_sales\`. Stored positive, unlike the server's own linked-negative-
+      -- sale row (D15) — this mirror is a memory of "a return happened", not a
+      -- ledger, so there is no sign convention to preserve.
+      CREATE TABLE IF NOT EXISTS local_returns (
+        local_id               TEXT PRIMARY KEY,
+        server_id              TEXT,
+        return_number          TEXT,
+        original_sale_local_id TEXT NOT NULL REFERENCES local_sales(local_id),
+        customer_id            TEXT,
+        cash_session_id        TEXT,
+        subtotal               TEXT NOT NULL,
+        tax_amount             TEXT NOT NULL,
+        discount_amount        TEXT NOT NULL,
+        total                  TEXT NOT NULL,
+        reason                 TEXT,
+        occurred_at            TEXT NOT NULL,
+        synced_at              TEXT
+      );
+
+      -- \`original_line_index\` is the ORIGINAL sale's line position
+      -- (\`local_sale_items.sort_order\`) — the only stable way to name one of
+      -- its lines, since neither end assigns a line its own id until the
+      -- server does on first sync. The server resolves it back to a real
+      -- \`sale_items.id\` by matching \`sort_order\`, sanity-checked against
+      -- \`variant_id\`. \`sort_order\` here is this RETURN's own display order,
+      -- and can repeat an \`original_line_index\` — the drill kit returned
+      -- earlier in this session split one original line into a restocked row
+      -- and a scrapped row.
+      CREATE TABLE IF NOT EXISTS local_return_items (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        return_local_id     TEXT NOT NULL REFERENCES local_returns(local_id) ON DELETE CASCADE,
+        original_line_index INTEGER NOT NULL,
+        variant_id          TEXT NOT NULL,
+        product_name        TEXT NOT NULL,
+        product_sku         TEXT NOT NULL,
+        quantity            TEXT NOT NULL,
+        unit_price          TEXT NOT NULL,
+        disposition         TEXT NOT NULL,
+        sort_order          INTEGER NOT NULL DEFAULT 0
+      );
+    `
   }
 ];
 function migrate(database) {
@@ -789,6 +839,7 @@ function roundTo(amount, decimals) {
   const step = 10n ** BigInt(MONEY_SCALE - decimals);
   return divideRoundHalfUp(amount, step) * step;
 }
+const isPositive = (a) => a > 0n;
 function numberToDecimalString(value) {
   if (!Number.isFinite(value)) {
     throw new TypeError(`Not a finite money value: ${value}`);
@@ -1070,6 +1121,92 @@ function commitSale(draft) {
   })();
   return { ...draft, saleNumber: null, synced: false };
 }
+function commitReturn(draft) {
+  const db2 = getDatabase();
+  db2.transaction(() => {
+    db2.prepare(
+      `INSERT INTO local_returns
+         (local_id, original_sale_local_id, customer_id, cash_session_id,
+          subtotal, tax_amount, discount_amount, total, reason, occurred_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      draft.localId,
+      draft.originalSaleLocalId,
+      draft.customerId,
+      draft.cashSessionId,
+      draft.subtotal,
+      draft.taxAmount,
+      draft.discountAmount,
+      draft.total,
+      draft.reason ?? null,
+      draft.occurredAt
+    );
+    const insertItem = db2.prepare(
+      `INSERT INTO local_return_items
+         (return_local_id, original_line_index, variant_id, product_name,
+          product_sku, quantity, unit_price, disposition, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    );
+    const restockVariant = db2.prepare(
+      `UPDATE inventory
+       SET local_delta = CAST(CAST(local_delta AS REAL) + ? AS TEXT)
+       WHERE variant_id = ?`
+    );
+    draft.lines.forEach((line, index) => {
+      insertItem.run(
+        draft.localId,
+        line.originalLineIndex,
+        line.variantId,
+        line.productName,
+        line.productSku,
+        line.quantity,
+        line.unitPrice,
+        line.disposition,
+        index
+      );
+      if (line.disposition === "restock") {
+        restockVariant.run(Number(line.quantity), line.variantId);
+      }
+    });
+    enqueue(db2, {
+      localId: draft.localId,
+      entity: "return",
+      occurredAt: draft.occurredAt,
+      payload: {
+        originalSaleId: draft.originalSaleLocalId,
+        customerId: draft.customerId,
+        cashSessionId: draft.cashSessionId,
+        lines: draft.lines.map((line) => ({
+          lineIndex: line.originalLineIndex,
+          variantId: line.variantId,
+          quantity: Number(line.quantity),
+          disposition: line.disposition
+        })),
+        refunds: draft.refunds.map((refund) => ({
+          method: refund.method,
+          amount: Number(refund.amount),
+          ...refund.reference ? { reference: refund.reference } : {}
+        })),
+        ...draft.reason ? { reason: draft.reason } : {}
+      }
+    });
+    const cashRefunded = draft.refunds.filter((r) => r.method === "cash").reduce((sum, r) => add(sum, toMinor(r.amount)), 0n);
+    if (draft.cashSessionId && isPositive(cashRefunded)) {
+      enqueue(db2, {
+        localId: node_crypto.randomUUID(),
+        entity: "cash_movement",
+        occurredAt: draft.occurredAt,
+        payload: {
+          cashSessionId: draft.cashSessionId,
+          type: "cash_out",
+          amount: toDecimalString(cashRefunded, 4),
+          reason: draft.reason ? `Return refund: ${draft.reason}` : "Return refund"
+        }
+      });
+    }
+  })();
+  return { ...draft, returnNumber: null, synced: false };
+}
 function recentSales(limit = 20) {
   const db2 = getDatabase();
   const sales = db2.prepare(
@@ -1320,6 +1457,11 @@ function settleOutboxItem(result) {
           `UPDATE local_quotations SET server_id = ?, quotation_number = ?, synced_at = datetime('now')
            WHERE local_id = ?`
         ).run(result.serverId ?? null, result.documentNumber ?? null, result.localId);
+      } else if (result.entity === "return") {
+        db2.prepare(
+          `UPDATE local_returns SET server_id = ?, return_number = ?, synced_at = datetime('now')
+           WHERE local_id = ?`
+        ).run(result.serverId ?? null, result.documentNumber ?? null, result.localId);
       } else if (result.entity === "customer_payment") {
         db2.prepare(
           `UPDATE local_customer_payments SET synced_at = datetime('now') WHERE local_id = ?`
@@ -1378,6 +1520,10 @@ function clearSettledDeltas() {
        SELECT i.variant_id FROM local_sale_items i
        JOIN local_sales s ON s.local_id = i.sale_local_id
        WHERE s.synced_at IS NOT NULL
+       UNION
+       SELECT i.variant_id FROM local_return_items i
+       JOIN local_returns r ON r.local_id = i.return_local_id
+       WHERE r.synced_at IS NOT NULL
      )`
   ).run();
 }
@@ -3623,6 +3769,11 @@ function registerDataHandlers(ipcMain) {
   });
   ipcMain.handle("sales:recent", (_event, limit) => recentSales(limit));
   ipcMain.handle("sales:find", (_event, reference) => findSale(reference ?? ""));
+  ipcMain.handle("sales:commit-return", (_event, draft) => {
+    const receipt = commitReturn(draft);
+    syncNow();
+    return receipt;
+  });
   ipcMain.handle("quotations:save", (_event, draft) => {
     const receipt = saveQuotation(draft);
     syncNow();

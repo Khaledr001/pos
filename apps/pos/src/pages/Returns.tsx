@@ -1,5 +1,6 @@
-import { Money } from "@devsfleet/shared-utils";
-import { Receipt, Search, Undo2 } from "lucide-react";
+import { DEFAULT_TENANT_SETTINGS, type PaymentMethod } from "@devsfleet/shared-types";
+import { Money, calculateDocument } from "@devsfleet/shared-utils";
+import { Banknote, CreditCard, Landmark, Receipt, Search, Undo2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Dialog } from "../components/Dialog.js";
 import { KeyRail } from "../components/KeyRail.js";
@@ -17,15 +18,38 @@ import { useAuth } from "../store/auth.js";
  *
  * The refund itself is recorded as a linked sale with negative quantities, so
  * the ledger stays append-only and the original document is never rewritten.
+ *
+ * Only a same-till original is supported — `posData.findSale` has no path to
+ * a sale from another terminal until both have synced.
  */
-export function Returns() {
+
+const TAX_MODE = DEFAULT_TENANT_SETTINGS.tax.mode;
+const DECIMALS = DEFAULT_TENANT_SETTINGS.currency.decimals;
+
+const REFUND_METHODS: Array<{
+  method: PaymentMethod;
+  label: string;
+  icon: typeof Banknote;
+  needsReference?: boolean;
+}> = [
+  { method: "cash", label: "Cash", icon: Banknote },
+  { method: "card", label: "Card", icon: CreditCard, needsReference: true },
+  { method: "bank_transfer", label: "Transfer", icon: Landmark, needsReference: true },
+];
+
+export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
   const { can } = useAuth();
   const [reference, setReference] = useState("");
   const [sale, setSale] = useState<PosSaleReceipt | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [quantities, setQuantities] = useState<Record<string, string>>({});
+  const [dispositions, setDispositions] = useState<Record<string, "restock" | "scrap">>({});
   const [confirming, setConfirming] = useState(false);
   const [recent, setRecent] = useState<PosSaleReceipt[]>([]);
+  const [refundMethod, setRefundMethod] = useState<PaymentMethod>("cash");
+  const [refundReference, setRefundReference] = useState("");
+  const [reason, setReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const allowed = can("sale:return");
 
@@ -39,25 +63,96 @@ export function Returns() {
     void posData.recentSales(8).then(setRecent);
   }, []);
 
+  function pickSale(found: PosSaleReceipt) {
+    setSale(found);
+    setNotFound(false);
+    setQuantities({});
+    setDispositions({});
+    setReason("");
+    setRefundMethod("cash");
+    setRefundReference("");
+  }
+
   async function find() {
     const trimmed = reference.trim();
     if (!trimmed) return;
     const found = await posData.findSale(trimmed);
-    setSale(found);
-    setNotFound(found === null);
-    setQuantities({});
+    if (found) pickSale(found);
+    else {
+      setSale(null);
+      setNotFound(true);
+    }
   }
 
-  const refund = sale
-    ? sale.lines.reduce<Money.Minor4>((sum, line, index) => {
-        const qty = Number(quantities[String(index)] ?? "0");
-        if (qty <= 0) return sum;
-        const unit = Money.toMinor(line.unitPrice);
-        return Money.add(sum, Money.multiplyByQuantity(unit, String(qty)));
-      }, 0n)
-    : 0n;
+  const selectedLines = sale
+    ? sale.lines
+        .map((line, index) => ({ line, index, qty: Number(quantities[String(index)] ?? "0") }))
+        .filter((l) => l.qty > 0)
+    : [];
 
+  const totals = calculateDocument({
+    taxMode: TAX_MODE,
+    decimals: DECIMALS,
+    lines: selectedLines.map(({ line, qty }) => ({
+      quantity: String(qty),
+      unitPrice: line.unitPrice,
+      discountPercent: line.discountPercent,
+      taxPercent: line.taxPercent,
+    })),
+  });
+  const refund = totals.total;
   const anySelected = Money.isPositive(refund);
+  const activeMethod = REFUND_METHODS.find((m) => m.method === refundMethod);
+
+  async function submitReturn() {
+    if (!sale || !anySelected || submitting) return;
+    setSubmitting(true);
+
+    const draft = {
+      localId: crypto.randomUUID(),
+      originalSaleLocalId: sale.localId,
+      customerId: sale.customerId,
+      cashSessionId,
+      lines: selectedLines.map(({ line, index, qty }) => ({
+        originalLineIndex: index,
+        variantId: line.variantId,
+        productName: line.productName,
+        productSku: line.productSku,
+        quantity: String(qty),
+        unitPrice: line.unitPrice,
+        disposition: dispositions[String(index)] ?? ("restock" as const),
+      })),
+      subtotal: Money.toDecimalString(totals.subtotal, 2),
+      taxAmount: Money.toDecimalString(totals.taxAmount, 2),
+      discountAmount: Money.toDecimalString(totals.discountAmount, 2),
+      total: Money.toDecimalString(totals.total, 2),
+      refunds: [
+        {
+          method: refundMethod,
+          amount: Money.toDecimalString(refund, 2),
+          ...(refundReference.trim() ? { reference: refundReference.trim() } : {}),
+        },
+      ],
+      ...(reason.trim() ? { reason: reason.trim() } : {}),
+      occurredAt: new Date().toISOString(),
+    };
+
+    try {
+      await posData.commitReturn(draft);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Could not record this return.");
+      setSubmitting(false);
+      return;
+    }
+
+    setSubmitting(false);
+    setConfirming(false);
+    setSale(null);
+    setReference("");
+    setQuantities({});
+    setDispositions({});
+    void posData.recentSales(8).then(setRecent);
+  }
 
   return (
     <>
@@ -128,11 +223,7 @@ export function Returns() {
                       <button
                         type="button"
                         disabled={!allowed}
-                        onClick={() => {
-                          setSale(entry);
-                          setNotFound(false);
-                          setQuantities({});
-                        }}
+                        onClick={() => pickSale(entry)}
                         className="flex w-full items-center gap-4 border-b border-steel-800 px-5 py-3 text-left transition-colors hover:bg-steel-800 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <Receipt className="size-4 shrink-0 text-zinc-600" aria-hidden />
@@ -191,6 +282,8 @@ export function Returns() {
                   const key = String(index);
                   const max = Number(line.quantity);
                   const selected = quantities[key] ?? "";
+                  const returning = Number(selected) > 0;
+                  const disposition = dispositions[key] ?? "restock";
 
                   return (
                     <li
@@ -209,6 +302,35 @@ export function Returns() {
                           {amount(Money.toMinor(line.unitPrice))}
                         </div>
                       </div>
+
+                      {returning && (
+                        <div className="flex items-center gap-1 rounded-lg border border-steel-700 bg-steel-800 p-0.5">
+                          <button
+                            type="button"
+                            onClick={() => setDispositions((d) => ({ ...d, [key]: "restock" }))}
+                            className={[
+                              "rounded px-2 py-1 text-[11px] font-medium transition-colors",
+                              disposition === "restock"
+                                ? "bg-brass/15 text-brass"
+                                : "text-zinc-500 hover:text-chalk",
+                            ].join(" ")}
+                          >
+                            Restock
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDispositions((d) => ({ ...d, [key]: "scrap" }))}
+                            className={[
+                              "rounded px-2 py-1 text-[11px] font-medium transition-colors",
+                              disposition === "scrap"
+                                ? "bg-signal-red/15 text-signal-red"
+                                : "text-zinc-500 hover:text-chalk",
+                            ].join(" ")}
+                          >
+                            Scrap
+                          </button>
+                        </div>
+                      )}
 
                       <div className="flex items-center gap-2">
                         <label htmlFor={`return-${key}`} className="eyebrow">
@@ -264,7 +386,7 @@ export function Returns() {
 
       <Dialog
         open={confirming}
-        onClose={() => setConfirming(false)}
+        onClose={() => !submitting && setConfirming(false)}
         title="Confirm the refund"
         description="This creates a linked return. The original invoice is not modified."
         width="sm"
@@ -274,31 +396,84 @@ export function Returns() {
               type="button"
               className="btn btn-ghost"
               onClick={() => setConfirming(false)}
+              disabled={submitting}
             >
               Cancel
             </button>
             <button
               type="button"
               className="btn btn-primary"
-              onClick={() => {
-                // TODO(phase-3): write the linked return to the outbox and open
-                // the drawer for a cash refund.
-                setConfirming(false);
-                setSale(null);
-                setReference("");
-                setQuantities({});
-              }}
+              onClick={() => void submitReturn()}
+              disabled={submitting}
             >
               <Undo2 className="size-4" aria-hidden />
-              Refund {money(refund)}
+              {submitting ? "Recording…" : `Refund ${money(refund)}`}
             </button>
           </>
         }
       >
-        <p className="text-[13px] text-zinc-400">
-          {money(refund)} goes back to the customer, and the returned stock comes
-          back into this branch.
-        </p>
+        <div className="space-y-4">
+          <p className="text-[13px] text-zinc-400">
+            {money(refund)} goes back to the customer. Restocked lines return to
+            sellable inventory at this branch; scrapped lines are written off.
+          </p>
+
+          <div>
+            <span className="eyebrow">Refund method</span>
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              {REFUND_METHODS.map(({ method, label, icon: Icon }) => (
+                <button
+                  key={method}
+                  type="button"
+                  onClick={() => setRefundMethod(method)}
+                  className={[
+                    "flex flex-col items-center gap-1.5 rounded-lg border px-2 py-3 text-[12px] font-medium transition-colors",
+                    refundMethod === method
+                      ? "border-brass bg-brass/12 text-brass"
+                      : "border-steel-700 bg-steel-800 text-zinc-400 hover:bg-steel-750",
+                  ].join(" ")}
+                >
+                  <Icon className="size-4" aria-hidden />
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-[11px] text-zinc-500">
+              Independent of how the sale was paid — a card sale can be refunded
+              in cash, and the reverse happens too.
+            </p>
+          </div>
+
+          {activeMethod?.needsReference && (
+            <div>
+              <label htmlFor="refund-ref" className="eyebrow">
+                Reference
+              </label>
+              <input
+                id="refund-ref"
+                value={refundReference}
+                onChange={(e) => setRefundReference(e.target.value)}
+                placeholder={refundMethod === "card" ? "Auth code" : "Transfer reference"}
+                className="field mt-1.5"
+                autoComplete="off"
+              />
+            </div>
+          )}
+
+          <div>
+            <label htmlFor="return-reason" className="eyebrow">
+              Reason (optional)
+            </label>
+            <input
+              id="return-reason"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Wrong size, changed mind, damaged…"
+              className="field mt-1.5"
+              autoComplete="off"
+            />
+          </div>
+        </div>
       </Dialog>
     </>
   );

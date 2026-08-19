@@ -614,6 +614,31 @@ export function commitReturn(draft: ReturnDraftInput): Record<string, unknown> {
         ...(draft.reason ? { reason: draft.reason } : {}),
       },
     });
+
+    /**
+     * A cash refund is cash leaving the till, same as paying a delivery driver
+     * out of the drawer — `movementTotals` folds `cash_movement` rows into
+     * `cashOut`, and the return itself is never counted there (it lives in
+     * `local_returns`, not `local_sales`), so without this the drawer would
+     * show more cash on hand than is actually left in it.
+     */
+    const cashRefunded = draft.refunds
+      .filter((r) => r.method === "cash")
+      .reduce((sum, r) => Money.add(sum, Money.toMinor(r.amount)), 0n);
+
+    if (draft.cashSessionId && Money.isPositive(cashRefunded)) {
+      enqueue(db, {
+        localId: randomUUID(),
+        entity: "cash_movement",
+        occurredAt: draft.occurredAt,
+        payload: {
+          cashSessionId: draft.cashSessionId,
+          type: "cash_out",
+          amount: Money.toDecimalString(cashRefunded, 4),
+          reason: draft.reason ? `Return refund: ${draft.reason}` : "Return refund",
+        },
+      });
+    }
   })();
 
   return { ...draft, returnNumber: null, synced: false };

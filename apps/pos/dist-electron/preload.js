@@ -37,7 +37,9 @@ const api = {
      */
     commit: (draft) => electron.ipcRenderer.invoke("sales:commit", draft),
     recent: (limit) => electron.ipcRenderer.invoke("sales:recent", limit),
-    find: (reference) => electron.ipcRenderer.invoke("sales:find", reference)
+    find: (reference) => electron.ipcRenderer.invoke("sales:find", reference),
+    /** Same fire-and-forget posture as `commit` — the refund is already real. */
+    commitReturn: (draft) => electron.ipcRenderer.invoke("sales:commit-return", draft)
   },
   quotations: {
     save: (draft) => electron.ipcRenderer.invoke("quotations:save", draft),
