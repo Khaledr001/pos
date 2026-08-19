@@ -46,6 +46,10 @@ export default defineConfig({
         vite: {
           build: {
             outDir: "dist-electron",
+            // Committed to the repo unminified and deliberately so: the
+            // built main process is small enough that review reads the
+            // actual diff, not a compressed one-liner nobody can check.
+            minify: false,
             rollupOptions: {
               external: ["electron", "better-sqlite3", "node-thermal-printer"],
             },
@@ -57,6 +61,7 @@ export default defineConfig({
         vite: {
           build: {
             outDir: "dist-electron",
+            minify: false,
             rollupOptions: { external: ["electron"] },
           },
         },
@@ -74,6 +79,19 @@ export default defineConfig({
     // and Chromium here is whatever Electron ships.
     target: "chrome128",
     sourcemap: true,
+  },
+  test: {
+    /**
+     * `electron/**` is excluded here on purpose — see `vitest.electron.config.ts`.
+     *
+     * Those tests import main-process code (`electron`, `better-sqlite3`), and
+     * this config carries `vite-plugin-electron-renderer`, which aliases Node
+     * built-ins to browser shims meant for the RENDERER bundle. Running them
+     * under this config resolves `node:path` to that shim instead of the real
+     * module. `better-sqlite3` is also compiled for Electron's ABI, which a
+     * plain Node vitest run cannot load at all — see `pnpm test:electron`.
+     */
+    exclude: ["**/node_modules/**", "electron/**"],
   },
   server: {
     port: 5173,

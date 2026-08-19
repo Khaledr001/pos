@@ -19,32 +19,6 @@ import { join } from "node:path";
 
 let db: Database.Database | null = null;
 
-/**
- * Defensive schema validation.
- *
- * Ensures critical columns exist on existing database files regardless of
- * whether migrations ran or if a database was initialized from an earlier build.
- */
-function ensureColumns(database: Database.Database): void {
-  try {
-    const pricesInfo = database.pragma("table_info(variant_prices)") as Array<{ name: string }>;
-    if (pricesInfo && pricesInfo.length > 0 && !pricesInfo.some((c) => c.name === "is_default")) {
-      database.exec("ALTER TABLE variant_prices ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0;");
-    }
-  } catch (err) {
-    console.warn("Could not check/add is_default on variant_prices:", err);
-  }
-
-  try {
-    const saleItemsInfo = database.pragma("table_info(local_sale_items)") as Array<{ name: string }>;
-    if (saleItemsInfo && saleItemsInfo.length > 0 && !saleItemsInfo.some((c) => c.name === "unit_abbr")) {
-      database.exec("ALTER TABLE local_sale_items ADD COLUMN unit_abbr TEXT;");
-    }
-  } catch (err) {
-    console.warn("Could not check/add unit_abbr on local_sale_items:", err);
-  }
-}
-
 const DEFAULT_CATALOG = [
   {
     id: "v1",
@@ -286,7 +260,6 @@ export function openDatabase(): Database.Database {
   db.pragma("busy_timeout = 5000");
 
   migrate(db);
-  ensureColumns(db);
   seedInitialCatalog(db);
   return db;
 }
@@ -314,7 +287,15 @@ export function closeDatabase(): void {
  * Append a new entry; never edit a shipped one. A terminal may be three
  * versions behind after a fortnight offline, and it has to walk the whole path.
  */
-const MIGRATIONS: Array<{ version: number; sql: string }> = [
+/**
+ * Almost every migration is a plain SQL string. `up` exists only for the rare
+ * step that cannot be idempotent as pure SQL — SQLite has no
+ * `ADD COLUMN IF NOT EXISTS` — and must check the schema before acting. See
+ * version 4 below for why one exists.
+ */
+const MIGRATIONS: Array<
+  { version: number } & ({ sql: string; up?: never } | { sql?: never; up: (database: Database.Database) => void })
+> = [
   {
     version: 1,
     sql: `
@@ -572,19 +553,49 @@ const MIGRATIONS: Array<{ version: number; sql: string }> = [
   },
   {
     version: 4,
-    sql: `
-      -- Which price list a row belongs to is not something the terminal can
-      -- infer, and a variant carries one row per list. Without the flag the
-      -- till shows whichever the join happened to return — a different price
-      -- on two tills looking at the same product.
-      ALTER TABLE variant_prices ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0;
+    /**
+     * A function step, not `sql`, because this migration cannot be a single
+     * idempotent SQL string.
+     *
+     * Version 3 above originally created `variant_prices` WITHOUT
+     * `is_default` — this migration's job was to add it for installs that had
+     * already run v3. A later edit (forbidden by the rule at the top of this
+     * file, and the direct cause of this being a function instead of plain SQL)
+     * put `is_default` into v3's own CREATE TABLE. That fixed nothing for an
+     * existing install still on v3, but it means a FRESH install now creates
+     * the column twice: once in v3, once here — and SQLite has no
+     * `ADD COLUMN IF NOT EXISTS`, so the plain-SQL version of this migration
+     * failed on every new terminal with "duplicate column name: is_default"
+     * before the window ever opened.
+     *
+     * Each statement below checks first, so this runs correctly whichever
+     * state a database arrives in: pre-edit v3 (needs all three changes),
+     * post-edit v3 (needs only the last two), or a replay after this fix
+     * (needs none — see the migration-replay test in `__tests__/`).
+     */
+    up: (database) => {
+      const prices = database.pragma("table_info(variant_prices)") as Array<{ name: string }>;
+      if (!prices.some((c) => c.name === "is_default")) {
+        database.exec(
+          "ALTER TABLE variant_prices ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0;",
+        );
+      }
 
-      -- The sale line references the variant it sold. Snapshotted alongside it:
-      -- name, sku and tax as they were at that moment, because a receipt is a
-      -- statement about a moment and must not be rewritten by a later edit.
-      ALTER TABLE local_sale_items RENAME COLUMN product_id TO variant_id;
-      ALTER TABLE local_sale_items ADD COLUMN unit_abbr TEXT;
-    `,
+      // The sale line references the variant it sold. Snapshotted alongside
+      // it: name, sku and tax as they were at that moment, because a receipt
+      // is a statement about a moment and must not be rewritten by a later
+      // edit.
+      const saleItems = database.pragma("table_info(local_sale_items)") as Array<{ name: string }>;
+      if (
+        saleItems.some((c) => c.name === "product_id") &&
+        !saleItems.some((c) => c.name === "variant_id")
+      ) {
+        database.exec("ALTER TABLE local_sale_items RENAME COLUMN product_id TO variant_id;");
+      }
+      if (!saleItems.some((c) => c.name === "unit_abbr")) {
+        database.exec("ALTER TABLE local_sale_items ADD COLUMN unit_abbr TEXT;");
+      }
+    },
   },
   {
     version: 5,
@@ -715,7 +726,7 @@ const MIGRATIONS: Array<{ version: number; sql: string }> = [
   },
 ];
 
-function migrate(database: Database.Database): void {
+export function migrate(database: Database.Database): void {
   const current = database.pragma("user_version", { simple: true }) as number;
   const target = MIGRATIONS.at(-1)?.version ?? 0;
 
@@ -733,7 +744,8 @@ function migrate(database: Database.Database): void {
   for (const migration of MIGRATIONS) {
     if (migration.version <= current) continue;
     database.transaction(() => {
-      database.exec(migration.sql);
+      if (migration.up) migration.up(database);
+      else database.exec(migration.sql);
       database.pragma(`user_version = ${migration.version}`);
     })();
   }

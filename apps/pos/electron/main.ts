@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { closeDatabase, openDatabase } from "./db/sqlite.js";
@@ -85,7 +85,29 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   void app.whenReady().then(() => {
-    openDatabase();
+    /**
+     * A database that cannot open must stop the app here, visibly — not with
+     * an unhandled rejection that never reaches a window.
+     *
+     * `openDatabase()` refuses on purpose in one case (the file is a NEWER
+     * schema version than this build understands — see `migrate()`) rather
+     * than guess how to reconcile an outbox that may hold sales that exist
+     * nowhere else yet. Before this guard existed, that refusal — and any
+     * other open failure, disk full or a corrupted file included — surfaced
+     * as a console warning nobody at the counter would ever see, with no
+     * window and nothing to photograph for support.
+     */
+    try {
+      openDatabase();
+    } catch (error) {
+      dialog.showErrorBox(
+        "DevsFleet POS cannot start",
+        error instanceof Error ? error.message : String(error),
+      );
+      app.quit();
+      return;
+    }
+
     registerDataHandlers(ipcMain);
     registerSyncHandlers(ipcMain, () => mainWindow);
     registerHardwareHandlers(ipcMain);

@@ -8,14 +8,15 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.electron.json --noEmit",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run --passWithNoTests && pnpm test:electron",
     "test:sync": "vitest run src/**/sync*.test.ts",
     "package": "pnpm build && electron-builder --dir",
     "dist": "pnpm build && electron-builder",
     "clean": "rm -rf dist dist-electron release .turbo *.tsbuildinfo",
     "dev:ui": "POS_RENDERER_ONLY=1 vite --port 5173 --strictPort",
     "rebuild:native": "electron-rebuild -f -w better-sqlite3",
-    "postinstall": "electron-rebuild -f -w better-sqlite3"
+    "postinstall": "electron-rebuild -f -w better-sqlite3",
+    "test:electron": "ELECTRON_RUN_AS_NODE=1 electron ./node_modules/vitest/vitest.mjs run --config vitest.electron.config.ts --passWithNoTests"
   },
   "dependencies": {
     "@devsfleet/shared-types": "workspace:*",

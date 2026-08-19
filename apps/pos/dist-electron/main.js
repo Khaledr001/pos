@@ -7,24 +7,6 @@ const node_crypto = require("node:crypto");
 const node_os = require("node:os");
 var _documentCurrentScript = typeof document !== "undefined" ? document.currentScript : null;
 let db = null;
-function ensureColumns(database) {
-  try {
-    const pricesInfo = database.pragma("table_info(variant_prices)");
-    if (pricesInfo && pricesInfo.length > 0 && !pricesInfo.some((c) => c.name === "is_default")) {
-      database.exec("ALTER TABLE variant_prices ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0;");
-    }
-  } catch (err) {
-    console.warn("Could not check/add is_default on variant_prices:", err);
-  }
-  try {
-    const saleItemsInfo = database.pragma("table_info(local_sale_items)");
-    if (saleItemsInfo && saleItemsInfo.length > 0 && !saleItemsInfo.some((c) => c.name === "unit_abbr")) {
-      database.exec("ALTER TABLE local_sale_items ADD COLUMN unit_abbr TEXT;");
-    }
-  } catch (err) {
-    console.warn("Could not check/add unit_abbr on local_sale_items:", err);
-  }
-}
 const DEFAULT_CATALOG = [
   {
     id: "v1",
@@ -242,7 +224,6 @@ function openDatabase() {
   db.pragma("foreign_keys = ON");
   db.pragma("busy_timeout = 5000");
   migrate(db);
-  ensureColumns(db);
   seedInitialCatalog(db);
   return db;
 }
@@ -514,19 +495,41 @@ const MIGRATIONS = [
   },
   {
     version: 4,
-    sql: `
-      -- Which price list a row belongs to is not something the terminal can
-      -- infer, and a variant carries one row per list. Without the flag the
-      -- till shows whichever the join happened to return — a different price
-      -- on two tills looking at the same product.
-      ALTER TABLE variant_prices ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0;
-
-      -- The sale line references the variant it sold. Snapshotted alongside it:
-      -- name, sku and tax as they were at that moment, because a receipt is a
-      -- statement about a moment and must not be rewritten by a later edit.
-      ALTER TABLE local_sale_items RENAME COLUMN product_id TO variant_id;
-      ALTER TABLE local_sale_items ADD COLUMN unit_abbr TEXT;
-    `
+    /**
+     * A function step, not `sql`, because this migration cannot be a single
+     * idempotent SQL string.
+     *
+     * Version 3 above originally created `variant_prices` WITHOUT
+     * `is_default` — this migration's job was to add it for installs that had
+     * already run v3. A later edit (forbidden by the rule at the top of this
+     * file, and the direct cause of this being a function instead of plain SQL)
+     * put `is_default` into v3's own CREATE TABLE. That fixed nothing for an
+     * existing install still on v3, but it means a FRESH install now creates
+     * the column twice: once in v3, once here — and SQLite has no
+     * `ADD COLUMN IF NOT EXISTS`, so the plain-SQL version of this migration
+     * failed on every new terminal with "duplicate column name: is_default"
+     * before the window ever opened.
+     *
+     * Each statement below checks first, so this runs correctly whichever
+     * state a database arrives in: pre-edit v3 (needs all three changes),
+     * post-edit v3 (needs only the last two), or a replay after this fix
+     * (needs none — see the migration-replay test in `__tests__/`).
+     */
+    up: (database) => {
+      const prices = database.pragma("table_info(variant_prices)");
+      if (!prices.some((c) => c.name === "is_default")) {
+        database.exec(
+          "ALTER TABLE variant_prices ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0;"
+        );
+      }
+      const saleItems = database.pragma("table_info(local_sale_items)");
+      if (saleItems.some((c) => c.name === "product_id") && !saleItems.some((c) => c.name === "variant_id")) {
+        database.exec("ALTER TABLE local_sale_items RENAME COLUMN product_id TO variant_id;");
+      }
+      if (!saleItems.some((c) => c.name === "unit_abbr")) {
+        database.exec("ALTER TABLE local_sale_items ADD COLUMN unit_abbr TEXT;");
+      }
+    }
   },
   {
     version: 5,
@@ -667,7 +670,8 @@ function migrate(database) {
   for (const migration of MIGRATIONS) {
     if (migration.version <= current) continue;
     database.transaction(() => {
-      database.exec(migration.sql);
+      if (migration.up) migration.up(database);
+      else database.exec(migration.sql);
       database.pragma(`user_version = ${migration.version}`);
     })();
   }
@@ -1785,7 +1789,16 @@ if (!electron.app.requestSingleInstanceLock()) {
     }
   });
   void electron.app.whenReady().then(() => {
-    openDatabase();
+    try {
+      openDatabase();
+    } catch (error) {
+      electron.dialog.showErrorBox(
+        "DevsFleet POS cannot start",
+        error instanceof Error ? error.message : String(error)
+      );
+      electron.app.quit();
+      return;
+    }
     registerDataHandlers(electron.ipcMain);
     registerSyncHandlers(electron.ipcMain, () => mainWindow);
     registerHardwareHandlers(electron.ipcMain);
