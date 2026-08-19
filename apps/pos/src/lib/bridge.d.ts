@@ -120,6 +120,22 @@ export interface DevsfleetBridge {
     }>;
     activate(activationCode: string, apiUrl: string): Promise<{ deviceId: string }>;
   };
+
+  outbox: {
+    attentionItems(): Promise<
+      Array<{
+        localId: string;
+        entity: string;
+        kind: "rejected" | "warning";
+        reason: string;
+        occurredAt: string;
+        attempts: number;
+      }>
+    >;
+    retry(localId: string): Promise<void>;
+    discard(localId: string): Promise<void>;
+    acknowledgeWarning(localId: string): Promise<void>;
+  };
 }
 
 declare global {

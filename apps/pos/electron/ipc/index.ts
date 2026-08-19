@@ -162,6 +162,26 @@ export function registerDataHandlers(ipcMain: IpcMain): void {
       return { deviceId: device.trim() };
     },
   );
+
+  /**
+   * The outbox items a human has to look at: a permanent rejection, or a push
+   * that succeeded with a caveat. See `outboxAttentionItems` for why both
+   * belong in one list.
+   */
+  ipcMain.handle("outbox:attention-items", () => repo.outboxAttentionItems());
+
+  ipcMain.handle("outbox:retry", (_event, localId: string) => {
+    repo.retryOutboxItem(String(localId ?? ""));
+    syncNow();
+  });
+
+  ipcMain.handle("outbox:discard", (_event, localId: string) => {
+    repo.discardOutboxItem(String(localId ?? ""));
+  });
+
+  ipcMain.handle("outbox:acknowledge-warning", (_event, localId: string) => {
+    repo.acknowledgeWarning(String(localId ?? ""));
+  });
 }
 
 /**

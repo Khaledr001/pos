@@ -1,5 +1,5 @@
 import type { PrintFormat, SyncStatusSnapshot } from "@devsfleet/shared-types";
-import { Cpu, LogOut, Moon, Printer, RefreshCw, Sun } from "lucide-react";
+import { AlertTriangle, Cpu, LogOut, Moon, Printer, RefreshCw, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 import { KeyRail } from "../components/KeyRail.js";
 import { clearPosApiSession, dataMode, hasBridge } from "../lib/pos-data.js";
@@ -21,6 +21,16 @@ export function Settings() {
     version: string;
   } | null>(null);
   const [sync, setSync] = useState<SyncStatusSnapshot | null>(null);
+  const [attention, setAttention] = useState<
+    Array<{
+      localId: string;
+      entity: string;
+      kind: "rejected" | "warning";
+      reason: string;
+      occurredAt: string;
+      attempts: number;
+    }>
+  >([]);
   const [printResult, setPrintResult] = useState<string | null>(null);
   const [theme, setTheme] = useState<PosTheme>(
     () => (document.documentElement.getAttribute("data-theme") as PosTheme) ?? "light",
@@ -37,11 +47,41 @@ export function Settings() {
     signOut();
   }
 
+  function refreshAttention() {
+    if (!hasBridge()) return;
+    void window.devsfleet.outbox.attentionItems().then(setAttention);
+  }
+
   useEffect(() => {
     if (!hasBridge()) return;
     void window.devsfleet.device.info().then(setDevice);
     void window.devsfleet.sync.status().then(setSync);
+    refreshAttention();
+
+    /**
+     * Every status change — a completed sync cycle above all — can add or
+     * clear an item here. Without this the list only ever reflected whatever
+     * was queued at the moment the screen happened to open.
+     */
+    const unsubscribe = window.devsfleet.sync.onStatusChange(() => refreshAttention());
+    return unsubscribe;
   }, []);
+
+  async function retryItem(localId: string) {
+    await window.devsfleet.outbox.retry(localId);
+    refreshAttention();
+  }
+
+  async function discardItem(localId: string) {
+    if (!confirm("Give up on this sale? It stays on record as discarded but will never be uploaded.")) return;
+    await window.devsfleet.outbox.discard(localId);
+    refreshAttention();
+  }
+
+  async function acknowledgeItem(localId: string) {
+    await window.devsfleet.outbox.acknowledgeWarning(localId);
+    refreshAttention();
+  }
 
   async function testPrint(format: PrintFormat) {
     if (!hasBridge()) return;
@@ -100,6 +140,68 @@ export function Settings() {
               reinstall the app while anything is queued.
             </p>
           </Section>
+
+          {attention.length > 0 && (
+            <Section title="Needs attention" icon={AlertTriangle}>
+              <div className="space-y-3">
+                {attention.map((item) => (
+                  <div
+                    key={item.localId}
+                    className="rounded-lg border border-steel-700 bg-steel-900/60 p-3"
+                  >
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="text-[12px] font-medium text-chalk">
+                        {item.entity} · {new Date(item.occurredAt).toLocaleString("en-GB")}
+                      </span>
+                      <span
+                        className={
+                          item.kind === "rejected"
+                            ? "text-[11px] font-semibold uppercase text-signal-red"
+                            : "text-[11px] font-semibold uppercase text-signal-amber"
+                        }
+                      >
+                        {item.kind === "rejected" ? "Rejected" : "Applied with a warning"}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[12px] text-zinc-400">{item.reason}</p>
+                    <div className="mt-2 flex gap-2">
+                      {item.kind === "rejected" ? (
+                        <>
+                          <button
+                            type="button"
+                            className="btn btn-ghost text-[12px]"
+                            onClick={() => void retryItem(item.localId)}
+                          >
+                            Retry
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-ghost text-[12px] text-signal-red"
+                            onClick={() => void discardItem(item.localId)}
+                          >
+                            Discard
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn btn-ghost text-[12px]"
+                          onClick={() => void acknowledgeItem(item.localId)}
+                        >
+                          Dismiss
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="pt-1 text-[12px] text-zinc-500">
+                <strong>Rejected</strong> never uploaded — retry after fixing the
+                cause, or discard it. <strong>Applied with a warning</strong> already
+                went through; dismiss it once you have checked why.
+              </p>
+            </Section>
+          )}
 
           <Section title="Hardware" icon={Printer}>
             <div className="flex flex-wrap gap-2">

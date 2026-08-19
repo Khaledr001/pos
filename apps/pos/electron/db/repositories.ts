@@ -832,28 +832,67 @@ export function outboxCounts(): { pending: number; failed: number } {
 export function settleOutboxItem(result: {
   localId: string;
   outcome: string;
+  entity?: string;
   serverId?: string;
   documentNumber?: string;
   message?: string;
 }): void {
   const db = getDatabase();
 
-  if (result.outcome === "applied" || result.outcome === "duplicate") {
+  if (result.outcome === "applied" || result.outcome === "duplicate" || result.outcome === "applied_with_warning") {
+    /**
+     * `applied_with_warning` used to fall through to the catch-all below,
+     * which leaves the row `pending` — the server had already created a real
+     * sale, with a real invoice number, and the terminal kept re-pushing it
+     * every cycle forever. The server's own idempotency check absorbed the
+     * duplicates, so nothing double-booked, but the local mirror never
+     * learned the sale had succeeded, and the one thing actually worth
+     * surfacing — "this landed but could not be reconciled to a drawer" —
+     * was silently discarded along with the rest of the response.
+     *
+     * Treated as synced, because it is: the money is real and the invoice
+     * number is real. `last_error` carries the warning forward instead of
+     * being cleared, so it stays findable by a manager without inventing a
+     * separate table for what is, structurally, the same "needs a look"
+     * queue a rejected item sits in.
+     */
+    const warning = result.outcome === "applied_with_warning" ? (result.message ?? "Applied with a warning") : null;
+
     db.transaction(() => {
       db.prepare(
-        `UPDATE outbox SET status = 'synced', server_id = ?, document_number = ?, last_error = NULL
+        `UPDATE outbox SET status = 'synced', server_id = ?, document_number = ?, last_error = ?
          WHERE local_id = ?`,
-      ).run(result.serverId ?? null, result.documentNumber ?? null, result.localId);
+      ).run(result.serverId ?? null, result.documentNumber ?? null, warning, result.localId);
 
       /**
-       * The local stock delta is released only once the server has the sale.
-       * Until then the terminal's own figure is the honest one — the server's
-       * pulled quantity still counts stock this sale has already sold.
+       * Which local mirror table gets the server's id and sync stamp depends
+       * on which entity this was — the response only correlates by localId,
+       * so the caller threads the entity through from the original push item.
+       *
+       * `local_quotations.synced_at` and `local_customer_payments.synced_at`
+       * were never stamped at all before this: a synced quotation stayed
+       * marked unsynced forever, and a synced payment the same way. Both
+       * looked like a sync that never finished, to anyone who checked.
+       *
+       * Sales alone release their local stock delta here — the server's
+       * pulled quantity already counts a sale once it has one, but neither a
+       * quotation nor a payment ever moved stock in the first place.
        */
-      db.prepare(
-        `UPDATE local_sales SET server_id = ?, sale_number = ?, synced_at = datetime('now')
-         WHERE local_id = ?`,
-      ).run(result.serverId ?? null, result.documentNumber ?? null, result.localId);
+      if (result.entity === "quotation") {
+        db.prepare(
+          `UPDATE local_quotations SET server_id = ?, quotation_number = ?, synced_at = datetime('now')
+           WHERE local_id = ?`,
+        ).run(result.serverId ?? null, result.documentNumber ?? null, result.localId);
+      } else if (result.entity === "customer_payment") {
+        db.prepare(
+          `UPDATE local_customer_payments SET synced_at = datetime('now') WHERE local_id = ?`,
+        ).run(result.localId);
+      } else {
+        db.prepare(
+          `UPDATE local_sales SET server_id = ?, sale_number = ?, synced_at = datetime('now')
+           WHERE local_id = ?`,
+        ).run(result.serverId ?? null, result.documentNumber ?? null, result.localId);
+      }
     })();
     return;
   }
@@ -871,6 +910,93 @@ export function settleOutboxItem(result: {
   db.prepare(
     `UPDATE outbox SET attempts = attempts + 1, last_error = ? WHERE local_id = ?`,
   ).run(result.message ?? null, result.localId);
+}
+
+export interface OutboxAttentionItem {
+  localId: string;
+  entity: string;
+  /** `rejected` needs retry-or-discard; `warning` already succeeded and needs a read, not an action. */
+  kind: "rejected" | "warning";
+  reason: string;
+  occurredAt: string;
+  attempts: number;
+}
+
+/**
+ * Everything sitting in the outbox that a human, not the sync loop, has to
+ * resolve — a permanent rejection, or a push that succeeded with a caveat.
+ *
+ * Both belong in one list rather than two: to whoever is looking, "the server
+ * refused this" and "the server accepted this but flagged it" are the same
+ * question — is this one of mine, and does it need me to do something.
+ */
+export function outboxAttentionItems(): OutboxAttentionItem[] {
+  const rows = getDatabase()
+    .prepare(
+      `SELECT local_id AS localId, entity, status, last_error AS lastError,
+              occurred_at AS occurredAt, attempts
+       FROM outbox
+       WHERE status = 'rejected' OR (status = 'synced' AND last_error IS NOT NULL)
+       ORDER BY occurred_at DESC`,
+    )
+    .all() as Array<{
+    localId: string;
+    entity: string;
+    status: string;
+    lastError: string | null;
+    occurredAt: string;
+    attempts: number;
+  }>;
+
+  return rows.map((row) => ({
+    localId: row.localId,
+    entity: row.entity,
+    kind: row.status === "rejected" ? "rejected" : "warning",
+    reason: row.lastError ?? "Unknown reason",
+    occurredAt: row.occurredAt,
+    attempts: row.attempts,
+  }));
+}
+
+/**
+ * Puts a rejected item back at the end of the push queue.
+ *
+ * For the case a rejection usually means: a manager just raised a customer's
+ * credit limit, or corrected the PIN collision that blocked it, and the exact
+ * same push should now go through. Restricted to `rejected` — retrying a
+ * `pending` row would race the sync loop pushing it anyway, and retrying an
+ * already-`synced` one makes no sense.
+ */
+export function retryOutboxItem(localId: string): void {
+  getDatabase()
+    .prepare(`UPDATE outbox SET status = 'pending', last_error = NULL WHERE local_id = ? AND status = 'rejected'`)
+    .run(localId);
+}
+
+/**
+ * Gives up on a rejected item without deleting it.
+ *
+ * The row stays, because it is the only record that a sale was rung up and
+ * never reached the books — exactly the kind of thing an audit trail exists
+ * to answer for. `discarded` removes it from the attention list and from the
+ * push queue permanently, which is different from `rejected` (still queued
+ * for a retry) and different from deleting (destroys the evidence).
+ */
+export function discardOutboxItem(localId: string): void {
+  getDatabase()
+    .prepare(`UPDATE outbox SET status = 'discarded' WHERE local_id = ? AND status = 'rejected'`)
+    .run(localId);
+}
+
+/**
+ * Dismisses a warning on an ALREADY-synced item — there is nothing to retry
+ * or discard, the sale already went through. This just stops it showing up
+ * as needing a look, once someone has taken one.
+ */
+export function acknowledgeWarning(localId: string): void {
+  getDatabase()
+    .prepare(`UPDATE outbox SET last_error = NULL WHERE local_id = ? AND status = 'synced'`)
+    .run(localId);
 }
 
 /**

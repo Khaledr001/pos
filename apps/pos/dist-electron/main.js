@@ -1290,16 +1290,28 @@ function outboxCounts() {
 }
 function settleOutboxItem(result) {
   const db2 = getDatabase();
-  if (result.outcome === "applied" || result.outcome === "duplicate") {
+  if (result.outcome === "applied" || result.outcome === "duplicate" || result.outcome === "applied_with_warning") {
+    const warning = result.outcome === "applied_with_warning" ? result.message ?? "Applied with a warning" : null;
     db2.transaction(() => {
       db2.prepare(
-        `UPDATE outbox SET status = 'synced', server_id = ?, document_number = ?, last_error = NULL
+        `UPDATE outbox SET status = 'synced', server_id = ?, document_number = ?, last_error = ?
          WHERE local_id = ?`
-      ).run(result.serverId ?? null, result.documentNumber ?? null, result.localId);
-      db2.prepare(
-        `UPDATE local_sales SET server_id = ?, sale_number = ?, synced_at = datetime('now')
-         WHERE local_id = ?`
-      ).run(result.serverId ?? null, result.documentNumber ?? null, result.localId);
+      ).run(result.serverId ?? null, result.documentNumber ?? null, warning, result.localId);
+      if (result.entity === "quotation") {
+        db2.prepare(
+          `UPDATE local_quotations SET server_id = ?, quotation_number = ?, synced_at = datetime('now')
+           WHERE local_id = ?`
+        ).run(result.serverId ?? null, result.documentNumber ?? null, result.localId);
+      } else if (result.entity === "customer_payment") {
+        db2.prepare(
+          `UPDATE local_customer_payments SET synced_at = datetime('now') WHERE local_id = ?`
+        ).run(result.localId);
+      } else {
+        db2.prepare(
+          `UPDATE local_sales SET server_id = ?, sale_number = ?, synced_at = datetime('now')
+           WHERE local_id = ?`
+        ).run(result.serverId ?? null, result.documentNumber ?? null, result.localId);
+      }
     })();
     return;
   }
@@ -1313,6 +1325,32 @@ function settleOutboxItem(result) {
   db2.prepare(
     `UPDATE outbox SET attempts = attempts + 1, last_error = ? WHERE local_id = ?`
   ).run(result.message ?? null, result.localId);
+}
+function outboxAttentionItems() {
+  const rows = getDatabase().prepare(
+    `SELECT local_id AS localId, entity, status, last_error AS lastError,
+              occurred_at AS occurredAt, attempts
+       FROM outbox
+       WHERE status = 'rejected' OR (status = 'synced' AND last_error IS NOT NULL)
+       ORDER BY occurred_at DESC`
+  ).all();
+  return rows.map((row) => ({
+    localId: row.localId,
+    entity: row.entity,
+    kind: row.status === "rejected" ? "rejected" : "warning",
+    reason: row.lastError ?? "Unknown reason",
+    occurredAt: row.occurredAt,
+    attempts: row.attempts
+  }));
+}
+function retryOutboxItem(localId) {
+  getDatabase().prepare(`UPDATE outbox SET status = 'pending', last_error = NULL WHERE local_id = ? AND status = 'rejected'`).run(localId);
+}
+function discardOutboxItem(localId) {
+  getDatabase().prepare(`UPDATE outbox SET status = 'discarded' WHERE local_id = ? AND status = 'rejected'`).run(localId);
+}
+function acknowledgeWarning(localId) {
+  getDatabase().prepare(`UPDATE outbox SET last_error = NULL WHERE local_id = ? AND status = 'synced'`).run(localId);
 }
 function clearSettledDeltas() {
   const db2 = getDatabase();
@@ -3353,7 +3391,10 @@ async function pushOutbox() {
     lastCheckpoint: getState("checkpoint"),
     items
   });
-  for (const result of response.results) settleOutboxItem(result);
+  const entityByLocalId = new Map(items.map((item) => [item.localId, item.entity]));
+  for (const result of response.results) {
+    settleOutboxItem({ ...result, entity: entityByLocalId.get(result.localId) });
+  }
   emit({ lastPushAt: (/* @__PURE__ */ new Date()).toISOString() });
 }
 async function pullChanges() {
@@ -3617,6 +3658,17 @@ function registerDataHandlers(ipcMain) {
       return { deviceId: device.trim() };
     }
   );
+  ipcMain.handle("outbox:attention-items", () => outboxAttentionItems());
+  ipcMain.handle("outbox:retry", (_event, localId) => {
+    retryOutboxItem(String(localId ?? ""));
+    syncNow();
+  });
+  ipcMain.handle("outbox:discard", (_event, localId) => {
+    discardOutboxItem(String(localId ?? ""));
+  });
+  ipcMain.handle("outbox:acknowledge-warning", (_event, localId) => {
+    acknowledgeWarning(String(localId ?? ""));
+  });
 }
 function hardwareId() {
   const macs = Object.values(node_os.networkInterfaces()).flat().filter((iface) => Boolean(iface)).filter((iface) => !iface.internal && iface.mac && iface.mac !== "00:00:00:00:00:00").map((iface) => iface.mac).sort();

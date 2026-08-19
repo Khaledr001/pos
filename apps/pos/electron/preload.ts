@@ -190,6 +190,24 @@ const api = {
     activate: (activationCode: string, apiUrl: string): Promise<{ deviceId: string }> =>
       ipcRenderer.invoke("device:activate", activationCode, apiUrl),
   },
+
+  outbox: {
+    /** Rejected pushes and applied-with-warning ones — see Settings. */
+    attentionItems: (): Promise<
+      Array<{
+        localId: string;
+        entity: string;
+        kind: "rejected" | "warning";
+        reason: string;
+        occurredAt: string;
+        attempts: number;
+      }>
+    > => ipcRenderer.invoke("outbox:attention-items"),
+    retry: (localId: string): Promise<void> => ipcRenderer.invoke("outbox:retry", localId),
+    discard: (localId: string): Promise<void> => ipcRenderer.invoke("outbox:discard", localId),
+    acknowledgeWarning: (localId: string): Promise<void> =>
+      ipcRenderer.invoke("outbox:acknowledge-warning", localId),
+  },
 } as const;
 
 contextBridge.exposeInMainWorld("devsfleet", api);

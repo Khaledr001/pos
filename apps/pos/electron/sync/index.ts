@@ -156,7 +156,12 @@ async function pushOutbox(): Promise<void> {
     items,
   });
 
-  for (const result of response.results) settleOutboxItem(result);
+  // The response only correlates by localId; entity is needed to know WHICH
+  // local mirror table (sales, quotations, ...) a synced item should stamp.
+  const entityByLocalId = new Map(items.map((item) => [item.localId, item.entity]));
+  for (const result of response.results) {
+    settleOutboxItem({ ...result, entity: entityByLocalId.get(result.localId) });
+  }
   emit({ lastPushAt: new Date().toISOString() });
 }
 
