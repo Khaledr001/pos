@@ -11,6 +11,7 @@ import type {
   PosReturnReceipt,
   PosSaleDraft,
   PosSaleReceipt,
+  PosVariantUnit,
 } from "./pos-data.js";
 
 /**
@@ -42,6 +43,7 @@ export interface DevsfleetBridge {
   catalog: {
     search(query: string, limit?: number): Promise<PosProduct[]>;
     byBarcode(barcode: string): Promise<PosProduct | null>;
+    unitsForVariant(variantId: string): Promise<PosVariantUnit[]>;
   };
   customers: {
     search(query: string): Promise<PosCustomer[]>;

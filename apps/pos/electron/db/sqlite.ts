@@ -818,6 +818,32 @@ const MIGRATIONS: Array<
       );
     `,
   },
+  {
+    version: 11,
+    sql: `
+      -- Packagings a variant can be sold in — a box, a carton — pulled so a
+      -- unit choice is available with the network unplugged (Stage 3.2).
+      -- Mirrors variant_prices' own shape: one row per (variant, packaging),
+      -- no tombstone handling needed because the server table carries no
+      -- deletedAt either (see catalog.ts) — retiring a packaging flips
+      -- is_sellable instead, an ordinary field update.
+      CREATE TABLE IF NOT EXISTS variant_units (
+        id                TEXT PRIMARY KEY,
+        variant_id        TEXT NOT NULL,
+        unit_id           TEXT NOT NULL,
+        unit_name         TEXT NOT NULL,
+        unit_abbr         TEXT NOT NULL,
+        -- Base units per pack. Box of 20 -> 20.
+        conversion_factor TEXT NOT NULL,
+        barcode           TEXT,
+        -- NULL = base price x conversion_factor.
+        price_override    TEXT,
+        is_sellable       INTEGER NOT NULL DEFAULT 1,
+        updated_at        TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_variant_units_variant ON variant_units(variant_id);
+    `,
+  },
 ];
 
 export function migrate(database: Database.Database): void {

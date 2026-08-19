@@ -233,6 +233,8 @@ export const SYNC_ENTITIES = asConst([
   "category",
   "brand",
   "unit",
+  /** A packaging a variant is sold in — a box, a carton — see Stage 3.1. */
+  "variant_unit",
   "customer",
   "inventory",
   "sale",

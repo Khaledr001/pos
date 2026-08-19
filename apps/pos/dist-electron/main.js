@@ -752,6 +752,32 @@ const MIGRATIONS = [
         sort_order          INTEGER NOT NULL DEFAULT 0
       );
     `
+  },
+  {
+    version: 11,
+    sql: `
+      -- Packagings a variant can be sold in — a box, a carton — pulled so a
+      -- unit choice is available with the network unplugged (Stage 3.2).
+      -- Mirrors variant_prices' own shape: one row per (variant, packaging),
+      -- no tombstone handling needed because the server table carries no
+      -- deletedAt either (see catalog.ts) — retiring a packaging flips
+      -- is_sellable instead, an ordinary field update.
+      CREATE TABLE IF NOT EXISTS variant_units (
+        id                TEXT PRIMARY KEY,
+        variant_id        TEXT NOT NULL,
+        unit_id           TEXT NOT NULL,
+        unit_name         TEXT NOT NULL,
+        unit_abbr         TEXT NOT NULL,
+        -- Base units per pack. Box of 20 -> 20.
+        conversion_factor TEXT NOT NULL,
+        barcode           TEXT,
+        -- NULL = base price x conversion_factor.
+        price_override    TEXT,
+        is_sellable       INTEGER NOT NULL DEFAULT 1,
+        updated_at        TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_variant_units_variant ON variant_units(variant_id);
+    `
   }
 ];
 function migrate(database) {
@@ -910,6 +936,14 @@ function findByBarcode(barcode) {
        WHERE v.barcode = ? OR v.sku = ? LIMIT 1`
   ).get(barcode.trim(), barcode.trim());
   return row ?? null;
+}
+function unitsForVariant(variantId) {
+  return getDatabase().prepare(
+    `SELECT id, unit_id AS unitId, unit_name AS unitName, unit_abbr AS unitAbbr,
+              conversion_factor AS conversionFactor, barcode, price_override AS priceOverride
+       FROM variant_units WHERE variant_id = ? AND is_sellable = 1
+       ORDER BY CAST(conversion_factor AS REAL)`
+  ).all(variantId);
 }
 function searchCustomers(query, limit = 25) {
   const db2 = getDatabase();
@@ -3598,7 +3632,8 @@ function applyTombstone(entity, id) {
     customer: "customers",
     user: "staff",
     category: null,
-    unit: null
+    unit: null,
+    variant_unit: null
   }[entity];
   if (table) db2.prepare(`DELETE FROM ${table} WHERE id = ?`).run(id);
   db2.prepare(
@@ -3655,6 +3690,29 @@ function applyRecord(entity, id, record) {
         text(record.sellingPrice) ?? "0",
         text(record.minSellingPrice),
         record.isDefault ? 1 : 0
+      );
+      return;
+    case "variant_unit":
+      db2.prepare(
+        `INSERT INTO variant_units
+           (id, variant_id, unit_id, unit_name, unit_abbr, conversion_factor,
+            barcode, price_override, is_sellable, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+         ON CONFLICT(id) DO UPDATE SET
+           unit_name = excluded.unit_name, unit_abbr = excluded.unit_abbr,
+           conversion_factor = excluded.conversion_factor, barcode = excluded.barcode,
+           price_override = excluded.price_override, is_sellable = excluded.is_sellable,
+           updated_at = datetime('now')`
+      ).run(
+        id,
+        text(record.variantId),
+        text(record.unitId),
+        text(record.unitName) ?? "",
+        text(record.unitAbbr) ?? "",
+        text(record.conversionFactor) ?? "1",
+        text(record.barcode),
+        text(record.priceOverride),
+        record.isSellable === false ? 0 : 1
       );
       return;
     case "inventory":
@@ -3730,6 +3788,10 @@ function registerDataHandlers(ipcMain) {
   ipcMain.handle(
     "catalog:by-barcode",
     (_event, barcode) => findByBarcode(barcode ?? "")
+  );
+  ipcMain.handle(
+    "catalog:units-for-variant",
+    (_event, variantId) => unitsForVariant(variantId ?? "")
   );
   ipcMain.handle(
     "customers:search",

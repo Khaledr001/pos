@@ -33,6 +33,16 @@ interface BridgeProduct {
   categoryName: string | null;
 }
 
+interface BridgeVariantUnit {
+  id: string;
+  unitId: string;
+  unitName: string;
+  unitAbbr: string;
+  conversionFactor: string;
+  barcode: string | null;
+  priceOverride: string | null;
+}
+
 interface BridgeCustomer {
   id: string;
   name: string;
@@ -68,6 +78,8 @@ const api = {
       ipcRenderer.invoke("catalog:search", query, limit),
     byBarcode: (barcode: string): Promise<BridgeProduct | null> =>
       ipcRenderer.invoke("catalog:by-barcode", barcode),
+    unitsForVariant: (variantId: string): Promise<BridgeVariantUnit[]> =>
+      ipcRenderer.invoke("catalog:units-for-variant", variantId),
   },
 
   customers: {

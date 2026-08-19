@@ -250,6 +250,7 @@ function applyTombstone(entity: string, id: string): void {
     user: "staff",
     category: null,
     unit: null,
+    variant_unit: null,
   }[entity];
   if (table) db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(id);
 
@@ -311,6 +312,30 @@ function applyRecord(entity: string, id: string, record: Record<string, unknown>
         text(record.sellingPrice) ?? "0",
         text(record.minSellingPrice),
         record.isDefault ? 1 : 0,
+      );
+      return;
+
+    case "variant_unit":
+      db.prepare(
+        `INSERT INTO variant_units
+           (id, variant_id, unit_id, unit_name, unit_abbr, conversion_factor,
+            barcode, price_override, is_sellable, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+         ON CONFLICT(id) DO UPDATE SET
+           unit_name = excluded.unit_name, unit_abbr = excluded.unit_abbr,
+           conversion_factor = excluded.conversion_factor, barcode = excluded.barcode,
+           price_override = excluded.price_override, is_sellable = excluded.is_sellable,
+           updated_at = datetime('now')`,
+      ).run(
+        id,
+        text(record.variantId),
+        text(record.unitId),
+        text(record.unitName) ?? "",
+        text(record.unitAbbr) ?? "",
+        text(record.conversionFactor) ?? "1",
+        text(record.barcode),
+        text(record.priceOverride),
+        record.isSellable === false ? 0 : 1,
       );
       return;
 

@@ -395,6 +395,34 @@ export class SyncService {
         collect("product_price", rows, (r) => r, () => false);
       }
 
+      if (wanted("variant_unit")) {
+        // No branch scope, like product_price — a packaging is catalogue
+        // data, the same box-of-20 wherever it is sold. No tombstone either:
+        // the table carries no deletedAt (see catalog.ts) — a merchant
+        // retiring a packaging flips isSellable instead, which is an
+        // ordinary field update the terminal already applies.
+        const rows = await tx
+          .select({
+            id: schema.variantUnits.id,
+            updatedAt: schema.variantUnits.updatedAt,
+            updatedAtRaw: sql<string>`variant_units.updated_at::text`,
+            variantId: schema.variantUnits.variantId,
+            unitId: schema.variantUnits.unitId,
+            unitName: schema.units.name,
+            unitAbbr: schema.units.abbreviation,
+            conversionFactor: schema.variantUnits.conversionFactor,
+            barcode: schema.variantUnits.barcode,
+            priceOverride: schema.variantUnits.priceOverride,
+            isSellable: schema.variantUnits.isSellable,
+          })
+          .from(schema.variantUnits)
+          .innerJoin(schema.units, eq(schema.variantUnits.unitId, schema.units.id))
+          .where(after("variant_unit", schema.variantUnits))
+          .orderBy(schema.variantUnits.updatedAt, schema.variantUnits.id)
+          .limit(limit);
+        collect("variant_unit", rows, (r) => r, () => false);
+      }
+
       if (wanted("customer")) {
         const rows = await tx
           .select({

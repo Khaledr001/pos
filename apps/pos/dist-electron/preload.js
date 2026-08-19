@@ -10,7 +10,8 @@ const api = {
    */
   catalog: {
     search: (query, limit) => electron.ipcRenderer.invoke("catalog:search", query, limit),
-    byBarcode: (barcode) => electron.ipcRenderer.invoke("catalog:by-barcode", barcode)
+    byBarcode: (barcode) => electron.ipcRenderer.invoke("catalog:by-barcode", barcode),
+    unitsForVariant: (variantId) => electron.ipcRenderer.invoke("catalog:units-for-variant", variantId)
   },
   customers: {
     search: (query) => electron.ipcRenderer.invoke("customers:search", query),

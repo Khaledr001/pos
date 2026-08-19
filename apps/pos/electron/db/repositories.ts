@@ -28,6 +28,18 @@ export interface BridgeProduct {
   categoryName: string | null;
 }
 
+export interface BridgeVariantUnit {
+  id: string;
+  unitId: string;
+  unitName: string;
+  unitAbbr: string;
+  /** Base units per pack. Box of 20 -> "20". */
+  conversionFactor: string;
+  barcode: string | null;
+  /** Flat price for the pack. null = base price x conversionFactor. */
+  priceOverride: string | null;
+}
+
 export interface BridgeCashSession {
   id: string;
   openingAmount: string;
@@ -207,6 +219,25 @@ export function findByBarcode(barcode: string): BridgeProduct | null {
     )
     .get(barcode.trim(), barcode.trim()) as BridgeProduct | undefined;
   return row ?? null;
+}
+
+/**
+ * Packagings offered for one variant — a box, a carton — pulled down at sync
+ * time (Stage 3.2) so a unit choice exists with the network unplugged.
+ *
+ * `is_sellable = 0` is a merchant retiring a packaging, not a delete (the
+ * server row carries no deletedAt either) — excluded here rather than at
+ * pull time so a re-enabled packaging needs no re-sync to reappear.
+ */
+export function unitsForVariant(variantId: string): BridgeVariantUnit[] {
+  return getDatabase()
+    .prepare(
+      `SELECT id, unit_id AS unitId, unit_name AS unitName, unit_abbr AS unitAbbr,
+              conversion_factor AS conversionFactor, barcode, price_override AS priceOverride
+       FROM variant_units WHERE variant_id = ? AND is_sellable = 1
+       ORDER BY CAST(conversion_factor AS REAL)`,
+    )
+    .all(variantId) as BridgeVariantUnit[];
 }
 
 export function searchCustomers(query: string, limit = 25): unknown[] {

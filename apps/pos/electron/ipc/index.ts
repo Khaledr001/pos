@@ -22,6 +22,9 @@ export function registerDataHandlers(ipcMain: IpcMain): void {
   ipcMain.handle("catalog:by-barcode", (_event, barcode: string) =>
     repo.findByBarcode(barcode ?? ""),
   );
+  ipcMain.handle("catalog:units-for-variant", (_event, variantId: string) =>
+    repo.unitsForVariant(variantId ?? ""),
+  );
   ipcMain.handle("customers:search", (_event, query: string) =>
     repo.searchCustomers(query ?? ""),
   );

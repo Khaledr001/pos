@@ -53,6 +53,19 @@ export interface PosProduct {
   categoryName: string | null;
 }
 
+/** A packaging a variant can be sold in — a box, a carton (Stage 3). */
+export interface PosVariantUnit {
+  id: string;
+  unitId: string;
+  unitName: string;
+  unitAbbr: string;
+  /** Base units per pack. Box of 20 -> "20". */
+  conversionFactor: string;
+  barcode: string | null;
+  /** Flat price for the pack. null = base price x conversionFactor. */
+  priceOverride: string | null;
+}
+
 export interface PosCustomer {
   id: string;
   name: string;
@@ -227,6 +240,8 @@ export interface PosDataAdapter {
 
   searchProducts(query: string, limit?: number): Promise<PosProduct[]>;
   findByBarcode(barcode: string): Promise<PosProduct | null>;
+  /** Packagings offered for one variant — a box, a carton. Base unit only = []. */
+  unitsForVariant(variantId: string): Promise<PosVariantUnit[]>;
   searchCustomers(query: string): Promise<PosCustomer[]>;
   createCustomer(input: CreateCustomerInput): Promise<PosCustomer>;
   checkStockInOtherBranches(sku: string): Promise<Array<{ branchName: string; available: string }>>;
@@ -320,6 +335,14 @@ const electronAdapter: PosDataAdapter = {
     } catch (err) {
       console.warn("Local barcode lookup failed:", err);
       return null;
+    }
+  },
+  unitsForVariant: async (variantId) => {
+    try {
+      return await window.devsfleet.catalog.unitsForVariant(variantId);
+    } catch (err) {
+      console.warn("Local packaging lookup failed:", err);
+      return [];
     }
   },
   searchCustomers: async (query) => {
@@ -614,6 +637,11 @@ const browserAdapter: PosDataAdapter = {
   },
   async findByBarcode(barcode) {
     return SEED_PRODUCTS.find((p) => p.barcode === barcode) ?? null;
+  },
+  // No live backend in this mode — matches saveQuotation below. Every seed
+  // product sells in its base unit only.
+  async unitsForVariant() {
+    return [];
   },
   async searchCustomers(query) {
     const q = query.trim();
@@ -1024,6 +1052,13 @@ const apiAdapter: PosDataAdapter = {
       console.warn("Barcode lookup failed:", err);
       return null;
     }
+  },
+
+  // No direct-read route exists for variant_units yet — the offline mirror
+  // (Stage 3.2) is the only consumer so far. This adapter never runs in the
+  // real Electron app, so packagings are simply unavailable here for now.
+  async unitsForVariant() {
+    return [];
   },
 
   async searchCustomers(query) {
