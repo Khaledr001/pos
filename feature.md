@@ -423,7 +423,7 @@ later step to avoid an earlier one.
 
 | # | Work | Accept when |
 |---|---|---|
-| 2.1 | API: return + void + refund, as a linked negative sale — **decision made, see D15 in docs/DECISIONS.md.** | `sale:return`/`sale:void` gate real routes; stock returns via `StockService`; refund is a negative payment; day close and drawer both see it |
+| 2.1 | ~~API: return + void + refund, as a linked negative sale~~ **DONE** (8e147b5) | ~~`sale:return`/`sale:void` gate real routes; stock returns via `StockService`; refund is a negative payment; day close and drawer both see it~~ — done. `sale:void` fully restocks and reverses payments, refused once any line has a return against it. `sale:return` writes a new negative `sales` row (`returnOfSaleId`) priced at each line's own historical snapshot, per-line `restock`/`scrap` disposition, refund as a negative payment, uncovered amount reduces the customer's credit balance. Both idempotent on `localId`, same pattern as `create()`. Verified live: stock, sale status/`returnedQuantity`, and credit balance all correct through a full void and a partial credit-sale return; every refusal path (over-return, return-a-return, void-after-return, missing permission) confirmed with the right error code and HTTP status. Day-close/drawer visibility not separately re-verified — payments are ordinary rows in the same table, so the existing day-close query already sees them; flag if that assumption turns out wrong in practice. |
 | 2.2 | Add a `return` entity to sync push | A return created offline reaches the server exactly once |
 | 2.3 | Wire `Returns.tsx` to it | Your §21 flow works: 100 AED back, stock restocked or scrapped, cash out of the drawer |
 | 2.4 | Exchange | Your §22 flow: return 100, take 130, POS charges 30 |
