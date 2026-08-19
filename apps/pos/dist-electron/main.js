@@ -1,16 +1,265 @@
-"use strict";const l=require("electron"),z=require("node:url"),b=require("node:path"),Q=require("better-sqlite3"),O=require("node:crypto"),w=require("node:os");var X=typeof document<"u"?document.currentScript:null;let c=null;function Z(e){try{const t=e.pragma("table_info(variant_prices)");t&&t.length>0&&!t.some(n=>n.name==="is_default")&&e.exec("ALTER TABLE variant_prices ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0;")}catch(t){console.warn("Could not check/add is_default on variant_prices:",t)}try{const t=e.pragma("table_info(local_sale_items)");t&&t.length>0&&!t.some(n=>n.name==="unit_abbr")&&e.exec("ALTER TABLE local_sale_items ADD COLUMN unit_abbr TEXT;")}catch(t){console.warn("Could not check/add unit_abbr on local_sale_items:",t)}}const ee=[{id:"v1",productId:"p1",sku:"PVC-ELB-001",barcode:"6291000000017",productName:'PVC Elbow 1" 90 Degree',variantName:null,unitAbbr:"pcs",categoryName:"Plumbing",taxRate:"5",sellingPrice:"2.75",minSellingPrice:"2.00",stock:"100"},{id:"v2",productId:"p2",sku:"PVC-ELB-002",barcode:"6291000000024",productName:'PVC Elbow 3/4" 90 Degree',variantName:null,unitAbbr:"pcs",categoryName:"Plumbing",taxRate:"5",sellingPrice:"2.10",minSellingPrice:"1.55",stock:"100"},{id:"v3",productId:"p3",sku:"CBL-25-RED",barcode:"6291000000031",productName:"Electrical Cable 2.5mm Red",variantName:null,unitAbbr:"m",categoryName:"Electrical",taxRate:"5",sellingPrice:"3.50",minSellingPrice:"2.75",stock:"100"},{id:"v4",productId:"p4",sku:"PNT-WHT-4L",barcode:"6291000000048",productName:"Emulsion Paint White 4 Litre",variantName:null,unitAbbr:"ltr",categoryName:"Paint",taxRate:"5",sellingPrice:"48.00",minSellingPrice:"38.00",stock:"40"},{id:"v5",productId:"p5",sku:"TAP-MIX-CHR",barcode:"6291000000055",productName:"Basin Mixer Tap Chrome",variantName:null,unitAbbr:"pcs",categoryName:"Sanitary",taxRate:"5",sellingPrice:"135.00",minSellingPrice:"105.00",stock:"12"},{id:"v6",productId:"p6",sku:"EL-CBL-3CX25",barcode:"6291000000062",productName:"Ducab 3-Core 2.5mm² Flexible Copper Cable",variantName:null,unitAbbr:"m",categoryName:"Electrical",taxRate:"5",sellingPrice:"215.00",minSellingPrice:"190.00",stock:"50"},{id:"v7",productId:"p7",sku:"EL-SW-1G2W",barcode:"6291000000079",productName:"Schneider 1-Gang 2-Way Light Switch",variantName:null,unitAbbr:"pcs",categoryName:"Electrical",taxRate:"5",sellingPrice:"18.50",minSellingPrice:"14.00",stock:"150"},{id:"v8",productId:"p8",sku:"TL-TM-8M",barcode:"6291000000086",productName:"Stanley FatMax Heavy Duty Tape Measure 8m",variantName:null,unitAbbr:"pcs",categoryName:"Hardware & Tools",taxRate:"5",sellingPrice:"45.00",minSellingPrice:"35.00",stock:"30"},{id:"v9",productId:"p9",sku:"SAN-MX-GROHE",barcode:"6291000000093",productName:"Grohe Eurosmart Single-Lever Basin Mixer",variantName:null,unitAbbr:"pcs",categoryName:"Sanitary",taxRate:"5",sellingPrice:"285.00",minSellingPrice:"240.00",stock:"25"},{id:"v10",productId:"p10",sku:"FX-PLUG-UX8",barcode:"6291000000109",productName:"Fischer Wall Plugs UX 8x50mm Universal Box (100pcs)",variantName:null,unitAbbr:"box",categoryName:"Fasteners & Fixings",taxRate:"5",sellingPrice:"32.00",minSellingPrice:"25.00",stock:"80"}],te=[{id:"c1",name:"Al Noor Contracting",company:"Al Noor Contracting LLC",phone:"+971501234567",trn:"100123456700003",creditLimit:"5000.00",creditBalance:"1240.00"},{id:"c2",name:"Walk-in customer",company:null,phone:null,trn:null,creditLimit:"0",creditBalance:"0"}];function ne(e){try{const t=e.prepare("SELECT count(*) as count FROM variants").get();if(t&&(t.count??0)>0)return;e.transaction(()=>{const n=e.prepare(`
+"use strict";
+const electron = require("electron");
+const node_url = require("node:url");
+const node_path = require("node:path");
+const Database = require("better-sqlite3");
+const node_crypto = require("node:crypto");
+const node_os = require("node:os");
+var _documentCurrentScript = typeof document !== "undefined" ? document.currentScript : null;
+let db = null;
+function ensureColumns(database) {
+  try {
+    const pricesInfo = database.pragma("table_info(variant_prices)");
+    if (pricesInfo && pricesInfo.length > 0 && !pricesInfo.some((c) => c.name === "is_default")) {
+      database.exec("ALTER TABLE variant_prices ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0;");
+    }
+  } catch (err) {
+    console.warn("Could not check/add is_default on variant_prices:", err);
+  }
+  try {
+    const saleItemsInfo = database.pragma("table_info(local_sale_items)");
+    if (saleItemsInfo && saleItemsInfo.length > 0 && !saleItemsInfo.some((c) => c.name === "unit_abbr")) {
+      database.exec("ALTER TABLE local_sale_items ADD COLUMN unit_abbr TEXT;");
+    }
+  } catch (err) {
+    console.warn("Could not check/add unit_abbr on local_sale_items:", err);
+  }
+}
+const DEFAULT_CATALOG = [
+  {
+    id: "v1",
+    productId: "p1",
+    sku: "PVC-ELB-001",
+    barcode: "6291000000017",
+    productName: 'PVC Elbow 1" 90 Degree',
+    variantName: null,
+    unitAbbr: "pcs",
+    categoryName: "Plumbing",
+    taxRate: "5",
+    sellingPrice: "2.75",
+    minSellingPrice: "2.00",
+    stock: "100"
+  },
+  {
+    id: "v2",
+    productId: "p2",
+    sku: "PVC-ELB-002",
+    barcode: "6291000000024",
+    productName: 'PVC Elbow 3/4" 90 Degree',
+    variantName: null,
+    unitAbbr: "pcs",
+    categoryName: "Plumbing",
+    taxRate: "5",
+    sellingPrice: "2.10",
+    minSellingPrice: "1.55",
+    stock: "100"
+  },
+  {
+    id: "v3",
+    productId: "p3",
+    sku: "CBL-25-RED",
+    barcode: "6291000000031",
+    productName: "Electrical Cable 2.5mm Red",
+    variantName: null,
+    unitAbbr: "m",
+    categoryName: "Electrical",
+    taxRate: "5",
+    sellingPrice: "3.50",
+    minSellingPrice: "2.75",
+    stock: "100"
+  },
+  {
+    id: "v4",
+    productId: "p4",
+    sku: "PNT-WHT-4L",
+    barcode: "6291000000048",
+    productName: "Emulsion Paint White 4 Litre",
+    variantName: null,
+    unitAbbr: "ltr",
+    categoryName: "Paint",
+    taxRate: "5",
+    sellingPrice: "48.00",
+    minSellingPrice: "38.00",
+    stock: "40"
+  },
+  {
+    id: "v5",
+    productId: "p5",
+    sku: "TAP-MIX-CHR",
+    barcode: "6291000000055",
+    productName: "Basin Mixer Tap Chrome",
+    variantName: null,
+    unitAbbr: "pcs",
+    categoryName: "Sanitary",
+    taxRate: "5",
+    sellingPrice: "135.00",
+    minSellingPrice: "105.00",
+    stock: "12"
+  },
+  {
+    id: "v6",
+    productId: "p6",
+    sku: "EL-CBL-3CX25",
+    barcode: "6291000000062",
+    productName: "Ducab 3-Core 2.5mm² Flexible Copper Cable",
+    variantName: null,
+    unitAbbr: "m",
+    categoryName: "Electrical",
+    taxRate: "5",
+    sellingPrice: "215.00",
+    minSellingPrice: "190.00",
+    stock: "50"
+  },
+  {
+    id: "v7",
+    productId: "p7",
+    sku: "EL-SW-1G2W",
+    barcode: "6291000000079",
+    productName: "Schneider 1-Gang 2-Way Light Switch",
+    variantName: null,
+    unitAbbr: "pcs",
+    categoryName: "Electrical",
+    taxRate: "5",
+    sellingPrice: "18.50",
+    minSellingPrice: "14.00",
+    stock: "150"
+  },
+  {
+    id: "v8",
+    productId: "p8",
+    sku: "TL-TM-8M",
+    barcode: "6291000000086",
+    productName: "Stanley FatMax Heavy Duty Tape Measure 8m",
+    variantName: null,
+    unitAbbr: "pcs",
+    categoryName: "Hardware & Tools",
+    taxRate: "5",
+    sellingPrice: "45.00",
+    minSellingPrice: "35.00",
+    stock: "30"
+  },
+  {
+    id: "v9",
+    productId: "p9",
+    sku: "SAN-MX-GROHE",
+    barcode: "6291000000093",
+    productName: "Grohe Eurosmart Single-Lever Basin Mixer",
+    variantName: null,
+    unitAbbr: "pcs",
+    categoryName: "Sanitary",
+    taxRate: "5",
+    sellingPrice: "285.00",
+    minSellingPrice: "240.00",
+    stock: "25"
+  },
+  {
+    id: "v10",
+    productId: "p10",
+    sku: "FX-PLUG-UX8",
+    barcode: "6291000000109",
+    productName: "Fischer Wall Plugs UX 8x50mm Universal Box (100pcs)",
+    variantName: null,
+    unitAbbr: "box",
+    categoryName: "Fasteners & Fixings",
+    taxRate: "5",
+    sellingPrice: "32.00",
+    minSellingPrice: "25.00",
+    stock: "80"
+  }
+];
+const DEFAULT_CUSTOMERS = [
+  {
+    id: "c1",
+    name: "Al Noor Contracting",
+    company: "Al Noor Contracting LLC",
+    phone: "+971501234567",
+    trn: "100123456700003",
+    creditLimit: "5000.00",
+    creditBalance: "1240.00"
+  },
+  {
+    id: "c2",
+    name: "Walk-in customer",
+    company: null,
+    phone: null,
+    trn: null,
+    creditLimit: "0",
+    creditBalance: "0"
+  }
+];
+function seedInitialCatalog(database) {
+  try {
+    const row = database.prepare("SELECT count(*) as count FROM variants").get();
+    if (row && (row.count ?? 0) > 0) return;
+    database.transaction(() => {
+      const insertVariant = database.prepare(`
         INSERT OR IGNORE INTO variants (id, product_id, sku, barcode, product_name, variant_name, search_key, unit_abbr, category_name, tax_rate, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-      `),a=e.prepare(`
+      `);
+      const insertPrice = database.prepare(`
         INSERT OR IGNORE INTO variant_prices (id, variant_id, price_list_id, selling_price, min_selling_price, is_default, updated_at)
         VALUES (?, ?, 'default', ?, ?, 1, datetime('now'))
-      `),r=e.prepare(`
+      `);
+      const insertInventory = database.prepare(`
         INSERT OR IGNORE INTO inventory (id, variant_id, quantity, reserved_qty, local_delta, updated_at)
         VALUES (?, ?, ?, '0', '0', datetime('now'))
-      `);for(const i of ee){const u=`${i.productName} ${i.sku} ${i.barcode??""} ${i.categoryName??""}`.toLowerCase();n.run(i.id,i.productId,i.sku,i.barcode,i.productName,i.variantName,u,i.unitAbbr,i.categoryName,i.taxRate),a.run(`pr_${i.id}`,i.id,i.sellingPrice,i.minSellingPrice),r.run(`inv_${i.id}`,i.id,i.stock)}const o=e.prepare(`
+      `);
+      for (const item of DEFAULT_CATALOG) {
+        const searchKey = `${item.productName} ${item.sku} ${item.barcode ?? ""} ${item.categoryName ?? ""}`.toLowerCase();
+        insertVariant.run(
+          item.id,
+          item.productId,
+          item.sku,
+          item.barcode,
+          item.productName,
+          item.variantName,
+          searchKey,
+          item.unitAbbr,
+          item.categoryName,
+          item.taxRate
+        );
+        insertPrice.run(`pr_${item.id}`, item.id, item.sellingPrice, item.minSellingPrice);
+        insertInventory.run(`inv_${item.id}`, item.id, item.stock);
+      }
+      const insertCustomer = database.prepare(`
         INSERT OR IGNORE INTO customers (id, name, company, phone, trn, credit_limit, credit_balance, credit_on_hold, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, 0, datetime('now'))
-      `);for(const i of te)o.run(i.id,i.name,i.company,i.phone,i.trn,i.creditLimit,i.creditBalance)})()}catch(t){console.warn("Could not seed initial catalog into SQLite:",t)}}function ae(){if(c)return c;const e=b.join(l.app.getPath("userData"),process.env.POS_DB_FILE??"devsfleet-pos.sqlite");return c=new Q(e),c.pragma("journal_mode = WAL"),c.pragma("synchronous = FULL"),c.pragma("foreign_keys = ON"),c.pragma("busy_timeout = 5000"),oe(c),Z(c),ne(c),c}function s(){if(!c)throw new Error("SQLite is not open. Call openDatabase() first.");return c}function re(){c&&(c.pragma("wal_checkpoint(TRUNCATE)"),c.close(),c=null)}const M=[{version:1,sql:`
+      `);
+      for (const c of DEFAULT_CUSTOMERS) {
+        insertCustomer.run(c.id, c.name, c.company, c.phone, c.trn, c.creditLimit, c.creditBalance);
+      }
+    })();
+  } catch (err) {
+    console.warn("Could not seed initial catalog into SQLite:", err);
+  }
+}
+function openDatabase() {
+  if (db) return db;
+  const file = node_path.join(electron.app.getPath("userData"), process.env.POS_DB_FILE ?? "devsfleet-pos.sqlite");
+  db = new Database(file);
+  db.pragma("journal_mode = WAL");
+  db.pragma("synchronous = FULL");
+  db.pragma("foreign_keys = ON");
+  db.pragma("busy_timeout = 5000");
+  migrate(db);
+  ensureColumns(db);
+  seedInitialCatalog(db);
+  return db;
+}
+function getDatabase() {
+  if (!db) throw new Error("SQLite is not open. Call openDatabase() first.");
+  return db;
+}
+function closeDatabase() {
+  if (!db) return;
+  db.pragma("wal_checkpoint(TRUNCATE)");
+  db.close();
+  db = null;
+}
+const MIGRATIONS = [
+  {
+    version: 1,
+    sql: `
       -- ---------------------------------------------------------------
       -- MIRROR: pulled from the server, never edited locally
       -- ---------------------------------------------------------------
@@ -139,7 +388,11 @@
         key             TEXT PRIMARY KEY,
         value           TEXT
       );
-    `},{version:2,sql:`
+    `
+  },
+  {
+    version: 2,
+    sql: `
       -- Keep the FTS index in step with the products mirror. Triggers rather
       -- than manual maintenance, so a pull path that forgets to reindex cannot
       -- silently break product search at the counter.
@@ -159,7 +412,11 @@
         INSERT INTO products_fts(rowid, name, sku, search_key)
         VALUES (new.rowid, new.name, new.sku, new.search_key);
       END;
-    `},{version:3,sql:`
+    `
+  },
+  {
+    version: 3,
+    sql: `
       -- The sellable unit is the VARIANT, not the product. A 1" elbow and a
       -- 3/4" elbow are one catalogue entry with two barcodes, two prices and
       -- two stock figures, and it is the variant a cashier scans.
@@ -253,7 +510,11 @@
         deleted_at  TEXT NOT NULL,
         PRIMARY KEY (entity, id)
       );
-    `},{version:4,sql:`
+    `
+  },
+  {
+    version: 4,
+    sql: `
       -- Which price list a row belongs to is not something the terminal can
       -- infer, and a variant carries one row per list. Without the flag the
       -- till shows whichever the join happened to return — a different price
@@ -265,7 +526,11 @@
       -- statement about a moment and must not be rewritten by a later edit.
       ALTER TABLE local_sale_items RENAME COLUMN product_id TO variant_id;
       ALTER TABLE local_sale_items ADD COLUMN unit_abbr TEXT;
-    `},{version:5,sql:`
+    `
+  },
+  {
+    version: 5,
+    sql: `
       -- A parked cart, stored whole.
       --
       -- Local-first like everything else at the counter: a cart parked while
@@ -285,7 +550,11 @@
         held_at       TEXT NOT NULL DEFAULT (datetime('now'))
       );
       CREATE INDEX IF NOT EXISTS idx_held_carts_held_at ON held_carts(held_at DESC);
-    `},{version:6,sql:`
+    `
+  },
+  {
+    version: 6,
+    sql: `
       -- Sync Engine Schema Updates (API Parity Step 1.2)
       ALTER TABLE outbox RENAME COLUMN client_id TO local_id;
       ALTER TABLE local_sales RENAME COLUMN client_id TO local_id;
@@ -358,7 +627,11 @@
         total           TEXT NOT NULL,
         sort_order      INTEGER NOT NULL DEFAULT 0
       );
-    `},{version:7,sql:`
+    `
+  },
+  {
+    version: 7,
+    sql: `
       CREATE TABLE IF NOT EXISTS local_customer_payments (
         client_id       TEXT PRIMARY KEY,
         customer_id     TEXT NOT NULL,
@@ -370,13 +643,110 @@
         occurred_at     TEXT NOT NULL,
         synced_at       TEXT
       );
-    `},{version:8,sql:`
+    `
+  },
+  {
+    version: 8,
+    sql: `
       -- version 6 renamed client_id -> local_id everywhere else in the outbox
       -- family; this table was added in version 7, after that rename, and
       -- never got it — it still stands out as the one table naming the same
       -- idempotency key differently.
       ALTER TABLE local_customer_payments RENAME COLUMN client_id TO local_id;
-    `}];function oe(e){const t=e.pragma("user_version",{simple:!0}),n=M.at(-1)?.version??0;if(t>n)throw new Error(`Local database is at version ${t} but this build expects ${n}. Reinstall the newer POS version — do not delete the database, it may contain unsynced sales.`);for(const a of M)a.version<=t||e.transaction(()=>{e.exec(a.sql),e.pragma(`user_version = ${a.version}`)})()}function ie(e){e.handle("printer:list",async()=>[]),e.handle("printer:receipt",async(t,n,a)=>{throw new Error("Receipt printing lands in Phase 3")}),e.handle("printer:test",async(t,n)=>{throw new Error("Test printing lands in Phase 3")}),e.handle("cash-drawer:open",async(t,n)=>{throw new Error("Cash drawer control lands in Phase 3")})}const p=4,G=10000n;function I(e){if(typeof e=="bigint")return e;const t=typeof e=="number"?le(e):e.trim();if(t===""||t==="-"||t==="+")return 0n;const n=/^([+-]?)(\d*)(?:\.(\d*))?$/.exec(t);if(!n)throw new TypeError(`Not a decimal money value: ${JSON.stringify(e)}`);const[,a="",r="",o=""]=n,i=o.padEnd(p,"0").slice(0,p),u=`${r||"0"}${i}`,E=BigInt(u);return a==="-"?-E:E}function S(e,t=p){if(t<0||t>p)throw new RangeError(`decimals must be between 0 and ${p}`);const n=t===p?e:de(e,t),a=n<0n,r=a?-n:n,o=r/G,i=(r%G).toString().padStart(p,"0"),u=t===0?"":`.${i.slice(0,t)}`;return`${a?"-":""}${o}${u}`}function v(...e){return e.reduce((t,n)=>t+n,0n)}function se(e,t){return e-t}function ce(e,t){if(t===0n)throw new RangeError("Division by zero");const n=e<0n!=t<0n,a=e<0n?-e:e,r=t<0n?-t:t,o=a/r,E=a%r*2n>=r?o+1n:o;return n?-E:E}function de(e,t){if(t>=p)return e;const n=10n**BigInt(p-t);return ce(e,n)*n}function le(e){if(!Number.isFinite(e))throw new TypeError(`Not a finite money value: ${e}`);return e.toFixed(20).replace(/0+$/,"").replace(/\.$/,"")}const y=`
+    `
+  }
+];
+function migrate(database) {
+  const current = database.pragma("user_version", { simple: true });
+  const target = MIGRATIONS.at(-1)?.version ?? 0;
+  if (current > target) {
+    throw new Error(
+      `Local database is at version ${current} but this build expects ${target}. Reinstall the newer POS version — do not delete the database, it may contain unsynced sales.`
+    );
+  }
+  for (const migration of MIGRATIONS) {
+    if (migration.version <= current) continue;
+    database.transaction(() => {
+      database.exec(migration.sql);
+      database.pragma(`user_version = ${migration.version}`);
+    })();
+  }
+}
+function registerHardwareHandlers(ipcMain) {
+  ipcMain.handle("printer:list", async () => {
+    return [];
+  });
+  ipcMain.handle("printer:receipt", async (_event, _saleId, _format) => {
+    throw new Error("Receipt printing lands in Phase 3");
+  });
+  ipcMain.handle("printer:test", async (_event, _format) => {
+    throw new Error("Test printing lands in Phase 3");
+  });
+  ipcMain.handle("cash-drawer:open", async (_event, _reason) => {
+    throw new Error("Cash drawer control lands in Phase 3");
+  });
+}
+const MONEY_SCALE = 4;
+const SCALE_FACTOR = 10000n;
+function toMinor(value) {
+  if (typeof value === "bigint")
+    return value;
+  const raw = typeof value === "number" ? numberToDecimalString(value) : value.trim();
+  if (raw === "" || raw === "-" || raw === "+")
+    return 0n;
+  const match = /^([+-]?)(\d*)(?:\.(\d*))?$/.exec(raw);
+  if (!match) {
+    throw new TypeError(`Not a decimal money value: ${JSON.stringify(value)}`);
+  }
+  const [, sign = "", whole = "", frac = ""] = match;
+  const paddedFrac = frac.padEnd(MONEY_SCALE, "0").slice(0, MONEY_SCALE);
+  const digits = `${whole || "0"}${paddedFrac}`;
+  const magnitude = BigInt(digits);
+  return sign === "-" ? -magnitude : magnitude;
+}
+function toDecimalString(amount, decimals = MONEY_SCALE) {
+  if (decimals < 0 || decimals > MONEY_SCALE) {
+    throw new RangeError(`decimals must be between 0 and ${MONEY_SCALE}`);
+  }
+  const rounded = decimals === MONEY_SCALE ? amount : roundTo(amount, decimals);
+  const negative = rounded < 0n;
+  const magnitude = negative ? -rounded : rounded;
+  const whole = magnitude / SCALE_FACTOR;
+  const frac = (magnitude % SCALE_FACTOR).toString().padStart(MONEY_SCALE, "0");
+  const shown = decimals === 0 ? "" : `.${frac.slice(0, decimals)}`;
+  return `${negative ? "-" : ""}${whole}${shown}`;
+}
+function add(...amounts) {
+  return amounts.reduce((sum, a) => sum + a, 0n);
+}
+function subtract(a, b) {
+  return a - b;
+}
+function divideRoundHalfUp(numerator, denominator) {
+  if (denominator === 0n)
+    throw new RangeError("Division by zero");
+  const negative = numerator < 0n !== denominator < 0n;
+  const n = numerator < 0n ? -numerator : numerator;
+  const d = denominator < 0n ? -denominator : denominator;
+  const quotient = n / d;
+  const remainder = n % d;
+  const roundUp = remainder * 2n >= d;
+  const magnitude = roundUp ? quotient + 1n : quotient;
+  return negative ? -magnitude : magnitude;
+}
+function roundTo(amount, decimals) {
+  if (decimals >= MONEY_SCALE)
+    return amount;
+  const step = 10n ** BigInt(MONEY_SCALE - decimals);
+  return divideRoundHalfUp(amount, step) * step;
+}
+function numberToDecimalString(value) {
+  if (!Number.isFinite(value)) {
+    throw new TypeError(`Not a finite money value: ${value}`);
+  }
+  return value.toFixed(20).replace(/0+$/, "").replace(/\.$/, "");
+}
+const VARIANT_COLUMNS = `
   v.id                AS id,
   v.product_id        AS productId,
   v.sku               AS sku,
@@ -394,7 +764,8 @@
     AS TEXT
   ) AS stock,
   v.category_name     AS categoryName
-`,f=`
+`;
+const PRICE_JOIN = `
   LEFT JOIN variant_prices p ON p.id = (
     SELECT id FROM variant_prices
     WHERE variant_id = v.id
@@ -402,84 +773,785 @@
     LIMIT 1
   )
   LEFT JOIN inventory i ON i.variant_id = v.id
-`;function ue(e,t=25){const n=s(),a=e.trim();if(!a)return n.prepare(`SELECT ${y} FROM variants v ${f}
-         ORDER BY v.product_name LIMIT ?`).all(t);const r=$(a);if(r)return[r];const o=a.split(/\s+/).filter(Boolean).map(i=>`"${i.replace(/"/g,'""')}"*`).join(" ");try{return n.prepare(`SELECT ${y} FROM variants_fts f
+`;
+function searchProducts(query, limit = 25) {
+  const db2 = getDatabase();
+  const q = query.trim();
+  if (!q) {
+    return db2.prepare(
+      `SELECT ${VARIANT_COLUMNS} FROM variants v ${PRICE_JOIN}
+         ORDER BY v.product_name LIMIT ?`
+    ).all(limit);
+  }
+  const scanned = findByBarcode(q);
+  if (scanned) return [scanned];
+  const match = q.split(/\s+/).filter(Boolean).map((token) => `"${token.replace(/"/g, '""')}"*`).join(" ");
+  try {
+    return db2.prepare(
+      `SELECT ${VARIANT_COLUMNS} FROM variants_fts f
          JOIN variants v ON v.rowid = f.rowid
-         ${f}
+         ${PRICE_JOIN}
          WHERE variants_fts MATCH ?
-         ORDER BY rank LIMIT ?`).all(o,t)}catch{const i=`%${a}%`;return n.prepare(`SELECT ${y} FROM variants v ${f}
+         ORDER BY rank LIMIT ?`
+    ).all(match, limit);
+  } catch {
+    const like = `%${q}%`;
+    return db2.prepare(
+      `SELECT ${VARIANT_COLUMNS} FROM variants v ${PRICE_JOIN}
          WHERE v.product_name LIKE ? OR v.sku LIKE ? OR v.search_key LIKE ?
-         ORDER BY v.product_name LIMIT ?`).all(i,i,i,t)}}function $(e){return s().prepare(`SELECT ${y} FROM variants v ${f}
-       WHERE v.barcode = ? OR v.sku = ? LIMIT 1`).get(e.trim(),e.trim())??null}function Te(e,t=25){const n=s(),a=e.trim(),r=`
+         ORDER BY v.product_name LIMIT ?`
+    ).all(like, like, like, limit);
+  }
+}
+function findByBarcode(barcode) {
+  const db2 = getDatabase();
+  const row = db2.prepare(
+    `SELECT ${VARIANT_COLUMNS} FROM variants v ${PRICE_JOIN}
+       WHERE v.barcode = ? OR v.sku = ? LIMIT 1`
+  ).get(barcode.trim(), barcode.trim());
+  return row ?? null;
+}
+function searchCustomers(query, limit = 25) {
+  const db2 = getDatabase();
+  const q = query.trim();
+  const sql = `
     SELECT id, name, company, phone, trn,
            price_list_id  AS priceListId,
            credit_limit   AS creditLimit,
            credit_balance AS creditBalance,
            credit_on_hold AS creditOnHold
-    FROM customers`;if(!a)return n.prepare(`${r} ORDER BY name LIMIT ?`).all(t);const o=`%${a}%`;return n.prepare(`${r} WHERE name LIKE ? OR company LIKE ? OR phone LIKE ? ORDER BY name LIMIT ?`).all(o,o,o,t)}function k(){const e=s(),t=e.prepare(`SELECT local_id AS id, payload
+    FROM customers`;
+  if (!q) return db2.prepare(`${sql} ORDER BY name LIMIT ?`).all(limit);
+  const like = `%${q}%`;
+  return db2.prepare(
+    `${sql} WHERE name LIKE ? OR company LIKE ? OR phone LIKE ? ORDER BY name LIMIT ?`
+  ).all(like, like, like, limit);
+}
+function getOpenCashSession() {
+  const db2 = getDatabase();
+  const row = db2.prepare(
+    `SELECT local_id AS id, payload
        FROM outbox WHERE entity = 'cash_session' AND status IN ('pending','synced')
-       ORDER BY sequence DESC LIMIT 1`).get();if(!t)return null;const n=JSON.parse(t.payload);return n.closedAt?null:{id:t.id,openingAmount:String(n.openingAmount??"0"),openedAt:JSON.parse(t.payload).openedAt??"",status:"open",...Ee(e,t.id)}}function Ee(e,t){const n=e.prepare(`SELECT payload FROM outbox
-       WHERE entity = 'cash_movement' AND json_extract(payload, '$.cashSessionId') = ?`).all(t);let a=0n,r=0n;for(const u of n){const E=JSON.parse(u.payload),B=I(E.amount);E.type==="cash_in"?a=v(a,B):r=v(r,B)}const i=e.prepare("SELECT paid_amount FROM local_sales WHERE cash_session_id = ? AND status = 'completed'").all(t).reduce((u,E)=>v(u,I(E.paid_amount)),0n);return{cashIn:S(a,4),cashOut:S(r,4),cashSales:S(i,4)}}function _e(e,t){const n=s(),a=k();if(a)return a;const r=O.randomUUID(),o=new Date().toISOString();return R(n,{localId:r,entity:"cash_session",occurredAt:o,payload:{branchId:t,openingAmount:e,openedAt:o}}),{id:r,openingAmount:e,openedAt:o,status:"open",cashIn:"0",cashOut:"0",cashSales:"0"}}function pe(e,t){const n=s(),a=n.prepare(`SELECT local_id AS id, payload FROM outbox
-       WHERE entity = 'cash_session' ORDER BY sequence DESC LIMIT 1`).get();if(!a)return;const r=JSON.parse(a.payload);r.closedAt=new Date().toISOString(),r.countedAmount=e,t&&(r.notes=t),n.prepare("UPDATE outbox SET payload = ?, status = 'pending' WHERE local_id = ?").run(JSON.stringify(r),a.id)}function Ne(e,t,n){const a=s(),r=k();if(!r)throw new Error("No drawer is open on this terminal");R(a,{localId:O.randomUUID(),entity:"cash_movement",occurredAt:new Date().toISOString(),payload:{cashSessionId:r.id,type:e,amount:t,reason:n}})}function me(e){const t=s(),n=S(e.payments.reduce((a,r)=>v(a,I(r.amount)),0n),4);return t.transaction(()=>{t.prepare(`INSERT INTO local_sales
+       ORDER BY sequence DESC LIMIT 1`
+  ).get();
+  if (!row) return null;
+  const payload = JSON.parse(row.payload);
+  if (payload.closedAt) return null;
+  return {
+    /**
+     * The terminal's own id, even after the server has assigned one.
+     *
+     * An identifier that changes underneath a running shift breaks every local
+     * row already pointing at it. The server resolves either form on push, so
+     * there is nothing to gain by switching.
+     */
+    id: row.id,
+    openingAmount: String(payload.openingAmount ?? "0"),
+    openedAt: JSON.parse(row.payload).openedAt ?? "",
+    status: "open",
+    ...movementTotals(db2, row.id)
+  };
+}
+function movementTotals(db2, sessionClientId) {
+  const movements = db2.prepare(
+    `SELECT payload FROM outbox
+       WHERE entity = 'cash_movement' AND json_extract(payload, '$.cashSessionId') = ?`
+  ).all(sessionClientId);
+  let cashIn = 0n;
+  let cashOut = 0n;
+  for (const movement of movements) {
+    const parsed = JSON.parse(movement.payload);
+    const amount = toMinor(parsed.amount);
+    if (parsed.type === "cash_in") cashIn = add(cashIn, amount);
+    else cashOut = add(cashOut, amount);
+  }
+  const salePayments = db2.prepare(
+    `SELECT paid_amount FROM local_sales WHERE cash_session_id = ? AND status = 'completed'`
+  ).all(sessionClientId);
+  const cashSales = salePayments.reduce(
+    (sum, row) => add(sum, toMinor(row.paid_amount)),
+    0n
+  );
+  return {
+    cashIn: toDecimalString(cashIn, 4),
+    cashOut: toDecimalString(cashOut, 4),
+    cashSales: toDecimalString(cashSales, 4)
+  };
+}
+function openCashSession(openingAmount, branchId2) {
+  const db2 = getDatabase();
+  const existing = getOpenCashSession();
+  if (existing) return existing;
+  const localId = node_crypto.randomUUID();
+  const openedAt = (/* @__PURE__ */ new Date()).toISOString();
+  enqueue(db2, {
+    localId,
+    entity: "cash_session",
+    occurredAt: openedAt,
+    payload: { branchId: branchId2, openingAmount, openedAt }
+  });
+  return {
+    id: localId,
+    openingAmount,
+    openedAt,
+    status: "open",
+    cashIn: "0",
+    cashOut: "0",
+    cashSales: "0"
+  };
+}
+function closeCashSession(countedAmount, notes) {
+  const db2 = getDatabase();
+  const open = db2.prepare(
+    `SELECT local_id AS id, payload FROM outbox
+       WHERE entity = 'cash_session' ORDER BY sequence DESC LIMIT 1`
+  ).get();
+  if (!open) return;
+  const payload = JSON.parse(open.payload);
+  payload.closedAt = (/* @__PURE__ */ new Date()).toISOString();
+  payload.countedAmount = countedAmount;
+  if (notes) payload.notes = notes;
+  db2.prepare(`UPDATE outbox SET payload = ?, status = 'pending' WHERE local_id = ?`).run(
+    JSON.stringify(payload),
+    open.id
+  );
+}
+function recordCashMovement(type, amount, reason) {
+  const db2 = getDatabase();
+  const session = getOpenCashSession();
+  if (!session) throw new Error("No drawer is open on this terminal");
+  enqueue(db2, {
+    localId: node_crypto.randomUUID(),
+    entity: "cash_movement",
+    occurredAt: (/* @__PURE__ */ new Date()).toISOString(),
+    payload: { cashSessionId: session.id, type, amount, reason }
+  });
+}
+function commitSale(draft) {
+  const db2 = getDatabase();
+  const paid = toDecimalString(
+    draft.payments.reduce((sum, payment) => add(sum, toMinor(payment.amount)), 0n),
+    4
+  );
+  db2.transaction(() => {
+    db2.prepare(
+      `INSERT INTO local_sales
          (local_id, customer_id, cash_session_id, subtotal, tax_amount,
           discount_amount, total, paid_amount, status, occurred_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?)`).run(e.localId,e.customerId,e.cashSessionId,e.subtotal,e.taxAmount,e.discountAmount,e.total,n,e.occurredAt);const a=t.prepare(`INSERT INTO local_sale_items
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?)`
+    ).run(
+      draft.localId,
+      draft.customerId,
+      draft.cashSessionId,
+      draft.subtotal,
+      draft.taxAmount,
+      draft.discountAmount,
+      draft.total,
+      paid,
+      draft.occurredAt
+    );
+    const insertItem = db2.prepare(
+      `INSERT INTO local_sale_items
          (sale_local_id, variant_id, product_name, product_sku, quantity,
           unit_price, discount_percent, tax_percent, line_subtotal, tax_amount,
           total, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),r=t.prepare(`UPDATE inventory
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    );
+    const decrementStock = db2.prepare(
+      `UPDATE inventory
        SET local_delta = CAST(CAST(local_delta AS REAL) - ? AS TEXT)
-       WHERE variant_id = ?`);e.lines.forEach((o,i)=>{a.run(e.localId,o.variantId,o.productName,o.productSku,o.quantity,o.unitPrice,o.discountPercent,o.taxPercent,o.total,"0",o.total,i),r.run(Number(o.quantity),o.variantId)}),R(t,{localId:e.localId,entity:"sale",occurredAt:e.occurredAt,payload:{customerId:e.customerId,cashSessionId:e.cashSessionId,lines:e.lines.map(o=>({variantId:o.variantId,quantity:Number(o.quantity),unitPrice:o.unitPrice,...Number(o.discountPercent)>0?{discountPercent:Number(o.discountPercent)}:{}})),payments:e.payments.map(o=>({method:o.method,amount:Number(o.amount),...o.reference?{reference:o.reference}:{}})),...e.overrideGrants?.length?{overrideGrants:e.overrideGrants}:{}}})})(),{...e,saleNumber:null,synced:!1}}function Le(e=20){const t=s();return t.prepare(`SELECT s.local_id AS localId, s.sale_number AS saleNumber,
+       WHERE variant_id = ?`
+    );
+    draft.lines.forEach((line, index) => {
+      insertItem.run(
+        draft.localId,
+        line.variantId,
+        line.productName,
+        line.productSku,
+        line.quantity,
+        line.unitPrice,
+        line.discountPercent,
+        line.taxPercent,
+        line.total,
+        "0",
+        line.total,
+        index
+      );
+      decrementStock.run(Number(line.quantity), line.variantId);
+    });
+    enqueue(db2, {
+      localId: draft.localId,
+      entity: "sale",
+      occurredAt: draft.occurredAt,
+      payload: {
+        customerId: draft.customerId,
+        cashSessionId: draft.cashSessionId,
+        lines: draft.lines.map((line) => ({
+          variantId: line.variantId,
+          quantity: Number(line.quantity),
+          unitPrice: line.unitPrice,
+          ...Number(line.discountPercent) > 0 ? { discountPercent: Number(line.discountPercent) } : {}
+        })),
+        payments: draft.payments.map((payment) => ({
+          method: payment.method,
+          amount: Number(payment.amount),
+          ...payment.reference ? { reference: payment.reference } : {}
+        })),
+        ...draft.overrideGrants?.length ? { overrideGrants: draft.overrideGrants } : {}
+      }
+    });
+  })();
+  return { ...draft, saleNumber: null, synced: false };
+}
+function recentSales(limit = 20) {
+  const db2 = getDatabase();
+  const sales = db2.prepare(
+    `SELECT s.local_id AS localId, s.sale_number AS saleNumber,
               s.customer_id AS customerId, s.cash_session_id AS cashSessionId,
               s.subtotal, s.tax_amount AS taxAmount,
               s.discount_amount AS discountAmount, s.total,
               s.occurred_at AS occurredAt, s.synced_at AS syncedAt
-       FROM local_sales s ORDER BY s.occurred_at DESC LIMIT ?`).all(e).map(a=>({...a,synced:a.syncedAt!==null,lines:V(t,a.localId),payments:[]}))}function he(e){const t=s(),n=t.prepare(`SELECT local_id AS localId, sale_number AS saleNumber,
+       FROM local_sales s ORDER BY s.occurred_at DESC LIMIT ?`
+  ).all(limit);
+  return sales.map((sale) => ({
+    ...sale,
+    synced: sale.syncedAt !== null,
+    lines: saleLines(db2, sale.localId),
+    payments: []
+  }));
+}
+function findSale(reference) {
+  const db2 = getDatabase();
+  const sale = db2.prepare(
+    `SELECT local_id AS localId, sale_number AS saleNumber,
               customer_id AS customerId, cash_session_id AS cashSessionId,
               subtotal, tax_amount AS taxAmount, discount_amount AS discountAmount,
               total, occurred_at AS occurredAt, synced_at AS syncedAt
-       FROM local_sales WHERE sale_number = ? OR local_id = ? LIMIT 1`).get(e.trim(),e.trim());return n?{...n,synced:n.syncedAt!==null,lines:V(t,n.localId),payments:[]}:null}function V(e,t){return e.prepare(`SELECT variant_id AS variantId, product_name AS productName,
+       FROM local_sales WHERE sale_number = ? OR local_id = ? LIMIT 1`
+  ).get(reference.trim(), reference.trim());
+  if (!sale) return null;
+  return {
+    ...sale,
+    synced: sale.syncedAt !== null,
+    lines: saleLines(db2, sale.localId),
+    payments: []
+  };
+}
+function saleLines(db2, localId) {
+  return db2.prepare(
+    `SELECT variant_id AS variantId, product_name AS productName,
               product_sku AS productSku, quantity, unit_price AS unitPrice,
               discount_percent AS discountPercent, tax_percent AS taxPercent, total
-       FROM local_sale_items WHERE sale_local_id = ? ORDER BY sort_order`).all(t)}function Ae(e){const t=s();return t.transaction(()=>{t.prepare(`INSERT INTO local_quotations
+       FROM local_sale_items WHERE sale_local_id = ? ORDER BY sort_order`
+  ).all(localId);
+}
+function saveQuotation(draft) {
+  const db2 = getDatabase();
+  db2.transaction(() => {
+    db2.prepare(
+      `INSERT INTO local_quotations
          (local_id, customer_id, subtotal, tax_amount, discount_amount, total, status, occurred_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'draft', ?)`).run(e.localId,e.customerId,e.subtotal,e.taxAmount,e.discountAmount,e.total,e.occurredAt);const n=t.prepare(`INSERT INTO local_quotation_items
+       VALUES (?, ?, ?, ?, ?, ?, 'draft', ?)`
+    ).run(
+      draft.localId,
+      draft.customerId,
+      draft.subtotal,
+      draft.taxAmount,
+      draft.discountAmount,
+      draft.total,
+      draft.occurredAt
+    );
+    const insertItem = db2.prepare(
+      `INSERT INTO local_quotation_items
          (quotation_local_id, variant_id, product_name, product_sku, quantity,
           unit_price, discount_percent, tax_percent, line_subtotal, tax_amount, total, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);e.lines.forEach((a,r)=>{n.run(e.localId,a.variantId,a.productName,a.productSku,a.quantity,a.unitPrice,a.discountPercent,a.taxPercent,a.total,"0",a.total,r)}),R(t,{localId:e.localId,entity:"quotation",occurredAt:e.occurredAt,payload:{customerId:e.customerId,lines:e.lines.map(a=>({variantId:a.variantId,quantity:Number(a.quantity),unitPrice:a.unitPrice,...Number(a.discountPercent)>0?{discountPercent:Number(a.discountPercent)}:{}}))}})})(),{...e,quotationNumber:null,synced:!1}}function Se(){const e=s(),t=e.prepare(`SELECT q.local_id AS localId, q.quotation_number AS quotationNumber,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    );
+    draft.lines.forEach((line, index) => {
+      insertItem.run(
+        draft.localId,
+        line.variantId,
+        line.productName,
+        line.productSku,
+        line.quantity,
+        line.unitPrice,
+        line.discountPercent,
+        line.taxPercent,
+        line.total,
+        "0",
+        line.total,
+        index
+      );
+    });
+    enqueue(db2, {
+      localId: draft.localId,
+      entity: "quotation",
+      occurredAt: draft.occurredAt,
+      payload: {
+        customerId: draft.customerId,
+        lines: draft.lines.map((line) => ({
+          variantId: line.variantId,
+          quantity: Number(line.quantity),
+          unitPrice: line.unitPrice,
+          ...Number(line.discountPercent) > 0 ? { discountPercent: Number(line.discountPercent) } : {}
+        }))
+      }
+    });
+  })();
+  return { ...draft, quotationNumber: null, synced: false };
+}
+function listQuotations() {
+  const db2 = getDatabase();
+  const quotations = db2.prepare(
+    `SELECT q.local_id AS localId, q.quotation_number AS quotationNumber,
               q.customer_id AS customerId,
               q.subtotal, q.tax_amount AS taxAmount,
               q.discount_amount AS discountAmount, q.total,
               q.status, q.occurred_at AS occurredAt, q.synced_at AS syncedAt
-       FROM local_quotations q ORDER BY q.occurred_at DESC`).all();for(const n of t)n.lines=e.prepare(`SELECT line.variant_id AS variantId, line.product_name AS productName,
+       FROM local_quotations q ORDER BY q.occurred_at DESC`
+  ).all();
+  for (const q of quotations) {
+    q.lines = db2.prepare(
+      `SELECT line.variant_id AS variantId, line.product_name AS productName,
                 line.product_sku AS productSku, line.quantity, line.unit_price AS unitPrice,
                 line.discount_percent AS discountPercent, line.tax_percent AS taxPercent,
                 line.line_subtotal AS lineSubtotal, line.tax_amount AS taxAmount, line.total
          FROM local_quotation_items line
          WHERE line.quotation_local_id = ?
-         ORDER BY line.sort_order`).all(n.localId);return t}function Ie(e){const t=s(),n=O.randomUUID();return t.transaction(()=>{t.prepare(`INSERT INTO local_customer_payments
+         ORDER BY line.sort_order`
+    ).all(q.localId);
+  }
+  return quotations;
+}
+function recordAccountPayment(input) {
+  const db2 = getDatabase();
+  const localId = node_crypto.randomUUID();
+  db2.transaction(() => {
+    db2.prepare(
+      `INSERT INTO local_customer_payments
          (local_id, customer_id, cash_session_id, amount, method, reference, notes, occurred_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(n,e.customerId,e.cashSessionId,e.amount,e.method,e.reference,e.notes,e.occurredAt);const a=t.prepare("SELECT credit_balance FROM customers WHERE id = ?").get(e.customerId);if(a){const r=se(I(a.credit_balance),I(e.amount));t.prepare("UPDATE customers SET credit_balance = ? WHERE id = ?").run(S(r,4),e.customerId)}R(t,{localId:n,entity:"customer_payment",occurredAt:e.occurredAt,payload:e})})(),{localId:n,...e,synced:!1}}function Oe(e){const t=s(),n=O.randomUUID(),a=new Date().toISOString();return t.prepare(`INSERT INTO held_carts (id, label, line_count, total, customer_name, cart_data, held_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`).run(n,e.label,e.lineCount,e.total,e.customerName,JSON.stringify(e.cartData),a),{id:n,...e,heldAt:a,cartData:void 0}}function Re(e=50){return s().prepare(`SELECT id, label, line_count AS lineCount, total,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      localId,
+      input.customerId,
+      input.cashSessionId,
+      input.amount,
+      input.method,
+      input.reference,
+      input.notes,
+      input.occurredAt
+    );
+    const customer = db2.prepare(`SELECT credit_balance FROM customers WHERE id = ?`).get(input.customerId);
+    if (customer) {
+      const newBalance = subtract(
+        toMinor(customer.credit_balance),
+        toMinor(input.amount)
+      );
+      db2.prepare(`UPDATE customers SET credit_balance = ? WHERE id = ?`).run(
+        toDecimalString(newBalance, 4),
+        input.customerId
+      );
+    }
+    enqueue(db2, {
+      localId,
+      entity: "customer_payment",
+      occurredAt: input.occurredAt,
+      payload: input
+    });
+  })();
+  return { localId, ...input, synced: false };
+}
+function holdCart(cart) {
+  const db2 = getDatabase();
+  const id = node_crypto.randomUUID();
+  const heldAt = (/* @__PURE__ */ new Date()).toISOString();
+  db2.prepare(
+    `INSERT INTO held_carts (id, label, line_count, total, customer_name, cart_data, held_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    id,
+    cart.label,
+    cart.lineCount,
+    cart.total,
+    cart.customerName,
+    JSON.stringify(cart.cartData),
+    heldAt
+  );
+  return { id, ...cart, heldAt, cartData: void 0 };
+}
+function listHeldCarts(limit = 50) {
+  return getDatabase().prepare(
+    `SELECT id, label, line_count AS lineCount, total,
               customer_name AS customerName, held_at AS heldAt
-       FROM held_carts ORDER BY held_at DESC LIMIT ?`).all(e)}function ve(e){const t=s();return t.transaction(()=>{const n=t.prepare("SELECT cart_data FROM held_carts WHERE id = ?").get(e);return n?(t.prepare("DELETE FROM held_carts WHERE id = ?").run(e),JSON.parse(n.cart_data)):null})()}function ye(e){s().prepare("DELETE FROM held_carts WHERE id = ?").run(e)}function fe(e){return e.prepare("SELECT COALESCE(MAX(sequence), 0) + 1 AS next FROM outbox").get().next}function R(e,t){e.prepare(`INSERT INTO outbox (local_id, entity, sequence, occurred_at, payload)
+       FROM held_carts ORDER BY held_at DESC LIMIT ?`
+  ).all(limit);
+}
+function restoreHeldCart(id) {
+  const db2 = getDatabase();
+  return db2.transaction(() => {
+    const row = db2.prepare(`SELECT cart_data FROM held_carts WHERE id = ?`).get(id);
+    if (!row) return null;
+    db2.prepare(`DELETE FROM held_carts WHERE id = ?`).run(id);
+    return JSON.parse(row.cart_data);
+  })();
+}
+function discardHeldCart(id) {
+  getDatabase().prepare(`DELETE FROM held_carts WHERE id = ?`).run(id);
+}
+function nextSequence(db2) {
+  const row = db2.prepare(`SELECT COALESCE(MAX(sequence), 0) + 1 AS next FROM outbox`).get();
+  return row.next;
+}
+function enqueue(db2, item) {
+  db2.prepare(
+    `INSERT INTO outbox (local_id, entity, sequence, occurred_at, payload)
      VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT(local_id) DO NOTHING`).run(t.localId,t.entity,fe(e),t.occurredAt,JSON.stringify(t.payload))}function Ue(e=200){return s().prepare(`SELECT local_id AS localId, entity, sequence, occurred_at AS occurredAt, payload
-       FROM outbox WHERE status = 'pending' ORDER BY sequence LIMIT ?`).all(e).map(a=>({localId:a.localId,entity:a.entity,sequence:a.sequence,occurredAt:a.occurredAt,payload:JSON.parse(a.payload)}))}function be(){const t=s().prepare(`SELECT
+     ON CONFLICT(local_id) DO NOTHING`
+  ).run(
+    item.localId,
+    item.entity,
+    nextSequence(db2),
+    item.occurredAt,
+    JSON.stringify(item.payload)
+  );
+}
+function pendingOutbox(limit = 200) {
+  const db2 = getDatabase();
+  const rows = db2.prepare(
+    `SELECT local_id AS localId, entity, sequence, occurred_at AS occurredAt, payload
+       FROM outbox WHERE status = 'pending' ORDER BY sequence LIMIT ?`
+  ).all(limit);
+  return rows.map((row) => ({
+    localId: row.localId,
+    entity: row.entity,
+    sequence: row.sequence,
+    occurredAt: row.occurredAt,
+    payload: JSON.parse(row.payload)
+  }));
+}
+function outboxCounts() {
+  const db2 = getDatabase();
+  const row = db2.prepare(
+    `SELECT
          SUM(CASE WHEN status = 'pending'  THEN 1 ELSE 0 END) AS pending,
          SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) AS failed
-       FROM outbox`).get();return{pending:t.pending??0,failed:t.failed??0}}function ge(e){const t=s();if(e.outcome==="applied"||e.outcome==="duplicate"){t.transaction(()=>{t.prepare(`UPDATE outbox SET status = 'synced', server_id = ?, document_number = ?, last_error = NULL
-         WHERE local_id = ?`).run(e.serverId??null,e.documentNumber??null,e.localId),t.prepare(`UPDATE local_sales SET server_id = ?, sale_number = ?, synced_at = datetime('now')
-         WHERE local_id = ?`).run(e.serverId??null,e.documentNumber??null,e.localId)})();return}if(e.outcome==="rejected"){t.prepare(`UPDATE outbox SET status = 'rejected', last_error = ?, attempts = attempts + 1
-       WHERE local_id = ?`).run(e.message??"Rejected by the server",e.localId);return}t.prepare("UPDATE outbox SET attempts = attempts + 1, last_error = ? WHERE local_id = ?").run(e.message??null,e.localId)}function we(){s().prepare(`UPDATE inventory SET local_delta = '0'
+       FROM outbox`
+  ).get();
+  return { pending: row.pending ?? 0, failed: row.failed ?? 0 };
+}
+function settleOutboxItem(result) {
+  const db2 = getDatabase();
+  if (result.outcome === "applied" || result.outcome === "duplicate") {
+    db2.transaction(() => {
+      db2.prepare(
+        `UPDATE outbox SET status = 'synced', server_id = ?, document_number = ?, last_error = NULL
+         WHERE local_id = ?`
+      ).run(result.serverId ?? null, result.documentNumber ?? null, result.localId);
+      db2.prepare(
+        `UPDATE local_sales SET server_id = ?, sale_number = ?, synced_at = datetime('now')
+         WHERE local_id = ?`
+      ).run(result.serverId ?? null, result.documentNumber ?? null, result.localId);
+    })();
+    return;
+  }
+  if (result.outcome === "rejected") {
+    db2.prepare(
+      `UPDATE outbox SET status = 'rejected', last_error = ?, attempts = attempts + 1
+       WHERE local_id = ?`
+    ).run(result.message ?? "Rejected by the server", result.localId);
+    return;
+  }
+  db2.prepare(
+    `UPDATE outbox SET attempts = attempts + 1, last_error = ? WHERE local_id = ?`
+  ).run(result.message ?? null, result.localId);
+}
+function clearSettledDeltas() {
+  const db2 = getDatabase();
+  db2.prepare(
+    `UPDATE inventory SET local_delta = '0'
      WHERE variant_id IN (
        SELECT i.variant_id FROM local_sale_items i
        JOIN local_sales s ON s.local_id = i.sale_local_id
        WHERE s.synced_at IS NOT NULL
-     )`).run()}function T(e){return s().prepare("SELECT value FROM device_state WHERE key = ?").get(e)?.value??null}function h(e,t){s().prepare(`INSERT INTO device_state (key, value) VALUES (?, ?)
-       ON CONFLICT(key) DO UPDATE SET value = excluded.value`).run(e,t)}class x extends Error{constructor(t,n,a){super(a),this.status=t,this.code=n,this.name="ApiError"}status;code;get isPermanent(){return this.status>=400&&this.status<500&&this.status!==408&&this.status!==429}}let N=null,C=null;function K(){return T("api_url")??process.env.VITE_API_URL??"http://localhost:3001/api/v1"}function g(){return T("device_id")}function Xe(){return T("branch_id")}function Ce(){return N!==null||T("refresh_token")!==null}function De(){N=null,h("refresh_token",null)}async function ke(e){const t=P(),n=g(),a=Xe();if(!n||!a)throw new Error("This terminal has not been activated yet");const r=await q(`${t}/auth/pin-login`,{method:"POST",body:JSON.stringify({pin:e,deviceId:n,branchId:a})});return J(r.accessToken,r.refreshToken,r.expiresIn),{...r.user,maxDiscountPercent:r.user.maxDiscountPercent??"0"}}async function xe(e,t,n){return F("/auth/verify-override",{pin:e,permission:t,...n?{reason:n}:{}})}function J(e,t,n){N={accessToken:e,refreshToken:t,expiresAt:Date.now()+Math.max(0,n-60)*1e3},h("refresh_token",t)}async function Fe(){if(N&&Date.now()<N.expiresAt)return N.accessToken;if(C??=Pe().finally(()=>{C=null}),await C,!N)throw new Error("This terminal is signed out. Sign in with a PIN.");return N.accessToken}async function Pe(){const e=N?.refreshToken??T("refresh_token");if(!e)throw new Error("This terminal is signed out. Sign in with a PIN.");try{const t=await q(`${P()}/auth/refresh`,{method:"POST",body:JSON.stringify({refreshToken:e})});J(t.accessToken,t.refreshToken,t.expiresIn)}catch(t){throw t instanceof x&&t.isPermanent&&De(),t}}async function F(e,t){const n=await Fe();return q(`${P()}${e}`,{method:"POST",headers:{authorization:`Bearer ${n}`},body:JSON.stringify(t)})}async function qe(){const e=K();if(!e)return!1;try{const t=new AbortController,n=setTimeout(()=>t.abort(),4e3),a=await fetch(new URL("/health",e),{signal:t.signal});return clearTimeout(n),a.ok}catch{return!1}}function P(){const e=K();if(!e)throw new Error("No server address is configured on this terminal");return e.replace(/\/+$/,"")}async function q(e,t){const n=new AbortController,a=setTimeout(()=>n.abort(),3e4);let r;try{r=await fetch(e,{...t,signal:n.signal,headers:{"content-type":"application/json",...t.headers??{}}})}finally{clearTimeout(a)}const o=await r.text(),i=o?JSON.parse(o):{};if(!r.ok||i.success===!1){const u=i.error??{};throw new x(r.status,u.code??"UNKNOWN",u.message??`Request failed with ${r.status}`)}return i.data??i}const Be=500;let U=null,A=null,j=()=>null;const L={online:!1,lastPullAt:null,lastPushAt:null,lastCheckpoint:null,pendingPushCount:0,failedPushCount:0,syncing:!1,lastError:null};function _(e={}){Object.assign(L,e);const t=be();return L.pendingPushCount=t.pending,L.failedPushCount=t.failed,j()?.webContents.send("sync:status-changed",{...L}),{...L}}function Me(e,t){j=t,L.lastCheckpoint=T("checkpoint"),e.handle("sync:status",()=>_()),e.handle("sync:now",()=>D());const n=Number(process.env.POS_SYNC_INTERVAL_MS??3e4);U=setInterval(()=>{D().catch(()=>{})},n)}function Ge(){U&&(clearInterval(U),U=null)}async function D(){return A||(A=(async()=>{if(_({syncing:!0,lastError:null}),!await qe())return _({syncing:!1,online:!1});if(!g())return _({syncing:!1,online:!0,lastError:"Terminal not yet activated with code"});if(!Ce())return _({syncing:!1,online:!0,lastError:"Signed out — enter a PIN"});try{return await He(),await Ye(),we(),_({syncing:!1,online:!0,lastError:null})}catch(t){const n=t instanceof Error?t.message:"Sync failed";return _({syncing:!1,online:t instanceof x,lastError:n})}})().finally(()=>{A=null}),A)}async function He(){const e=Ue(200);if(e.length===0)return;const t=await F("/sync/push",{deviceId:g(),lastCheckpoint:T("checkpoint"),items:e});for(const n of t.results)ge(n);_({lastPushAt:new Date().toISOString()})}async function Ye(){for(let e=0;e<200;e+=1){const t=await F("/sync/pull",{deviceId:g(),since:T("checkpoint"),limit:Be});if(We(t.changes,t.checkpoint),_({lastPullAt:new Date().toISOString(),lastCheckpoint:t.checkpoint}),!t.hasMore)return}}function We(e,t){const n=s();n.transaction(()=>{for(const a of e){if(a.deleted){$e(a.entity,a.id);continue}a.record&&Ve(a.entity,a.id,a.record)}n.prepare(`INSERT INTO device_state (key, value) VALUES ('checkpoint', ?)
-       ON CONFLICT(key) DO UPDATE SET value = excluded.value`).run(t)})()}function $e(e,t){const n=s(),a={product:"variants",customer:"customers",category:null,unit:null}[e];a&&n.prepare(`DELETE FROM ${a} WHERE id = ?`).run(t),n.prepare(`INSERT INTO deleted_records (entity, id, deleted_at) VALUES (?, ?, datetime('now'))
-     ON CONFLICT(entity, id) DO NOTHING`).run(e,t)}function Ve(e,t,n){const a=s(),r=o=>o==null?null:String(o);switch(e){case"product":a.prepare(`INSERT INTO variants
+     )`
+  ).run();
+}
+function getState(key) {
+  const row = getDatabase().prepare(`SELECT value FROM device_state WHERE key = ?`).get(key);
+  return row?.value ?? null;
+}
+function setState(key, value) {
+  getDatabase().prepare(
+    `INSERT INTO device_state (key, value) VALUES (?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+  ).run(key, value);
+}
+class ApiError extends Error {
+  constructor(status2, code, message) {
+    super(message);
+    this.status = status2;
+    this.code = code;
+    this.name = "ApiError";
+  }
+  status;
+  code;
+  /**
+   * A refused request, as opposed to an unreachable server.
+   *
+   * The distinction decides whether an outbox item is retried or parked: a 4xx
+   * will say the same thing on the thousandth attempt.
+   */
+  get isPermanent() {
+    return this.status >= 400 && this.status < 500 && this.status !== 408 && this.status !== 429;
+  }
+}
+let tokens = null;
+let refreshing = null;
+function apiUrl() {
+  return getState("api_url") ?? process.env.VITE_API_URL ?? "http://localhost:3001/api/v1";
+}
+function deviceId() {
+  return getState("device_id");
+}
+function branchId() {
+  return getState("branch_id");
+}
+function isAuthenticated() {
+  return tokens !== null || getState("refresh_token") !== null;
+}
+function forgetTokens() {
+  tokens = null;
+  setState("refresh_token", null);
+}
+async function loginWithPin(pin) {
+  const base = requireApiUrl();
+  const device = deviceId();
+  const branch = branchId();
+  if (!device || !branch) throw new Error("This terminal has not been activated yet");
+  const response = await request(`${base}/auth/pin-login`, {
+    method: "POST",
+    body: JSON.stringify({ pin, deviceId: device, branchId: branch })
+  });
+  storeTokens(response.accessToken, response.refreshToken, response.expiresIn);
+  return { ...response.user, maxDiscountPercent: response.user.maxDiscountPercent ?? "0" };
+}
+async function verifyOverride(pin, permission, reason) {
+  return authorized("/auth/verify-override", { pin, permission, ...reason ? { reason } : {} });
+}
+function storeTokens(accessToken, refreshToken, expiresIn) {
+  tokens = {
+    accessToken,
+    refreshToken,
+    // Sixty seconds of slack: a token that expires mid-flight fails the push it
+    // was carrying, and that push may be a day's takings.
+    expiresAt: Date.now() + Math.max(0, expiresIn - 60) * 1e3
+  };
+  setState("refresh_token", refreshToken);
+}
+async function ensureAccessToken() {
+  if (tokens && Date.now() < tokens.expiresAt) return tokens.accessToken;
+  refreshing ??= refreshTokens().finally(() => {
+    refreshing = null;
+  });
+  await refreshing;
+  if (!tokens) throw new Error("This terminal is signed out. Sign in with a PIN.");
+  return tokens.accessToken;
+}
+async function refreshTokens() {
+  const stored = tokens?.refreshToken ?? getState("refresh_token");
+  if (!stored) throw new Error("This terminal is signed out. Sign in with a PIN.");
+  try {
+    const response = await request(`${requireApiUrl()}/auth/refresh`, {
+      method: "POST",
+      body: JSON.stringify({ refreshToken: stored })
+    });
+    storeTokens(response.accessToken, response.refreshToken, response.expiresIn);
+  } catch (error) {
+    if (error instanceof ApiError && error.isPermanent) forgetTokens();
+    throw error;
+  }
+}
+async function authorized(path, body) {
+  const accessToken = await ensureAccessToken();
+  return request(`${requireApiUrl()}${path}`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(body)
+  });
+}
+async function ping() {
+  const base = apiUrl();
+  if (!base) return false;
+  try {
+    const controller = new AbortController();
+    const timer2 = setTimeout(() => controller.abort(), 4e3);
+    const response = await fetch(new URL("/health", base), { signal: controller.signal });
+    clearTimeout(timer2);
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+function requireApiUrl() {
+  const base = apiUrl();
+  if (!base) throw new Error("No server address is configured on this terminal");
+  return base.replace(/\/+$/, "");
+}
+async function request(url, init) {
+  const controller = new AbortController();
+  const timer2 = setTimeout(() => controller.abort(), 3e4);
+  let response;
+  try {
+    response = await fetch(url, {
+      ...init,
+      signal: controller.signal,
+      headers: { "content-type": "application/json", ...init.headers ?? {} }
+    });
+  } finally {
+    clearTimeout(timer2);
+  }
+  const text = await response.text();
+  const parsed = text ? JSON.parse(text) : {};
+  if (!response.ok || parsed.success === false) {
+    const error = parsed.error ?? {};
+    throw new ApiError(
+      response.status,
+      error.code ?? "UNKNOWN",
+      error.message ?? `Request failed with ${response.status}`
+    );
+  }
+  return parsed.data ?? parsed;
+}
+const PULL_PAGE_LIMIT = 500;
+let timer = null;
+let cycleInFlight = null;
+let getWindow = () => null;
+const status = {
+  online: false,
+  lastPullAt: null,
+  lastPushAt: null,
+  lastCheckpoint: null,
+  pendingPushCount: 0,
+  failedPushCount: 0,
+  syncing: false,
+  lastError: null
+};
+function emit(patch = {}) {
+  Object.assign(status, patch);
+  const counts = outboxCounts();
+  status.pendingPushCount = counts.pending;
+  status.failedPushCount = counts.failed;
+  getWindow()?.webContents.send("sync:status-changed", { ...status });
+  return { ...status };
+}
+function registerSyncHandlers(ipcMain, windowGetter) {
+  getWindow = windowGetter;
+  status.lastCheckpoint = getState("checkpoint");
+  ipcMain.handle("sync:status", () => emit());
+  ipcMain.handle("sync:now", () => runCycle());
+  const interval = Number(process.env.POS_SYNC_INTERVAL_MS ?? 3e4);
+  timer = setInterval(() => {
+    void runCycle().catch(() => {
+    });
+  }, interval);
+}
+function stopSyncEngine() {
+  if (timer) {
+    clearInterval(timer);
+    timer = null;
+  }
+}
+async function runCycle() {
+  if (cycleInFlight) return cycleInFlight;
+  cycleInFlight = (async () => {
+    emit({ syncing: true, lastError: null });
+    const reachable = await ping();
+    if (!reachable) {
+      return emit({ syncing: false, online: false });
+    }
+    if (!deviceId()) {
+      return emit({ syncing: false, online: true, lastError: "Terminal not yet activated with code" });
+    }
+    if (!isAuthenticated()) {
+      return emit({ syncing: false, online: true, lastError: "Signed out — enter a PIN" });
+    }
+    try {
+      await pushOutbox();
+      await pullChanges();
+      clearSettledDeltas();
+      return emit({ syncing: false, online: true, lastError: null });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Sync failed";
+      return emit({
+        syncing: false,
+        // An auth or validation failure means the server answered, so the
+        // terminal is online — flagging it offline would send a cashier to
+        // check a router that is working fine.
+        online: error instanceof ApiError,
+        lastError: message
+      });
+    }
+  })().finally(() => {
+    cycleInFlight = null;
+  });
+  return cycleInFlight;
+}
+async function pushOutbox() {
+  const items = pendingOutbox(200);
+  if (items.length === 0) return;
+  const response = await authorized("/sync/push", {
+    deviceId: deviceId(),
+    lastCheckpoint: getState("checkpoint"),
+    items
+  });
+  for (const result of response.results) settleOutboxItem(result);
+  emit({ lastPushAt: (/* @__PURE__ */ new Date()).toISOString() });
+}
+async function pullChanges() {
+  for (let page = 0; page < 200; page += 1) {
+    const response = await authorized("/sync/pull", {
+      deviceId: deviceId(),
+      since: getState("checkpoint"),
+      limit: PULL_PAGE_LIMIT
+    });
+    applyChanges(response.changes, response.checkpoint);
+    emit({ lastPullAt: (/* @__PURE__ */ new Date()).toISOString(), lastCheckpoint: response.checkpoint });
+    if (!response.hasMore) return;
+  }
+}
+function applyChanges(changes, checkpoint) {
+  const db2 = getDatabase();
+  db2.transaction(() => {
+    for (const change of changes) {
+      if (change.deleted) {
+        applyTombstone(change.entity, change.id);
+        continue;
+      }
+      if (!change.record) continue;
+      applyRecord(change.entity, change.id, change.record);
+    }
+    db2.prepare(
+      `INSERT INTO device_state (key, value) VALUES ('checkpoint', ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+    ).run(checkpoint);
+  })();
+}
+function applyTombstone(entity, id) {
+  const db2 = getDatabase();
+  const table = { product: "variants", customer: "customers", category: null, unit: null }[entity];
+  if (table) db2.prepare(`DELETE FROM ${table} WHERE id = ?`).run(id);
+  db2.prepare(
+    `INSERT INTO deleted_records (entity, id, deleted_at) VALUES (?, ?, datetime('now'))
+     ON CONFLICT(entity, id) DO NOTHING`
+  ).run(entity, id);
+}
+function applyRecord(entity, id, record) {
+  const db2 = getDatabase();
+  const text = (value) => value === null || value === void 0 ? null : String(value);
+  switch (entity) {
+    case "product":
+      db2.prepare(
+        `INSERT INTO variants
            (id, product_id, sku, barcode, product_name, variant_name, search_key,
             unit_abbr, category_name, tax_rate, min_stock, is_stock_tracked, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
@@ -489,19 +1561,59 @@
            variant_name = excluded.variant_name, search_key = excluded.search_key,
            unit_abbr = excluded.unit_abbr, category_name = excluded.category_name,
            tax_rate = excluded.tax_rate, min_stock = excluded.min_stock,
-           is_stock_tracked = excluded.is_stock_tracked, updated_at = datetime('now')`).run(t,r(n.productId),r(n.sku),r(n.barcode),r(n.productName),r(n.variantName),r(n.searchKey)??"",r(n.unitAbbr),r(n.categoryName),r(n.taxRate),r(n.minStock),n.isStockTracked===!1?0:1);return;case"product_price":a.prepare(`INSERT INTO variant_prices
+           is_stock_tracked = excluded.is_stock_tracked, updated_at = datetime('now')`
+      ).run(
+        id,
+        text(record.productId),
+        text(record.sku),
+        text(record.barcode),
+        text(record.productName),
+        text(record.variantName),
+        text(record.searchKey) ?? "",
+        text(record.unitAbbr),
+        text(record.categoryName),
+        text(record.taxRate),
+        text(record.minStock),
+        record.isStockTracked === false ? 0 : 1
+      );
+      return;
+    case "product_price":
+      db2.prepare(
+        `INSERT INTO variant_prices
            (id, variant_id, price_list_id, selling_price, min_selling_price, is_default, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
          ON CONFLICT(id) DO UPDATE SET
            selling_price = excluded.selling_price,
            min_selling_price = excluded.min_selling_price,
            is_default = excluded.is_default,
-           updated_at = datetime('now')`).run(t,r(n.variantId),r(n.priceListId),r(n.sellingPrice)??"0",r(n.minSellingPrice),n.isDefault?1:0);return;case"inventory":a.prepare(`INSERT INTO inventory (id, variant_id, quantity, reserved_qty, updated_at)
+           updated_at = datetime('now')`
+      ).run(
+        id,
+        text(record.variantId),
+        text(record.priceListId),
+        text(record.sellingPrice) ?? "0",
+        text(record.minSellingPrice),
+        record.isDefault ? 1 : 0
+      );
+      return;
+    case "inventory":
+      db2.prepare(
+        `INSERT INTO inventory (id, variant_id, quantity, reserved_qty, updated_at)
          VALUES (?, ?, ?, ?, datetime('now'))
          ON CONFLICT(variant_id) DO UPDATE SET
            quantity = excluded.quantity,
            reserved_qty = excluded.reserved_qty,
-           updated_at = datetime('now')`).run(t,r(n.variantId),r(n.quantity)??"0",r(n.reservedQuantity)??"0");return;case"customer":a.prepare(`INSERT INTO customers
+           updated_at = datetime('now')`
+      ).run(
+        id,
+        text(record.variantId),
+        text(record.quantity) ?? "0",
+        text(record.reservedQuantity) ?? "0"
+      );
+      return;
+    case "customer":
+      db2.prepare(
+        `INSERT INTO customers
            (id, name, company, phone, trn, price_list_id, credit_limit,
             credit_balance, credit_on_hold, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
@@ -509,4 +1621,184 @@
            name = excluded.name, company = excluded.company, phone = excluded.phone,
            trn = excluded.trn, price_list_id = excluded.price_list_id,
            credit_limit = excluded.credit_limit, credit_balance = excluded.credit_balance,
-           credit_on_hold = excluded.credit_on_hold, updated_at = datetime('now')`).run(t,r(n.name),r(n.company),r(n.phone),r(n.trn),r(n.priceListId),r(n.creditLimit)??"0",r(n.creditBalance)??"0",n.creditOnHold?1:0);return;default:return}}function m(){D().catch(()=>{})}function Ke(e){e.handle("catalog:search",(t,n,a)=>ue(n??"",a)),e.handle("catalog:by-barcode",(t,n)=>$(n??"")),e.handle("customers:search",(t,n)=>Te(n??"")),e.handle("customers:payment",(t,n)=>{const a=Ie(n);return m(),a}),e.handle("cash:current",()=>k()),e.handle("cash:open",(t,n)=>_e(String(n??"0"),T("branch_id"))),e.handle("cash:close",(t,n,a)=>{pe(String(n??"0"),a),m()}),e.handle("cash:movement",(t,n,a,r)=>{Ne(n,String(a??"0"),r??"")}),e.handle("carts:hold",(t,n)=>Oe(n)),e.handle("carts:list",()=>Re()),e.handle("carts:restore",(t,n)=>ve(n)),e.handle("carts:discard",(t,n)=>ye(n)),e.handle("sales:commit",(t,n)=>{const a=me(n);return m(),a}),e.handle("sales:recent",(t,n)=>Le(n)),e.handle("sales:find",(t,n)=>he(n??"")),e.handle("quotations:save",(t,n)=>{const a=Ae(n);return m(),a}),e.handle("quotations:list",()=>Se()),e.handle("auth:pin-login",async(t,n)=>{const a=await ke(String(n??""));return m(),a}),e.handle("auth:manager-override",async(t,n,a,r)=>{const o=await xe(String(n??""),String(a??""),r?String(r):void 0);return{managerName:o.approvedBy.name,grant:o.grant}}),e.handle("device:info",()=>({deviceId:T("device_id"),branchId:T("branch_id"),apiUrl:T("api_url"),hardwareId:H(),version:l.app.getVersion()})),e.handle("device:activate",(t,n,a)=>{const[r,o]=String(n??"").split(":");if(!r||!o)throw new Error("Activation code must be <terminal-id>:<branch-id>");return h("api_url",String(a??"").replace(/\/+$/,"")),h("device_id",r.trim()),h("branch_id",o.trim()),h("hardware_id",H()),m(),{deviceId:r.trim()}})}function H(){const e=Object.values(w.networkInterfaces()).flat().filter(t=>!!t).filter(t=>!t.internal&&t.mac&&t.mac!=="00:00:00:00:00:00").map(t=>t.mac).sort();return O.createHash("sha256").update([...e,w.hostname(),w.platform()].join("|")).digest("hex").slice(0,32)}const Y=b.dirname(z.fileURLToPath(typeof document>"u"?require("url").pathToFileURL(__filename).href:X&&X.tagName.toUpperCase()==="SCRIPT"&&X.src||new URL("main.js",document.baseURI).href));let d=null;function W(){d=new l.BrowserWindow({width:1440,height:900,minWidth:1024,minHeight:720,show:!1,backgroundColor:"#0b0d10",title:"DevsFleet POS",webPreferences:{preload:b.join(Y,"preload.js"),contextIsolation:!0,nodeIntegration:!1,sandbox:!1,webSecurity:!0,spellcheck:!1}}),d.once("ready-to-show",()=>d?.show());const e=process.env.VITE_DEV_SERVER_URL;e?(d.loadURL(e),d.webContents.openDevTools({mode:"detach"})):d.loadFile(b.join(Y,"../dist/index.html")),d.webContents.setWindowOpenHandler(()=>({action:"deny"})),d.webContents.on("will-navigate",(t,n)=>{n!==e&&t.preventDefault()}),d.on("closed",()=>{d=null})}l.app.requestSingleInstanceLock()?(l.app.on("second-instance",()=>{d&&(d.isMinimized()&&d.restore(),d.focus())}),l.app.whenReady().then(()=>{ae(),Ke(l.ipcMain),Me(l.ipcMain,()=>d),ie(l.ipcMain),W(),l.app.on("activate",()=>{l.BrowserWindow.getAllWindows().length===0&&W()})})):l.app.quit();l.app.on("window-all-closed",()=>{process.platform!=="darwin"&&l.app.quit()});l.app.on("before-quit",()=>{Ge(),re()});
+           credit_on_hold = excluded.credit_on_hold, updated_at = datetime('now')`
+      ).run(
+        id,
+        text(record.name),
+        text(record.company),
+        text(record.phone),
+        text(record.trn),
+        text(record.priceListId),
+        text(record.creditLimit) ?? "0",
+        text(record.creditBalance) ?? "0",
+        record.creditOnHold ? 1 : 0
+      );
+      return;
+    default:
+      return;
+  }
+}
+function syncNow() {
+  void runCycle().catch(() => void 0);
+}
+function registerDataHandlers(ipcMain) {
+  ipcMain.handle(
+    "catalog:search",
+    (_event, query, limit) => searchProducts(query ?? "", limit)
+  );
+  ipcMain.handle(
+    "catalog:by-barcode",
+    (_event, barcode) => findByBarcode(barcode ?? "")
+  );
+  ipcMain.handle(
+    "customers:search",
+    (_event, query) => searchCustomers(query ?? "")
+  );
+  ipcMain.handle("customers:payment", (_event, input) => {
+    const payment = recordAccountPayment(input);
+    syncNow();
+    return payment;
+  });
+  ipcMain.handle("cash:current", () => getOpenCashSession());
+  ipcMain.handle(
+    "cash:open",
+    (_event, openingAmount) => openCashSession(String(openingAmount ?? "0"), getState("branch_id"))
+  );
+  ipcMain.handle("cash:close", (_event, countedAmount, notes) => {
+    closeCashSession(String(countedAmount ?? "0"), notes);
+    syncNow();
+  });
+  ipcMain.handle(
+    "cash:movement",
+    (_event, type, amount, reason) => {
+      recordCashMovement(type, String(amount ?? "0"), reason ?? "");
+    }
+  );
+  ipcMain.handle(
+    "carts:hold",
+    (_event, cart) => holdCart(cart)
+  );
+  ipcMain.handle("carts:list", () => listHeldCarts());
+  ipcMain.handle("carts:restore", (_event, id) => restoreHeldCart(id));
+  ipcMain.handle("carts:discard", (_event, id) => discardHeldCart(id));
+  ipcMain.handle("sales:commit", (_event, draft) => {
+    const receipt = commitSale(draft);
+    syncNow();
+    return receipt;
+  });
+  ipcMain.handle("sales:recent", (_event, limit) => recentSales(limit));
+  ipcMain.handle("sales:find", (_event, reference) => findSale(reference ?? ""));
+  ipcMain.handle("quotations:save", (_event, draft) => {
+    const receipt = saveQuotation(draft);
+    syncNow();
+    return receipt;
+  });
+  ipcMain.handle("quotations:list", () => listQuotations());
+  ipcMain.handle("auth:pin-login", async (_event, pin) => {
+    const user = await loginWithPin(String(pin ?? ""));
+    syncNow();
+    return user;
+  });
+  ipcMain.handle(
+    "auth:manager-override",
+    async (_event, pin, requiredPermission, reason) => {
+      const result = await verifyOverride(
+        String(pin ?? ""),
+        String(requiredPermission ?? ""),
+        reason ? String(reason) : void 0
+      );
+      return { managerName: result.approvedBy.name, grant: result.grant };
+    }
+  );
+  ipcMain.handle("device:info", () => ({
+    deviceId: getState("device_id"),
+    branchId: getState("branch_id"),
+    apiUrl: getState("api_url"),
+    hardwareId: hardwareId(),
+    version: electron.app.getVersion()
+  }));
+  ipcMain.handle(
+    "device:activate",
+    (_event, activationCode, apiUrl2) => {
+      const [device, branch] = String(activationCode ?? "").split(":");
+      if (!device || !branch) {
+        throw new Error("Activation code must be <terminal-id>:<branch-id>");
+      }
+      setState("api_url", String(apiUrl2 ?? "").replace(/\/+$/, ""));
+      setState("device_id", device.trim());
+      setState("branch_id", branch.trim());
+      setState("hardware_id", hardwareId());
+      syncNow();
+      return { deviceId: device.trim() };
+    }
+  );
+}
+function hardwareId() {
+  const macs = Object.values(node_os.networkInterfaces()).flat().filter((iface) => Boolean(iface)).filter((iface) => !iface.internal && iface.mac && iface.mac !== "00:00:00:00:00:00").map((iface) => iface.mac).sort();
+  return node_crypto.createHash("sha256").update([...macs, node_os.hostname(), node_os.platform()].join("|")).digest("hex").slice(0, 32);
+}
+const __dirname$1 = node_path.dirname(node_url.fileURLToPath(typeof document === "undefined" ? require("url").pathToFileURL(__filename).href : _documentCurrentScript && _documentCurrentScript.tagName.toUpperCase() === "SCRIPT" && _documentCurrentScript.src || new URL("main.js", document.baseURI).href));
+let mainWindow = null;
+function createWindow() {
+  mainWindow = new electron.BrowserWindow({
+    width: 1440,
+    height: 900,
+    minWidth: 1024,
+    minHeight: 720,
+    show: false,
+    backgroundColor: "#0b0d10",
+    title: "DevsFleet POS",
+    webPreferences: {
+      preload: node_path.join(__dirname$1, "preload.js"),
+      // Non-negotiable on a terminal that handles money.
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+      // preload needs `require` for the IPC bridge
+      webSecurity: true,
+      spellcheck: false
+    }
+  });
+  mainWindow.once("ready-to-show", () => mainWindow?.show());
+  const devServerUrl = process.env.VITE_DEV_SERVER_URL;
+  if (devServerUrl) {
+    void mainWindow.loadURL(devServerUrl);
+    mainWindow.webContents.openDevTools({ mode: "detach" });
+  } else {
+    void mainWindow.loadFile(node_path.join(__dirname$1, "../dist/index.html"));
+  }
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  mainWindow.webContents.on("will-navigate", (event, url) => {
+    if (url !== devServerUrl) event.preventDefault();
+  });
+  mainWindow.on("closed", () => {
+    mainWindow = null;
+  });
+}
+if (!electron.app.requestSingleInstanceLock()) {
+  electron.app.quit();
+} else {
+  electron.app.on("second-instance", () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+  void electron.app.whenReady().then(() => {
+    openDatabase();
+    registerDataHandlers(electron.ipcMain);
+    registerSyncHandlers(electron.ipcMain, () => mainWindow);
+    registerHardwareHandlers(electron.ipcMain);
+    createWindow();
+    electron.app.on("activate", () => {
+      if (electron.BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+  });
+}
+electron.app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") electron.app.quit();
+});
+electron.app.on("before-quit", () => {
+  stopSyncEngine();
+  closeDatabase();
+});

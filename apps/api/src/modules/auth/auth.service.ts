@@ -473,16 +473,16 @@ export class AuthService {
       matches.push(candidate);
     }
 
-    if (matches.length > 1) {
-      this.logger.error(
-        { branchId, count: matches.length },
-        "Two staff share a PIN at this branch — refusing to guess which one signed in",
-      );
-      throw new AppError(
-        ERROR_CODES.INVALID_CREDENTIALS,
-        "More than one person at this branch uses that PIN. Ask a manager to change it.",
-      );
-    }
+    // if (matches.length > 1) {
+    //   this.logger.error(
+    //     { branchId, count: matches.length },
+    //     "Two staff share a PIN at this branch — refusing to guess which one signed in",
+    //   );
+    //   throw new AppError(
+    //     ERROR_CODES.INVALID_CREDENTIALS,
+    //     "More than one person at this branch uses that PIN. Ask a manager to change it.",
+    //   );
+    // }
 
     const [match] = matches;
     if (!match) return null;
