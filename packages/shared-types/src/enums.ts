@@ -236,6 +236,8 @@ export const SYNC_ENTITIES = asConst([
   "customer",
   "inventory",
   "sale",
+  /** A return, pushed as its own outbox item — see D15 in docs/DECISIONS.md. */
+  "return",
   "payment",
   "cash_session",
   "cash_movement",

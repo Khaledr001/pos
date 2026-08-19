@@ -7,6 +7,8 @@ import type {
   PosProduct,
   PosQuotationDraft,
   PosQuotationReceipt,
+  PosReturnDraft,
+  PosReturnReceipt,
   PosSaleDraft,
   PosSaleReceipt,
 } from "./pos-data.js";
@@ -89,6 +91,7 @@ export interface DevsfleetBridge {
     commit(draft: PosSaleDraft): Promise<PosSaleReceipt>;
     recent(limit?: number): Promise<PosSaleReceipt[]>;
     find(reference: string): Promise<PosSaleReceipt | null>;
+    commitReturn(draft: PosReturnDraft): Promise<PosReturnReceipt>;
   };
   quotations: {
     save(draft: PosQuotationDraft): Promise<PosQuotationReceipt>;

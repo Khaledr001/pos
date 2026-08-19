@@ -15,7 +15,7 @@ import { RequestContext } from "../../common/context/request-context.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import { CashMovementSchema, OpenSessionSchema } from "../cash-register/dto.js";
 import { CashRegisterService } from "../cash-register/cash-register.service.js";
-import { CreateSaleSchema } from "../sales/dto.js";
+import { CreateSaleSchema, PushReturnSchema } from "../sales/dto.js";
 import { SalesService } from "../sales/sales.service.js";
 import { CustomersService } from "../customers/customers.service.js";
 import { QuotationsService } from "../quotations/quotations.service.js";
@@ -73,6 +73,7 @@ const PUSH_PERMISSIONS: Partial<
   Record<SyncPushRequest["items"][number]["entity"], Permission[]>
 > = {
   sale: ["sale:create"],
+  return: ["sale:return"],
   cash_session: ["cash:open"],
   cash_movement: ["cash:movement"],
   customer: ["customer:write"],
@@ -580,6 +581,97 @@ export class SyncService {
           ...(detached
             ? { message: "Uploaded, but the drawer session it belonged to was not found" }
             : {}),
+        };
+      }
+
+      case "return": {
+        const known = await this.db.run(async (tx) =>
+          tx.query.sales.findFirst({
+            where: (t, { eq: e }) => e(t.localId, item.localId),
+            columns: { id: true, saleNumber: true },
+          }),
+        );
+        if (known) {
+          return {
+            localId: item.localId,
+            outcome: "duplicate",
+            serverId: known.id,
+            documentNumber: known.saleNumber,
+          };
+        }
+
+        const raw = this.parsePayload(PushReturnSchema, "return", payload);
+
+        /**
+         * The terminal names the original sale by whatever it knows — its own
+         * `local_id` if this till rang it up and it has not synced yet, the
+         * server's id once it has. Items apply in sequence order, so if both
+         * travelled in the same batch the sale already exists by now.
+         */
+        const original = await this.db.run(async (tx) =>
+          tx.query.sales.findFirst({
+            where: (t, { eq: e, or: o }) => o(e(t.id, raw.originalSaleId), e(t.localId, raw.originalSaleId)),
+            columns: { id: true },
+          }),
+        );
+        if (!original) {
+          throw new AppError(
+            ERROR_CODES.NOT_FOUND,
+            `Cannot find the original sale for this return (${raw.originalSaleId})`,
+          );
+        }
+
+        /**
+         * The till only knows a line by the position it held in the ORIGINAL
+         * sale — it never learned a `sale_items.id`, offline or on. `sortOrder`
+         * is written from that same array's index at creation time (see
+         * `create()`), so matching on it recovers the real id; `variantId` is
+         * checked alongside as a sanity guard against a corrupt or stale push.
+         */
+        const originalItems = await this.db.run(async (tx) =>
+          tx
+            .select({
+              id: schema.saleItems.id,
+              variantId: schema.saleItems.variantId,
+              sortOrder: schema.saleItems.sortOrder,
+            })
+            .from(schema.saleItems)
+            .where(eq(schema.saleItems.saleId, original.id)),
+        );
+        const bySortOrder = new Map(originalItems.map((row) => [row.sortOrder, row]));
+
+        const lines = raw.lines.map((line) => {
+          const match = bySortOrder.get(line.lineIndex);
+          if (!match || match.variantId !== line.variantId) {
+            throw new AppError(
+              ERROR_CODES.NOT_FOUND,
+              `Line ${line.lineIndex} does not match this sale any more`,
+            );
+          }
+          return {
+            saleItemId: match.id,
+            quantity: line.quantity,
+            disposition: line.disposition,
+          };
+        });
+
+        const session = await this.resolveCashSession(raw.cashSessionId);
+
+        const returnSale = (await this.sales.createReturn({
+          originalSaleId: original.id,
+          lines,
+          refunds: raw.refunds,
+          ...(raw.reason ? { reason: raw.reason } : {}),
+          ...(session ? { cashSessionId: session } : {}),
+          localId: item.localId,
+          occurredAt: item.occurredAt,
+        })) as { id: string; saleNumber: string };
+
+        return {
+          localId: item.localId,
+          outcome: "applied",
+          serverId: returnSale.id,
+          documentNumber: returnSale.saleNumber,
         };
       }
 

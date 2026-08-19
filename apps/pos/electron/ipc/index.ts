@@ -63,6 +63,11 @@ export function registerDataHandlers(ipcMain: IpcMain): void {
   });
   ipcMain.handle("sales:recent", (_event, limit?: number) => repo.recentSales(limit));
   ipcMain.handle("sales:find", (_event, reference: string) => repo.findSale(reference ?? ""));
+  ipcMain.handle("sales:commit-return", (_event, draft: repo.ReturnDraftInput) => {
+    const receipt = repo.commitReturn(draft);
+    syncNow();
+    return receipt;
+  });
 
   ipcMain.handle("quotations:save", (_event, draft: repo.SaleDraftInput) => {
     const receipt = repo.saveQuotation(draft);

@@ -98,6 +98,43 @@ export interface PosSaleReceipt extends PosSaleDraft {
   synced: boolean;
 }
 
+export interface PosReturnLine {
+  /**
+   * Position of this line on the ORIGINAL sale — `sale.lines[originalLineIndex]`.
+   * Neither end assigns a line its own id until the server does on first
+   * sync, so this is the only stable way to name one offline.
+   */
+  originalLineIndex: number;
+  variantId: string;
+  productName: string;
+  productSku: string;
+  quantity: string;
+  unitPrice: string;
+  disposition: "restock" | "scrap";
+}
+
+export interface PosReturnDraft {
+  localId: string;
+  /** The original sale's `localId` — only a same-till return is supported. */
+  originalSaleLocalId: string;
+  customerId: string | null;
+  cashSessionId: string | null;
+  lines: PosReturnLine[];
+  subtotal: string;
+  taxAmount: string;
+  discountAmount: string;
+  total: string;
+  refunds: Array<{ method: PaymentMethod; amount: string; reference?: string }>;
+  reason?: string;
+  occurredAt: string;
+}
+
+export interface PosReturnReceipt extends PosReturnDraft {
+  /** Assigned by the server on sync; null while the return is still local. */
+  returnNumber: string | null;
+  synced: boolean;
+}
+
 /**
  * A quotation is not a sale draft with fields ignored — it takes no payment
  * and is not tied to a drawer session, so it gets its own type rather than
@@ -241,6 +278,8 @@ export interface PosDataAdapter {
   commitSale(draft: PosSaleDraft): Promise<PosSaleReceipt>;
   recentSales(limit?: number): Promise<PosSaleReceipt[]>;
   findSale(saleNumberOrClientId: string): Promise<PosSaleReceipt | null>;
+  /** Same fire-and-forget posture as `commitSale` — the refund is already real. */
+  commitReturn(draft: PosReturnDraft): Promise<PosReturnReceipt>;
 
   saveQuotation(draft: PosQuotationDraft): Promise<PosQuotationReceipt>;
   listQuotations(): Promise<PosQuotationReceipt[]>;
@@ -330,6 +369,7 @@ const electronAdapter: PosDataAdapter = {
   commitSale: (draft) => window.devsfleet.sales.commit(draft),
   recentSales: (limit) => window.devsfleet.sales.recent(limit),
   findSale: (ref) => window.devsfleet.sales.find(ref),
+  commitReturn: (draft) => window.devsfleet.sales.commitReturn(draft),
   saveQuotation: (draft) => window.devsfleet.quotations.save(draft),
   listQuotations: () => window.devsfleet.quotations.list(),
 };
@@ -686,6 +726,11 @@ const browserAdapter: PosDataAdapter = {
       browserState.sales.find((s) => s.saleNumber === ref || s.localId === ref) ?? null
     );
   },
+  // No live backend in this mode — matches saveQuotation below. Nothing reads
+  // a return back in dev mode, so there is nowhere to store it.
+  async commitReturn(draft) {
+    return { ...draft, returnNumber: null, synced: false };
+  },
   async saveQuotation(draft) {
     return { ...draft, quotationNumber: null, synced: false };
   },
@@ -810,6 +855,8 @@ interface ApiSale {
   customerId: string | null;
   cashSessionId: string | null;
   lines: Array<{
+    /** Present on the real API response; absent nowhere it is actually used. */
+    id: string;
     variantId: string;
     productName: string;
     productSku: string;
@@ -1164,6 +1211,35 @@ const apiAdapter: PosDataAdapter = {
     } catch {
       return null;
     }
+  },
+  /**
+   * This adapter talks to the API directly, so — unlike the offline mirror —
+   * it can just fetch the original sale and read each line's real id, rather
+   * than resolving `originalLineIndex` back to one server-side.
+   */
+  async commitReturn(draft) {
+    const original = await apiClient.get<ApiSale>(`/sales/${draft.originalSaleLocalId}`);
+    const lines = draft.lines.map((line) => {
+      const match = original.lines[line.originalLineIndex];
+      if (!match) {
+        throw new Error(`Line ${line.originalLineIndex} no longer exists on this sale`);
+      }
+      return { saleItemId: match.id, quantity: Number(line.quantity), disposition: line.disposition };
+    });
+
+    const created = await apiClient.post<{ saleNumber: string | null }>("/sales/returns", {
+      originalSaleId: original.id,
+      lines,
+      refunds: draft.refunds.map((r) => ({
+        method: r.method,
+        amount: Number(r.amount),
+        ...(r.reference ? { reference: r.reference } : {}),
+      })),
+      ...(draft.reason ? { reason: draft.reason } : {}),
+      ...(draft.cashSessionId ? { cashSessionId: draft.cashSessionId } : {}),
+    });
+
+    return { ...draft, returnNumber: created.saleNumber, synced: true };
   },
   async saveQuotation(draft) {
     return { ...draft, quotationNumber: null, synced: false };

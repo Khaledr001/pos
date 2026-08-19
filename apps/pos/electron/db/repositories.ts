@@ -70,6 +70,33 @@ export interface SaleDraftInput {
   overrideGrants?: string[];
 }
 
+interface ReturnLineInput {
+  /** Position of this line on the ORIGINAL sale — how the server finds it back. */
+  originalLineIndex: number;
+  variantId: string;
+  productName: string;
+  productSku: string;
+  quantity: string;
+  unitPrice: string;
+  disposition: "restock" | "scrap";
+}
+
+export interface ReturnDraftInput {
+  localId: string;
+  /** The original sale's OWN local_id — only a same-till return is supported. */
+  originalSaleLocalId: string;
+  customerId: string | null;
+  cashSessionId: string | null;
+  lines: ReturnLineInput[];
+  subtotal: string;
+  taxAmount: string;
+  discountAmount: string;
+  total: string;
+  refunds: Array<{ method: string; amount: string; reference?: string }>;
+  reason?: string;
+  occurredAt: string;
+}
+
 // -----------------------------------------------------------------------------
 // Catalogue
 // -----------------------------------------------------------------------------
@@ -501,6 +528,97 @@ export function commitSale(draft: SaleDraftInput): Record<string, unknown> {
   return { ...draft, saleNumber: null, synced: false };
 }
 
+/**
+ * Record a return against a sale this terminal rang up, and enqueue it for
+ * push. Restocked lines credit `inventory.local_delta` back — the mirror
+ * image of `commitSale`'s decrement — so a unit handed back offline is
+ * sellable again at this till before the next sync, not just after it.
+ *
+ * Does not re-check the returned quantity against what the original sale
+ * still has outstanding: this mirror does not track prior offline returns of
+ * the same line, only what has synced. The server is the authority here and
+ * refuses an over-return on push (`RETURN_QUANTITY_EXCEEDS_REMAINING`), which
+ * surfaces through the same "needs attention" queue a rejected sale does.
+ */
+export function commitReturn(draft: ReturnDraftInput): Record<string, unknown> {
+  const db = getDatabase();
+
+  db.transaction(() => {
+    db.prepare(
+      `INSERT INTO local_returns
+         (local_id, original_sale_local_id, customer_id, cash_session_id,
+          subtotal, tax_amount, discount_amount, total, reason, occurred_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      draft.localId,
+      draft.originalSaleLocalId,
+      draft.customerId,
+      draft.cashSessionId,
+      draft.subtotal,
+      draft.taxAmount,
+      draft.discountAmount,
+      draft.total,
+      draft.reason ?? null,
+      draft.occurredAt,
+    );
+
+    const insertItem = db.prepare(
+      `INSERT INTO local_return_items
+         (return_local_id, original_line_index, variant_id, product_name,
+          product_sku, quantity, unit_price, disposition, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+
+    const restockVariant = db.prepare(
+      `UPDATE inventory
+       SET local_delta = CAST(CAST(local_delta AS REAL) + ? AS TEXT)
+       WHERE variant_id = ?`,
+    );
+
+    draft.lines.forEach((line, index) => {
+      insertItem.run(
+        draft.localId,
+        line.originalLineIndex,
+        line.variantId,
+        line.productName,
+        line.productSku,
+        line.quantity,
+        line.unitPrice,
+        line.disposition,
+        index,
+      );
+      if (line.disposition === "restock") {
+        restockVariant.run(Number(line.quantity), line.variantId);
+      }
+    });
+
+    enqueue(db, {
+      localId: draft.localId,
+      entity: "return",
+      occurredAt: draft.occurredAt,
+      payload: {
+        originalSaleId: draft.originalSaleLocalId,
+        customerId: draft.customerId,
+        cashSessionId: draft.cashSessionId,
+        lines: draft.lines.map((line) => ({
+          lineIndex: line.originalLineIndex,
+          variantId: line.variantId,
+          quantity: Number(line.quantity),
+          disposition: line.disposition,
+        })),
+        refunds: draft.refunds.map((refund) => ({
+          method: refund.method,
+          amount: Number(refund.amount),
+          ...(refund.reference ? { reference: refund.reference } : {}),
+        })),
+        ...(draft.reason ? { reason: draft.reason } : {}),
+      },
+    });
+  })();
+
+  return { ...draft, returnNumber: null, synced: false };
+}
+
 export function recentSales(limit = 20): unknown[] {
   const db = getDatabase();
   const sales = db
@@ -921,6 +1039,11 @@ export function settleOutboxItem(result: {
           `UPDATE local_quotations SET server_id = ?, quotation_number = ?, synced_at = datetime('now')
            WHERE local_id = ?`,
         ).run(result.serverId ?? null, result.documentNumber ?? null, result.localId);
+      } else if (result.entity === "return") {
+        db.prepare(
+          `UPDATE local_returns SET server_id = ?, return_number = ?, synced_at = datetime('now')
+           WHERE local_id = ?`,
+        ).run(result.serverId ?? null, result.documentNumber ?? null, result.localId);
       } else if (result.entity === "customer_payment") {
         db.prepare(
           `UPDATE local_customer_payments SET synced_at = datetime('now') WHERE local_id = ?`,
@@ -1038,11 +1161,12 @@ export function acknowledgeWarning(localId: string): void {
 }
 
 /**
- * Drop the local stock adjustments for sales the server has confirmed.
+ * Drop the local stock adjustments for sales AND returns the server has
+ * confirmed.
  *
  * Run after a pull, never before: the pulled quantity already accounts for
- * those sales, so keeping the delta would double-count them and make the
- * terminal think it has less stock than it does.
+ * both, so keeping the delta would double-count them and make the terminal
+ * think it has more or less stock than it does.
  */
 export function clearSettledDeltas(): void {
   const db = getDatabase();
@@ -1052,6 +1176,10 @@ export function clearSettledDeltas(): void {
        SELECT i.variant_id FROM local_sale_items i
        JOIN local_sales s ON s.local_id = i.sale_local_id
        WHERE s.synced_at IS NOT NULL
+       UNION
+       SELECT i.variant_id FROM local_return_items i
+       JOIN local_returns r ON r.local_id = i.return_local_id
+       WHERE r.synced_at IS NOT NULL
      )`,
   ).run();
 }

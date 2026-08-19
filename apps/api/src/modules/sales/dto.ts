@@ -62,7 +62,7 @@ export const CreateSaleSchema = z.object({
 });
 export type CreateSaleDto = z.infer<typeof CreateSaleSchema>;
 
-const RefundSchema = z.object({
+export const RefundSchema = z.object({
   method: z.enum(PAYMENT_METHODS),
   amount: z.coerce.number().positive(),
   reference: z.string().trim().max(100).optional(),
@@ -104,6 +104,38 @@ export const VoidSaleSchema = z.object({
   reason: z.string().trim().min(1, "A void needs a reason").max(500),
 });
 export type VoidSaleDto = z.infer<typeof VoidSaleSchema>;
+
+/**
+ * A return as a TERMINAL can describe one: the till has no `sale_items.id`
+ * for anything it rang up itself, only the position a line held in the
+ * original sale's own array. `sync.service.ts` resolves `lineIndex` back to a
+ * real `saleItemId` (matching `sortOrder`, sanity-checked against
+ * `variantId`) before calling the same `createReturn` a direct API caller
+ * would, so the two paths converge on one validated shape.
+ */
+const PushReturnLineSchema = z.object({
+  lineIndex: z.number().int().min(0),
+  variantId: z.string().uuid(),
+  quantity: z.coerce.number().positive(),
+  disposition: z.enum(["restock", "scrap"]),
+});
+
+export const PushReturnSchema = z.object({
+  /**
+   * A real UUID either way — the server's id, or the terminal's own
+   * `localId`, itself minted with `crypto.randomUUID()`. Enforced here so an
+   * unresolvable reference fails validation (a permanent, terminal-visible
+   * rejection) rather than reaching a `uuid`-typed column comparison and
+   * crashing there — which `push()` cannot tell apart from a transient
+   * infrastructure fault, and would retry forever.
+   */
+  originalSaleId: z.string().uuid(),
+  lines: z.array(PushReturnLineSchema).min(1, "A return needs at least one line"),
+  refunds: z.array(RefundSchema).default([]),
+  reason: z.string().trim().max(500).optional(),
+  cashSessionId: z.string().uuid().optional(),
+});
+export type PushReturnDto = z.infer<typeof PushReturnSchema>;
 
 export const ListSalesSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),

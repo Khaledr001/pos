@@ -109,6 +109,9 @@ const api = {
       ipcRenderer.invoke("sales:recent", limit),
     find: (reference: string): Promise<unknown> =>
       ipcRenderer.invoke("sales:find", reference),
+    /** Same fire-and-forget posture as `commit` — the refund is already real. */
+    commitReturn: (draft: unknown): Promise<unknown> =>
+      ipcRenderer.invoke("sales:commit-return", draft),
   },
 
   quotations: {

@@ -768,6 +768,56 @@ const MIGRATIONS: Array<
       );
     `,
   },
+  {
+    version: 10,
+    sql: `
+      -- A return recorded offline, against a sale THIS terminal rang up.
+      --
+      -- Only same-till originals are supported: \`sales:find\` has no path to a
+      -- sale from another terminal until both have synced (see Returns.tsx), so
+      -- \`original_sale_local_id\` always resolves against this till's own
+      -- \`local_sales\`. Stored positive, unlike the server's own linked-negative-
+      -- sale row (D15) — this mirror is a memory of "a return happened", not a
+      -- ledger, so there is no sign convention to preserve.
+      CREATE TABLE IF NOT EXISTS local_returns (
+        local_id               TEXT PRIMARY KEY,
+        server_id              TEXT,
+        return_number          TEXT,
+        original_sale_local_id TEXT NOT NULL REFERENCES local_sales(local_id),
+        customer_id            TEXT,
+        cash_session_id        TEXT,
+        subtotal               TEXT NOT NULL,
+        tax_amount             TEXT NOT NULL,
+        discount_amount        TEXT NOT NULL,
+        total                  TEXT NOT NULL,
+        reason                 TEXT,
+        occurred_at            TEXT NOT NULL,
+        synced_at              TEXT
+      );
+
+      -- \`original_line_index\` is the ORIGINAL sale's line position
+      -- (\`local_sale_items.sort_order\`) — the only stable way to name one of
+      -- its lines, since neither end assigns a line its own id until the
+      -- server does on first sync. The server resolves it back to a real
+      -- \`sale_items.id\` by matching \`sort_order\`, sanity-checked against
+      -- \`variant_id\`. \`sort_order\` here is this RETURN's own display order,
+      -- and can repeat an \`original_line_index\` — the drill kit returned
+      -- earlier in this session split one original line into a restocked row
+      -- and a scrapped row.
+      CREATE TABLE IF NOT EXISTS local_return_items (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        return_local_id     TEXT NOT NULL REFERENCES local_returns(local_id) ON DELETE CASCADE,
+        original_line_index INTEGER NOT NULL,
+        variant_id          TEXT NOT NULL,
+        product_name        TEXT NOT NULL,
+        product_sku         TEXT NOT NULL,
+        quantity            TEXT NOT NULL,
+        unit_price          TEXT NOT NULL,
+        disposition         TEXT NOT NULL,
+        sort_order          INTEGER NOT NULL DEFAULT 0
+      );
+    `,
+  },
 ];
 
 export function migrate(database: Database.Database): void {
