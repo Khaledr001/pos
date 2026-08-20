@@ -8,7 +8,9 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
+  Res,
 } from "@nestjs/common";
+import type { Response } from "express";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Audited, RequirePermissions } from "../../common/decorators/index.js";
 import { zodPipe } from "../../common/pipes/zod-validation.pipe.js";
@@ -33,6 +35,31 @@ export class QuotationsController {
   @RequirePermissions("quotation:read")
   list(@Query(zodPipe(ListQuotationsSchema)) query: ListQuotationsDto) {
     return this.quotations.list(query);
+  }
+
+  /**
+   * Declared BEFORE `:id` — Express matches in order, so a literal segment
+   * registered after a parameterised sibling is never reached.
+   *
+   * `quotation:read`, not `:write`: handing a customer a copy of the quote
+   * they were already shown is reading it, not changing it. The POST below
+   * stays on `:write` because it mutates the record.
+   */
+  @Get(":id/pdf")
+  @RequirePermissions("quotation:read")
+  @ApiOperation({ summary: "Download this quotation as a PDF" })
+  async downloadPdf(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { filename, body } = await this.quotations.renderPdf(id);
+
+    // `@Res()` because the global TransformInterceptor wraps every returned
+    // value in the JSON envelope, and a PDF wrapped in JSON is not a PDF.
+    res.setHeader("content-type", "application/pdf");
+    res.setHeader("content-disposition", `attachment; filename="${filename}"`);
+    res.setHeader("content-length", String(body.length));
+    res.end(body);
   }
 
   @Get(":id")

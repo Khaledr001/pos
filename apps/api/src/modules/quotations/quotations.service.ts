@@ -371,6 +371,64 @@ export class QuotationsService {
    * every call rather than served from cache, since `pdfUrl` only marks that
    * one has ever existed, not that the quotation has not changed since.
    */
+  /**
+   * The quotation as PDF bytes, without storing anything.
+   *
+   * Split out from `generatePdf` so the same renderer serves two transports:
+   * this one for "download it now", and the upload below for attaching a
+   * durable copy to the record. A download that required object storage
+   * would fail in any deploy without MinIO/S3 configured — and failing to
+   * hand a customer their quote is a worse outcome than not having archived
+   * a copy of it.
+   */
+  async renderPdf(id: string): Promise<{ filename: string; body: Buffer }> {
+    const quotation = (await this.findById(id)) as {
+      quotationNumber: string;
+      currency: string;
+      createdAt: Date;
+      validUntil: string | null;
+      notes: string | null;
+      subtotal: string;
+      discountAmount: string;
+      taxAmount: string;
+      total: string;
+      customer: { name: string; company: string | null; phone: string | null } | null;
+      items: Array<{
+        productName: string;
+        variantName: string;
+        productSku: string;
+        quantity: string;
+        unitPrice: string;
+        discountPercent: string;
+        taxPercent: string;
+        total: string;
+      }>;
+    };
+
+    const tenant = await this.db.run((tx) =>
+      tx.query.tenants.findFirst({ columns: { name: true } }),
+    );
+
+    const body = await renderQuotationPdf({
+      tenantName: tenant?.name ?? "",
+      quotationNumber: quotation.quotationNumber,
+      currency: quotation.currency,
+      createdAt: quotation.createdAt,
+      validUntil: quotation.validUntil,
+      customer: quotation.customer,
+      items: quotation.items,
+      subtotal: quotation.subtotal,
+      discountAmount: quotation.discountAmount,
+      taxAmount: quotation.taxAmount,
+      total: quotation.total,
+      notes: quotation.notes,
+    });
+
+    // The quote number, not the uuid — this lands in somebody's downloads
+    // folder and has to be findable there later.
+    return { filename: `${quotation.quotationNumber}.pdf`, body };
+  }
+
   async generatePdf(id: string): Promise<{ pdfUrl: string }> {
     const tenantId = RequestContext.requireTenantId();
 

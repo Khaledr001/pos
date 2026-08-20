@@ -81,6 +81,16 @@ function money(value: string): string {
   return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+/**
+ * Keeps precision but drops meaningless trailing zeros: "2" rather than the
+ * stored "2.0000", while "1.5" metres of cable stays "1.5". This catalogue
+ * genuinely sells fractional units, so rounding here would lie.
+ */
+function quantity(value: string): string {
+  const n = Number(value || "0");
+  return Number.isFinite(n) ? String(n) : value;
+}
+
 function formatDateTime(date: Date): string {
   // ISO-ish and unambiguous. A tax document read in another country should not
   // depend on whether the reader assumes day-first or month-first.
@@ -169,7 +179,7 @@ export function renderInvoicePdf(input: InvoicePdfInput): Promise<Buffer> {
       const height = row(
         [
           `${label} (${line.productSku})`,
-          line.quantity,
+          quantity(line.quantity),
           money(line.unitPrice),
           `${Number(line.discountPercent || "0")}%`,
           `${Number(line.taxPercent || "0")}%`,

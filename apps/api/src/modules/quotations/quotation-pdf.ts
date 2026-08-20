@@ -29,6 +29,27 @@ export interface QuotationPdfInput {
 const MONEY_COLS = ["Qty", "Unit price", "Disc %", "Tax %", "Total"] as const;
 
 /**
+ * Money columns arrive as DECIMAL(12,4) strings, so interpolating them raw
+ * printed "AED 33.0000" on a document a customer reads. Formatted to the two
+ * places money is quoted in — the stored precision exists for arithmetic, not
+ * for display.
+ */
+function money(value: string): string {
+  const n = Number(value || "0");
+  return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/**
+ * Quantity keeps its precision but drops meaningless trailing zeros: "12"
+ * rather than "12.0000", while "1.5" metres of cable stays "1.5". This
+ * catalogue genuinely sells fractional units, so rounding here would lie.
+ */
+function quantity(value: string): string {
+  const n = Number(value || "0");
+  return Number.isFinite(n) ? String(n) : value;
+}
+
+/**
  * Renders a quotation as a printable PDF: a fixed, coded layout rather than
  * an HTML template — no headless browser in the deploy image for a document
  * this simple. Every figure comes straight from the snapshotted quotation
@@ -100,11 +121,11 @@ export function renderQuotationPdf(input: QuotationPdfInput): Promise<Buffer> {
       const height = row(
         [
           `${label} (${item.productSku})`,
-          item.quantity,
-          item.unitPrice,
-          `${item.discountPercent}%`,
-          `${item.taxPercent}%`,
-          item.total,
+          quantity(item.quantity),
+          money(item.unitPrice),
+          `${Number(item.discountPercent || "0")}%`,
+          `${Number(item.taxPercent || "0")}%`,
+          money(item.total),
         ],
         y,
       );
@@ -122,11 +143,14 @@ export function renderQuotationPdf(input: QuotationPdfInput): Promise<Buffer> {
       ["Tax", input.taxAmount],
     ] as const) {
       doc.font("Helvetica").fontSize(9).fillColor("#555").text(label, totalsX, y, { width: 100 });
-      doc.text(`${input.currency} ${value}`, totalsX + 100, y, { width: 100, align: "right" });
+      doc.text(`${input.currency} ${money(value)}`, totalsX + 100, y, { width: 100, align: "right" });
       y += 14;
     }
     doc.font("Helvetica-Bold").fontSize(11).fillColor("#000").text("Total", totalsX, y, { width: 100 });
-    doc.text(`${input.currency} ${input.total}`, totalsX + 100, y, { width: 100, align: "right" });
+    doc.text(`${input.currency} ${money(input.total)}`, totalsX + 100, y, {
+      width: 100,
+      align: "right",
+    });
 
     if (input.notes) {
       doc.moveDown(3);

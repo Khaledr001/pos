@@ -25,6 +25,7 @@ import {
   Wallet,
   FolderTree,
   Tag,
+  FileText,
 } from "lucide-react";
 import { hasPermission, type Permission } from "@devsfleet/shared-types";
 import { useAuth } from "@/lib/auth-context";
@@ -72,6 +73,7 @@ const NAV_SECTIONS: Array<{
       { label: "Purchase Orders", href: "/purchases", icon: Package, permission: "purchase:read" },
       { label: "Suppliers", href: "/suppliers", icon: Truck, permission: "supplier:read" },
       { label: "Sales & Orders", href: "/sales", icon: ShoppingCart, permission: "sale:read" },
+      { label: "Quotations", href: "/quotations", icon: FileText, permission: "quotation:read" },
       { label: "Day Close", href: "/day-close", icon: Wallet, permission: "day_close:read" },
       { label: "Customers", href: "/customers", icon: Users, permission: "customer:read" },
     ],
