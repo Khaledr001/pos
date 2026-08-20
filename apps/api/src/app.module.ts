@@ -23,6 +23,7 @@ import { CashRegisterModule } from "./modules/cash-register/cash-register.module
 import { CatalogModule } from "./modules/catalog/catalog.module.js";
 import { InventoryModule } from "./modules/inventory/inventory.module.js";
 import { ProductsModule } from "./modules/products/products.module.js";
+import { PricingModule } from "./modules/pricing/pricing.module.js";
 import { DayCloseModule } from "./modules/day-close/day-close.module.js";
 import { ExpensesModule } from "./modules/expenses/expenses.module.js";
 import { HeldCartsModule } from "./modules/held-carts/held-carts.module.js";
@@ -133,6 +134,7 @@ import { TransfersModule } from "./modules/transfers/transfers.module.js";
     AuditModule,
     BranchesModule,
     ProductsModule,
+    PricingModule,
     CatalogModule,
     InventoryModule,
     CashRegisterModule,
