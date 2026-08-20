@@ -34,6 +34,12 @@ export const SetProductPriceSchema = z.object({
   sellingPrice: z.coerce.number().positive("A selling price is required"),
   purchasePrice: z.coerce.number().min(0).optional(),
   minSellingPrice: z.coerce.number().min(0).optional(),
+  /**
+   * Quantity break: 1 (the default) is the ordinary, untiered price. A
+   * second row at e.g. 10 applies once the sold quantity reaches 10 —
+   * each threshold has its own independent effective-dating timeline.
+   */
+  minQuantity: z.coerce.number().positive().default(1),
   effectiveFrom: DATE_STRING.optional(),
   /** Shown against the price_history row this write produces. */
   reason: z.string().trim().max(500).optional(),

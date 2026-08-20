@@ -168,10 +168,19 @@ export class PricingService {
     const sellingPrice = String(dto.sellingPrice);
     const purchasePrice = dto.purchasePrice !== undefined ? String(dto.purchasePrice) : null;
     const minSellingPrice = dto.minSellingPrice !== undefined ? String(dto.minSellingPrice) : null;
+    const minQuantity = String(dto.minQuantity);
 
+    // Each quantity tier is its own independent effective-dating timeline —
+    // "the current 10+ price" and "the current 1+ price" never touch or
+    // close each other.
     const current = await tx.query.productPrices.findFirst({
       where: (t, { and: a, eq: e, isNull: n }) =>
-        a(e(t.variantId, dto.variantId), e(t.priceListId, dto.priceListId), n(t.effectiveTo)),
+        a(
+          e(t.variantId, dto.variantId),
+          e(t.priceListId, dto.priceListId),
+          e(t.minQuantity, minQuantity),
+          n(t.effectiveTo),
+        ),
     });
 
     if (current && effectiveFrom < current.effectiveFrom) {
@@ -194,6 +203,7 @@ export class PricingService {
         tenantId,
         variantId: dto.variantId,
         priceListId: dto.priceListId,
+        minQuantity,
         oldPurchasePrice: current.purchasePrice,
         newPurchasePrice: purchasePrice,
         oldSellingPrice: current.sellingPrice,
@@ -211,6 +221,7 @@ export class PricingService {
         tenantId,
         variantId: dto.variantId,
         priceListId: dto.priceListId,
+        minQuantity,
         newPurchasePrice: purchasePrice,
         newSellingPrice: sellingPrice,
         newMinSellingPrice: minSellingPrice,
@@ -244,6 +255,7 @@ export class PricingService {
         tenantId,
         variantId: dto.variantId,
         priceListId: dto.priceListId,
+        minQuantity,
         sellingPrice,
         purchasePrice,
         minSellingPrice,

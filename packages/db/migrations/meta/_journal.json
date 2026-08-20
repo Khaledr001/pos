@@ -36,6 +36,13 @@
       "when": 1787162153290,
       "tag": "0004_lumpy_magik",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787225594068,
+      "tag": "0005_keen_master_chief",
+      "breakpoints": true
     }
   ]
 }

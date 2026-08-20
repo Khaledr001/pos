@@ -155,6 +155,56 @@ export function scaledListPrice(line: CartLine): Money.Minor4 {
   );
 }
 
+/**
+ * The base (untiered) price for a given quantity — the highest-threshold
+ * tier the quantity actually reaches, or the product's ordinary
+ * `sellingPrice` when it carries no tiers at all (or none of them apply).
+ * Mirrors PriceResolverService.resolveMany's own tier-picking exactly, so a
+ * quantity discount rings up offline the same way it would online.
+ */
+/**
+ * "10.00" and "10.0000" are the same amount but different strings —
+ * comparing them with `===` would wrongly read an untouched, on-ladder line
+ * as manually overridden the moment its price round-trips through Money's
+ * 4-decimal formatting (e.g. after a packaging change).
+ */
+function sameAmount(a: string, b: string): boolean {
+  return Money.toMinor(a) === Money.toMinor(b);
+}
+
+export function pickTierPrice(product: PosProduct, quantity: string): string {
+  const tiers = product.priceTiers;
+  if (!tiers || tiers.length === 0) return product.sellingPrice;
+
+  const qty = Number(quantity);
+  const applicable = tiers.filter((tier) => Number(tier.minQuantity) <= qty);
+  if (applicable.length === 0) return product.sellingPrice;
+
+  return applicable.reduce((best, tier) =>
+    Number(tier.minQuantity) > Number(best.minQuantity) ? tier : best,
+  ).sellingPrice;
+}
+
+/**
+ * The tiered price for a line, scaled into whatever it is sold in — same
+ * scaling `setLineUnit` always did, just against the tier the CURRENT
+ * quantity reaches rather than always the base (quantity-1) tier. A
+ * packaging with its own flat price is never tiered: a box has one price,
+ * not a ladder. No packaging chosen returns the tier's own string exactly
+ * as-is — matching `sellingPrice`'s own precision — rather than round-
+ * tripping it through Money for a x1 scale that changes nothing but the
+ * number of decimal places.
+ */
+export function scaledTierPrice(line: CartLine, quantity: string): string {
+  if (line.unit?.priceOverride) return line.unit.priceOverride;
+  const base = pickTierPrice(line.product, quantity);
+  if (!line.unit) return base;
+  return Money.toDecimalString(
+    Money.multiplyByQuantity(Money.toMinor(base), line.unit.conversionFactor),
+    4,
+  );
+}
+
 export const useCart = create<CartState>((set, get) => ({
   lines: [],
   customer: null,
@@ -171,10 +221,12 @@ export const useCart = create<CartState>((set, get) => ({
    * is not silently merged into a standard one.
    */
   addProduct(product, quantity = "1") {
+    // Still on-ladder for its OWN quantity, not necessarily the incoming
+    // one — merging first, then adjustQuantity below re-prices for the sum.
     const existing = get().lines.find(
       (line) =>
         line.product.id === product.id &&
-        line.unitPrice === product.sellingPrice &&
+        sameAmount(line.unitPrice, pickTierPrice(product, line.quantity)) &&
         line.discountPercent === "0",
     );
 
@@ -190,7 +242,7 @@ export const useCart = create<CartState>((set, get) => ({
           key: crypto.randomUUID(),
           product,
           quantity,
-          unitPrice: product.sellingPrice,
+          unitPrice: pickTierPrice(product, quantity),
           discountPercent: "0",
           floorOverridden: false,
           addedAt: Date.now(),
@@ -207,9 +259,14 @@ export const useCart = create<CartState>((set, get) => ({
       return;
     }
     set((state) => ({
-      lines: state.lines.map((line) =>
-        line.key === key ? { ...line, quantity } : line,
-      ),
+      lines: state.lines.map((line) => {
+        if (line.key !== key) return line;
+        // Only follow the ladder if the price is still exactly what the OLD
+        // quantity's tier set it to — a manually typed price stays put.
+        const onLadder = sameAmount(line.unitPrice, scaledTierPrice(line, line.quantity));
+        const unitPrice = onLadder ? scaledTierPrice(line, quantity) : line.unitPrice;
+        return { ...line, quantity, unitPrice };
+      }),
     }));
   },
 
@@ -234,18 +291,7 @@ export const useCart = create<CartState>((set, get) => ({
     set((state) => ({
       lines: state.lines.map((line) => {
         if (line.key !== key) return line;
-
-        const listedPrice = unit
-          ? (unit.priceOverride ??
-            Money.toDecimalString(
-              Money.multiplyByQuantity(
-                Money.toMinor(line.product.sellingPrice),
-                unit.conversionFactor,
-              ),
-              4,
-            ))
-          : line.product.sellingPrice;
-
+        const listedPrice = scaledTierPrice({ ...line, unit }, line.quantity);
         return { ...line, unit, unitPrice: listedPrice, floorOverridden: false };
       }),
     }));

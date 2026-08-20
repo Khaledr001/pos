@@ -10,7 +10,7 @@ import {
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
-import { activeFlag, money, primaryId, timestamps } from "./_shared.js";
+import { activeFlag, money, primaryId, quantity, timestamps } from "./_shared.js";
 import { tenantScope } from "./tenants.js";
 import { users } from "./auth.js";
 import { productVariants } from "./catalog.js";
@@ -76,8 +76,21 @@ export const productPrices = pgTable(
      * Floor. A cashier with `sale:discount` cannot go below it; only
      * `price:override_floor` (manager) can, and doing so writes an audit row.
      * This is the single most effective control against counter discounting.
+     *
+     * Deliberately NOT tiered by `minQuantity` in practice — the floor exists
+     * to stop selling below cost/margin, which does not vary with quantity
+     * the way a promotional price does. Only the tier-1 (minQuantity = "1")
+     * row is expected to carry one; other tiers may leave it null.
      */
     minSellingPrice: money(),
+
+    /**
+     * Quantity break: this tier applies once the sold quantity reaches this
+     * figure. "1" (the default) is the ordinary, untiered price every row had
+     * before quantity breaks existed — a tenant that never configures a
+     * second tier sees no change at all.
+     */
+    minQuantity: quantity().notNull().default("1"),
 
     effectiveFrom: date({ mode: "string" }).notNull().defaultNow(),
     /** NULL = still current. Set when superseded, never deleted. */
@@ -88,15 +101,16 @@ export const productPrices = pgTable(
     uniqueIndex("uq_product_prices_effective").on(
       t.variantId,
       t.priceListId,
+      t.minQuantity,
       t.effectiveFrom,
     ),
     /**
-     * The hot path: "current price for this product on this list".
-     * Partial on effective_to so the index only holds live rows — after a few
-     * years of price history that is a fraction of the table.
+     * The hot path: "current price for this product, this list, this
+     * quantity". Partial on effective_to so the index only holds live rows —
+     * after a few years of price history that is a fraction of the table.
      */
     index("idx_product_prices_current")
-      .on(t.variantId, t.priceListId)
+      .on(t.variantId, t.priceListId, t.minQuantity)
       .where(sql`effective_to IS NULL`),
     index("idx_product_prices_list").on(t.priceListId),
   ],
@@ -121,6 +135,8 @@ export const priceHistory = pgTable(
     priceListId: uuid()
       .notNull()
       .references(() => priceLists.id, { onDelete: "cascade" }),
+    /** Which tier changed — a variant can hold several independent ones. */
+    minQuantity: quantity().notNull().default("1"),
     oldPurchasePrice: money(),
     newPurchasePrice: money(),
     oldSellingPrice: money(),

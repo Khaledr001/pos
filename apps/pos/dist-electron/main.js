@@ -831,6 +831,17 @@ const MIGRATIONS = [
         synced_at   TEXT
       );
     `
+  },
+  {
+    version: 14,
+    sql: `
+      -- Quantity-break pricing (Stage 5.2): a variant can now hold several
+      -- rows on the same (default) list, one per minQuantity threshold —
+      -- '1' is the ordinary, untiered price every row already had. Default
+      -- lets the existing seed INSERT (which never lists this column) and
+      -- every already-synced row keep meaning exactly what it always did.
+      ALTER TABLE variant_prices ADD COLUMN min_quantity TEXT NOT NULL DEFAULT '1';
+    `
   }
 ];
 function migrate(database) {
@@ -928,17 +939,39 @@ const VARIANT_COLUMNS = `
     + COALESCE(CAST(i.local_delta AS REAL), 0)
     AS TEXT
   ) AS stock,
-  v.category_name     AS categoryName
+  v.category_name     AS categoryName,
+  COALESCE(t.tiersJson, '[]') AS priceTiersJson
 `;
 const PRICE_JOIN = `
   LEFT JOIN variant_prices p ON p.id = (
     SELECT id FROM variant_prices
     WHERE variant_id = v.id
-    ORDER BY is_default DESC, updated_at DESC
+    ORDER BY is_default DESC, CAST(min_quantity AS REAL) ASC, updated_at DESC
     LIMIT 1
   )
+  LEFT JOIN (
+    SELECT variant_id, json_group_array(
+      json_object('minQuantity', min_quantity, 'sellingPrice', selling_price)
+    ) AS tiersJson
+    FROM (
+      SELECT variant_id, min_quantity, selling_price
+      FROM variant_prices
+      WHERE is_default = 1
+      ORDER BY variant_id, CAST(min_quantity AS REAL) ASC
+    )
+    GROUP BY variant_id
+  ) t ON t.variant_id = v.id
   LEFT JOIN inventory i ON i.variant_id = v.id
 `;
+function parsePriceTiers(row) {
+  const { priceTiersJson, ...rest } = row;
+  let priceTiers = [];
+  try {
+    priceTiers = JSON.parse(priceTiersJson);
+  } catch {
+  }
+  return { ...rest, priceTiers };
+}
 function searchProducts(query, limit = 25) {
   const db2 = getDatabase();
   const q = query.trim();
@@ -946,7 +979,7 @@ function searchProducts(query, limit = 25) {
     return db2.prepare(
       `SELECT ${VARIANT_COLUMNS} FROM variants v ${PRICE_JOIN}
          ORDER BY v.product_name LIMIT ?`
-    ).all(limit);
+    ).all(limit).map(parsePriceTiers);
   }
   const scanned = findByBarcode(q);
   if (scanned) return [scanned];
@@ -958,14 +991,14 @@ function searchProducts(query, limit = 25) {
          ${PRICE_JOIN}
          WHERE variants_fts MATCH ?
          ORDER BY rank LIMIT ?`
-    ).all(match, limit);
+    ).all(match, limit).map(parsePriceTiers);
   } catch {
     const like = `%${q}%`;
     return db2.prepare(
       `SELECT ${VARIANT_COLUMNS} FROM variants v ${PRICE_JOIN}
          WHERE v.product_name LIKE ? OR v.sku LIKE ? OR v.search_key LIKE ?
          ORDER BY v.product_name LIMIT ?`
-    ).all(like, like, like, limit);
+    ).all(like, like, like, limit).map(parsePriceTiers);
   }
 }
 function findByBarcode(barcode) {
@@ -974,7 +1007,7 @@ function findByBarcode(barcode) {
     `SELECT ${VARIANT_COLUMNS} FROM variants v ${PRICE_JOIN}
        WHERE v.barcode = ? OR v.sku = ? LIMIT 1`
   ).get(barcode.trim(), barcode.trim());
-  return row ?? null;
+  return row ? parsePriceTiers(row) : null;
 }
 function unitsForVariant(variantId) {
   return getDatabase().prepare(
@@ -154102,11 +154135,12 @@ function applyRecord(entity, id, record) {
     case "product_price":
       db2.prepare(
         `INSERT INTO variant_prices
-           (id, variant_id, price_list_id, selling_price, min_selling_price, is_default, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+           (id, variant_id, price_list_id, selling_price, min_selling_price, min_quantity, is_default, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
          ON CONFLICT(id) DO UPDATE SET
            selling_price = excluded.selling_price,
            min_selling_price = excluded.min_selling_price,
+           min_quantity = excluded.min_quantity,
            is_default = excluded.is_default,
            updated_at = datetime('now')`
       ).run(
@@ -154115,6 +154149,7 @@ function applyRecord(entity, id, record) {
         text(record.priceListId),
         text(record.sellingPrice) ?? "0",
         text(record.minSellingPrice),
+        text(record.minQuantity) ?? "1",
         record.isDefault ? 1 : 0
       );
       return;

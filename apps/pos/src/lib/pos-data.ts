@@ -51,6 +51,19 @@ export interface PosProduct {
   /** Available = on hand minus reserved, at this branch. */
   stock: string;
   categoryName: string | null;
+  /**
+   * Quantity-break tiers on the default list, lowest minQuantity first —
+   * "1" is the ordinary, untiered price every product had before quantity
+   * breaks existed. Optional so the browser dev stand-in's plain sample
+   * data (no tiers configured) still type-checks.
+   */
+  priceTiers?: PosPriceTier[];
+}
+
+/** One quantity-break tier — see PosProduct.priceTiers. */
+export interface PosPriceTier {
+  minQuantity: string;
+  sellingPrice: string;
 }
 
 /** A packaging a variant can be sold in — a box, a carton (Stage 3). */

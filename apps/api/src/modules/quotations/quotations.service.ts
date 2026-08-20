@@ -58,6 +58,9 @@ export class QuotationsService {
       const resolved = await this.prices.resolveMany(tx, {
         variantIds: dto.lines.map((line) => line.variantId),
         customerId: dto.customerId ?? null,
+        quantities: Object.fromEntries(
+          dto.lines.map((line) => [line.variantId, String(line.quantity)]),
+        ),
       });
       const priceByVariant = new Map(resolved.map((price) => [price.variantId, price]));
 

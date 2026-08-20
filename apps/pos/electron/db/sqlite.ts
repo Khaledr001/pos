@@ -891,6 +891,17 @@ const MIGRATIONS: Array<
       );
     `,
   },
+  {
+    version: 14,
+    sql: `
+      -- Quantity-break pricing (Stage 5.2): a variant can now hold several
+      -- rows on the same (default) list, one per minQuantity threshold —
+      -- '1' is the ordinary, untiered price every row already had. Default
+      -- lets the existing seed INSERT (which never lists this column) and
+      -- every already-synced row keep meaning exactly what it always did.
+      ALTER TABLE variant_prices ADD COLUMN min_quantity TEXT NOT NULL DEFAULT '1';
+    `,
+  },
 ];
 
 export function migrate(database: Database.Database): void {

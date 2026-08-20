@@ -373,6 +373,7 @@ export class SyncService {
             priceListId: schema.productPrices.priceListId,
             sellingPrice: schema.productPrices.sellingPrice,
             minSellingPrice: schema.productPrices.minSellingPrice,
+            minQuantity: schema.productPrices.minQuantity,
             effectiveTo: schema.productPrices.effectiveTo,
             /**
              * Without this the terminal holds several prices per variant and

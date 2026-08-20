@@ -100,6 +100,10 @@ export class SalesService {
         variantIds: dto.lines.map((l) => l.variantId),
         customerId: dto.customerId ?? null,
         includeCost: true, // snapshotted onto the line, never returned to a cashier
+        // Quantity as entered on the line — a quantity break is not scaled
+        // by packaging here, the same way discountPercent and unitPrice
+        // already apply per line regardless of which unit was chosen.
+        quantities: Object.fromEntries(dto.lines.map((l) => [l.variantId, String(l.quantity)])),
       });
       const priceBy = new Map(resolved.map((p) => [p.variantId, p]));
 

@@ -24,6 +24,14 @@ import { Injectable } from "@nestjs/common";
  * than needing a job to unwind it.
  */
 
+interface PriceTierRow {
+  variantId: string;
+  sellingPrice: string;
+  minSellingPrice: string | null;
+  purchasePrice: string | null;
+  minQuantity: string;
+}
+
 export interface ResolvedPrice {
   variantId: string;
   /** What to charge, before line discounts. */
@@ -52,6 +60,8 @@ export class PriceResolverService {
       customerId?: string | null;
       includeCost?: boolean;
       asOf?: Date;
+      /** Quantity being bought. Picks the right tier — see resolveMany. */
+      quantity?: string;
     },
   ): Promise<ResolvedPrice> {
     const [resolved] = await this.resolveMany(tx, {
@@ -59,6 +69,7 @@ export class PriceResolverService {
       customerId: input.customerId ?? null,
       includeCost: input.includeCost ?? false,
       asOf: input.asOf ?? new Date(),
+      quantities: input.quantity ? { [input.variantId]: input.quantity } : undefined,
     });
 
     if (!resolved) {
@@ -85,9 +96,16 @@ export class PriceResolverService {
       customerId?: string | null;
       includeCost?: boolean;
       asOf?: Date;
+      /**
+       * Quantity being bought, per variant. Missing = "1", the untiered
+       * price every product had before quantity breaks existed. Applies
+       * only to the price-list tier, not a negotiated customer price —
+       * a negotiated price is one specific agreement, not a ladder.
+       */
+      quantities?: Record<string, string>;
     },
   ): Promise<ResolvedPrice[]> {
-    const { variantIds, customerId = null, includeCost = false } = input;
+    const { variantIds, customerId = null, includeCost = false, quantities = {} } = input;
     if (variantIds.length === 0) return [];
 
     const asOf = (input.asOf ?? new Date()).toISOString().slice(0, 10);
@@ -140,6 +158,7 @@ export class PriceResolverService {
               sellingPrice: schema.productPrices.sellingPrice,
               minSellingPrice: schema.productPrices.minSellingPrice,
               purchasePrice: schema.productPrices.purchasePrice,
+              minQuantity: schema.productPrices.minQuantity,
             })
             .from(schema.productPrices)
             .where(
@@ -151,19 +170,42 @@ export class PriceResolverService {
                 effective(schema.productPrices.effectiveFrom, schema.productPrices.effectiveTo),
               ),
             )
-        : Promise.resolve([]),
+        : Promise.resolve([] as PriceTierRow[]),
     ]);
 
     const negotiatedBy = new Map(negotiated.map((r) => [r.variantId, r.price]));
-    const listedBy = new Map(listed.map((r) => [r.variantId, r]));
+    // Every tier a variant has on this list — picking ONE happens per
+    // variant below, against the quantity actually being bought.
+    const tiersBy = new Map<string, PriceTierRow[]>();
+    for (const row of listed) {
+      const tiers = tiersBy.get(row.variantId);
+      if (tiers) tiers.push(row);
+      else tiersBy.set(row.variantId, [row]);
+    }
 
     const results: ResolvedPrice[] = [];
 
     for (const variantId of variantIds) {
-      const list = listedBy.get(variantId);
+      const tiers = tiersBy.get(variantId);
       const special = negotiatedBy.get(variantId);
 
+      // The highest-threshold tier the requested quantity actually reaches.
+      // Ties (two tiers at the same minQuantity, which should not happen but
+      // is not enforced by the schema) resolve to whichever sorted first.
+      const quantity = Number(quantities[variantId] ?? "1");
+      const list = tiers
+        ?.filter((tier) => Number(tier.minQuantity) <= quantity)
+        .sort((a, b) => Number(b.minQuantity) - Number(a.minQuantity))[0];
+
       if (!special && !list) continue; // Caller decides whether that is fatal.
+
+      // The floor is a cost control, not a promotional lever — it comes from
+      // the lowest tier (ordinarily minQuantity "1") even when a higher tier
+      // answered the selling price, so a bulk discount cannot also silently
+      // switch the floor off.
+      const baseTier = tiers
+        ?.slice()
+        .sort((a, b) => Number(a.minQuantity) - Number(b.minQuantity))[0];
 
       results.push({
         variantId,
@@ -174,7 +216,7 @@ export class PriceResolverService {
          * floor is a control on what staff may do, and one must not disable
          * the other.
          */
-        minSellingPrice: list?.minSellingPrice ?? null,
+        minSellingPrice: list?.minSellingPrice ?? baseTier?.minSellingPrice ?? null,
         // Cost is omitted entirely, not zeroed, for callers without the
         // permission — a zero would be mistaken for a real figure.
         purchasePrice: includeCost ? (list?.purchasePrice ?? null) : null,

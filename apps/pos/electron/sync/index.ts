@@ -310,11 +310,12 @@ function applyRecord(entity: string, id: string, record: Record<string, unknown>
     case "product_price":
       db.prepare(
         `INSERT INTO variant_prices
-           (id, variant_id, price_list_id, selling_price, min_selling_price, is_default, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+           (id, variant_id, price_list_id, selling_price, min_selling_price, min_quantity, is_default, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
          ON CONFLICT(id) DO UPDATE SET
            selling_price = excluded.selling_price,
            min_selling_price = excluded.min_selling_price,
+           min_quantity = excluded.min_quantity,
            is_default = excluded.is_default,
            updated_at = datetime('now')`,
       ).run(
@@ -323,6 +324,7 @@ function applyRecord(entity: string, id: string, record: Record<string, unknown>
         text(record.priceListId),
         text(record.sellingPrice) ?? "0",
         text(record.minSellingPrice),
+        text(record.minQuantity) ?? "1",
         record.isDefault ? 1 : 0,
       );
       return;

@@ -12,6 +12,12 @@ import { getDatabase } from "./sqlite.js";
  * would silently make the counter depend on the shop's internet.
  */
 
+/** One quantity-break tier (Stage 5.2). minQuantity "1" is the ordinary, untiered price. */
+export interface BridgePriceTier {
+  minQuantity: string;
+  sellingPrice: string;
+}
+
 export interface BridgeProduct {
   /** The VARIANT id — the sellable unit, and what a sale line carries. */
   id: string;
@@ -26,6 +32,8 @@ export interface BridgeProduct {
   taxPercent: string;
   stock: string;
   categoryName: string | null;
+  /** Every tier on the default list, lowest minQuantity first. Always has at least one entry when priced at all. */
+  priceTiers: BridgePriceTier[];
 }
 
 export interface BridgeVariantUnit {
@@ -141,38 +149,71 @@ const VARIANT_COLUMNS = `
     + COALESCE(CAST(i.local_delta AS REAL), 0)
     AS TEXT
   ) AS stock,
-  v.category_name     AS categoryName
+  v.category_name     AS categoryName,
+  COALESCE(t.tiersJson, '[]') AS priceTiersJson
 `;
 
 /**
- * Exactly ONE price row per variant.
+ * Exactly ONE row per variant for `sellingPrice`/`minSellingPrice` display —
+ * the base (lowest-minQuantity) tier on the default list.
  *
  * A variant carries a row per price list, so joining on `variant_id` alone
  * multiplies every search result by the number of lists and shows a different
  * price depending on join order. The default list wins; customer-specific
  * pricing is resolved server-side and applied when the sale is pushed.
+ *
+ * `t` is every tier on that SAME default list, quantity-break pricing
+ * (Stage 5.2) — resolved locally, unlike the customer/default-list choice
+ * above, because it needs no identity to pick between, only the quantity
+ * already on the line.
  */
 const PRICE_JOIN = `
   LEFT JOIN variant_prices p ON p.id = (
     SELECT id FROM variant_prices
     WHERE variant_id = v.id
-    ORDER BY is_default DESC, updated_at DESC
+    ORDER BY is_default DESC, CAST(min_quantity AS REAL) ASC, updated_at DESC
     LIMIT 1
   )
+  LEFT JOIN (
+    SELECT variant_id, json_group_array(
+      json_object('minQuantity', min_quantity, 'sellingPrice', selling_price)
+    ) AS tiersJson
+    FROM (
+      SELECT variant_id, min_quantity, selling_price
+      FROM variant_prices
+      WHERE is_default = 1
+      ORDER BY variant_id, CAST(min_quantity AS REAL) ASC
+    )
+    GROUP BY variant_id
+  ) t ON t.variant_id = v.id
   LEFT JOIN inventory i ON i.variant_id = v.id
 `;
+
+function parsePriceTiers(row: Record<string, unknown>): BridgeProduct {
+  const { priceTiersJson, ...rest } = row as { priceTiersJson: string } & Record<string, unknown>;
+  let priceTiers: BridgePriceTier[] = [];
+  try {
+    priceTiers = JSON.parse(priceTiersJson) as BridgePriceTier[];
+  } catch {
+    // Malformed JSON here would be a bug in the query above, never bad data —
+    // falling back to the single sellingPrice column keeps search working.
+  }
+  return { ...rest, priceTiers } as BridgeProduct;
+}
 
 export function searchProducts(query: string, limit = 25): BridgeProduct[] {
   const db = getDatabase();
   const q = query.trim();
 
   if (!q) {
-    return db
-      .prepare(
-        `SELECT ${VARIANT_COLUMNS} FROM variants v ${PRICE_JOIN}
+    return (
+      db
+        .prepare(
+          `SELECT ${VARIANT_COLUMNS} FROM variants v ${PRICE_JOIN}
          ORDER BY v.product_name LIMIT ?`,
-      )
-      .all(limit) as BridgeProduct[];
+        )
+        .all(limit) as Array<Record<string, unknown>>
+    ).map(parsePriceTiers);
   }
 
   // An exact barcode wins outright. A scanner firing mid-search must not have
@@ -192,26 +233,30 @@ export function searchProducts(query: string, limit = 25): BridgeProduct[] {
     .join(" ");
 
   try {
-    return db
-      .prepare(
-        `SELECT ${VARIANT_COLUMNS} FROM variants_fts f
+    return (
+      db
+        .prepare(
+          `SELECT ${VARIANT_COLUMNS} FROM variants_fts f
          JOIN variants v ON v.rowid = f.rowid
          ${PRICE_JOIN}
          WHERE variants_fts MATCH ?
          ORDER BY rank LIMIT ?`,
-      )
-      .all(match, limit) as BridgeProduct[];
+        )
+        .all(match, limit) as Array<Record<string, unknown>>
+    ).map(parsePriceTiers);
   } catch {
     // FTS refuses some inputs outright. Falling back to LIKE keeps the counter
     // working on a query that would otherwise show an empty catalogue.
     const like = `%${q}%`;
-    return db
-      .prepare(
-        `SELECT ${VARIANT_COLUMNS} FROM variants v ${PRICE_JOIN}
+    return (
+      db
+        .prepare(
+          `SELECT ${VARIANT_COLUMNS} FROM variants v ${PRICE_JOIN}
          WHERE v.product_name LIKE ? OR v.sku LIKE ? OR v.search_key LIKE ?
          ORDER BY v.product_name LIMIT ?`,
-      )
-      .all(like, like, like, limit) as BridgeProduct[];
+        )
+        .all(like, like, like, limit) as Array<Record<string, unknown>>
+    ).map(parsePriceTiers);
   }
 }
 
@@ -222,8 +267,8 @@ export function findByBarcode(barcode: string): BridgeProduct | null {
       `SELECT ${VARIANT_COLUMNS} FROM variants v ${PRICE_JOIN}
        WHERE v.barcode = ? OR v.sku = ? LIMIT 1`,
     )
-    .get(barcode.trim(), barcode.trim()) as BridgeProduct | undefined;
-  return row ?? null;
+    .get(barcode.trim(), barcode.trim()) as Record<string, unknown> | undefined;
+  return row ? parsePriceTiers(row) : null;
 }
 
 /**
