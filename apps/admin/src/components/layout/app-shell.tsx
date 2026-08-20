@@ -36,6 +36,7 @@ const ROUTE_PERMISSIONS: Array<[string, Permission]> = [
   ["/audit-log", "audit:read"],
   ["/day-close", "day_close:read"],
   ["/transfers", "transfer:read"],
+  ["/purchases", "purchase:read"],
 ];
 
 function permissionFor(pathname: string): Permission | undefined {
