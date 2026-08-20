@@ -12,10 +12,12 @@ import { Injectable } from "@nestjs/common";
 import { assertBranchInScope, requireBranchId } from "../../common/context/branch-scope.js";
 import { RequestContext } from "../../common/context/request-context.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
+import { OrdersService } from "../orders/orders.service.js";
 import { PriceResolverService } from "../pricing/price-resolver.service.js";
 import { SalesService } from "../sales/sales.service.js";
 import type {
   ConvertQuotationDto,
+  ConvertQuotationToOrderDto,
   CreateQuotationDto,
   ListQuotationsDto,
 } from "./dto.js";
@@ -39,6 +41,7 @@ export class QuotationsService {
     private readonly db: TenantDatabase,
     private readonly prices: PriceResolverService,
     private readonly sales: SalesService,
+    private readonly orders: OrdersService,
   ) {}
 
   async create(dto: CreateQuotationDto): Promise<unknown> {
@@ -239,6 +242,73 @@ export class QuotationsService {
     });
 
     return sale;
+  }
+
+  /**
+   * Turn an accepted quotation into a COMMITMENT rather than an immediate
+   * sale: an order, reserving nothing yet either, until it is confirmed —
+   * for the customer who wants to lock in today's price and pick up the
+   * goods over the coming days rather than paying right now.
+   *
+   * `quotations.convertedToOrderId` — despite its name — has always held the
+   * id of the SALE `convert()` produces, because that was the only
+   * conversion path this column's name ever anticipated. This is the first
+   * path where it holds what it says.
+   */
+  async convertToOrder(id: string, dto: ConvertQuotationToOrderDto): Promise<unknown> {
+    const quotation = await this.db.run(async (tx) => {
+      const found = await this.require(tx, id);
+
+      if (found.status === "converted") {
+        throw new AppError(
+          ERROR_CODES.CONFLICT,
+          "This quotation has already been converted.",
+        );
+      }
+      if (found.status === "cancelled") {
+        throw new AppError(ERROR_CODES.CONFLICT, "This quotation was cancelled.");
+      }
+      if (found.validUntil && found.validUntil < today()) {
+        throw new AppError(
+          ERROR_CODES.CONFLICT,
+          `This quotation expired on ${found.validUntil}. Raise a new one at today's prices.`,
+        );
+      }
+
+      const items = await tx.query.quotationItems.findMany({
+        where: (t, { eq: e }) => e(t.quotationId, id),
+        orderBy: (t, { asc: a }) => a(t.sortOrder),
+      });
+
+      return { ...found, items };
+    });
+
+    // Created through the normal service, in its own transaction — an order
+    // from a quotation needs no different price resolution than one rung up
+    // directly, and a second path into `orders` is a second set of rules.
+    const order = (await this.orders.create({
+      branchId: dto.branchId ?? quotation.branchId,
+      customerId: quotation.customerId,
+      quotationId: quotation.id,
+      lines: quotation.items.map((item) => ({
+        variantId: item.variantId,
+        quantity: Number(item.quantity),
+        unitPrice: item.unitPrice,
+        ...(Number(item.discountPercent) > 0
+          ? { discountPercent: Number(item.discountPercent) }
+          : {}),
+      })),
+      ...(dto.expectedReadyAt ? { expectedReadyAt: dto.expectedReadyAt } : {}),
+    })) as { id: string };
+
+    await this.db.run(async (tx) => {
+      await tx
+        .update(schema.quotations)
+        .set({ status: "converted", convertedAt: new Date(), convertedToOrderId: order.id })
+        .where(eq(schema.quotations.id, id));
+    });
+
+    return order;
   }
 
   async cancel(id: string): Promise<unknown> {

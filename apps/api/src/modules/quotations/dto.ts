@@ -54,3 +54,10 @@ export const ConvertQuotationSchema = z.object({
     .default([]),
 });
 export type ConvertQuotationDto = z.infer<typeof ConvertQuotationSchema>;
+
+export const ConvertQuotationToOrderSchema = z.object({
+  /** Where it will be picked up, which need not be where it was quoted. */
+  branchId: z.string().uuid().optional(),
+  expectedReadyAt: z.string().datetime().optional(),
+});
+export type ConvertQuotationToOrderDto = z.infer<typeof ConvertQuotationToOrderSchema>;

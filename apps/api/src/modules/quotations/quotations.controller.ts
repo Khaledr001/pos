@@ -15,9 +15,11 @@ import { zodPipe } from "../../common/pipes/zod-validation.pipe.js";
 import { QuotationsService } from "./quotations.service.js";
 import {
   ConvertQuotationSchema,
+  ConvertQuotationToOrderSchema,
   CreateQuotationSchema,
   ListQuotationsSchema,
   type ConvertQuotationDto,
+  type ConvertQuotationToOrderDto,
   type CreateQuotationDto,
   type ListQuotationsDto,
 } from "./dto.js";
@@ -68,6 +70,22 @@ export class QuotationsController {
     @Body(zodPipe(ConvertQuotationSchema)) dto: ConvertQuotationDto,
   ) {
     return this.quotations.convert(id, dto);
+  }
+
+  /**
+   * `order:write`, not `sale:create` — this commits to an ORDER, and no
+   * money moves until it is eventually fulfilled.
+   */
+  @Post(":id/convert-to-order")
+  @RequirePermissions("order:write")
+  @Audited("quotation", "convert_to_order")
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: "Turn an accepted quotation into an order — reserves nothing yet" })
+  convertToOrder(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body(zodPipe(ConvertQuotationToOrderSchema)) dto: ConvertQuotationToOrderDto,
+  ) {
+    return this.quotations.convertToOrder(id, dto);
   }
 
   @Post(":id/cancel")
