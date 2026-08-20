@@ -15,6 +15,13 @@ import renderer from "vite-plugin-electron-renderer";
  * `better-sqlite3` is externalised: it is a native .node binding that cannot be
  * bundled, and it must stay in the main process regardless — the renderer has
  * no filesystem access by design.
+ *
+ * `pdfkit` is externalised too, for a subtler reason: at runtime it loads its
+ * standard fonts (Helvetica, etc.) from a `data/*.afm` folder next to its own
+ * module file. Bundled into one main.js, that folder no longer exists next to
+ * anything, and `new PDFDocument()` throws ENOENT the first time an A4 invoice
+ * is rendered. Left as a real `require("pdfkit")`, Node resolves it inside
+ * node_modules where its own `data/` folder is still sitting beside it.
  */
 
 /**
@@ -51,7 +58,7 @@ export default defineConfig({
             // actual diff, not a compressed one-liner nobody can check.
             minify: false,
             rollupOptions: {
-              external: ["electron", "better-sqlite3", "node-thermal-printer"],
+              external: ["electron", "better-sqlite3", "node-thermal-printer", "pdfkit"],
             },
           },
         },
