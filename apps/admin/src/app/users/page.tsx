@@ -56,11 +56,18 @@ interface Branch {
   code: string;
 }
 
+interface Role {
+  id: string;
+  name: string;
+  description?: string | null;
+}
+
 export default function UsersPage() {
   const { tokens, user: currentUser } = useAuth();
 
   const [users, setUsers] = useState<StaffUser[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -91,11 +98,17 @@ export default function UsersPage() {
   const [fMaxDiscount, setFMaxDiscount] = useState("10");
   const [fCanApproveRefund, setFCanApproveRefund] = useState(false);
   const [fCanViewCost, setFCanViewCost] = useState(true);
+  const [fRoleId, setFRoleId] = useState("");
+
+  const roleName = useCallback(
+    (roleId: string) => roles.find((r) => r.id === roleId)?.name ?? "—",
+    [roles],
+  );
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
-      const [usersRes, branchRes] = await Promise.allSettled([
+      const [usersRes, branchRes, rolesRes] = await Promise.allSettled([
         api.get<UsersResponse>("/users", {
           accessToken: tokens?.accessToken,
           query: {
@@ -108,6 +121,7 @@ export default function UsersPage() {
         api.get<{ items: Branch[] }>("/branches", {
           accessToken: tokens?.accessToken,
         }),
+        api.get<Role[]>("/roles", { accessToken: tokens?.accessToken }),
       ]);
 
       if (usersRes.status === "fulfilled") {
@@ -120,6 +134,13 @@ export default function UsersPage() {
         const val = branchRes.value as any;
         const list = Array.isArray(val) ? val : (val?.items ?? []);
         setBranches(list);
+      }
+      if (rolesRes.status === "fulfilled") {
+        const list = rolesRes.value ?? [];
+        setRoles(list);
+        if (list.length > 0) {
+          setFRoleId((current) => current || list.find((r) => r.name === "cashier")?.id || list[0]!.id);
+        }
       }
     } catch (err: any) {
       console.error("Failed to load staff list:", err);
@@ -135,11 +156,12 @@ export default function UsersPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!fRoleId) {
+      setActionError("Choose a role.");
+      return;
+    }
     setSubmitting(true);
     setActionError(null);
-
-    // Use roleId from existing staff list or default
-    const roleId = users[0]?.roleId || "00000000-0000-0000-0000-000000000001";
 
     try {
       await api.post(
@@ -148,7 +170,7 @@ export default function UsersPage() {
           name: fName.trim(),
           email: fEmail.trim().toLowerCase(),
           phone: fPhone.trim() || undefined,
-          roleId,
+          roleId: fRoleId,
           branchId: fBranchId || undefined,
           password: fPassword,
           pin: fPin || undefined,
@@ -273,6 +295,7 @@ export default function UsersPage() {
               <thead className="border-b border-border bg-secondary/50 text-muted-foreground">
                 <tr>
                   <th className="px-4 py-3.5 font-medium">User Profile</th>
+                  <th className="px-4 py-3.5 font-medium">Role</th>
                   <th className="px-4 py-3.5 font-medium">Branch Assignment</th>
                   <th className="px-4 py-3.5 font-medium">Discount Limit</th>
                   <th className="px-4 py-3.5 font-medium">Refund / Cost Access</th>
@@ -295,6 +318,9 @@ export default function UsersPage() {
                           <p className="text-[11px] text-muted-foreground font-mono">{u.email}</p>
                         </div>
                       </div>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <Badge variant="outline" className="text-[10px] capitalize">{roleName(u.roleId)}</Badge>
                     </td>
                     <td className="px-4 py-3.5 text-muted-foreground">
                       {getBranchName(u.branchId)}
@@ -365,6 +391,20 @@ export default function UsersPage() {
               <div>
                 <label className="block text-xs font-medium text-foreground mb-1.5">Mobile Phone</label>
                 <Input type="tel" value={fPhone} onChange={(e) => setFPhone(e.target.value)} placeholder="+971 50 123 4567" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-foreground mb-1.5">Role *</label>
+                <select
+                  required
+                  value={fRoleId}
+                  onChange={(e) => setFRoleId(e.target.value)}
+                  className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="">— Select role —</option>
+                  {roles.map((r) => (
+                    <option key={r.id} value={r.id}>{r.name}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-xs font-medium text-foreground mb-1.5">Assigned Branch</label>

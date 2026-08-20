@@ -24,7 +24,8 @@ Copying its shape is what keeps twenty modules looking like one codebase.
 | `auth` | 1 | ✅ done | JWT login, PIN login, refresh rotation |
 | `branches` | 1 | ✅ done | Branch CRUD — **the reference module** |
 | `tenants` | 1 | ✅ done | Tenant provisioning, settings (VAT, currency, locales) |
-| `users` | 1 | ✅ done | Users, roles, permission assignment |
+| `users` | 1 | ✅ done | Users, permission assignment |
+| `roles` | 1 | ✅ done | Role CRUD — permission grants, `assertMayGrantPermissions` on every write |
 | `categories` | 1 | ✅ done | Hierarchical tree with materialised `path` |
 | `brands` | 1 | ✅ done | Brand CRUD |
 | `units` | 1 | ✅ done | Units and packaging conversions |

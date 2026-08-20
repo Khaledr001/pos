@@ -20,6 +20,7 @@ import {
   BarChart3,
   UserCheck,
   Tablet,
+  ShieldCheck,
 } from "lucide-react";
 import { hasPermission, type Permission } from "@devsfleet/shared-types";
 import { useAuth } from "@/lib/auth-context";
@@ -77,6 +78,7 @@ const NAV_SECTIONS: Array<{
     label: "System",
     items: [
       { label: "Staff & Users", href: "/users", icon: UserCheck, permission: "user:read" },
+      { label: "Roles & Permissions", href: "/roles", icon: ShieldCheck, permission: "role:write" },
       { label: "Terminals", href: "/devices", icon: Tablet, permission: "branch:read" },
       { label: "Settings", href: "/settings", icon: Settings, permission: "settings:read" },
     ],
