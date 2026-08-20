@@ -95,4 +95,13 @@ export class QuotationsController {
   cancel(@Param("id", ParseUUIDPipe) id: string) {
     return this.quotations.cancel(id);
   }
+
+  @Post(":id/pdf")
+  @RequirePermissions("quotation:write")
+  @Audited("quotation", "generate_pdf")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Render, upload and record this quotation's PDF" })
+  generatePdf(@Param("id", ParseUUIDPipe) id: string) {
+    return this.quotations.generatePdf(id);
+  }
 }

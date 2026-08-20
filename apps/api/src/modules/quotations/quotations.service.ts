@@ -15,12 +15,14 @@ import { TenantDatabase } from "../../database/tenant-database.service.js";
 import { OrdersService } from "../orders/orders.service.js";
 import { PriceResolverService } from "../pricing/price-resolver.service.js";
 import { SalesService } from "../sales/sales.service.js";
+import { StorageService } from "../storage/storage.service.js";
 import type {
   ConvertQuotationDto,
   ConvertQuotationToOrderDto,
   CreateQuotationDto,
   ListQuotationsDto,
 } from "./dto.js";
+import { renderQuotationPdf } from "./quotation-pdf.js";
 
 type Transaction = Parameters<Parameters<TenantDatabase["run"]>[0]>[0];
 
@@ -42,6 +44,7 @@ export class QuotationsService {
     private readonly prices: PriceResolverService,
     private readonly sales: SalesService,
     private readonly orders: OrdersService,
+    private readonly storage: StorageService,
   ) {}
 
   async create(dto: CreateQuotationDto): Promise<unknown> {
@@ -358,6 +361,69 @@ export class QuotationsService {
     };
 
     return existing ? read(existing) : this.db.run(read);
+  }
+
+  /**
+   * Render, upload, and record the PDF for one quotation — regenerated on
+   * every call rather than served from cache, since `pdfUrl` only marks that
+   * one has ever existed, not that the quotation has not changed since.
+   */
+  async generatePdf(id: string): Promise<{ pdfUrl: string }> {
+    const tenantId = RequestContext.requireTenantId();
+
+    const quotation = (await this.findById(id)) as {
+      quotationNumber: string;
+      currency: string;
+      createdAt: Date;
+      validUntil: string | null;
+      notes: string | null;
+      subtotal: string;
+      discountAmount: string;
+      taxAmount: string;
+      total: string;
+      customer: { name: string; company: string | null; phone: string | null } | null;
+      items: Array<{
+        productName: string;
+        variantName: string;
+        productSku: string;
+        quantity: string;
+        unitPrice: string;
+        discountPercent: string;
+        taxPercent: string;
+        total: string;
+      }>;
+    };
+
+    const tenant = await this.db.run((tx) =>
+      tx.query.tenants.findFirst({ columns: { name: true } }),
+    );
+
+    const buffer = await renderQuotationPdf({
+      tenantName: tenant?.name ?? "",
+      quotationNumber: quotation.quotationNumber,
+      currency: quotation.currency,
+      createdAt: quotation.createdAt,
+      validUntil: quotation.validUntil,
+      customer: quotation.customer,
+      items: quotation.items,
+      subtotal: quotation.subtotal,
+      discountAmount: quotation.discountAmount,
+      taxAmount: quotation.taxAmount,
+      total: quotation.total,
+      notes: quotation.notes,
+    });
+
+    const pdfUrl = await this.storage.upload(
+      `${tenantId}/quotations/${quotation.quotationNumber}.pdf`,
+      buffer,
+      "application/pdf",
+    );
+
+    await this.db.run((tx) =>
+      tx.update(schema.quotations).set({ pdfUrl }).where(eq(schema.quotations.id, id)),
+    );
+
+    return { pdfUrl };
   }
 
   async list(query: ListQuotationsDto): Promise<{ items: unknown[]; total: number }> {
