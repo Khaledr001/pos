@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { COLS } from "../../common/pdf/tax-document.js";
 import { renderInvoicePdf, type InvoicePdfInput } from "./invoice-pdf.js";
 
 /**
@@ -21,6 +22,7 @@ const BASE: InvoicePdfInput = {
   occurredAt: new Date("2026-01-15T10:30:00Z"),
   currency: "AED",
   taxLabel: "VAT",
+  timezone: "Asia/Dubai",
   customer: {
     name: "Al Manar Construction",
     company: "Al Manar LLC",
@@ -38,6 +40,8 @@ const BASE: InvoicePdfInput = {
       unitPrice: "2.75",
       discountPercent: "0",
       taxPercent: "5",
+      lineSubtotal: "82.50",
+      taxAmount: "4.13",
       total: "86.63",
     },
   ],
@@ -82,6 +86,8 @@ describe("renderInvoicePdf", () => {
           unitPrice: "135.00",
           discountPercent: "10",
           taxPercent: "5",
+          lineSubtotal: "243.00",
+          taxAmount: "12.15",
           total: "255.15",
         },
       ],
@@ -107,6 +113,15 @@ describe("renderInvoicePdf", () => {
   });
 
   /**
+   * A timezone Postgres would accept but `Intl` would throw on must not take
+   * the download with it — an unprintable invoice is worse than a UTC one.
+   */
+  it("falls back rather than throwing on an unusable timezone", async () => {
+    const buffer = await renderInvoicePdf({ ...BASE, timezone: "Mars/Olympus_Mons" });
+    expect(buffer.subarray(0, 5).toString("latin1")).toBe("%PDF-");
+  });
+
+  /**
    * 60 lines runs past one A4 page. The renderer breaks to a new page rather
    * than drawing off the bottom edge — a truncated tax document is not one.
    */
@@ -125,5 +140,21 @@ describe("renderInvoicePdf", () => {
   it("handles an empty line list without throwing", async () => {
     const buffer = await renderInvoicePdf({ ...BASE, lines: [] });
     expect(buffer.subarray(0, 5).toString("latin1")).toBe("%PDF-");
+  });
+});
+
+describe("table geometry", () => {
+  /**
+   * The description holds the only unbounded content on the row, so it gets
+   * the majority of the width by requirement, not by accident. Widening a
+   * numeric column at its expense wraps product names to three lines.
+   */
+  it("gives DESCRIPTION more than 45% of the table", () => {
+    expect(COLS.description).toBeGreaterThan(0.45);
+  });
+
+  it("spends the whole table width and no more", () => {
+    const total = Object.values(COLS).reduce((sum, share) => sum + share, 0);
+    expect(total).toBeCloseTo(1, 5);
   });
 });

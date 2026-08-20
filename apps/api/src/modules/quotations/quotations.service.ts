@@ -383,6 +383,7 @@ export class QuotationsService {
    */
   async renderPdf(id: string): Promise<{ filename: string; body: Buffer }> {
     const quotation = (await this.findById(id)) as {
+      branchId: string;
       quotationNumber: string;
       currency: string;
       createdAt: Date;
@@ -392,7 +393,13 @@ export class QuotationsService {
       discountAmount: string;
       taxAmount: string;
       total: string;
-      customer: { name: string; company: string | null; phone: string | null } | null;
+      customer: {
+        name: string;
+        company: string | null;
+        phone: string | null;
+        trn: string | null;
+        address?: string | null;
+      } | null;
       items: Array<{
         productName: string;
         variantName: string;
@@ -401,21 +408,56 @@ export class QuotationsService {
         unitPrice: string;
         discountPercent: string;
         taxPercent: string;
+        lineSubtotal: string;
+        taxAmount: string;
         total: string;
       }>;
     };
 
-    const tenant = await this.db.run((tx) =>
-      tx.query.tenants.findFirst({ columns: { name: true } }),
-    );
+    /**
+     * The issuing business, same as the sales invoice gathers — a quotation
+     * carries the letterhead and the TRN too, because it is the document a
+     * customer takes to their own accounts department before deciding.
+     */
+    const { tenant, settings, branch } = await this.db.run(async (tx) => {
+      const [tenantRow, branchRow] = await Promise.all([
+        tx.query.tenants.findFirst({ columns: { name: true, settings: true } }),
+        tx.query.branches.findFirst({
+          where: (t, { eq: e }) => e(t.id, quotation.branchId),
+          columns: { name: true },
+        }),
+      ]);
+      return {
+        tenant: tenantRow,
+        settings: resolveTenantSettings(tenantRow?.settings),
+        branch: branchRow,
+      };
+    });
 
     const body = await renderQuotationPdf({
-      tenantName: tenant?.name ?? "",
+      business: {
+        legalName: settings.legalName ?? tenant?.name ?? "",
+        trn: settings.trn ?? null,
+        phone: settings.phone ?? null,
+        email: settings.email ?? null,
+        addressLines: settings.addressLines ?? [],
+      },
+      branchName: branch?.name ?? null,
       quotationNumber: quotation.quotationNumber,
       currency: quotation.currency,
+      taxLabel: settings.tax.label,
+      timezone: settings.locale.timezone,
       createdAt: quotation.createdAt,
       validUntil: quotation.validUntil,
-      customer: quotation.customer,
+      customer: quotation.customer
+        ? {
+            name: quotation.customer.name,
+            company: quotation.customer.company,
+            phone: quotation.customer.phone,
+            trn: quotation.customer.trn,
+            address: quotation.customer.address ?? null,
+          }
+        : null,
       items: quotation.items,
       subtotal: quotation.subtotal,
       discountAmount: quotation.discountAmount,
@@ -429,53 +471,18 @@ export class QuotationsService {
     return { filename: `${quotation.quotationNumber}.pdf`, body };
   }
 
+  /**
+   * Render AND archive: uploads to object storage and records `pdfUrl` on the
+   * quotation, for attaching a durable copy (emailing it, sending it over
+   * WhatsApp later). Renders through `renderPdf` so the archived file and the
+   * one a customer downloads can never drift apart.
+   */
   async generatePdf(id: string): Promise<{ pdfUrl: string }> {
     const tenantId = RequestContext.requireTenantId();
-
-    const quotation = (await this.findById(id)) as {
-      quotationNumber: string;
-      currency: string;
-      createdAt: Date;
-      validUntil: string | null;
-      notes: string | null;
-      subtotal: string;
-      discountAmount: string;
-      taxAmount: string;
-      total: string;
-      customer: { name: string; company: string | null; phone: string | null } | null;
-      items: Array<{
-        productName: string;
-        variantName: string;
-        productSku: string;
-        quantity: string;
-        unitPrice: string;
-        discountPercent: string;
-        taxPercent: string;
-        total: string;
-      }>;
-    };
-
-    const tenant = await this.db.run((tx) =>
-      tx.query.tenants.findFirst({ columns: { name: true } }),
-    );
-
-    const buffer = await renderQuotationPdf({
-      tenantName: tenant?.name ?? "",
-      quotationNumber: quotation.quotationNumber,
-      currency: quotation.currency,
-      createdAt: quotation.createdAt,
-      validUntil: quotation.validUntil,
-      customer: quotation.customer,
-      items: quotation.items,
-      subtotal: quotation.subtotal,
-      discountAmount: quotation.discountAmount,
-      taxAmount: quotation.taxAmount,
-      total: quotation.total,
-      notes: quotation.notes,
-    });
+    const { filename, body: buffer } = await this.renderPdf(id);
 
     const pdfUrl = await this.storage.upload(
-      `${tenantId}/quotations/${quotation.quotationNumber}.pdf`,
+      `${tenantId}/quotations/${filename}`,
       buffer,
       "application/pdf",
     );

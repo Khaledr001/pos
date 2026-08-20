@@ -35,6 +35,7 @@ export default function SettingsPage() {
   const [trn, setTrn] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [address, setAddress] = useState("");
 
   const [taxEnabled, setTaxEnabled] = useState(DEFAULT_TENANT_SETTINGS.tax.enabled);
   const [taxLabel, setTaxLabel] = useState(DEFAULT_TENANT_SETTINGS.tax.label);
@@ -67,6 +68,7 @@ export default function SettingsPage() {
       setTrn(tenant.settings.trn ?? "");
       setPhone(tenant.settings.phone ?? "");
       setEmail(tenant.settings.email ?? "");
+      setAddress((tenant.settings.addressLines ?? []).join("\n"));
       setTaxEnabled(tenant.settings.tax.enabled);
       setTaxLabel(tenant.settings.tax.label);
       setTaxRate(tenant.settings.tax.defaultRate);
@@ -115,6 +117,12 @@ export default function SettingsPage() {
           trn: trn || undefined,
           phone: phone || undefined,
           email: email || undefined,
+          // One line per row, blanks dropped — the invoice letterhead prints
+          // these verbatim, and an empty line there reads as a layout bug.
+          addressLines: address
+            .split("\n")
+            .map((line) => line.trim())
+            .filter(Boolean),
           tax: { enabled: taxEnabled, label: taxLabel, defaultRate: taxRate },
           sales: {
             enforceCreditLimit,
@@ -198,6 +206,18 @@ export default function SettingsPage() {
                 <div>
                   <label className="block text-xs font-medium text-foreground mb-1.5">Email</label>
                   <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-medium text-foreground mb-1.5">
+                    Address (one line per row)
+                  </label>
+                  <textarea
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    rows={2}
+                    placeholder={"Shop 4, Al Wahda Street\nSharjah, UAE"}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  />
                 </div>
               </div>
             </CardContent>

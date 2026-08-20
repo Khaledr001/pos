@@ -1248,6 +1248,7 @@ export class SalesService {
       occurredAt: sale.occurredAt,
       currency: settings.currency.base,
       taxLabel: settings.tax.label,
+      timezone: settings.locale.timezone,
       customer: customer
         ? {
             name: customer.name,
@@ -1266,6 +1267,11 @@ export class SalesService {
         unitPrice: item.unitPrice,
         discountPercent: item.discountPercent,
         taxPercent: item.taxPercent,
+        // Both stored per line at sale time, so the invoice's own columns add
+        // up to its totals without this recomputing tax and risking a penny
+        // of disagreement with the sale it is describing.
+        lineSubtotal: item.lineSubtotal,
+        taxAmount: item.taxAmount,
         total: item.total,
       })),
       subtotal: sale.subtotal,
