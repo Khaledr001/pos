@@ -1,7 +1,10 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
-import { Package, Search, Plus, RefreshCw, X, AlertCircle, CheckCircle2, Boxes, Trash2 } from "lucide-react";
+import {
+  Package, Search, Plus, RefreshCw, X, AlertCircle, CheckCircle2, Boxes, Trash2,
+  Pencil, Image as ImageIcon, Upload, Star,
+} from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
@@ -29,9 +32,11 @@ interface Product {
   id: string;
   name: string;
   sku: string;
+  description?: string | null;
   isActive: boolean;
   categoryId?: string;
   categoryName?: string;
+  brandId?: string | null;
   brandName?: string;
   unitAbbr?: string;
   variantCount?: number;
@@ -42,6 +47,19 @@ interface Product {
   category?: { name: string } | null;
   taxRate?: number;
   variants?: ProductVariant[];
+  images?: ProductImage[];
+}
+
+interface ProductImage {
+  id: string;
+  url: string;
+  isPrimary: boolean;
+  altText: string | null;
+}
+
+interface Brand {
+  id: string;
+  name: string;
 }
 
 interface ProductsPage {
@@ -111,6 +129,7 @@ export default function ProductsPage() {
   // Lookups
   const [units, setUnits] = useState<Unit[]>([]);
   const [categories, setCategories] = useState<{ id: string; label: string }[]>([]);
+  const [brands, setBrands] = useState<Brand[]>([]);
 
   // Dialog
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -132,6 +151,9 @@ export default function ProductsPage() {
 
   // Packagings dialog
   const [packagingProduct, setPackagingProduct] = useState<Product | null>(null);
+
+  // Edit dialog (includes image management)
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
   // ── Fetch products ──────────────────────────────────────────────────────
 
@@ -164,7 +186,8 @@ export default function ProductsPage() {
       api.get<Unit[]>("/units", { accessToken: tokens.accessToken }),
       api.get<Category[]>("/categories", { accessToken: tokens.accessToken }),
       api.get<{ items: { id: string; name: string; code: string }[] }>("/branches", { accessToken: tokens.accessToken }),
-    ]).then(([unitsRes, catsRes, branchesRes]) => {
+      api.get<Brand[]>("/brands", { accessToken: tokens.accessToken }),
+    ]).then(([unitsRes, catsRes, branchesRes, brandsRes]) => {
       if (unitsRes.status === "fulfilled") setUnits(unitsRes.value ?? []);
       if (catsRes.status === "fulfilled") setCategories(flattenCategories(catsRes.value ?? []));
       if (branchesRes.status === "fulfilled") {
@@ -172,6 +195,7 @@ export default function ProductsPage() {
         setBranches(bs);
         if (bs.length > 0 && bs[0]) setFBranchId(bs[0].id);
       }
+      if (brandsRes.status === "fulfilled") setBrands(brandsRes.value ?? []);
     });
   }, [tokens]);
 
@@ -228,6 +252,22 @@ export default function ProductsPage() {
       setSubmitting(false);
     }
   };
+
+  // ── Handle delete ───────────────────────────────────────────────────────
+
+  async function handleDelete(product: Product) {
+    if (!window.confirm(`Delete "${product.name}"? A product with sales history is deactivated instead.`)) {
+      return;
+    }
+    setActionError(null);
+    try {
+      await api.delete(`/products/${product.id}`, { accessToken: tokens?.accessToken });
+      setActionSuccess(`"${product.name}" removed.`);
+      await fetchProducts();
+    } catch (err: any) {
+      setActionError(err?.message || "Failed to delete the product.");
+    }
+  }
 
   // ── Render ──────────────────────────────────────────────────────────────
 
@@ -315,7 +355,7 @@ export default function ProductsPage() {
                   <th className="px-4 py-3.5 text-right font-medium">Price (AED)</th>
                   <th className="px-4 py-3.5 text-center font-medium">Variants</th>
                   <th className="px-4 py-3.5 text-center font-medium">Status</th>
-                  <th className="px-4 py-3.5 text-center font-medium">Packagings</th>
+                  <th className="px-4 py-3.5 text-right font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -358,15 +398,28 @@ export default function ProductsPage() {
                           {product.isActive ? "Active" : "Inactive"}
                         </Badge>
                       </td>
-                      <td className="px-4 py-3.5 text-center">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setPackagingProduct(product)}
-                        >
-                          <Boxes className="h-3.5 w-3.5" />
-                          Manage
-                        </Button>
+                      <td className="px-4 py-3.5 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Button variant="outline" size="sm" onClick={() => setPackagingProduct(product)}>
+                            <Boxes className="h-3.5 w-3.5" />
+                          </Button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingProduct(product)}
+                            aria-label={`Edit ${product.name}`}
+                            className="cursor-pointer p-1.5 text-muted-foreground hover:text-foreground"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleDelete(product)}
+                            aria-label={`Delete ${product.name}`}
+                            className="cursor-pointer p-1.5 text-muted-foreground hover:text-destructive"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -517,7 +570,312 @@ export default function ProductsPage() {
         accessToken={tokens?.accessToken}
         onClose={() => setPackagingProduct(null)}
       />
+
+      <EditProductDialog
+        product={editingProduct}
+        categories={categories}
+        brands={brands}
+        accessToken={tokens?.accessToken}
+        onClose={() => setEditingProduct(null)}
+        onSaved={() => {
+          setActionSuccess("Product updated.");
+          fetchProducts();
+        }}
+      />
     </div>
+  );
+}
+
+// ── Edit product (details + images) ─────────────────────────────────────────
+
+/**
+ * Product-level fields only — sku and unitId are fixed at creation
+ * (products.service.ts's own update() never touches them either), and
+ * variant/price editing lives in the pricing module's own surface (Stage
+ * 5.1), not here. Images are managed inline: upload, set primary, remove.
+ */
+function EditProductDialog({
+  product,
+  categories,
+  brands,
+  accessToken,
+  onClose,
+  onSaved,
+}: {
+  product: Product | null;
+  categories: { id: string; label: string }[];
+  brands: Brand[];
+  accessToken?: string;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [fName, setFName] = useState("");
+  const [fDescription, setFDescription] = useState("");
+  const [fCategoryId, setFCategoryId] = useState("");
+  const [fBrandId, setFBrandId] = useState("");
+  const [fTaxRate, setFTaxRate] = useState("");
+  const [fIsActive, setFIsActive] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const [images, setImages] = useState<ProductImage[]>([]);
+  const [imagesLoading, setImagesLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  const fetchImages = useCallback(async (productId: string) => {
+    setImagesLoading(true);
+    try {
+      const rows = await api.get<ProductImage[]>(`/products/${productId}/images`, { accessToken });
+      setImages(rows ?? []);
+    } catch (err: any) {
+      setError(err?.message || "Failed to load images.");
+    } finally {
+      setImagesLoading(false);
+    }
+  }, [accessToken]);
+
+  useEffect(() => {
+    if (!product) return;
+    setError(null);
+    setFName(product.name);
+    setFDescription(product.description ?? "");
+    setFCategoryId(product.categoryId ?? "");
+    setFBrandId(product.brandId ?? "");
+    setFTaxRate(product.taxRate !== undefined && product.taxRate !== null ? String(product.taxRate) : "");
+    setFIsActive(product.isActive);
+    void fetchImages(product.id);
+  }, [product, fetchImages]);
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (!product) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await api.patch(
+        `/products/${product.id}`,
+        {
+          name: fName,
+          description: fDescription || undefined,
+          categoryId: fCategoryId || null,
+          brandId: fBrandId || null,
+          taxRate: fTaxRate ? Number(fTaxRate) : undefined,
+          isActive: fIsActive,
+        },
+        { accessToken },
+      );
+      onSaved();
+      onClose();
+    } catch (err: any) {
+      setError(err?.message || "Failed to save the product.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleUpload(file: File) {
+    if (!product) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("isPrimary", String(images.length === 0));
+      await api.postForm(`/products/${product.id}/images`, form, { accessToken });
+      await fetchImages(product.id);
+    } catch (err: any) {
+      setError(err?.message || "Failed to upload the image.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleSetPrimary(image: ProductImage) {
+    if (!product) return;
+    setError(null);
+    try {
+      await api.patch(`/products/images/${image.id}`, { isPrimary: true }, { accessToken });
+      await fetchImages(product.id);
+    } catch (err: any) {
+      setError(err?.message || "Failed to set the primary image.");
+    }
+  }
+
+  async function handleRemoveImage(image: ProductImage) {
+    if (!product) return;
+    setError(null);
+    try {
+      await api.delete(`/products/images/${image.id}`, { accessToken });
+      await fetchImages(product.id);
+    } catch (err: any) {
+      setError(err?.message || "Failed to remove the image.");
+    }
+  }
+
+  return (
+    <Dialog open={product !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
+              <Pencil className="h-4 w-4" />
+            </div>
+            <div>
+              <DialogTitle>Edit {product?.name}</DialogTitle>
+              <DialogDescription>SKU {product?.sku} — variant pricing lives on the Pricing screen.</DialogDescription>
+            </div>
+          </div>
+        </DialogHeader>
+
+        {error && (
+          <div className="flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+            <AlertCircle className="h-4 w-4 shrink-0" /><span>{error}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSave} className="space-y-4">
+          <div className="rounded-xl border border-border p-4 space-y-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Product Details</p>
+            <div>
+              <label className="block text-xs font-medium text-foreground mb-1.5">Product Name *</label>
+              <Input required value={fName} onChange={(e) => setFName(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-foreground mb-1.5">Description</label>
+              <textarea
+                value={fDescription}
+                onChange={(e) => setFDescription(e.target.value)}
+                rows={2}
+                className="flex w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div>
+                <label className="block text-xs font-medium text-foreground mb-1.5">Category</label>
+                <select
+                  value={fCategoryId}
+                  onChange={(e) => setFCategoryId(e.target.value)}
+                  className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="">— None —</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-foreground mb-1.5">Brand</label>
+                <select
+                  value={fBrandId}
+                  onChange={(e) => setFBrandId(e.target.value)}
+                  className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="">— None —</option>
+                  {brands.map((b) => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-foreground mb-1.5">Tax Rate % (blank = default)</label>
+                <Input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={fTaxRate}
+                  onChange={(e) => setFTaxRate(e.target.value)}
+                  className="font-mono"
+                />
+              </div>
+            </div>
+            <label className="flex items-center gap-2 text-xs font-medium text-foreground">
+              <input
+                type="checkbox"
+                checked={fIsActive}
+                onChange={(e) => setFIsActive(e.target.checked)}
+                className="h-4 w-4 rounded border-input"
+              />
+              Active
+            </label>
+          </div>
+
+          <div className="rounded-xl border border-border p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Photos</p>
+              <label className="cursor-pointer">
+                <span className={cn(
+                  "inline-flex items-center gap-1.5 rounded-lg border border-input px-2.5 py-1.5 text-xs font-medium hover:bg-secondary/50",
+                  uploading && "opacity-50 pointer-events-none",
+                )}>
+                  <Upload className="h-3.5 w-3.5" />
+                  {uploading ? "Uploading…" : "Upload"}
+                </span>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) void handleUpload(file);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            </div>
+
+            {imagesLoading ? (
+              <p className="text-xs text-muted-foreground">Loading…</p>
+            ) : images.length === 0 ? (
+              <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                <ImageIcon className="h-4 w-4" /> No photos yet. JPEG, PNG or WebP, up to 5MB.
+              </p>
+            ) : (
+              <div className="grid grid-cols-4 gap-3 sm:grid-cols-6">
+                {images.map((image) => (
+                  <div key={image.id} className="group relative aspect-square overflow-hidden rounded-lg border border-border">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={image.url} alt={image.altText ?? ""} className="h-full w-full object-cover" />
+                    {image.isPrimary && (
+                      <span className="absolute left-1 top-1 rounded-full bg-primary p-1 text-primary-foreground">
+                        <Star className="h-2.5 w-2.5 fill-current" />
+                      </span>
+                    )}
+                    <div className="absolute inset-0 hidden items-center justify-center gap-1.5 bg-black/60 group-hover:flex">
+                      {!image.isPrimary && (
+                        <button
+                          type="button"
+                          onClick={() => void handleSetPrimary(image)}
+                          aria-label="Set as primary photo"
+                          className="cursor-pointer rounded-full bg-white/90 p-1.5 text-foreground hover:bg-white"
+                        >
+                          <Star className="h-3 w-3" />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => void handleRemoveImage(image)}
+                        aria-label="Remove photo"
+                        className="cursor-pointer rounded-full bg-white/90 p-1.5 text-destructive hover:bg-white"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 

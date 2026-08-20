@@ -16,7 +16,7 @@
     "module": "CommonJS",
     "moduleResolution": "Node",
     "lib": ["ES2023"],
-    "types": ["node", "vitest/globals"],
+    "types": ["node", "vitest/globals", "multer"],
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "strictPropertyInitialization": false,

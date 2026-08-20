@@ -1,7 +1,8 @@
 import {
   Body, Controller, Delete, Get, HttpCode, HttpStatus,
-  Param, ParseUUIDPipe, Patch, Post, Query,
+  Param, ParseUUIDPipe, Patch, Post, Query, UploadedFile, UseInterceptors,
 } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Audited, RequirePermissions } from "../../common/decorators/index.js";
 import { zodPipe } from "../../common/pipes/zod-validation.pipe.js";
@@ -9,10 +10,12 @@ import { ProductsService } from "./products.service.js";
 import {
   CreateProductSchema, CreateProductSupplierLinkSchema, CreateVariantUnitSchema,
   ListProductsSchema, SearchVariantsSchema,
-  UpdateProductSchema, UpdateProductSupplierLinkSchema, UpdateVariantUnitSchema,
+  UpdateProductImageSchema, UpdateProductSchema, UpdateProductSupplierLinkSchema, UpdateVariantUnitSchema,
+  UploadProductImageSchema,
   type CreateProductDto, type CreateProductSupplierLinkDto, type CreateVariantUnitDto,
   type ListProductsDto, type SearchVariantsDto, type UpdateProductDto,
-  type UpdateProductSupplierLinkDto, type UpdateVariantUnitDto,
+  type UpdateProductImageDto, type UpdateProductSupplierLinkDto, type UpdateVariantUnitDto,
+  type UploadProductImageDto,
 } from "./dto.js";
 
 @ApiTags("products")
@@ -157,5 +160,44 @@ export class ProductsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteSupplierLink(@Param("id", ParseUUIDPipe) id: string): Promise<void> {
     return this.products.deleteSupplierLink(id);
+  }
+
+  // --- images (Stage 5.6) ---------------------------------------------------
+
+  @Get(":productId/images")
+  @RequirePermissions("product:read")
+  listImages(@Param("productId", ParseUUIDPipe) productId: string) {
+    return this.products.listImages(productId);
+  }
+
+  @Post(":productId/images")
+  @RequirePermissions("product:write")
+  @Audited("product_images", "create")
+  @UseInterceptors(FileInterceptor("file"))
+  @ApiOperation({ summary: "Upload a product photo (JPEG/PNG/WebP, 5MB max)" })
+  uploadImage(
+    @Param("productId", ParseUUIDPipe) productId: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Body(zodPipe(UploadProductImageSchema)) dto: UploadProductImageDto,
+  ) {
+    return this.products.addImage(productId, file, dto);
+  }
+
+  @Patch("images/:id")
+  @RequirePermissions("product:write")
+  @Audited("product_images", "update")
+  updateImage(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body(zodPipe(UpdateProductImageSchema)) dto: UpdateProductImageDto,
+  ) {
+    return this.products.updateImage(id, dto);
+  }
+
+  @Delete("images/:id")
+  @RequirePermissions("product:write")
+  @Audited("product_images", "delete")
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteImage(@Param("id", ParseUUIDPipe) id: string): Promise<void> {
+    return this.products.deleteImage(id);
   }
 }

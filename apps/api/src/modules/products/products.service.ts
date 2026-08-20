@@ -3,11 +3,13 @@ import type { AttributeDefinition } from "@devsfleet/db";
 import type { Paginated } from "@devsfleet/shared-types";
 import { AppError, ERROR_CODES, searchKey, normalizeBarcode } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
+import { createHash } from "node:crypto";
 import { RequestContext } from "../../common/context/request-context.js";
 import { PlanLimitService } from "../../common/guards/plan-limit.service.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import { StockService } from "../inventory/stock.service.js";
 import { PriceResolverService } from "../pricing/price-resolver.service.js";
+import { StorageService } from "../storage/storage.service.js";
 import type {
   CreateProductDto,
   CreateProductSupplierLinkDto,
@@ -15,9 +17,18 @@ import type {
   ListProductsDto,
   SearchVariantsDto,
   UpdateProductDto,
+  UpdateProductImageDto,
   UpdateProductSupplierLinkDto,
   UpdateVariantUnitDto,
+  UploadProductImageDto,
 } from "./dto.js";
+
+const ALLOWED_IMAGE_MIME_TYPES: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+};
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 /**
  * The catalogue.
@@ -37,6 +48,7 @@ export class ProductsService {
     private readonly planLimits: PlanLimitService,
     private readonly stock: StockService,
     private readonly prices: PriceResolverService,
+    private readonly storage: StorageService,
   ) {}
 
   async list(query: ListProductsDto): Promise<Paginated<unknown>> {
@@ -203,6 +215,12 @@ export class ProductsService {
       });
       const priceBy = new Map(priced.map((p) => [p.variantId, p]));
 
+      const images = await tx
+        .select()
+        .from(schema.productImages)
+        .where(eq(schema.productImages.productId, id))
+        .orderBy(asc(schema.productImages.sortOrder));
+
       return {
         ...product,
         variants: variants.map((v) => {
@@ -215,6 +233,7 @@ export class ProductsService {
             ...(canViewCost ? { purchasePrice: price?.purchasePrice ?? null } : {}),
           };
         }),
+        images,
       };
     });
   }
@@ -622,6 +641,170 @@ export class ProductsService {
   async deleteSupplierLink(id: string): Promise<void> {
     await this.db.run(async (tx) => {
       await tx.delete(schema.productSupplierLinks).where(eq(schema.productSupplierLinks.id, id));
+    });
+  }
+
+  /**
+   * Product images (Stage 5.6). Deduplicated by SHA-256 of the bytes — the
+   * same photo cannot be stored twice under this tenant; a collision is
+   * refused with the product it already belongs to, rather than silently
+   * reusing or re-uploading it, since which product actually owns a shared
+   * photo is a judgement call this service should not make for someone.
+   */
+  async listImages(productId: string): Promise<unknown[]> {
+    return this.db.run((tx) =>
+      tx
+        .select()
+        .from(schema.productImages)
+        .where(eq(schema.productImages.productId, productId))
+        .orderBy(asc(schema.productImages.sortOrder)),
+    );
+  }
+
+  async addImage(
+    productId: string,
+    file: Express.Multer.File,
+    dto: UploadProductImageDto,
+  ): Promise<unknown> {
+    const tenantId = RequestContext.requireTenantId();
+
+    const extension = ALLOWED_IMAGE_MIME_TYPES[file.mimetype];
+    if (!extension) {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_FAILED,
+        `Unsupported image type "${file.mimetype}". Use JPEG, PNG or WebP.`,
+      );
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      throw new AppError(ERROR_CODES.VALIDATION_FAILED, "Image is larger than 5MB.");
+    }
+
+    const checksum = createHash("sha256").update(file.buffer).digest("hex");
+
+    return this.db.run(async (tx) => {
+      const product = await tx.query.products.findFirst({
+        where: (t, { eq: e }) => e(t.id, productId),
+        columns: { id: true },
+      });
+      if (!product) throw new AppError(ERROR_CODES.PRODUCT_NOT_FOUND, `Product ${productId} not found`);
+
+      const duplicate = await tx.query.productImages.findFirst({
+        where: (t, { eq: e }) => e(t.checksum, checksum),
+        columns: { id: true, productId: true },
+      });
+      if (duplicate) {
+        throw new AppError(
+          ERROR_CODES.DUPLICATE_IMAGE,
+          duplicate.productId === productId
+            ? "This exact image is already attached to this product."
+            : "This exact image is already attached to a different product.",
+        );
+      }
+
+      const [existingCount] = await tx
+        .select({ value: count() })
+        .from(schema.productImages)
+        .where(eq(schema.productImages.productId, productId));
+      // The first photo a product gets is primary whether or not the caller
+      // asked — a lone image with nothing marked primary is a product with
+      // no thumbnail anywhere that reads one.
+      const isPrimary = dto.isPrimary || (existingCount?.value ?? 0) === 0;
+
+      const key = `${tenantId}/products/${productId}/${checksum}.${extension}`;
+      const url = await this.storage.upload(key, file.buffer, file.mimetype);
+
+      if (isPrimary) {
+        await tx
+          .update(schema.productImages)
+          .set({ isPrimary: false })
+          .where(eq(schema.productImages.productId, productId));
+      }
+
+      const [image] = await tx
+        .insert(schema.productImages)
+        .values({
+          tenantId,
+          productId,
+          ...(dto.variantId ? { variantId: dto.variantId } : {}),
+          url,
+          checksum,
+          sizeBytes: file.size,
+          mimeType: file.mimetype,
+          ...(dto.altText ? { altText: dto.altText } : {}),
+          isPrimary,
+        })
+        .returning();
+
+      if (isPrimary) {
+        await tx.update(schema.products).set({ imageUrl: url }).where(eq(schema.products.id, productId));
+      }
+
+      return image;
+    });
+  }
+
+  async updateImage(id: string, dto: UpdateProductImageDto): Promise<unknown> {
+    return this.db.run(async (tx) => {
+      const image = await tx.query.productImages.findFirst({
+        where: (t, { eq: e }) => e(t.id, id),
+        columns: { productId: true },
+      });
+      if (!image) throw new AppError(ERROR_CODES.NOT_FOUND, `Image ${id} not found`);
+
+      if (dto.isPrimary) {
+        await tx
+          .update(schema.productImages)
+          .set({ isPrimary: false })
+          .where(eq(schema.productImages.productId, image.productId));
+      }
+
+      const [updated] = await tx
+        .update(schema.productImages)
+        .set({
+          ...(dto.isPrimary !== undefined ? { isPrimary: dto.isPrimary } : {}),
+          ...(dto.altText !== undefined ? { altText: dto.altText } : {}),
+          ...(dto.sortOrder !== undefined ? { sortOrder: dto.sortOrder } : {}),
+        })
+        .where(eq(schema.productImages.id, id))
+        .returning();
+      if (!updated) throw new AppError(ERROR_CODES.NOT_FOUND, `Image ${id} not found`);
+
+      if (dto.isPrimary) {
+        await tx.update(schema.products).set({ imageUrl: updated.url }).where(eq(schema.products.id, image.productId));
+      }
+      return updated;
+    });
+  }
+
+  /**
+   * A real delete — this is a reference to a stored object, not a document
+   * anything snapshots from. The object itself is left in storage rather
+   * than deleted alongside the row: another product's own row can still
+   * point at the same bytes if this ever moves toward shared photography,
+   * and an orphaned blob costs storage, not correctness.
+   */
+  async deleteImage(id: string): Promise<void> {
+    await this.db.run(async (tx) => {
+      const image = await tx.query.productImages.findFirst({
+        where: (t, { eq: e }) => e(t.id, id),
+      });
+      if (!image) throw new AppError(ERROR_CODES.NOT_FOUND, `Image ${id} not found`);
+
+      await tx.delete(schema.productImages).where(eq(schema.productImages.id, id));
+
+      if (image.isPrimary) {
+        const next = await tx.query.productImages.findFirst({
+          where: (t, { eq: e }) => e(t.productId, image.productId),
+          orderBy: (t, { asc: a }) => a(t.sortOrder),
+        });
+        await tx
+          .update(schema.products)
+          .set({ imageUrl: next?.url ?? null })
+          .where(eq(schema.products.id, image.productId));
+        if (next) {
+          await tx.update(schema.productImages).set({ isPrimary: true }).where(eq(schema.productImages.id, next.id));
+        }
+      }
     });
   }
 

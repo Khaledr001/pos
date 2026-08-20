@@ -25,6 +25,8 @@ const ROUTE_PERMISSIONS: Array<[string, Permission]> = [
   ["/settings", "settings:read"],
   ["/branches", "branch:read"],
   ["/products", "product:read"],
+  ["/categories", "product:read"],
+  ["/brands", "product:read"],
   ["/inventory", "inventory:read"],
   ["/customers", "customer:read"],
   ["/suppliers", "supplier:read"],

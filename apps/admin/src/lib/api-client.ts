@@ -90,6 +90,7 @@ async function refreshAccessToken(): Promise<string | null> {
 }
 
 export interface RequestOptions extends Omit<RequestInit, "body"> {
+  /** A FormData body (file upload) is sent as-is — see the `send()` closure below. */
   body?: unknown;
   /** Bearer token. Server components pass it explicitly; browser resolves from localStorage. */
   accessToken?: string;
@@ -106,15 +107,20 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
     if (value !== undefined) url.searchParams.set(key, String(value));
   }
 
+  // A FormData body (file upload) must never be JSON-stringified, and must
+  // never carry an explicit content-type — fetch sets the multipart boundary
+  // itself, and a caller-set header here would be missing it.
+  const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
+
   const send = (bearer: string | undefined) =>
     fetch(url, {
       ...rest,
       headers: {
-        "content-type": "application/json",
+        ...(isFormData ? {} : { "content-type": "application/json" }),
         ...(bearer ? { authorization: `Bearer ${bearer}` } : {}),
         ...headers,
       },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      ...(body === undefined ? {} : { body: isFormData ? (body as FormData) : JSON.stringify(body) }),
     });
 
   let response = await send(token);
@@ -177,6 +183,9 @@ export const api = {
     apiFetch<T>(path, { ...options, method: "GET" }),
   post: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     apiFetch<T>(path, { ...options, method: "POST", body }),
+  /** File upload — pass a FormData body, e.g. one built with `.append("file", file)`. */
+  postForm: <T>(path: string, formData: FormData, options?: RequestOptions) =>
+    apiFetch<T>(path, { ...options, method: "POST", body: formData }),
   patch: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     apiFetch<T>(path, { ...options, method: "PATCH", body }),
   delete: <T>(path: string, options?: RequestOptions) =>

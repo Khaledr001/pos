@@ -23,6 +23,8 @@ import {
   ShieldCheck,
   ScrollText,
   Wallet,
+  FolderTree,
+  Tag,
 } from "lucide-react";
 import { hasPermission, type Permission } from "@devsfleet/shared-types";
 import { useAuth } from "@/lib/auth-context";
@@ -63,6 +65,8 @@ const NAV_SECTIONS: Array<{
     label: "Commerce",
     items: [
       { label: "Products", href: "/products", icon: Package, permission: "product:read" },
+      { label: "Categories", href: "/categories", icon: FolderTree, permission: "product:read" },
+      { label: "Brands", href: "/brands", icon: Tag, permission: "product:read" },
       { label: "Inventory", href: "/inventory", icon: Boxes, permission: "inventory:read" },
       { label: "Transfers", href: "/transfers", icon: Truck, permission: "transfer:read" },
       { label: "Purchase Orders", href: "/purchases", icon: Package, permission: "purchase:read" },

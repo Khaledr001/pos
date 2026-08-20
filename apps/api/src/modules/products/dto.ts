@@ -158,3 +158,23 @@ export const UpdateProductSupplierLinkSchema = ProductSupplierLinkShape.omit({
   supplierId: true,
 }).partial();
 export type UpdateProductSupplierLinkDto = z.infer<typeof UpdateProductSupplierLinkSchema>;
+
+/**
+ * The non-file fields alongside a product image upload (Stage 5.6). Arrives
+ * as multipart form fields, hence z.coerce — the file itself is handled by
+ * FileInterceptor, never by Zod.
+ */
+export const UploadProductImageSchema = z.object({
+  /** Set when this photo shows one specific variant rather than the family. */
+  variantId: z.string().uuid().optional(),
+  isPrimary: z.coerce.boolean().default(false),
+  altText: z.string().trim().max(255).optional(),
+});
+export type UploadProductImageDto = z.infer<typeof UploadProductImageSchema>;
+
+export const UpdateProductImageSchema = z.object({
+  isPrimary: z.boolean().optional(),
+  altText: z.string().trim().max(255).nullable().optional(),
+  sortOrder: z.coerce.number().int().min(0).optional(),
+});
+export type UpdateProductImageDto = z.infer<typeof UpdateProductImageSchema>;

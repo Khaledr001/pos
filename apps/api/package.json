@@ -45,6 +45,7 @@
     "@nestjs/cli": "^11.0.10",
     "@nestjs/schematics": "^11.0.8",
     "@nestjs/testing": "^11.1.6",
+    "@types/multer": "^1.4.13",
     "@swc/core": "^1.13.5",
     "@types/compression": "^1.8.1",
     "@types/express": "^5.0.3",
