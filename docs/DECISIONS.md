@@ -202,11 +202,58 @@ before Stage 2 ships if it matters for this tenant's actual VAT reporting.
 
 ---
 
+## D16 — Thermal printer over USB as a raw device file; A4 via `pdfkit`
+
+**Decided**, going into Stage 4 (receipts and hardware — see feature.md).
+Resolves open item #3 below; the printer's exact model is still unconfirmed,
+but that no longer blocks building against it.
+
+Asked the user how the thermal printer connects: USB, network, or decide
+later. Answer: **USB**. ESC/POS is near-universal across 58mm/80mm thermal
+printers regardless of model, so the model itself was never the blocking
+question — the connection method was, because it determines the code path.
+
+`node-thermal-printer` talks to the printer through its own `File` interface:
+a raw `fs.writeFile` to a kernel `usblp` device path (e.g. `/dev/usb/lp0` on
+Linux), configurable per terminal. Deliberately NOT the library's
+`printer:name` interface, which needs an external native driver module (the
+`printer`/`node-printer` npm packages) — this project already paid the cost of
+a native-binding Electron-ABI rebuild once, with `better-sqlite3`, and a
+second one was avoidable here. `node-thermal-printer` itself and all of its
+own dependencies (iconv-lite, pngjs, write-file-queue) are pure JS.
+
+The cash drawer needs no separate decision or device: it is wired to the
+printer's RJ11 port, and opening it is the same ESC/POS kick pulse
+(`openCashDrawer()`) appended to the same buffer as a receipt, or sent alone
+for a manual open.
+
+The A4 tax invoice (4.4) is a different problem — a general-purpose page, not
+a receipt strip — and uses `pdfkit` instead, the same dependency the API
+already uses for quotation PDFs (D-less, but see `quotation-pdf.ts`): one
+PDF-rendering approach across the codebase, still no native binding. The
+POS saves the rendered PDF under `userData/invoices` and hands it to the OS's
+default viewer via `shell.openPath` — printing it to an actual A4 printer is
+that viewer's own native Print command, not a driver this app talks to
+directly. Rejected Electron's `webContents.printToPDF`/`print()` on rendered
+HTML for the same reason `pdfkit` won at the API layer: one rendering engine,
+not two, and no hidden `BrowserWindow` lifecycle to manage for a document this
+structured.
+
+Not yet verified against real hardware — no physical USB thermal printer or
+A4 printer exists in this environment. What is verified: the exact ESC/POS
+byte sequence a real device would receive (written to a scratch file standing
+in for the device path), and a real, valid PDF buffer for the A4 invoice.
+
+---
+
 ## Still open
 
 | # | Question | Blocks |
 |---|---|---|
 | 1 | The real product price list | Final products/pricing schema, the importer |
 | 2 | Barcode scanner model — USB HID assumed | POS scanner integration (Phase 3) |
-| 3 | Thermal printer models (58mm / 80mm) | POS receipt rendering (Phase 3) |
 | 4 | LLM provider — OpenAI assumed, Gemini/Anthropic wired in env | AI module (Phase 4) |
+
+Thermal printer models (formerly #3) resolved as D16 — connection method
+(USB, raw device file) decided and built; the exact printer model remains
+unconfirmed but no longer blocks anything.
