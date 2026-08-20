@@ -20,6 +20,7 @@ Copying its shape is what keeps twenty modules looking like one codebase.
 | Module | Phase | Status | Responsibility |
 |---|---|---|---|
 | `platform` | 1 | ✅ done | SuperAdmin console, plans, impersonation |
+| `audit` | 1 | ✅ done | Read side of `audit_log` — `AuditInterceptor` is the only writer |
 | `health` | 1 | ✅ done | Liveness and readiness probes |
 | `auth` | 1 | ✅ done | JWT login, PIN login, refresh rotation |
 | `branches` | 1 | ✅ done | Branch CRUD — **the reference module** |

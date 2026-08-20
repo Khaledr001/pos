@@ -21,6 +21,7 @@ import {
   UserCheck,
   Tablet,
   ShieldCheck,
+  ScrollText,
 } from "lucide-react";
 import { hasPermission, type Permission } from "@devsfleet/shared-types";
 import { useAuth } from "@/lib/auth-context";
@@ -80,6 +81,7 @@ const NAV_SECTIONS: Array<{
       { label: "Staff & Users", href: "/users", icon: UserCheck, permission: "user:read" },
       { label: "Roles & Permissions", href: "/roles", icon: ShieldCheck, permission: "role:write" },
       { label: "Terminals", href: "/devices", icon: Tablet, permission: "branch:read" },
+      { label: "Audit Trail", href: "/audit-log", icon: ScrollText, permission: "audit:read" },
       { label: "Settings", href: "/settings", icon: Settings, permission: "settings:read" },
     ],
   },

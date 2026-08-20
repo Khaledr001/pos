@@ -33,6 +33,7 @@ const ROUTE_PERMISSIONS: Array<[string, Permission]> = [
   ["/whatsapp", "whatsapp:read"],
   ["/devices", "branch:read"],
   ["/roles", "role:write"],
+  ["/audit-log", "audit:read"],
 ];
 
 function permissionFor(pathname: string): Permission | undefined {
