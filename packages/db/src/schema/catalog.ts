@@ -1,4 +1,4 @@
-import type { SerialNumberStatus } from "@devsfleet/shared-types";
+import type { AttributeType, SerialNumberStatus } from "@devsfleet/shared-types";
 import { relations, sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
@@ -256,6 +256,77 @@ export const productVariants = pgTable(
 );
 
 /**
+ * TYPED VARIANT ATTRIBUTES.
+ *
+ * `product_variants.attributes` is a free-form JSONB bag — fine for a spec
+ * nobody needs to filter on, useless for "every 1-inch elbow" (a full scan of
+ * an unindexed column). A definition here is scoped to ONE category, because
+ * this catalogue's categories do not share a vocabulary: paint needs
+ * sheen/finish, a pipe needs diameter/schedule, cable needs gauge/voltage.
+ * Redefining "size" per category is a little repetition; a single global
+ * attribute space that has to mean the same thing in Paint and Electrical
+ * would not.
+ *
+ * Values live in `variant_attribute_values`, ADDITIONALLY to the JSONB bag —
+ * this is additive, not a replacement. Only the keys a category has bothered
+ * to define here become indexed and filterable; anything else stays exactly
+ * as free-form as it always was.
+ */
+export const attributeDefinitions = pgTable(
+  "attribute_definitions",
+  {
+    id: primaryId(),
+    ...tenantScope(),
+    categoryId: uuid()
+      .notNull()
+      .references(() => categories.id, { onDelete: "cascade" }),
+    /** Machine key, e.g. "size" — matched against product_variants.attributes' own keys. */
+    name: varchar({ length: 100 }).notNull(),
+    /** Display name, e.g. "Size". */
+    label: varchar({ length: 255 }).notNull(),
+    type: varchar({ length: 20 }).$type<AttributeType>().notNull(),
+    /** Display suffix for a `number` attribute — "mm", "L". Not used otherwise. */
+    unit: varchar({ length: 20 }),
+    /** Only meaningful (and only enforced) for type "select". */
+    allowedValues: jsonb().$type<string[]>(),
+    sortOrder: integer().notNull().default(0),
+    ...timestamps(),
+  },
+  (t) => [
+    uniqueIndex("uq_attribute_definitions_category_name").on(t.categoryId, t.name),
+    index("idx_attribute_definitions_tenant").on(t.tenantId),
+  ],
+);
+
+/**
+ * One variant's value for one defined attribute. Stored as text regardless
+ * of the definition's type — "5,000 SKUs" is small enough that a plain btree
+ * on (attribute_definition_id, value) already turns "every 1-inch elbow"
+ * into an index lookup; a typed numeric column for range queries is not
+ * something this stage's acceptance criterion asks for.
+ */
+export const variantAttributeValues = pgTable(
+  "variant_attribute_values",
+  {
+    id: primaryId(),
+    ...tenantScope(),
+    variantId: uuid()
+      .notNull()
+      .references(() => productVariants.id, { onDelete: "cascade" }),
+    attributeDefinitionId: uuid()
+      .notNull()
+      .references(() => attributeDefinitions.id, { onDelete: "cascade" }),
+    value: text().notNull(),
+    ...timestamps(),
+  },
+  (t) => [
+    uniqueIndex("uq_variant_attribute_values_variant_def").on(t.variantId, t.attributeDefinitionId),
+    // The hot path: "every variant where attribute X = value".
+    index("idx_variant_attribute_values_lookup").on(t.attributeDefinitionId, t.value),
+  ],
+);
+
+/**
  * Alternate scannable codes for one variant: the outer-box code, the
  * manufacturer's code, a superseded SKU.
  */
@@ -394,6 +465,7 @@ export const categoriesRelations = relations(categories, ({ one, many }) => ({
   }),
   children: many(categories, { relationName: "category_parent" }),
   products: many(products),
+  attributeDefinitions: many(attributeDefinitions),
 }));
 
 export const productsRelations = relations(products, ({ one, many }) => ({
@@ -408,6 +480,23 @@ export const productVariantsRelations = relations(productVariants, ({ one, many 
   product: one(products, { fields: [productVariants.productId], references: [products.id] }),
   barcodes: many(variantBarcodes),
   packagings: many(variantUnits),
+  attributeValues: many(variantAttributeValues),
+}));
+
+export const attributeDefinitionsRelations = relations(attributeDefinitions, ({ one, many }) => ({
+  category: one(categories, { fields: [attributeDefinitions.categoryId], references: [categories.id] }),
+  values: many(variantAttributeValues),
+}));
+
+export const variantAttributeValuesRelations = relations(variantAttributeValues, ({ one }) => ({
+  variant: one(productVariants, {
+    fields: [variantAttributeValues.variantId],
+    references: [productVariants.id],
+  }),
+  definition: one(attributeDefinitions, {
+    fields: [variantAttributeValues.attributeDefinitionId],
+    references: [attributeDefinitions.id],
+  }),
 }));
 
 export const variantBarcodesRelations = relations(variantBarcodes, ({ one }) => ({
@@ -444,3 +533,7 @@ export type VariantUnit = typeof variantUnits.$inferSelect;
 export type ProductImage = typeof productImages.$inferSelect;
 export type NewProductImage = typeof productImages.$inferInsert;
 export type SerialNumber = typeof serialNumbers.$inferSelect;
+export type AttributeDefinition = typeof attributeDefinitions.$inferSelect;
+export type NewAttributeDefinition = typeof attributeDefinitions.$inferInsert;
+export type VariantAttributeValue = typeof variantAttributeValues.$inferSelect;
+export type NewVariantAttributeValue = typeof variantAttributeValues.$inferInsert;

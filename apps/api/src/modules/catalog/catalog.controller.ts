@@ -5,13 +5,14 @@ import {
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Audited, RequirePermissions } from "../../common/decorators/index.js";
 import { zodPipe } from "../../common/pipes/zod-validation.pipe.js";
+import { AttributeDefinitionsService } from "./attribute-definitions.service.js";
 import { CategoriesService } from "./categories.service.js";
 import { LookupsService } from "./lookups.service.js";
 import {
-  CreateBrandSchema, CreateCategorySchema, CreateUnitSchema,
-  UpdateBrandSchema, UpdateCategorySchema, UpdateUnitSchema,
-  type CreateBrandDto, type CreateCategoryDto, type CreateUnitDto,
-  type UpdateBrandDto, type UpdateCategoryDto, type UpdateUnitDto,
+  CreateAttributeDefinitionSchema, CreateBrandSchema, CreateCategorySchema, CreateUnitSchema,
+  UpdateAttributeDefinitionSchema, UpdateBrandSchema, UpdateCategorySchema, UpdateUnitSchema,
+  type CreateAttributeDefinitionDto, type CreateBrandDto, type CreateCategoryDto, type CreateUnitDto,
+  type UpdateAttributeDefinitionDto, type UpdateBrandDto, type UpdateCategoryDto, type UpdateUnitDto,
 } from "./dto.js";
 
 /**
@@ -27,6 +28,7 @@ export class CatalogController {
   constructor(
     private readonly categories: CategoriesService,
     private readonly lookups: LookupsService,
+    private readonly attributes: AttributeDefinitionsService,
   ) {}
 
   // --- categories ----------------------------------------------------------
@@ -134,5 +136,42 @@ export class CatalogController {
   @HttpCode(HttpStatus.NO_CONTENT)
   removeUnit(@Param("id", ParseUUIDPipe) id: string): Promise<void> {
     return this.lookups.removeUnit(id);
+  }
+
+  // --- attribute definitions (Stage 5.3) ------------------------------------
+
+  @Get("categories/:categoryId/attributes")
+  @RequirePermissions("product:read")
+  @ApiOperation({ summary: "Typed attributes defined for one category" })
+  listAttributeDefinitions(@Param("categoryId", ParseUUIDPipe) categoryId: string) {
+    return this.attributes.listForCategory(categoryId);
+  }
+
+  @Post("attributes")
+  @RequirePermissions("product:write")
+  @Audited("attribute_definitions", "create")
+  createAttributeDefinition(
+    @Body(zodPipe(CreateAttributeDefinitionSchema)) dto: CreateAttributeDefinitionDto,
+  ) {
+    return this.attributes.create(dto);
+  }
+
+  @Patch("attributes/:id")
+  @RequirePermissions("product:write")
+  @Audited("attribute_definitions", "update")
+  updateAttributeDefinition(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body(zodPipe(UpdateAttributeDefinitionSchema)) dto: UpdateAttributeDefinitionDto,
+  ) {
+    return this.attributes.update(id, dto);
+  }
+
+  @Delete("attributes/:id")
+  @RequirePermissions("product:delete")
+  @Audited("attribute_definitions", "delete")
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: "Remove a definition — refused while any variant carries a value for it" })
+  removeAttributeDefinition(@Param("id", ParseUUIDPipe) id: string): Promise<void> {
+    return this.attributes.remove(id);
   }
 }

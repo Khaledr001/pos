@@ -83,6 +83,13 @@ export const ListProductsSchema = z.object({
   includeInactive: z.coerce.boolean().default(false),
   /** Include per-branch stock. Costs a join, so it is opt-in. */
   branchId: z.string().uuid().optional(),
+  /**
+   * Typed attribute filter (Stage 5.3) — `?attributes[size]=1in` finds every
+   * product with a variant carrying that value, via the indexed
+   * `variant_attribute_values` table rather than a scan of the JSONB bag.
+   * Matched by the attribute's machine name, not its display label.
+   */
+  attributes: z.record(z.string(), z.string()).optional(),
   sortBy: z.enum(["name", "sku", "createdAt"]).default("name"),
   sortOrder: z.enum(["asc", "desc"]).default("asc"),
 });

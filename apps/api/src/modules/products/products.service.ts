@@ -1,4 +1,5 @@
 import { and, asc, count, desc, eq, ilike, isNull, or, schema, sql } from "@devsfleet/db";
+import type { AttributeDefinition } from "@devsfleet/db";
 import type { Paginated } from "@devsfleet/shared-types";
 import { AppError, ERROR_CODES, searchKey, normalizeBarcode } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
@@ -37,7 +38,7 @@ export class ProductsService {
   ) {}
 
   async list(query: ListProductsDto): Promise<Paginated<unknown>> {
-    const { page, limit, q, categoryId, brandId, includeInactive, sortBy, sortOrder } = query;
+    const { page, limit, q, categoryId, brandId, includeInactive, sortBy, sortOrder, attributes } = query;
     const offset = (page - 1) * limit;
 
     const where = and(
@@ -56,6 +57,26 @@ export class ProductsService {
                 AND (v.sku ILIKE ${`%${q}%`} OR v.barcode = ${q})
             )`,
           )
+        : undefined,
+      // "All 1-inch elbows" (Stage 5.3) — matches a product with ONE variant
+      // carrying every requested attribute value (not different values
+      // scattered across different variants), each condition hitting
+      // idx_variant_attribute_values_lookup rather than scanning the JSONB bag.
+      Object.entries(attributes ?? {}).length > 0
+        ? sql`EXISTS (
+            SELECT 1 FROM product_variants v
+            WHERE v.product_id = products.id AND v.deleted_at IS NULL
+              AND ${sql.join(
+                Object.entries(attributes ?? {}).map(
+                  ([name, value]) => sql`EXISTS (
+                    SELECT 1 FROM variant_attribute_values vav
+                    JOIN attribute_definitions ad ON ad.id = vav.attribute_definition_id
+                    WHERE vav.variant_id = v.id AND ad.name = ${name} AND vav.value = ${value}
+                  )`,
+                ),
+                sql` AND `,
+              )}
+          )`
         : undefined,
     );
 
@@ -246,6 +267,23 @@ export class ProductsService {
         );
       }
 
+      /**
+       * Typed attributes this category has defined (Stage 5.3) — keyed by
+       * their machine name so each variant's free-form `attributes` object
+       * can be cross-referenced against them below. A category with none
+       * defined (the common case, until an admin bothers to set one up)
+       * means every variant's attributes stay JSONB-only, exactly as before.
+       */
+      const attributeDefsByName: Map<string, AttributeDefinition> = dto.categoryId
+        ? new Map(
+            (
+              await tx.query.attributeDefinitions.findMany({
+                where: (t, { eq: e }) => e(t.categoryId, dto.categoryId!),
+              })
+            ).map((d) => [d.name, d]),
+          )
+        : new Map();
+
       for (const [index, v] of dto.variants.entries()) {
         const variantSku = v.sku ?? (dto.variants.length === 1 ? sku : `${sku}-${index + 1}`);
 
@@ -279,6 +317,10 @@ export class ProductsService {
             ? { minSellingPrice: String(v.minSellingPrice) }
             : {}),
         });
+
+        if (attributeDefsByName.size > 0) {
+          await this.writeAttributeValues(tx, tenantId, variant.id, v.attributes, attributeDefsByName);
+        }
 
         if (v.openingStock && v.openingStock > 0) {
           const branchId =
@@ -577,6 +619,47 @@ export class ProductsService {
           };
         });
     });
+  }
+
+  /**
+   * Cross-references this variant's free-form `attributes` against whatever
+   * this category has DEFINED (Stage 5.3), writing a `variant_attribute_values`
+   * row for each key that matches a definition. A key with no matching
+   * definition is left exactly where it already was — in the JSONB bag,
+   * present but unindexed — so a category that hasn't formalised an
+   * attribute yet loses nothing by not having done so.
+   */
+  private async writeAttributeValues(
+    tx: Parameters<Parameters<TenantDatabase["run"]>[0]>[0],
+    tenantId: string,
+    variantId: string,
+    attributes: Record<string, string | number | boolean>,
+    definitionsByName: Map<string, AttributeDefinition>,
+  ): Promise<void> {
+    for (const [name, rawValue] of Object.entries(attributes)) {
+      const definition = definitionsByName.get(name);
+      if (!definition) continue;
+
+      if (definition.type === "select" && !(definition.allowedValues ?? []).includes(String(rawValue))) {
+        throw new AppError(
+          ERROR_CODES.VALIDATION_FAILED,
+          `"${rawValue}" is not an allowed value for ${definition.label}. Allowed: ${(definition.allowedValues ?? []).join(", ")}`,
+        );
+      }
+      if (definition.type === "number" && Number.isNaN(Number(rawValue))) {
+        throw new AppError(ERROR_CODES.VALIDATION_FAILED, `${definition.label} must be a number`);
+      }
+      if (definition.type === "boolean" && typeof rawValue !== "boolean") {
+        throw new AppError(ERROR_CODES.VALIDATION_FAILED, `${definition.label} must be true or false`);
+      }
+
+      await tx.insert(schema.variantAttributeValues).values({
+        tenantId,
+        variantId,
+        attributeDefinitionId: definition.id,
+        value: String(rawValue),
+      });
+    }
   }
 
   /**

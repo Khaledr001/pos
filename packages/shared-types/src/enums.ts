@@ -64,6 +64,14 @@ export type PriceListType = (typeof PRICE_LIST_TYPES)[number];
 export const CUSTOMER_TYPES = asConst(["retail", "wholesale", "vip"]);
 export type CustomerType = (typeof CUSTOMER_TYPES)[number];
 
+/**
+ * `select` is the only type `allowedValues` applies to — free text and
+ * numbers are open-ended by nature, and a boolean has nowhere else to go
+ * but true/false.
+ */
+export const ATTRIBUTE_TYPES = asConst(["text", "number", "boolean", "select"]);
+export type AttributeType = (typeof ATTRIBUTE_TYPES)[number];
+
 // -----------------------------------------------------------------------------
 // Inventory
 // -----------------------------------------------------------------------------

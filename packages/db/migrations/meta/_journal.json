@@ -43,6 +43,13 @@
       "when": 1787225594068,
       "tag": "0005_keen_master_chief",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787226856955,
+      "tag": "0006_aspiring_carlie_cooper",
+      "breakpoints": true
     }
   ]
 }
