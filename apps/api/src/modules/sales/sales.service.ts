@@ -20,6 +20,7 @@ import { StockService } from "../inventory/stock.service.js";
 import { PriceResolverService } from "../pricing/price-resolver.service.js";
 import { OverrideGrantsService } from "../auth/override-grants.service.js";
 import { SerialsService } from "../serials/serials.service.js";
+import { renderInvoicePdf } from "./invoice-pdf.js";
 import type { CreateReturnDto, CreateSaleDto, VoidSaleDto } from "./dto.js";
 
 /**
@@ -1177,6 +1178,110 @@ export class SalesService {
     };
 
     return existingTx ? read(existingTx) : this.db.run(read);
+  }
+
+  /**
+   * The sale as a downloadable A4 tax invoice.
+   *
+   * Gathers more than `findById` does — the issuing business, the branch, the
+   * customer's own TRN — because those are what make the document a tax
+   * invoice rather than a receipt. Cost price is never gathered at all: this
+   * file is handed to the customer, and `findById`'s `canViewCost` filter
+   * would be the only thing standing between margin data and a PDF sitting
+   * in somebody's downloads folder.
+   *
+   * Returns the bytes and a filename; the controller decides the transport.
+   */
+  async invoicePdf(id: string): Promise<{ filename: string; body: Buffer }> {
+    const data = await this.db.run(async (tx) => {
+      const sale = await tx.query.sales.findFirst({
+        where: (t, { eq: e }) => e(t.id, id),
+      });
+      if (!sale) throw new AppError(ERROR_CODES.NOT_FOUND, `Sale ${id} not found`);
+      // The same branch scoping every other read obeys — an invoice is a
+      // document about one shop's takings.
+      assertBranchInScope(sale.branchId);
+
+      const [items, payments, tenant, branch, customer, cashier] = await Promise.all([
+        tx
+          .select()
+          .from(schema.saleItems)
+          .where(eq(schema.saleItems.saleId, id))
+          .orderBy(schema.saleItems.sortOrder),
+        tx.select().from(schema.payments).where(eq(schema.payments.saleId, id)),
+        tx.query.tenants.findFirst({ columns: { name: true, settings: true } }),
+        tx.query.branches.findFirst({
+          where: (t, { eq: e }) => e(t.id, sale.branchId),
+          columns: { name: true },
+        }),
+        sale.customerId
+          ? tx.query.customers.findFirst({
+              where: (t, { eq: e }) => e(t.id, sale.customerId!),
+              columns: { name: true, company: true, phone: true, trn: true, address: true },
+            })
+          : Promise.resolve(undefined),
+        sale.createdBy
+          ? tx.query.users.findFirst({
+              where: (t, { eq: e }) => e(t.id, sale.createdBy!),
+              columns: { name: true },
+            })
+          : Promise.resolve(undefined),
+      ]);
+
+      const settings = resolveTenantSettings(tenant?.settings);
+
+      return { sale, items, payments, tenant, settings, branch, customer, cashier };
+    });
+
+    const { sale, items, payments, tenant, settings, branch, customer, cashier } = data;
+
+    const body = await renderInvoicePdf({
+      business: {
+        legalName: settings.legalName ?? tenant?.name ?? "",
+        trn: settings.trn ?? null,
+        phone: settings.phone ?? null,
+        email: settings.email ?? null,
+        addressLines: settings.addressLines ?? [],
+      },
+      branchName: branch?.name ?? null,
+      saleNumber: sale.saleNumber,
+      occurredAt: sale.occurredAt,
+      currency: settings.currency.base,
+      taxLabel: settings.tax.label,
+      customer: customer
+        ? {
+            name: customer.name,
+            company: customer.company,
+            phone: customer.phone,
+            trn: customer.trn,
+            address: customer.address,
+          }
+        : null,
+      cashierName: cashier?.name ?? null,
+      lines: items.map((item) => ({
+        productName: item.productName,
+        variantName: item.variantName,
+        productSku: item.productSku,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        discountPercent: item.discountPercent,
+        taxPercent: item.taxPercent,
+        total: item.total,
+      })),
+      subtotal: sale.subtotal,
+      discountAmount: sale.discountAmount,
+      taxAmount: sale.taxAmount,
+      total: sale.total,
+      paidAmount: sale.paidAmount,
+      dueAmount: sale.dueAmount,
+      payments: payments.map((p) => ({ method: p.method, amount: p.amount })),
+      voided: sale.voidedAt !== null,
+      notes: sale.notes,
+    });
+
+    // The invoice number, not the uuid — this lands in somebody's downloads
+    // folder and has to be findable there a year later.
+    return { filename: `${sale.saleNumber}.pdf`, body };
   }
 
   async list(query: {

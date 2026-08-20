@@ -178,6 +178,85 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   return payload.data;
 }
 
+/**
+ * Fetch a binary body (a PDF invoice) rather than the JSON envelope.
+ *
+ * `apiFetch` cannot serve this: it parses every response as JSON and unwraps
+ * `.data`, which turns a PDF into a parse error. This shares the same token
+ * and the same single-refresh rule — a download half an hour into a session
+ * must not be the one request that fails on an expired token.
+ *
+ * Returns the blob and the filename the server named, so a caller does not
+ * have to reinvent one from the URL.
+ */
+export async function apiDownload(
+  path: string,
+  options: { accessToken?: string } = {},
+): Promise<{ blob: Blob; filename: string | null }> {
+  let token = options.accessToken ?? readTokens()?.accessToken;
+  const url = `${getBaseUrl()}${path.startsWith("/") ? path : `/${path}`}`;
+
+  const send = (bearer: string | undefined) =>
+    fetch(url, { headers: bearer ? { authorization: `Bearer ${bearer}` } : {} });
+
+  let response = await send(token);
+
+  if (response.status === 401 && !options.accessToken && typeof window !== "undefined") {
+    refreshing ??= refreshAccessToken().finally(() => {
+      refreshing = null;
+    });
+    const fresh = await refreshing;
+    if (fresh) {
+      token = fresh;
+      response = await send(fresh);
+    } else {
+      clearSession();
+      window.location.href = `/login?next=${encodeURIComponent(window.location.pathname)}`;
+      throw new AppError(ERROR_CODES.TOKEN_EXPIRED, "Your session has expired. Sign in again.");
+    }
+  }
+
+  if (!response.ok) {
+    /**
+     * A failure here still arrives as the JSON error envelope, because the
+     * exception filter owns every error path — so the real message is
+     * readable, and worth surfacing rather than showing a bare status.
+     */
+    let message = `Download failed (${response.status})`;
+    let code: string = ERROR_CODES.INTERNAL_ERROR;
+    try {
+      const payload = (await response.json()) as ApiResponse<never>;
+      if (!payload.success) {
+        message = payload.error.message;
+        code = payload.error.code;
+      }
+    } catch {
+      // Not JSON — keep the status message.
+    }
+    throw new AppError(code, message);
+  }
+
+  // `filename="INV-...pdf"` out of the Content-Disposition the server set.
+  const disposition = response.headers.get("content-disposition") ?? "";
+  const match = /filename="?([^"]+)"?/.exec(disposition);
+
+  return { blob: await response.blob(), filename: match?.[1] ?? null };
+}
+
+/** Hand a fetched blob to the browser as a download, then release the object URL. */
+export function saveBlob(blob: Blob, filename: string): void {
+  const href = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = href;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  // Revoked on the next tick — revoking synchronously can cancel the download
+  // in some browsers before it has started reading the blob.
+  setTimeout(() => URL.revokeObjectURL(href), 0);
+}
+
 export const api = {
   get: <T>(path: string, options?: RequestOptions) =>
     apiFetch<T>(path, { ...options, method: "GET" }),
