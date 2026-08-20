@@ -28,7 +28,7 @@ Copying its shape is what keeps twenty modules looking like one codebase.
 | `categories` | 1 | ✅ done | Hierarchical tree with materialised `path` |
 | `brands` | 1 | ✅ done | Brand CRUD |
 | `units` | 1 | ✅ done | Units and packaging conversions |
-| `products` | 1 | ✅ done | CRUD, full-text + trigram search, barcode lookup, images |
+| `products` | 1 | ✅ done | CRUD, full-text + trigram search, barcode lookup, images, per-variant packagings |
 | `pricing` | 1 | 🟡 partial | `PriceResolverService` resolves the ladder and enforces the floor, but has no `@Module`, no controller and no routes — it is duplicated as a provider in three other modules. `price:read`/`price:write` are attached to zero routes: a price is set once, at product creation, and never through a CRUD API. See feature.md Stage 5.1. |
 | `customers` | 1 | ✅ done | CRUD, credit settlement, loyalty ledger |
 | `inventory` | 2 | ✅ done | Per-branch stock, the append-only ledger, adjustments |
@@ -48,7 +48,7 @@ Copying its shape is what keeps twenty modules looking like one codebase.
 | `whatsapp` | 4 | ⬜ todo | Meta Cloud API webhook, send/receive, templates |
 | `ai` | 4 | ⬜ todo | LLM tools, intent extraction, escalation |
 | `quotations` | 5 | ✅ done | Quote at snapshotted prices, convert to a sale |
-| `orders` | 5 | ⬜ todo | Order lifecycle, POS pickup, fulfilment |
+| `orders` | 5 | ✅ done | Create, confirm (reserves stock), cancel (releases it), partial fulfilment — each a real sale linked back via `sales.orderId` |
 | `reports` | 6 | ✅ done | Sales, top products, stock health, financial |
 | `paint` | 7 | ✅ done | Formulas, dosages, mix orders that deduct the base can |
 

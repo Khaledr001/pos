@@ -229,6 +229,67 @@ export class StockService {
   }
 
   /**
+   * Hold stock for a confirmed order — not yet shipped, but no longer free to
+   * promise to somebody else. Writes only `reservedQuantity`, never the
+   * ledger: nothing has actually moved yet, so there is nothing to post.
+   *
+   * Upserts like `post()` does, for the same reason: the first reservation
+   * against a (variant, branch) with no inventory row yet must not need a
+   * separate "create the row" step.
+   */
+  async reserveStock(input: {
+    tx: Transaction;
+    variantId: string;
+    branchId: string;
+    quantity: string;
+  }): Promise<void> {
+    const tenantId = RequestContext.requireTenantId();
+
+    await input.tx
+      .insert(schema.inventory)
+      .values({
+        tenantId,
+        variantId: input.variantId,
+        branchId: input.branchId,
+        reservedQuantity: input.quantity,
+      })
+      .onConflictDoUpdate({
+        target: [schema.inventory.variantId, schema.inventory.branchId],
+        set: {
+          reservedQuantity: sql`${schema.inventory.reservedQuantity} + ${input.quantity}::numeric`,
+          updatedAt: new Date(),
+        },
+      });
+  }
+
+  /**
+   * Give back a hold — an order was cancelled, or the reserved units just
+   * left as an actual fulfilment (see `deductStock`, called alongside this
+   * in that case). Clamped at zero: a reservation released twice, or by more
+   * than remains, must not drive this negative and quietly free stock that
+   * was never held.
+   */
+  async releaseReservedStock(input: {
+    tx: Transaction;
+    variantId: string;
+    branchId: string;
+    quantity: string;
+  }): Promise<void> {
+    await input.tx
+      .update(schema.inventory)
+      .set({
+        reservedQuantity: sql`GREATEST(${schema.inventory.reservedQuantity} - ${input.quantity}::numeric, 0)`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(schema.inventory.variantId, input.variantId),
+          eq(schema.inventory.branchId, input.branchId),
+        ),
+      );
+  }
+
+  /**
    * Replay the ledger and correct the cached balance.
    *
    * The reconciliation the cache's existence depends on. Run nightly and after
