@@ -22,6 +22,7 @@ import {
   Tablet,
   ShieldCheck,
   ScrollText,
+  Wallet,
 } from "lucide-react";
 import { hasPermission, type Permission } from "@devsfleet/shared-types";
 import { useAuth } from "@/lib/auth-context";
@@ -65,6 +66,7 @@ const NAV_SECTIONS: Array<{
       { label: "Inventory", href: "/inventory", icon: Boxes, permission: "inventory:read" },
       { label: "Suppliers", href: "/suppliers", icon: Truck, permission: "supplier:read" },
       { label: "Sales & Orders", href: "/sales", icon: ShoppingCart, permission: "sale:read" },
+      { label: "Day Close", href: "/day-close", icon: Wallet, permission: "day_close:read" },
       { label: "Customers", href: "/customers", icon: Users, permission: "customer:read" },
     ],
   },
