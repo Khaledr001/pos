@@ -1,5 +1,5 @@
 import type { Currency, PurchaseOrderStatus, TaxMode } from "@devsfleet/shared-types";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   date,
   index,
@@ -30,6 +30,46 @@ import { branches, tenantScope } from "./tenants.js";
  * Each receipt also updates the branch's weighted-average cost, which is what
  * `sale_items.costPrice` snapshots from.
  */
+
+/**
+ * A supplier's OWN identifiers for one variant — their SKU, their barcode.
+ * Neither is the tenant's own `product_variants.sku`/`barcode`: a supplier's
+ * outer-carton label almost never matches what this catalogue calls the
+ * product, which is exactly why receiving could only ever match on the
+ * tenant's own codes before this table existed (Stage 5.4).
+ */
+export const productSupplierLinks = pgTable(
+  "product_supplier_links",
+  {
+    id: primaryId(),
+    ...tenantScope(),
+    supplierId: uuid()
+      .notNull()
+      .references(() => suppliers.id, { onDelete: "cascade" }),
+    variantId: uuid()
+      .notNull()
+      .references(() => productVariants.id, { onDelete: "cascade" }),
+    supplierSku: varchar({ length: 100 }),
+    supplierBarcode: varchar({ length: 64 }),
+    /** Days from order to expected delivery, for THIS supplier of THIS item. */
+    leadTimeDays: integer(),
+    /** Most recent cost paid to this supplier for this item. Reference only — never what a receipt actually charges. */
+    lastCost: money(),
+    notes: text(),
+    ...timestamps(),
+  },
+  (t) => [
+    uniqueIndex("uq_product_supplier_links_supplier_variant").on(t.supplierId, t.variantId),
+    /** The hot path: receiving scans a supplier's barcode against ONE supplier's own codes. */
+    index("idx_product_supplier_links_barcode")
+      .on(t.supplierId, t.supplierBarcode)
+      .where(sql`supplier_barcode IS NOT NULL`),
+    index("idx_product_supplier_links_sku")
+      .on(t.supplierId, t.supplierSku)
+      .where(sql`supplier_sku IS NOT NULL`),
+    index("idx_product_supplier_links_variant").on(t.variantId),
+  ],
+);
 
 export const purchaseOrders = pgTable(
   "purchase_orders",
@@ -179,6 +219,17 @@ export const goodsReceiptItems = pgTable(
   ],
 );
 
+export const productSupplierLinksRelations = relations(productSupplierLinks, ({ one }) => ({
+  supplier: one(suppliers, {
+    fields: [productSupplierLinks.supplierId],
+    references: [suppliers.id],
+  }),
+  variant: one(productVariants, {
+    fields: [productSupplierLinks.variantId],
+    references: [productVariants.id],
+  }),
+}));
+
 export const purchaseOrdersRelations = relations(purchaseOrders, ({ one, many }) => ({
   supplier: one(suppliers, {
     fields: [purchaseOrders.supplierId],
@@ -231,3 +282,5 @@ export type GoodsReceipt = typeof goodsReceipts.$inferSelect;
 export type NewGoodsReceipt = typeof goodsReceipts.$inferInsert;
 export type GoodsReceiptItem = typeof goodsReceiptItems.$inferSelect;
 export type NewGoodsReceiptItem = typeof goodsReceiptItems.$inferInsert;
+export type ProductSupplierLink = typeof productSupplierLinks.$inferSelect;
+export type NewProductSupplierLink = typeof productSupplierLinks.$inferInsert;

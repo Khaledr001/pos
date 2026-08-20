@@ -36,29 +36,45 @@ export const UpdatePurchaseOrderSchema = CreatePurchaseOrderSchema.partial().omi
 });
 export type UpdatePurchaseOrderDto = z.infer<typeof UpdatePurchaseOrderSchema>;
 
-const ReceiptLineSchema = z.object({
-  /** Omit on a direct receipt with no order behind it. */
-  purchaseOrderItemId: z.string().uuid().optional(),
-  variantId: z.string().uuid(),
-  quantity: z.coerce.number().positive(),
-  /**
-   * Required, one per SELLABLE unit, when the product tracks serial numbers.
-   * The count must equal quantity - damagedQuantity exactly — a serialised
-   * product with no identity for one of its units is not something a
-   * warranty claim can ever be answered for.
-   */
-  serials: z.array(z.string().trim().min(1)).optional(),
-  /**
-   * Required on a direct receipt; on a PO receipt it defaults to the ordered
-   * price. Supplied when the invoice differs from the quote, which is common.
-   */
-  unitPrice: z.coerce.number().min(0).optional(),
-  /** Arrived broken. Recorded, but never added to sellable stock. */
-  damagedQuantity: z.coerce.number().min(0).default(0),
-  batchNumber: z.string().trim().max(50).optional(),
-  expiryDate: isoDate.optional(),
-  notes: z.string().trim().max(500).optional(),
-});
+const ReceiptLineSchema = z
+  .object({
+    /** Omit on a direct receipt with no order behind it. */
+    purchaseOrderItemId: z.string().uuid().optional(),
+    /**
+     * Omit to resolve the variant from `supplierSku`/`supplierBarcode`
+     * instead (Stage 5.4) — the point of a direct receipt (no PO already
+     * naming a variant): a supplier's own delivery note becomes usable
+     * as-is, matched against product_supplier_links for THIS receipt's
+     * supplier, rather than requiring every UUID already known by heart.
+     */
+    variantId: z.string().uuid().optional(),
+    /** The supplier's own SKU for this item — checked when variantId is omitted. */
+    supplierSku: z.string().trim().min(1).max(100).optional(),
+    /** The supplier's own barcode for this item — checked when variantId is omitted. */
+    supplierBarcode: z.string().trim().min(1).max(64).optional(),
+    quantity: z.coerce.number().positive(),
+    /**
+     * Required, one per SELLABLE unit, when the product tracks serial numbers.
+     * The count must equal quantity - damagedQuantity exactly — a serialised
+     * product with no identity for one of its units is not something a
+     * warranty claim can ever be answered for.
+     */
+    serials: z.array(z.string().trim().min(1)).optional(),
+    /**
+     * Required on a direct receipt; on a PO receipt it defaults to the ordered
+     * price. Supplied when the invoice differs from the quote, which is common.
+     */
+    unitPrice: z.coerce.number().min(0).optional(),
+    /** Arrived broken. Recorded, but never added to sellable stock. */
+    damagedQuantity: z.coerce.number().min(0).default(0),
+    batchNumber: z.string().trim().max(50).optional(),
+    expiryDate: isoDate.optional(),
+    notes: z.string().trim().max(500).optional(),
+  })
+  .refine((v) => v.variantId || v.supplierSku || v.supplierBarcode, {
+    message: "Name the variant directly, or give a supplierSku/supplierBarcode to resolve one",
+    path: ["variantId"],
+  });
 
 export const ReceiveGoodsSchema = z.object({
   branchId: z.string().uuid().optional(),
@@ -81,6 +97,13 @@ export const ReceiveGoodsSchema = z.object({
   notes: z.string().trim().max(1000).optional(),
 });
 export type ReceiveGoodsDto = z.infer<typeof ReceiveGoodsSchema>;
+
+/** For the receiving screen: "what does this scanned code resolve to?" before a whole receipt is submitted. */
+export const SupplierLookupSchema = z.object({
+  supplierId: z.string().uuid(),
+  code: z.string().trim().min(1).max(100),
+});
+export type SupplierLookupDto = z.infer<typeof SupplierLookupSchema>;
 
 export const ListPurchaseOrdersSchema = z.object({
   branchId: z.string().uuid().optional(),

@@ -131,3 +131,30 @@ export const UpdateVariantUnitSchema = CreateVariantUnitSchema.omit({ unitId: tr
     priceOverride: z.coerce.number().positive().nullable().optional(),
   });
 export type UpdateVariantUnitDto = z.infer<typeof UpdateVariantUnitSchema>;
+
+/**
+ * A supplier's OWN identifiers for one variant (Stage 5.4) — their SKU,
+ * their barcode. Neither is this catalogue's own sku/barcode; this is what
+ * lets receiving match a delivery note that was never typed in this
+ * catalogue's own terms.
+ */
+const ProductSupplierLinkShape = z.object({
+  supplierId: z.string().uuid(),
+  supplierSku: z.string().trim().min(1).max(100).optional(),
+  supplierBarcode: z.string().trim().min(1).max(64).optional(),
+  leadTimeDays: z.coerce.number().int().min(0).optional(),
+  lastCost: z.coerce.number().min(0).optional(),
+  notes: z.string().trim().max(1000).optional(),
+});
+
+export const CreateProductSupplierLinkSchema = ProductSupplierLinkShape.refine(
+  (v) => v.supplierSku || v.supplierBarcode,
+  { message: "Give at least a supplier SKU or a supplier barcode", path: ["supplierSku"] },
+);
+export type CreateProductSupplierLinkDto = z.infer<typeof CreateProductSupplierLinkSchema>;
+
+/** `supplierId` is absent — that would change which unique (supplier, variant) pair this row is. Delete and recreate instead. */
+export const UpdateProductSupplierLinkSchema = ProductSupplierLinkShape.omit({
+  supplierId: true,
+}).partial();
+export type UpdateProductSupplierLinkDto = z.infer<typeof UpdateProductSupplierLinkSchema>;

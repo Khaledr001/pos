@@ -18,6 +18,7 @@ import type {
   CreatePurchaseOrderDto,
   ListPurchaseOrdersDto,
   ReceiveGoodsDto,
+  SupplierLookupDto,
   UpdatePurchaseOrderDto,
 } from "./dto.js";
 
@@ -250,11 +251,16 @@ export class PurchasesService {
         : [];
       const orderItemsById = new Map(orderItems.map((item) => [item.id, item]));
 
+      // A line names its variant directly, or via a code that belongs to
+      // THIS supplier alone (Stage 5.4) — resolved once, up front, so
+      // everything below can keep treating variantId as always present.
+      const resolvedLines = await this.resolveLineVariants(tx, supplierId, dto.lines);
+
       // Whether each line's product tracks serial numbers — needed on a
       // direct receipt too, where there is no purchase-order line to ask.
       const trackSerialByVariant = await this.loadTrackSerial(
         tx,
-        dto.lines.map((line) => line.variantId),
+        resolvedLines.map((line) => line.variantId),
       );
 
       /**
@@ -264,7 +270,7 @@ export class PurchasesService {
        */
       const settings = await this.settings(tx);
 
-      const lineValues = dto.lines.map((line) => {
+      const lineValues = resolvedLines.map((line) => {
         const ordered = line.purchaseOrderItemId
           ? orderItemsById.get(line.purchaseOrderItemId)
           : undefined;
@@ -335,7 +341,7 @@ export class PurchasesService {
 
       let payable = 0n;
 
-      for (const [index, line] of dto.lines.entries()) {
+      for (const [index, line] of resolvedLines.entries()) {
         const { value, tax } = lineValues[index]!;
         const damaged = Money.toMinor(String(line.damagedQuantity));
         const sellable = Money.subtract(
@@ -600,6 +606,74 @@ export class PurchasesService {
     if (!order) throw new AppError(ERROR_CODES.NOT_FOUND, `Purchase order ${id} not found`);
     assertBranchInScope(order.branchId);
     return order;
+  }
+
+  /**
+   * "What does this scanned code resolve to?" — for the receiving screen to
+   * check a code before submitting a whole receipt, rather than discovering
+   * a bad one only at the end. Matches either the supplier's SKU or their
+   * barcode; a receiving clerk cannot always tell which one is printed on a
+   * given label.
+   */
+  async lookupSupplierCode(query: SupplierLookupDto): Promise<unknown> {
+    const link = await this.db.run((tx) =>
+      tx.query.productSupplierLinks.findFirst({
+        where: (t, { and: a, eq: e, or: o }) =>
+          a(e(t.supplierId, query.supplierId), o(e(t.supplierBarcode, query.code), e(t.supplierSku, query.code))),
+        with: { variant: { with: { product: true } } },
+      }),
+    );
+
+    if (!link) {
+      throw new AppError(
+        ERROR_CODES.NOT_FOUND,
+        `No product is linked to this supplier's code "${query.code}"`,
+      );
+    }
+    return link;
+  }
+
+  /**
+   * A receipt line names its variant directly, or via a code (their SKU or
+   * barcode) that belongs to THIS supplier alone — matched against
+   * product_supplier_links (Stage 5.4). This is what makes a direct receipt
+   * (no purchase order already carrying a resolved variantId) usable
+   * straight off a supplier's own delivery note.
+   */
+  private async resolveLineVariants(
+    tx: Transaction,
+    supplierId: string,
+    lines: ReceiveGoodsDto["lines"],
+  ): Promise<Array<ReceiveGoodsDto["lines"][number] & { variantId: string }>> {
+    return Promise.all(
+      lines.map(async (line) => {
+        if (line.variantId) return { ...line, variantId: line.variantId };
+
+        const code = line.supplierBarcode ?? line.supplierSku;
+        // The DTO's own refinement already guarantees one of these three is
+        // present; this is just narrowing the type back down for TS.
+        if (!code) {
+          throw new AppError(
+            ERROR_CODES.VALIDATION_FAILED,
+            "A receipt line needs a variantId, or a supplierSku/supplierBarcode to resolve one",
+          );
+        }
+
+        const link = await tx.query.productSupplierLinks.findFirst({
+          where: (t, { and: a, eq: e, or: o }) =>
+            a(e(t.supplierId, supplierId), o(e(t.supplierBarcode, code), e(t.supplierSku, code))),
+          columns: { variantId: true },
+        });
+
+        if (!link) {
+          throw new AppError(
+            ERROR_CODES.NOT_FOUND,
+            `No product is linked to this supplier's code "${code}"`,
+          );
+        }
+        return { ...line, variantId: link.variantId };
+      }),
+    );
   }
 
   private async loadTrackSerial(

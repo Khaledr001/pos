@@ -7,10 +7,12 @@ import { Audited, RequirePermissions } from "../../common/decorators/index.js";
 import { zodPipe } from "../../common/pipes/zod-validation.pipe.js";
 import { ProductsService } from "./products.service.js";
 import {
-  CreateProductSchema, CreateVariantUnitSchema, ListProductsSchema, SearchVariantsSchema,
-  UpdateProductSchema, UpdateVariantUnitSchema,
-  type CreateProductDto, type CreateVariantUnitDto, type ListProductsDto,
-  type SearchVariantsDto, type UpdateProductDto, type UpdateVariantUnitDto,
+  CreateProductSchema, CreateProductSupplierLinkSchema, CreateVariantUnitSchema,
+  ListProductsSchema, SearchVariantsSchema,
+  UpdateProductSchema, UpdateProductSupplierLinkSchema, UpdateVariantUnitSchema,
+  type CreateProductDto, type CreateProductSupplierLinkDto, type CreateVariantUnitDto,
+  type ListProductsDto, type SearchVariantsDto, type UpdateProductDto,
+  type UpdateProductSupplierLinkDto, type UpdateVariantUnitDto,
 } from "./dto.js";
 
 @ApiTags("products")
@@ -116,5 +118,44 @@ export class ProductsController {
   @ApiOperation({ summary: "Remove a packaging — pure configuration, a real delete" })
   deleteVariantUnit(@Param("id", ParseUUIDPipe) id: string): Promise<void> {
     return this.products.deleteVariantUnit(id);
+  }
+
+  /**
+   * Supplier links (Stage 5.4) — a supplier's own SKU/barcode for one
+   * variant, so receiving can match their delivery note directly.
+   */
+  @Get("variants/:variantId/suppliers")
+  @RequirePermissions("supplier:read")
+  @ApiOperation({ summary: "Suppliers linked to one variant, with their own codes" })
+  listSupplierLinks(@Param("variantId", ParseUUIDPipe) variantId: string) {
+    return this.products.listSupplierLinks(variantId);
+  }
+
+  @Post("variants/:variantId/suppliers")
+  @RequirePermissions("supplier:write")
+  @Audited("product_supplier_links", "create")
+  createSupplierLink(
+    @Param("variantId", ParseUUIDPipe) variantId: string,
+    @Body(zodPipe(CreateProductSupplierLinkSchema)) dto: CreateProductSupplierLinkDto,
+  ) {
+    return this.products.createSupplierLink(variantId, dto);
+  }
+
+  @Patch("variant-suppliers/:id")
+  @RequirePermissions("supplier:write")
+  @Audited("product_supplier_links", "update")
+  updateSupplierLink(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body(zodPipe(UpdateProductSupplierLinkSchema)) dto: UpdateProductSupplierLinkDto,
+  ) {
+    return this.products.updateSupplierLink(id, dto);
+  }
+
+  @Delete("variant-suppliers/:id")
+  @RequirePermissions("supplier:write")
+  @Audited("product_supplier_links", "delete")
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteSupplierLink(@Param("id", ParseUUIDPipe) id: string): Promise<void> {
+    return this.products.deleteSupplierLink(id);
   }
 }

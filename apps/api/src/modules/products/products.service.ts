@@ -10,10 +10,12 @@ import { StockService } from "../inventory/stock.service.js";
 import { PriceResolverService } from "../pricing/price-resolver.service.js";
 import type {
   CreateProductDto,
+  CreateProductSupplierLinkDto,
   CreateVariantUnitDto,
   ListProductsDto,
   SearchVariantsDto,
   UpdateProductDto,
+  UpdateProductSupplierLinkDto,
   UpdateVariantUnitDto,
 } from "./dto.js";
 
@@ -533,6 +535,93 @@ export class ProductsService {
   async deleteVariantUnit(id: string): Promise<void> {
     await this.db.run(async (tx) => {
       await tx.delete(schema.variantUnits).where(eq(schema.variantUnits.id, id));
+    });
+  }
+
+  /**
+   * Suppliers linked to one variant (Stage 5.4) — their own SKU/barcode, so
+   * receiving can match a delivery note that never mentions this
+   * catalogue's own codes. Pure configuration, like a packaging: a real
+   * delete, no soft-delete column, nothing downstream snapshots from it.
+   */
+  async listSupplierLinks(variantId: string): Promise<unknown[]> {
+    return this.db.run((tx) =>
+      tx
+        .select({
+          id: schema.productSupplierLinks.id,
+          supplierId: schema.productSupplierLinks.supplierId,
+          supplierName: schema.suppliers.name,
+          supplierSku: schema.productSupplierLinks.supplierSku,
+          supplierBarcode: schema.productSupplierLinks.supplierBarcode,
+          leadTimeDays: schema.productSupplierLinks.leadTimeDays,
+          lastCost: schema.productSupplierLinks.lastCost,
+          notes: schema.productSupplierLinks.notes,
+        })
+        .from(schema.productSupplierLinks)
+        .innerJoin(schema.suppliers, eq(schema.productSupplierLinks.supplierId, schema.suppliers.id))
+        .where(eq(schema.productSupplierLinks.variantId, variantId))
+        .orderBy(asc(schema.suppliers.name)),
+    );
+  }
+
+  async createSupplierLink(
+    variantId: string,
+    dto: CreateProductSupplierLinkDto,
+  ): Promise<unknown> {
+    const tenantId = RequestContext.requireTenantId();
+
+    return this.db.run(async (tx) => {
+      const variant = await tx.query.productVariants.findFirst({
+        where: (t, { eq: e }) => e(t.id, variantId),
+        columns: { id: true },
+      });
+      if (!variant) {
+        throw new AppError(ERROR_CODES.PRODUCT_NOT_FOUND, `Variant ${variantId} not found`);
+      }
+
+      const [row] = await tx
+        .insert(schema.productSupplierLinks)
+        .values({
+          tenantId,
+          variantId,
+          supplierId: dto.supplierId,
+          ...(dto.supplierSku ? { supplierSku: dto.supplierSku } : {}),
+          ...(dto.supplierBarcode ? { supplierBarcode: dto.supplierBarcode } : {}),
+          ...(dto.leadTimeDays !== undefined ? { leadTimeDays: dto.leadTimeDays } : {}),
+          ...(dto.lastCost !== undefined ? { lastCost: String(dto.lastCost) } : {}),
+          ...(dto.notes ? { notes: dto.notes } : {}),
+        })
+        .returning();
+
+      return row;
+    });
+    // A duplicate (supplierId, variantId) raises 23505 on
+    // uq_product_supplier_links_supplier_variant -> 409. No pre-flight
+    // SELECT — that is a race, the unique index is not.
+  }
+
+  async updateSupplierLink(id: string, dto: UpdateProductSupplierLinkDto): Promise<unknown> {
+    return this.db.run(async (tx) => {
+      const [row] = await tx
+        .update(schema.productSupplierLinks)
+        .set({
+          ...(dto.supplierSku !== undefined ? { supplierSku: dto.supplierSku } : {}),
+          ...(dto.supplierBarcode !== undefined ? { supplierBarcode: dto.supplierBarcode } : {}),
+          ...(dto.leadTimeDays !== undefined ? { leadTimeDays: dto.leadTimeDays } : {}),
+          ...(dto.lastCost !== undefined ? { lastCost: String(dto.lastCost) } : {}),
+          ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
+        })
+        .where(eq(schema.productSupplierLinks.id, id))
+        .returning();
+
+      if (!row) throw new AppError(ERROR_CODES.NOT_FOUND, `Supplier link ${id} not found`);
+      return row;
+    });
+  }
+
+  async deleteSupplierLink(id: string): Promise<void> {
+    await this.db.run(async (tx) => {
+      await tx.delete(schema.productSupplierLinks).where(eq(schema.productSupplierLinks.id, id));
     });
   }
 

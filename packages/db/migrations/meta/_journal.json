@@ -50,6 +50,13 @@
       "when": 1787226856955,
       "tag": "0006_aspiring_carlie_cooper",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787229035963,
+      "tag": "0007_giant_raider",
+      "breakpoints": true
     }
   ]
 }

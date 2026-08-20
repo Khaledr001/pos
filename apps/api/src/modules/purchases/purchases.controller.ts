@@ -18,10 +18,12 @@ import {
   CreatePurchaseOrderSchema,
   ListPurchaseOrdersSchema,
   ReceiveGoodsSchema,
+  SupplierLookupSchema,
   UpdatePurchaseOrderSchema,
   type CreatePurchaseOrderDto,
   type ListPurchaseOrdersDto,
   type ReceiveGoodsDto,
+  type SupplierLookupDto,
   type UpdatePurchaseOrderDto,
 } from "./dto.js";
 
@@ -56,6 +58,18 @@ export class PurchasesController {
   @RequirePermissions("purchase:read")
   findReceipt(@Param("id", ParseUUIDPipe) id: string) {
     return this.purchases.findReceipt(id);
+  }
+
+  /**
+   * Declared before `:id` — same reason as `receipts/:id` above. Lets the
+   * receiving screen check a scanned/typed supplier code before submitting
+   * a whole receipt (Stage 5.4).
+   */
+  @Get("supplier-lookup")
+  @RequirePermissions("purchase:read")
+  @ApiOperation({ summary: "Resolve a supplier's own SKU/barcode to a variant" })
+  lookupSupplierCode(@Query(zodPipe(SupplierLookupSchema)) query: SupplierLookupDto) {
+    return this.purchases.lookupSupplierCode(query);
   }
 
   @Get(":id")
