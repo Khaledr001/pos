@@ -8,9 +8,39 @@ import { AppError, ERROR_CODES } from "@devsfleet/shared-utils";
  * ApiError into a thrown `AppError` carrying the server's stable error code.
  */
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1";
+const DEFAULT_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1";
 const TOKEN_KEY = "devsfleet_auth_tokens";
 const USER_KEY = "devsfleet_auth_user";
+const BASE_URL_OVERRIDE_KEY = "devsfleet_api_base_url";
+
+/**
+ * Which API this admin build talks to — usually fixed at build time via
+ * `NEXT_PUBLIC_API_URL`, but a self-hosted deploy needs to point one
+ * already-built static bundle at a backend chosen after the fact (moving to
+ * a VPS, a staging vs. production API). The settings page is the only writer
+ * of the override; everything that calls the API reads through here so the
+ * two can never disagree about which server "save" actually pointed at.
+ */
+function getBaseUrl(): string {
+  if (typeof window === "undefined") return DEFAULT_BASE_URL;
+  return localStorage.getItem(BASE_URL_OVERRIDE_KEY)?.trim() || DEFAULT_BASE_URL;
+}
+
+export function getApiBaseUrlOverride(): string {
+  if (typeof window === "undefined") return "";
+  return localStorage.getItem(BASE_URL_OVERRIDE_KEY) ?? "";
+}
+
+/** Empty or the default clears the override rather than storing it verbatim. */
+export function setApiBaseUrlOverride(url: string): void {
+  if (typeof window === "undefined") return;
+  const trimmed = url.trim();
+  if (!trimmed || trimmed === DEFAULT_BASE_URL) {
+    localStorage.removeItem(BASE_URL_OVERRIDE_KEY);
+  } else {
+    localStorage.setItem(BASE_URL_OVERRIDE_KEY, trimmed);
+  }
+}
 
 /**
  * One refresh at a time.
@@ -44,7 +74,7 @@ async function refreshAccessToken(): Promise<string | null> {
   const current = readTokens();
   if (!current?.refreshToken) return null;
 
-  const response = await fetch(`${BASE_URL}/auth/refresh`, {
+  const response = await fetch(`${getBaseUrl()}/auth/refresh`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ refreshToken: current.refreshToken }),
@@ -71,7 +101,7 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
 
   let token = explicitToken ?? readTokens()?.accessToken;
 
-  const url = new URL(`${BASE_URL}${path.startsWith("/") ? path : `/${path}`}`);
+  const url = new URL(`${getBaseUrl()}${path.startsWith("/") ? path : `/${path}`}`);
   for (const [key, value] of Object.entries(query ?? {})) {
     if (value !== undefined) url.searchParams.set(key, String(value));
   }
