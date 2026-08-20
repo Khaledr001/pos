@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-import { apiClient } from "../lib/api-client.js";
-import { posData, type PosProduct } from "../lib/pos-data.js";
+import { hasBridge, posData, type PosProduct } from "../lib/pos-data.js";
 import { Dialog } from "../components/Dialog.js";
 import { Building2, Search, Package, Plus } from "lucide-react";
 import { useAuth } from "../store/auth.js";
@@ -25,14 +24,21 @@ export function RequestTransferModal({
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
-    if (!open) return;
-    // We already have a /branches endpoint for registration we can use
-    apiClient.get<{ data: Array<{ id: string; name: string }> }>("/branches")
-      .then(res => {
-        setBranches(res.data.filter(b => b.id !== terminal?.branchId));
+    if (!open || !hasBridge()) return;
+    // Through the bridge so the request is authenticated — see Transfers.tsx.
+    window.devsfleet.transfers
+      .branches()
+      .then((res) => {
+        setBranches((res.data ?? []).filter((b) => b.id !== terminal?.branchId));
       })
-      .catch(console.error);
+      .catch((e: unknown) => {
+        // Shown, not console.error'd: with no branches the source dropdown is
+        // empty and the form silently cannot be submitted at all.
+        setError(e instanceof Error ? e.message : "Could not load the list of branches.");
+      });
   }, [open, terminal?.branchId]);
 
   useEffect(() => {
@@ -63,16 +69,22 @@ export function RequestTransferModal({
   async function handleSubmit() {
     if (!selectedBranch || items.length === 0) return;
     setSubmitting(true);
+    setError(null);
     try {
-      await apiClient.post("/transfers", {
-        fromBranchId: selectedBranch, // We are requesting FROM them
-        toBranchId: terminal?.branchId, // TO us
-        items: items.map(i => ({ variantId: i.variantId, quantity: i.quantity })),
-        notes: notes || undefined,
+      /**
+       * The DESTINATION is not sent — the main process stamps it from the
+       * terminal's own branch binding. A till may only request stock to
+       * where it is standing, and taking `toBranchId` from the renderer made
+       * that the renderer's choice to make.
+       */
+      await window.devsfleet.transfers.request({
+        fromBranchId: selectedBranch,
+        items: items.map((i) => ({ variantId: i.variantId, quantity: i.quantity })),
+        ...(notes ? { notes } : {}),
       });
       onSuccess();
-    } catch (e: any) {
-      alert(e.message || "Failed to submit transfer request");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to submit the transfer request.");
     } finally {
       setSubmitting(false);
     }
@@ -113,6 +125,9 @@ export function RequestTransferModal({
           </div>
 
           <div className="pt-2">
+            {error && (
+              <p className="mb-2 text-[12px] text-signal-red">{error}</p>
+            )}
             <button
               type="button"
               className="btn btn-primary w-full"

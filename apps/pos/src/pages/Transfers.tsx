@@ -1,59 +1,65 @@
 import { useEffect, useState } from "react";
-import { apiClient } from "../lib/api-client.js";
 import { formatDistanceToNow } from "date-fns";
-import { PackageOpen, ArrowRightLeft, Plus, CheckCircle2, Truck } from "lucide-react";
+import { PackageOpen, ArrowRightLeft, Plus, CheckCircle2, Truck, AlertCircle } from "lucide-react";
+import { hasBridge, type PosTransfer } from "../lib/pos-data.js";
 import { useAuth } from "../store/auth.js";
 import { RequestTransferModal } from "./RequestTransferModal.js";
 
-interface TransferItem {
-  variantId: string;
-  sku: string;
-  productName: string;
-  quantity: string;
-}
-
-interface Transfer {
-  id: string;
-  transferNumber: string;
-  fromBranchId: string;
-  toBranchId: string;
-  status: "requested" | "approved" | "shipped" | "received" | "cancelled";
-  createdAt: string;
-  notes: string | null;
-  items: TransferItem[];
-}
+type Transfer = PosTransfer;
 
 export function Transfers() {
   const terminal = useAuth((s) => s.terminal);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [requestModalOpen, setRequestModalOpen] = useState(false);
 
+  /**
+   * Through the bridge, not the renderer's api-client.
+   *
+   * This screen is online-only — stock at another branch is not something a
+   * till can know offline — but it used to call the API from the renderer
+   * with a token that Electron PIN login never writes and sign-out clears.
+   * On a real terminal that meant an unauthenticated request, a swallowed
+   * 401, and a permanently empty list that looked exactly like "no transfers".
+   */
   function loadTransfers() {
-    if (!terminal?.branchId) return;
+    if (!hasBridge()) {
+      setError("Transfers need the Electron terminal.");
+      setLoading(false);
+      return;
+    }
     setLoading(true);
-    apiClient
-      .get<{ data: Transfer[] }>(`/transfers?branchId=${terminal.branchId}`)
+    window.devsfleet.transfers
+      .list()
       .then((res) => {
-        setTransfers(res.data);
+        setTransfers(res.data ?? []);
+        setError(null);
         setLoading(false);
       })
-      .catch(() => {
+      .catch((e: unknown) => {
+        // Surfaced, never swallowed: "cannot reach the server" and "nothing
+        // to transfer" are different answers and staff must tell them apart.
+        setError(e instanceof Error ? e.message : "Could not load transfers.");
         setLoading(false);
       });
   }
 
   useEffect(() => {
     loadTransfers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [terminal?.branchId]);
 
   async function handleReceive(id: string) {
-    if (!confirm("Are you sure you want to receive this stock?")) return;
+    if (!confirm("Receive this stock into your branch? This moves it onto your shelves.")) return;
+    setError(null);
     try {
-      await apiClient.post(`/transfers/${id}/receive`);
-      setTransfers((prev) => prev.map(t => t.id === id ? { ...t, status: "received" } : t));
-    } catch (e: any) {
-      alert(e.message || "Failed to receive transfer");
+      await window.devsfleet.transfers.receive(id);
+      // Refetched rather than patched in place: receiving moves stock, and the
+      // server is the authority on what the transfer looks like afterwards.
+      loadTransfers();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to receive the transfer.");
     }
   }
 
@@ -77,7 +83,19 @@ export function Transfers() {
 
       <div className="flex-1 overflow-y-auto p-8">
         <div className="max-w-5xl mx-auto space-y-8">
-          
+
+          {error && (
+            <div className="flex items-start gap-3 rounded-lg border border-signal-red/40 bg-signal-red/5 p-4">
+              <AlertCircle className="size-5 shrink-0 text-signal-red/80" aria-hidden />
+              <div>
+                <p className="text-[14px] font-medium text-white">{error}</p>
+                <p className="mt-1 text-[12px] text-zinc-500">
+                  Transfers need the network — stock at another branch is not held on this terminal.
+                </p>
+              </div>
+            </div>
+          )}
+
           <section>
             <h2 className="text-sm font-semibold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
               <ArrowRightLeft className="size-4 text-brass" /> Incoming & Actionable

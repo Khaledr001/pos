@@ -176,6 +176,31 @@ export async function authorized<T>(path: string, body: unknown): Promise<T> {
 }
 
 /**
+ * An authenticated call for the screens that genuinely need the live server —
+ * inter-branch transfers and expected deliveries, neither of which is
+ * mirrored locally because both are about stock that is not here yet.
+ *
+ * It matters that these run in the MAIN process rather than the renderer.
+ * The renderer's own `apiClient` reads a token out of localStorage that
+ * Electron PIN login never writes and sign-out actively clears, so those
+ * screens were issuing unauthenticated requests on a real till and showing
+ * an empty list. The tokens live here, and `ensureAccessToken` refreshes
+ * them, so a shift that started hours ago still works.
+ */
+export async function authorizedRequest<T>(
+  method: "GET" | "POST",
+  path: string,
+  body?: unknown,
+): Promise<T> {
+  const accessToken = await ensureAccessToken();
+  return request<T>(`${requireApiUrl()}${path}`, {
+    method,
+    headers: { authorization: `Bearer ${accessToken}` },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+}
+
+/**
  * Liveness only. Deliberately unauthenticated, so it works while signed out.
  *
  * The probe lives at the ORIGIN, not under the configured base: the API keeps

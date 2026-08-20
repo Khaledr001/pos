@@ -5,6 +5,9 @@ import type {
   PosCashSession,
   PosCustomer,
   PosProduct,
+  PosPurchaseOrder,
+  PosPurchaseOrderDetails,
+  PosTransfer,
   PosQuotationDraft,
   PosQuotationReceipt,
   PosReturnDraft,
@@ -47,7 +50,8 @@ export interface DevsfleetBridge {
   };
   customers: {
     search(query: string): Promise<PosCustomer[]>;
-    createCustomer?(input: {
+    /** Offline-capable: written locally under a terminal-minted id, then pushed. */
+    createCustomer(input: {
       name: string;
       phone?: string;
       company?: string;
@@ -66,6 +70,33 @@ export interface DevsfleetBridge {
       occurredAt: string;
     }): Promise<unknown>;
   };
+  /**
+   * Online-only by nature: stock at another branch, and stock a supplier has
+   * not delivered yet, are both things this terminal cannot know offline.
+   * Routed through the main process so the call is authenticated — see
+   * electron/ipc/index.ts.
+   *
+   * Typed as the API's raw envelope because that is what the main process
+   * passes back untouched; callers read `.data`.
+   */
+  transfers: {
+    list(): Promise<{ data: PosTransfer[] }>;
+    request(input: {
+      fromBranchId: string;
+      items: Array<{ variantId: string; quantity: number }>;
+      notes?: string;
+    }): Promise<unknown>;
+    receive(id: string): Promise<unknown>;
+    branches(): Promise<{ data: Array<{ id: string; name: string }> }>;
+  };
+
+  purchases: {
+    /** `[sent, partial]` — each the API's own `{items, total}` envelope. */
+    expected(): Promise<Array<{ data: { items: PosPurchaseOrder[]; total: number } }>>;
+    detail(id: string): Promise<{ data: PosPurchaseOrderDetails }>;
+    receive(input: unknown): Promise<unknown>;
+  };
+
   cash: {
     current(): Promise<PosCashSession | null>;
     open(openingAmount: string): Promise<PosCashSession>;

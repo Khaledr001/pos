@@ -78,7 +78,10 @@ const PUSH_PERMISSIONS: Partial<
   cash_movement: ["cash:movement"],
   customer: ["customer:write"],
   quotation: ["quotation:write"],
-  customer_payment: ["customer:credit"],
+  // Mirrors POST /customers/:id/payments exactly — see the reasoning on that
+  // route for why receiving a repayment is `payment:write` and not the
+  // credit-GRANTING permission it used to demand.
+  customer_payment: ["payment:write"],
 };
 
 /**
@@ -589,6 +592,9 @@ export class SyncService {
         const dto = this.parsePayload(CreateSaleSchema, "sale", {
           ...payload,
           cashSessionId: session,
+          // A customer opened at the till this shift is known here by the id
+          // the TERMINAL minted, not the one this server assigned it.
+          customerId: await this.resolveCustomer(payload.customerId),
           branchId,
           localId: item.localId,
           occurredAt: item.occurredAt,
@@ -824,6 +830,7 @@ export class SyncService {
 
         const dto = this.parsePayload(CreateQuotationSchema, "quotation", {
           ...payload,
+          customerId: await this.resolveCustomer(payload.customerId),
           branchId,
           localId: item.localId,
           occurredAt: item.occurredAt,
@@ -865,6 +872,7 @@ export class SyncService {
             // older build still gets its reference number through, instead
             // of it being silently dropped by a key the payload never had.
             referenceNumber: payload.referenceNumber ?? payload.reference,
+            customerId: await this.resolveCustomer(payload.customerId),
             branchId,
             ...(session ? { cashSessionId: session } : { cashSessionId: undefined }),
             localId: item.localId,
@@ -1004,6 +1012,37 @@ export class SyncService {
         columns: { id: true },
       });
       return session?.id ?? null;
+    });
+  }
+
+  /**
+   * Map a terminal's customer reference onto the server's id.
+   *
+   * Same translation `resolveCashSession` does, and needed for the same
+   * reason: a customer created at the till exists first under the id the
+   * TERMINAL minted, and every document raised for them that shift names
+   * them by it.
+   *
+   * Without this, `sales.customerId` is a foreign key and `SalesService`
+   * refuses an id it cannot find — so the very first sale to a walk-in
+   * account opened offline came back `rejected`, permanently, and the
+   * takings landed in the attention queue instead of the ledger. Items
+   * apply in `sequence` order so the customer row exists by now; it just
+   * exists under a different id than the sale is asking for.
+   *
+   * An id that matches nothing is returned as-is rather than nulled: the
+   * services below raise a precise CUSTOMER_NOT_FOUND, which is a better
+   * answer than silently booking the sale to nobody.
+   */
+  private async resolveCustomer(reference: unknown): Promise<string | null> {
+    if (typeof reference !== "string" || reference.length === 0) return null;
+
+    return this.db.run(async (tx) => {
+      const customer = await tx.query.customers.findFirst({
+        where: (t, { eq: e, or: o }) => o(e(t.id, reference), e(t.localId, reference)),
+        columns: { id: true },
+      });
+      return customer?.id ?? reference;
     });
   }
 

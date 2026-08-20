@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { apiClient } from "../lib/api-client.js";
+import { hasBridge, posData } from "../lib/pos-data.js";
 import { formatDistanceToNow } from "date-fns";
 import { ClipboardCheck, ScanBarcode, ChevronLeft, PackageCheck, AlertCircle } from "lucide-react";
 import { useAuth } from "../store/auth.js";
@@ -33,6 +33,18 @@ interface PurchaseOrderDetails {
   items: PurchaseOrderItem[];
 }
 
+/**
+ * NOTE ON THE RESPONSE SHAPE, because getting it wrong here was silent.
+ *
+ * `/purchases` returns `{items, total}`, and the API's interceptor only
+ * flattens `{items, meta}` — so the orders arrive nested at `data.items`,
+ * not at `items`. This screen read `res.items`, got `undefined`, spread it
+ * (`[...undefined]` throws), and the catch turned that into "No expected
+ * deliveries" — permanently, even with a valid token and the right
+ * permissions, which is indistinguishable from genuinely having nothing to
+ * receive. The bridge types below keep the nesting explicit.
+ */
+
 export function Receiving() {
   const terminal = useAuth((s) => s.terminal);
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
@@ -40,29 +52,49 @@ export function Receiving() {
   
   const [selectedOrder, setSelectedOrder] = useState<PurchaseOrderDetails | null>(null);
 
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!terminal?.branchId) return;
-    
-    // We fetch "sent" and "partial" orders
-    Promise.all([
-      apiClient.get<{ items: PurchaseOrder[] }>(`/purchases?branchId=${terminal.branchId}&status=sent`),
-      apiClient.get<{ items: PurchaseOrder[] }>(`/purchases?branchId=${terminal.branchId}&status=partial`)
-    ])
+
+    if (!hasBridge()) {
+      setError("Receiving needs the Electron terminal.");
+      setLoading(false);
+      return;
+    }
+
+    // "sent" and "partial" are the two states with stock still to arrive.
+    // Fetched through the bridge so the call carries the terminal's real
+    // token — see the handler in electron/ipc/index.ts.
+    window.devsfleet.purchases
+      .expected()
       .then(([sentRes, partialRes]) => {
-        setOrders([...sentRes.items, ...partialRes.items]);
+        setOrders([...(sentRes?.data?.items ?? []), ...(partialRes?.data?.items ?? [])]);
+        setError(null);
         setLoading(false);
       })
-      .catch(() => {
+      .catch((e: unknown) => {
+        /**
+         * Surfaced, not swallowed. This screen needs the network — nothing
+         * about purchase orders is mirrored locally — so "could not reach the
+         * server" and "nothing to receive" are completely different answers
+         * and a receiving clerk has to be able to tell them apart. Swallowing
+         * the error showed the empty state for a 403 or an offline terminal.
+         */
+        setError(e instanceof Error ? e.message : "Could not load expected deliveries.");
         setLoading(false);
       });
   }, [terminal?.branchId, selectedOrder]); // Refetch when returning to list
 
   async function handleSelect(id: string) {
     try {
-      const res = await apiClient.get<PurchaseOrderDetails>(`/purchases/${id}`);
-      setSelectedOrder(res);
-    } catch (e: any) {
-      alert(e.message || "Failed to load order details");
+      // `/purchases/:id` returns a plain object, so it is NOT flattened —
+      // the order is at `.data`, and reading `res` directly handed the render
+      // an envelope whose `.items` was undefined.
+      const res = await window.devsfleet.purchases.detail(id);
+      setSelectedOrder(res.data);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to load order details.");
     }
   }
 
@@ -130,6 +162,15 @@ export function Receiving() {
                     </button>
                   ))}
                 </div>
+              ) : error ? (
+                <div className="rounded-lg border border-dashed border-signal-red/40 bg-signal-red/5 p-12 text-center flex flex-col items-center justify-center">
+                  <AlertCircle className="size-12 text-signal-red/70 mb-4" />
+                  <h3 className="text-white font-medium mb-1">Could not load deliveries</h3>
+                  <p className="text-zinc-400 text-sm max-w-md">{error}</p>
+                  <p className="text-zinc-500 text-xs mt-3">
+                    Receiving needs the network — purchase orders are not held on this terminal.
+                  </p>
+                </div>
               ) : (
                 <div className="bg-steel-800/50 border border-steel-800 border-dashed rounded-lg p-12 text-center flex flex-col items-center justify-center">
                   <PackageCheck className="size-12 text-zinc-600 mb-4" />
@@ -161,26 +202,43 @@ function ReceivingForm({ order, onComplete }: { order: PurchaseOrderDetails, onC
     inputRef.current?.focus();
   }, []);
 
-  function handleScan(e: React.FormEvent) {
+  async function handleScan(e: React.FormEvent) {
     e.preventDefault();
-    if (!barcode.trim()) return;
+    const code = barcode.trim();
+    if (!code) return;
 
-    // We assume the barcode matches the SKU for this simple implementation
-    // A more robust implementation would fetch the variant by barcode and match its ID
-    const line = order.items.find(i => i.productSku.toLowerCase() === barcode.trim().toLowerCase());
-    
+    /**
+     * A real barcode, resolved through the local catalogue mirror.
+     *
+     * This used to compare the scanned string against `productSku` and admit
+     * as much in a comment — so an actual scanner, which emits a barcode and
+     * not a SKU, never matched anything and the whole screen could only be
+     * driven by typing SKUs by hand. `findByBarcode` is the same offline
+     * lookup the sale screen scans against, so whatever works at the till
+     * works here; a typed SKU still matches on the fallback below.
+     */
+    let line = order.items.find(
+      (i) => i.productSku.toLowerCase() === code.toLowerCase(),
+    );
+
+    if (!line) {
+      const variant = await posData.findByBarcode(code).catch(() => null);
+      if (variant) line = order.items.find((i) => i.variantId === variant.id);
+    }
+
     if (line) {
-      const remaining = Number(line.quantity) - Number(line.receivedQuantity);
-      const current = scanned[line.id] || 0;
-      
+      const matched = line;
+      const remaining = Number(matched.quantity) - Number(matched.receivedQuantity);
+      const current = scanned[matched.id] || 0;
+
       if (current >= remaining) {
-        setError(`You have already scanned all expected units for ${line.productName}`);
+        setError(`You have already scanned all expected units for ${matched.productName}`);
       } else {
-        setScanned(prev => ({ ...prev, [line.id]: current + 1 }));
+        setScanned((prev) => ({ ...prev, [matched.id]: current + 1 }));
         setError(null);
       }
     } else {
-      setError(`Barcode ${barcode} not found in this Purchase Order.`);
+      setError(`${code} is not on this purchase order.`);
     }
     
     setBarcode("");
@@ -218,15 +276,15 @@ function ReceivingForm({ order, onComplete }: { order: PurchaseOrderDetails, onC
 
     setSubmitting(true);
     try {
-      await apiClient.post("/purchases/receive", {
+      await window.devsfleet.purchases.receive({
         branchId: order.branchId,
         purchaseOrderId: order.id,
         supplierId: order.supplierId,
         lines,
       });
       onComplete();
-    } catch (e: any) {
-      setError(e.message || "Failed to submit receipt");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to submit the receipt.");
       setSubmitting(false);
     }
   }

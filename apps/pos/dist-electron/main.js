@@ -1033,6 +1033,52 @@ function searchCustomers(query, limit = 25) {
     `${sql} WHERE name LIKE ? OR company LIKE ? OR phone LIKE ? ORDER BY name LIMIT ?`
   ).all(like, like, like, limit);
 }
+function createCustomer(input) {
+  const db2 = getDatabase();
+  const localId = nc.randomUUID();
+  const occurredAt = (/* @__PURE__ */ new Date()).toISOString();
+  const creditLimit = input.creditLimit?.trim() ? input.creditLimit.trim() : "0";
+  db2.transaction(() => {
+    db2.prepare(
+      `INSERT INTO customers
+         (id, name, company, phone, trn, type, price_list_id,
+          credit_limit, credit_balance, credit_on_hold, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'retail', NULL, ?, '0', 0, ?)`
+    ).run(
+      localId,
+      input.name.trim(),
+      input.company?.trim() || null,
+      input.phone?.trim() || null,
+      input.trn?.trim() || null,
+      creditLimit,
+      occurredAt
+    );
+    enqueue(db2, {
+      localId,
+      entity: "customer",
+      occurredAt,
+      payload: {
+        name: input.name.trim(),
+        ...input.company?.trim() ? { company: input.company.trim() } : {},
+        ...input.phone?.trim() ? { phone: input.phone.trim() } : {},
+        ...input.trn?.trim() ? { trn: input.trn.trim() } : {},
+        ...input.email?.trim() ? { email: input.email.trim() } : {},
+        creditLimit: Number(creditLimit)
+      }
+    });
+  })();
+  return {
+    id: localId,
+    name: input.name.trim(),
+    company: input.company?.trim() || null,
+    phone: input.phone?.trim() || null,
+    trn: input.trn?.trim() || null,
+    priceListId: null,
+    creditLimit,
+    creditBalance: "0",
+    creditOnHold: 0
+  };
+}
 function getOpenCashSession() {
   const db2 = getDatabase();
   const row = db2.prepare(
@@ -1594,6 +1640,24 @@ function settleOutboxItem(result) {
         db2.prepare(
           `UPDATE local_customer_payments SET synced_at = datetime('now') WHERE local_id = ?`
         ).run(result.localId);
+      } else if (result.entity === "customer") {
+        if (result.serverId) {
+          for (const table of [
+            "local_sales",
+            "local_quotations",
+            "local_orders",
+            "local_customer_payments",
+            "local_returns"
+          ]) {
+            db2.prepare(
+              `UPDATE ${table} SET customer_id = ? WHERE customer_id = ?`
+            ).run(result.serverId, result.localId);
+          }
+          db2.prepare(`UPDATE customers SET id = ? WHERE id = ?`).run(
+            result.serverId,
+            result.localId
+          );
+        }
       } else {
         db2.prepare(
           `UPDATE local_sales SET server_id = ?, sale_number = ?, synced_at = datetime('now')
@@ -153922,6 +153986,14 @@ async function authorized(path, body) {
     body: JSON.stringify(body)
   });
 }
+async function authorizedRequest(method, path, body) {
+  const accessToken = await ensureAccessToken();
+  return request(`${requireApiUrl()}${path}`, {
+    method,
+    headers: { authorization: `Bearer ${accessToken}` },
+    ...body === void 0 ? {} : { body: JSON.stringify(body) }
+  });
+}
 async function ping() {
   const base = apiUrl();
   if (!base) return false;
@@ -154258,11 +154330,53 @@ function registerDataHandlers(ipcMain) {
     "customers:search",
     (_event, query) => searchCustomers(query ?? "")
   );
+  ipcMain.handle("customers:create", (_event, input) => {
+    const customer = createCustomer(input);
+    syncNow();
+    return customer;
+  });
   ipcMain.handle("customers:payment", (_event, input) => {
     const payment = recordAccountPayment(input);
     syncNow();
     return payment;
   });
+  ipcMain.handle("transfers:list", () => {
+    const branch = branchId();
+    if (!branch) throw new Error("This terminal is not bound to a branch yet.");
+    return authorizedRequest("GET", `/transfers?branchId=${encodeURIComponent(branch)}`);
+  });
+  ipcMain.handle("transfers:request", (_event, input) => {
+    const branch = branchId();
+    if (!branch) throw new Error("This terminal is not bound to a branch yet.");
+    return authorizedRequest("POST", "/transfers", {
+      fromBranchId: input.fromBranchId,
+      toBranchId: branch,
+      items: input.items,
+      ...input.notes ? { notes: input.notes } : {}
+    });
+  });
+  ipcMain.handle(
+    "transfers:receive",
+    (_event, id) => authorizedRequest("POST", `/transfers/${id}/receive`, {})
+  );
+  ipcMain.handle("transfers:branches", () => authorizedRequest("GET", "/branches"));
+  ipcMain.handle("purchases:expected", () => {
+    const branch = branchId();
+    if (!branch) throw new Error("This terminal is not bound to a branch yet.");
+    const scope = `branchId=${encodeURIComponent(branch)}`;
+    return Promise.all([
+      authorizedRequest("GET", `/purchases?${scope}&status=sent`),
+      authorizedRequest("GET", `/purchases?${scope}&status=partial`)
+    ]);
+  });
+  ipcMain.handle(
+    "purchases:detail",
+    (_event, id) => authorizedRequest("GET", `/purchases/${id}`)
+  );
+  ipcMain.handle(
+    "purchases:receive",
+    (_event, input) => authorizedRequest("POST", "/purchases/receive", input)
+  );
   ipcMain.handle("cash:current", () => getOpenCashSession());
   ipcMain.handle(
     "cash:open",

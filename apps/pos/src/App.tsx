@@ -1,3 +1,4 @@
+import type { Permission } from "@devsfleet/shared-types";
 import { Banknote, Settings2, ShoppingCart, Undo2, FileText, Landmark, PackageOpen, PackageCheck } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { HashRouter, NavLink, Navigate, Route, Routes } from "react-router-dom";
@@ -89,22 +90,38 @@ function Shell() {
 }
 
 /**
- * Four destinations, icons and labels both.
+ * Icons and labels both.
  *
  * Icon-only navigation is a false economy on a till: staff turnover is high and
  * a new cashier should not have to learn a pictogram to find returns.
+ *
+ * `permission` hides what this cashier cannot actually use. Transfers and
+ * Receiving are the reason: neither is in the cashier role's grant list, so
+ * every cashier was shown both tabs and met a swallowed 403 on arrival —
+ * which reads as a broken till, not as a boundary. This is presentation only;
+ * the API refuses the data regardless, which is the real control.
  */
 function SideNav() {
-  const items = [
+  const can = useAuth((s) => s.can);
+
+  const allItems: Array<{
+    to: string;
+    label: string;
+    icon: typeof ShoppingCart;
+    end?: boolean;
+    permission?: Permission;
+  }> = [
     { to: "/", label: "Sell", icon: ShoppingCart, end: true },
     { to: "/drawer", label: "Drawer", icon: Banknote },
-    { to: "/quotations", label: "Quotes", icon: FileText },
-    { to: "/accounts", label: "Accounts", icon: Landmark },
-    { to: "/transfers", label: "Transfers", icon: PackageOpen },
-    { to: "/receiving", label: "Receiving", icon: PackageCheck },
-    { to: "/returns", label: "Returns", icon: Undo2 },
+    { to: "/quotations", label: "Quotes", icon: FileText, permission: "quotation:read" },
+    { to: "/accounts", label: "Accounts", icon: Landmark, permission: "payment:write" },
+    { to: "/transfers", label: "Transfers", icon: PackageOpen, permission: "transfer:read" },
+    { to: "/receiving", label: "Receiving", icon: PackageCheck, permission: "purchase:receive" },
+    { to: "/returns", label: "Returns", icon: Undo2, permission: "sale:return" },
     { to: "/settings", label: "Settings", icon: Settings2 },
   ];
+
+  const items = allItems.filter((item) => !item.permission || can(item.permission));
 
   useHotkeys({
     "ctrl+1": () => (location.hash = "#/"),

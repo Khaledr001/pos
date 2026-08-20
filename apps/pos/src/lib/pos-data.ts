@@ -66,6 +66,61 @@ export interface PosPriceTier {
   sellingPrice: string;
 }
 
+/**
+ * ONLINE-ONLY SHAPES.
+ *
+ * Transfers and purchase orders are the two things a till genuinely cannot
+ * hold locally: both describe stock that is somewhere else. They are not part
+ * of `PosDataAdapter` for that reason — there is no offline implementation to
+ * pick between, so they go through `window.devsfleet.transfers` /
+ * `.purchases`, which proxy the API from the main process.
+ */
+export interface PosTransferItem {
+  variantId: string;
+  sku: string;
+  productName: string;
+  quantity: string;
+}
+
+export interface PosTransfer {
+  id: string;
+  transferNumber: string;
+  fromBranchId: string;
+  toBranchId: string;
+  status: "requested" | "approved" | "shipped" | "received" | "cancelled";
+  createdAt: string;
+  notes: string | null;
+  items: PosTransferItem[];
+}
+
+export interface PosPurchaseOrder {
+  id: string;
+  poNumber: string;
+  status: "draft" | "sent" | "partial" | "received" | "cancelled";
+  supplierName: string;
+  expectedDate: string | null;
+  createdAt: string;
+}
+
+export interface PosPurchaseOrderItem {
+  id: string;
+  variantId: string;
+  productName: string;
+  productSku: string;
+  quantity: string;
+  receivedQuantity: string;
+  unitPrice: string;
+  unitAbbr: string;
+}
+
+export interface PosPurchaseOrderDetails {
+  id: string;
+  poNumber: string;
+  supplierId: string;
+  branchId: string;
+  items: PosPurchaseOrderItem[];
+}
+
 /** A packaging a variant can be sold in — a box, a carton (Stage 3). */
 export interface PosVariantUnit {
   id: string;
@@ -371,22 +426,17 @@ const electronAdapter: PosDataAdapter = {
       return [];
     }
   },
-  createCustomer: (input) => {
-    // Feature-detected because the offline path does not exist yet (§11–12
-    // in feature.md) — not a fallback. A caller getting a fake, unpersisted
-    // customer back with no indication it never reached the server is worse
-    // than a clear refusal.
-    if ("createCustomer" in (window.devsfleet.customers as unknown as Record<string, unknown>)) {
-      return (
-        window.devsfleet.customers as unknown as {
-          createCustomer: (i: CreateCustomerInput) => Promise<PosCustomer>;
-        }
-      ).createCustomer(input);
-    }
-    throw new Error(
-      "Creating a customer offline isn't supported yet on this terminal. Connect to the network to add one.",
-    );
-  },
+  /**
+   * Works with the network unplugged: the row lands in the local mirror
+   * under a terminal-minted id and goes out through the outbox, so the sale
+   * being rung up right now can attach it.
+   *
+   * This used to be feature-detected and throw "not supported offline" —
+   * except the bridge method did not exist at all, so it threw on a
+   * connected terminal too, and the new-customer form on the sale screen
+   * could never succeed anywhere.
+   */
+  createCustomer: (input) => window.devsfleet.customers.createCustomer(input),
   checkStockInOtherBranches: async (sku) => {
     try {
       const res = await apiClient.get<{ data: Array<{ branchName: string; available: string }> }>(`/inventory?q=${encodeURIComponent(sku)}`);

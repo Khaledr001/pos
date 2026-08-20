@@ -90,8 +90,25 @@ export class CustomersController {
     return this.customers.setCredit(id, dto);
   }
 
+  /**
+   * `payment:write`, not `customer:credit`.
+   *
+   * `customer:credit` is the power to GRANT credit — set a limit, allow a
+   * credit sale. Taking a repayment is the opposite direction: money coming
+   * in, which is what `payment:write` covers and what a cashier at a till
+   * does all day.
+   *
+   * Gating it on `customer:credit` (which no cashier role holds) meant the
+   * Accounts screen on the POS took the customer's cash, decremented the
+   * balance in the local mirror, and then had its push permanently REJECTED
+   * — so the debt was never actually cleared on the server and the money
+   * went to the outbox attention queue instead of the ledger. A detectable,
+   * audited risk beats a guaranteed loss: this write is audited, carries the
+   * user id, and a cash one folds into the drawer, so an invented payment
+   * shows up as a surplus at day-close.
+   */
   @Post(":id/payments")
-  @RequirePermissions("customer:credit")
+  @RequirePermissions("payment:write")
   @Audited("customer_payment", "create")
   @ApiOperation({ summary: "Settle an old credit invoice" })
   recordPayment(

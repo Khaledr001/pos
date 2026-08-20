@@ -4,7 +4,7 @@ import type { IpcMain } from "electron";
 import { app } from "electron";
 import * as repo from "../db/repositories.js";
 import { verifyPinLocally } from "../db/local-auth.js";
-import { ApiError, loginWithPin, verifyOverride } from "../sync/api-client.js";
+import { ApiError, authorizedRequest, branchId as terminalBranchId, loginWithPin, verifyOverride } from "../sync/api-client.js";
 import { syncNow } from "../sync/index.js";
 
 /**
@@ -28,11 +28,71 @@ export function registerDataHandlers(ipcMain: IpcMain): void {
   ipcMain.handle("customers:search", (_event, query: string) =>
     repo.searchCustomers(query ?? ""),
   );
+  ipcMain.handle("customers:create", (_event, input: repo.NewCustomerInput) => {
+    const customer = repo.createCustomer(input);
+    // Nudge the sync loop so the server assigns a real id promptly — the
+    // local row is re-keyed to it on settlement. Fire-and-forget: the
+    // customer already exists locally and the sale must not wait.
+    syncNow();
+    return customer;
+  });
   ipcMain.handle("customers:payment", (_event, input: repo.AccountPaymentInput) => {
     const payment = repo.recordAccountPayment(input);
     syncNow();
     return payment;
   });
+
+  /**
+   * TRANSFERS and RECEIVING — the two screens that are online-only by nature.
+   *
+   * Stock at another branch, and stock a supplier has not delivered yet, are
+   * both things this terminal cannot know offline: there is no local mirror
+   * for either, and inventing one would mean a cashier acting on a figure
+   * that was true yesterday. So these proxy straight to the API — but from
+   * the MAIN process, which holds the terminal's tokens and refreshes them.
+   * The renderer's own api-client could not: nothing writes its token under
+   * Electron PIN login, and sign-out clears it, so both screens were making
+   * unauthenticated calls and rendering an empty list on a working till.
+   *
+   * `branchId` is taken from the terminal's own state, never from the
+   * renderer — a till may only receive stock into the branch it is standing
+   * in, and letting the caller name it would make that the renderer's choice.
+   */
+  ipcMain.handle("transfers:list", () => {
+    const branch = terminalBranchId();
+    if (!branch) throw new Error("This terminal is not bound to a branch yet.");
+    return authorizedRequest("GET", `/transfers?branchId=${encodeURIComponent(branch)}`);
+  });
+  ipcMain.handle("transfers:request", (_event, input: { fromBranchId: string; items: unknown[]; notes?: string }) => {
+    const branch = terminalBranchId();
+    if (!branch) throw new Error("This terminal is not bound to a branch yet.");
+    return authorizedRequest("POST", "/transfers", {
+      fromBranchId: input.fromBranchId,
+      toBranchId: branch,
+      items: input.items,
+      ...(input.notes ? { notes: input.notes } : {}),
+    });
+  });
+  ipcMain.handle("transfers:receive", (_event, id: string) =>
+    authorizedRequest("POST", `/transfers/${id}/receive`, {}),
+  );
+  ipcMain.handle("transfers:branches", () => authorizedRequest("GET", "/branches"));
+
+  ipcMain.handle("purchases:expected", () => {
+    const branch = terminalBranchId();
+    if (!branch) throw new Error("This terminal is not bound to a branch yet.");
+    const scope = `branchId=${encodeURIComponent(branch)}`;
+    return Promise.all([
+      authorizedRequest("GET", `/purchases?${scope}&status=sent`),
+      authorizedRequest("GET", `/purchases?${scope}&status=partial`),
+    ]);
+  });
+  ipcMain.handle("purchases:detail", (_event, id: string) =>
+    authorizedRequest("GET", `/purchases/${id}`),
+  );
+  ipcMain.handle("purchases:receive", (_event, input: unknown) =>
+    authorizedRequest("POST", "/purchases/receive", input),
+  );
 
   ipcMain.handle("cash:current", () => repo.getOpenCashSession());
   ipcMain.handle("cash:open", (_event, openingAmount: string) =>

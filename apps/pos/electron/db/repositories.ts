@@ -312,6 +312,82 @@ export function searchCustomers(query: string, limit = 25): unknown[] {
     .all(like, like, like, limit);
 }
 
+export interface NewCustomerInput {
+  name: string;
+  phone?: string;
+  company?: string;
+  trn?: string;
+  email?: string;
+  /** Decimal string. A walk-in gets "0" — credit is granted deliberately, never by default. */
+  creditLimit?: string;
+}
+
+/**
+ * Create a customer at the till, offline.
+ *
+ * The counter case this exists for: someone wants an invoice in a company
+ * name and the terminal has no network. Refusing means either no sale or a
+ * sale attached to nobody, and `customers` is the one mirror table the POS
+ * had no way to add to — search could only ever find what sync had already
+ * brought down.
+ *
+ * The row is inserted under the `localId` this mints, so the cart can attach
+ * it and the receipt can name it immediately. `settleOutboxItem` rewrites
+ * that id to the server's once the push lands — see the `customer` branch
+ * there for why the rewrite has to carry every local reference with it.
+ */
+export function createCustomer(input: NewCustomerInput): Record<string, unknown> {
+  const db = getDatabase();
+  const localId = randomUUID();
+  const occurredAt = new Date().toISOString();
+  const creditLimit = input.creditLimit?.trim() ? input.creditLimit.trim() : "0";
+
+  db.transaction(() => {
+    db.prepare(
+      `INSERT INTO customers
+         (id, name, company, phone, trn, type, price_list_id,
+          credit_limit, credit_balance, credit_on_hold, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'retail', NULL, ?, '0', 0, ?)`,
+    ).run(
+      localId,
+      input.name.trim(),
+      input.company?.trim() || null,
+      input.phone?.trim() || null,
+      input.trn?.trim() || null,
+      creditLimit,
+      occurredAt,
+    );
+
+    enqueue(db, {
+      localId,
+      entity: "customer",
+      occurredAt,
+      payload: {
+        name: input.name.trim(),
+        ...(input.company?.trim() ? { company: input.company.trim() } : {}),
+        ...(input.phone?.trim() ? { phone: input.phone.trim() } : {}),
+        ...(input.trn?.trim() ? { trn: input.trn.trim() } : {}),
+        ...(input.email?.trim() ? { email: input.email.trim() } : {}),
+        creditLimit: Number(creditLimit),
+      },
+    });
+  })();
+
+  // Shaped like searchCustomers' rows, because the cart attaches this
+  // directly rather than searching for it again.
+  return {
+    id: localId,
+    name: input.name.trim(),
+    company: input.company?.trim() || null,
+    phone: input.phone?.trim() || null,
+    trn: input.trn?.trim() || null,
+    priceListId: null,
+    creditLimit,
+    creditBalance: "0",
+    creditOnHold: 0,
+  };
+}
+
 // -----------------------------------------------------------------------------
 // Cash drawer
 // -----------------------------------------------------------------------------
@@ -1184,6 +1260,39 @@ export function settleOutboxItem(result: {
         db.prepare(
           `UPDATE local_customer_payments SET synced_at = datetime('now') WHERE local_id = ?`,
         ).run(result.localId);
+      } else if (result.entity === "customer") {
+        /**
+         * A customer created at the till lives under the localId the terminal
+         * minted, because the cart had to attach it before any server knew it
+         * existed. Now that the server has given it a real id, the local row
+         * is re-keyed to that id — otherwise the next pull inserts the SAME
+         * customer a second time under the server's id and the cashier sees
+         * a duplicate they cannot explain or merge.
+         *
+         * Every local row pointing at the old id moves with it. Missing one
+         * would orphan a document from its customer, and a receipt reprinted
+         * afterwards would show no name — silently, because a LEFT JOIN on a
+         * dead id yields NULL rather than an error. Held carts are exempt:
+         * they store the customer as JSON, and restoring one re-reads the
+         * name from that snapshot rather than joining.
+         */
+        if (result.serverId) {
+          for (const table of [
+            "local_sales",
+            "local_quotations",
+            "local_orders",
+            "local_customer_payments",
+            "local_returns",
+          ]) {
+            db.prepare(
+              `UPDATE ${table} SET customer_id = ? WHERE customer_id = ?`,
+            ).run(result.serverId, result.localId);
+          }
+          db.prepare(`UPDATE customers SET id = ? WHERE id = ?`).run(
+            result.serverId,
+            result.localId,
+          );
+        }
       } else {
         db.prepare(
           `UPDATE local_sales SET server_id = ?, sale_number = ?, synced_at = datetime('now')

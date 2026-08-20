@@ -15,7 +15,33 @@ const api = {
   },
   customers: {
     search: (query) => electron.ipcRenderer.invoke("customers:search", query),
+    /**
+     * Create one at the till, offline. Written to the local mirror under a
+     * terminal-minted id and queued for push, so the cart can attach it
+     * immediately — see repositories.ts's createCustomer.
+     */
+    createCustomer: (input) => electron.ipcRenderer.invoke("customers:create", input),
     payment: (input) => electron.ipcRenderer.invoke("customers:payment", input)
+  },
+  /**
+   * Inter-branch transfers and expected deliveries. Online-only by nature —
+   * neither is mirrored locally — but proxied through the MAIN process so the
+   * call carries the terminal's real, auto-refreshed token. See the handlers
+   * in electron/ipc/index.ts for why the renderer cannot do this itself.
+   */
+  transfers: {
+    list: () => electron.ipcRenderer.invoke("transfers:list"),
+    /** The destination is always THIS terminal's branch; only the source is chosen. */
+    request: (input) => electron.ipcRenderer.invoke("transfers:request", input),
+    receive: (id) => electron.ipcRenderer.invoke("transfers:receive", id),
+    /** Other branches, to pick a source from. */
+    branches: () => electron.ipcRenderer.invoke("transfers:branches")
+  },
+  purchases: {
+    /** Sent + partially-received orders for this branch, as a pair of responses. */
+    expected: () => electron.ipcRenderer.invoke("purchases:expected"),
+    detail: (id) => electron.ipcRenderer.invoke("purchases:detail", id),
+    receive: (input) => electron.ipcRenderer.invoke("purchases:receive", input)
   },
   cash: {
     current: () => electron.ipcRenderer.invoke("cash:current"),
