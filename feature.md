@@ -478,9 +478,20 @@ later step to avoid an earlier one.
 
 ### Stage 7 — Admin depth
 
-Purchase orders UI, transfer approval/shipping, day-close review, audit-log
-viewer, device management, roles/permissions editor, real reports (remove every
-hardcoded fallback; wire the date range), settings persisted to the API.
+Broken out into a table (was a flat paragraph) once work on it started, so
+each piece can be tracked and committed independently rather than as one
+undifferentiated blob.
+
+| # | Work | Accept when |
+|---|---|---|
+| 7.1 | Purchase orders UI | Create a PO, receive against it, see landed cost |
+| 7.2 | Transfer approval/shipping UI (the real request→approve→ship→receive workflow — `inventory.tsx`'s "Transfer Stock" dialog is a separate, immediate-move bypass around it) | The four-state workflow is usable end to end, not just the immediate-move shortcut |
+| 7.3 | Day-close review UI | A manager can open, preview, and close a day, and read back history |
+| 7.4 | Audit-log viewer | Needs a read endpoint first — writes only exist today via `@Audited` |
+| 7.5 | Device management UI | List, register, update a terminal |
+| 7.6 | Roles/permissions editor | Needs a roles API first — none exists; also fixes a real bug: user creation hardcodes `roleId` to a magic UUID with no picker |
+| 7.7 | Real reports — remove every hardcoded fallback, wire the date range | No mock top-products array, no hardcoded revenue/margin/stock numbers, the 7d/30d/90d buttons actually change what the three report calls return |
+| 7.8 | ~~Settings persisted to the API~~ **DONE** (2de20d7) | ~~Editing and saving actually changes what the server has~~ — done. `GET /tenant`/`PATCH /tenant/settings` were fully built and completely unused; the page only wrote to `localStorage`. Also fixed a second, separate lie found while touching this: the "Central API Endpoint" field changed nothing about which backend the app talked to (`api-client.ts`'s `BASE_URL` was a module constant) — now a real, working per-browser override, kept in `localStorage` on purpose since it configures this browser's connection, not tenant data. |
 
 ### Stage 8 — WhatsApp, then AI
 
