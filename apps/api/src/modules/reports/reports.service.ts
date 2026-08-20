@@ -198,6 +198,10 @@ export class ReportsService {
           revenue: sql<string>`coalesce(sum(${schema.saleItems.lineSubtotal}), 0)::text`,
           cost: sql<string>`round(coalesce(sum(${schema.saleItems.quantity} * coalesce(${schema.saleItems.costPrice}, 0)), 0), 4)::text`,
           unitsSold: sql<string>`coalesce(sum(${schema.saleItems.quantity}), 0)::text`,
+          // Output tax on what was sold. A return's items carry negative
+          // quantities and a negative taxAmount already, so summing across
+          // the window nets a refunded sale's tax back out on its own.
+          taxCollected: sql<string>`coalesce(sum(${schema.saleItems.taxAmount}), 0)::text`,
         })
         .from(schema.saleItems)
         .innerJoin(schema.sales, eq(schema.saleItems.saleId, schema.sales.id))
@@ -235,6 +239,7 @@ export class ReportsService {
         // payroll, rent accruals and depreciation live outside this system.
         netProfit: Money.toDecimalString(Money.subtract(grossProfit, overheads), 2),
         unitsSold: trading?.unitsSold ?? "0",
+        taxCollected: Money.toDecimalString(Money.toMinor(trading?.taxCollected ?? "0"), 2),
       };
     });
   }

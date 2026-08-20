@@ -2,14 +2,11 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import {
-  BarChart3,
   TrendingUp,
   Coins,
   Boxes,
   RefreshCw,
-  ArrowUpRight,
   ShieldCheck,
-  Calendar,
   Layers,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
@@ -20,62 +17,88 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 
 interface FinancialSummary {
-  revenue?: string | number;
-  cost?: string | number;
-  grossProfit?: string | number;
-  marginPercent?: string | number;
-  taxCollected?: string | number;
+  range: { from: string; to: string };
+  revenue: string;
+  cost: string;
+  grossProfit: string;
+  grossMarginPercent: string;
+  expenses: string;
+  netProfit: string;
+  unitsSold: string;
+  taxCollected: string;
 }
 
 interface TopProduct {
+  variantId: string;
   sku: string;
-  name: string;
-  quantitySold: number;
-  revenue: string | number;
+  productName: string;
+  quantity: string;
+  revenue: string;
 }
 
 interface InventorySummary {
-  totalValuation?: string | number;
-  totalItemsCount?: number;
-  lowStockCount?: number;
-  outOfStockCount?: number;
+  totals: {
+    variants: number;
+    units: string;
+    value: string;
+    outOfStock: number;
+  };
+  lowStock: unknown[];
+}
+
+const RANGES = { "7d": 6, "30d": 29, "90d": 89 } as const;
+type RangeKey = keyof typeof RANGES;
+
+function isoDaysAgo(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+
+function money(value: string | undefined): string {
+  return Number(value ?? "0").toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export default function ReportsPage() {
   const { tokens } = useAuth();
 
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [financial, setFinancial] = useState<FinancialSummary | null>(null);
   const [topProducts, setTopProducts] = useState<TopProduct[]>([]);
   const [invSummary, setInvSummary] = useState<InventorySummary | null>(null);
-  const [dateRange, setDateRange] = useState<"7d" | "30d" | "90d">("30d");
+  const [dateRange, setDateRange] = useState<RangeKey>("30d");
 
   const fetchReports = useCallback(async () => {
     if (!tokens?.accessToken) return;
     setLoading(true);
+    setError(null);
+
+    const to = isoDaysAgo(0);
+    const from = isoDaysAgo(RANGES[dateRange]);
 
     try {
       const [finRes, topRes, invRes] = await Promise.allSettled([
-        api.get<FinancialSummary>("/reports/financial", { accessToken: tokens.accessToken }),
+        api.get<FinancialSummary>("/reports/financial", {
+          accessToken: tokens.accessToken,
+          query: { from, to },
+        }),
         api.get<{ items: TopProduct[] }>("/reports/top-products", {
           accessToken: tokens.accessToken,
-          query: { limit: 5 },
+          query: { from, to, limit: 5 },
         }),
         api.get<InventorySummary>("/reports/inventory", { accessToken: tokens.accessToken }),
       ]);
 
       if (finRes.status === "fulfilled") setFinancial(finRes.value);
-      if (topRes.status === "fulfilled") {
-        const val = topRes.value as any;
-        setTopProducts(Array.isArray(val) ? val : (val?.items ?? []));
-      }
+      else setError((prev) => prev ?? finRes.reason?.message ?? "Failed to load financial figures.");
+
+      if (topRes.status === "fulfilled") setTopProducts(topRes.value?.items ?? []);
       if (invRes.status === "fulfilled") setInvSummary(invRes.value);
-    } catch {
-      // fallback
     } finally {
       setLoading(false);
     }
-  }, [tokens]);
+  }, [tokens, dateRange]);
 
   useEffect(() => {
     fetchReports();
@@ -96,7 +119,7 @@ export default function ReportsPage() {
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1 bg-secondary/50 p-1 rounded-lg border border-border">
-            {(["7d", "30d", "90d"] as const).map((r) => (
+            {(Object.keys(RANGES) as RangeKey[]).map((r) => (
               <button
                 key={r}
                 onClick={() => setDateRange(r)}
@@ -105,7 +128,7 @@ export default function ReportsPage() {
                   dateRange === r ? "bg-background shadow-xs text-foreground font-semibold" : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                {r === "7d" ? "Last 7 Days" : r === "30d" ? "This Month" : "Last Quarter"}
+                {r === "7d" ? "Last 7 Days" : r === "30d" ? "Last 30 Days" : "Last 90 Days"}
               </button>
             ))}
           </div>
@@ -115,6 +138,18 @@ export default function ReportsPage() {
           </Button>
         </div>
       </div>
+
+      {error && (
+        <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+          {error}
+        </div>
+      )}
+
+      {financial && (
+        <p className="text-xs text-muted-foreground">
+          Showing {financial.range.from} to {financial.range.to}
+        </p>
+      )}
 
       {/* KPI Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -128,10 +163,10 @@ export default function ReportsPage() {
             </div>
             <div className="mt-3">
               <span className="tabular text-2xl font-bold text-foreground">
-                AED {financial?.revenue ? Number(financial.revenue).toLocaleString() : "148,250.00"}
+                {loading ? "—" : `AED ${money(financial?.revenue)}`}
               </span>
-              <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1 font-medium">
-                <ArrowUpRight className="h-3 w-3" /> +12.4% vs last period
+              <p className="text-[11px] text-muted-foreground mt-1">
+                {financial ? `${financial.unitsSold} units sold` : "No data for this range"}
               </p>
             </div>
           </CardContent>
@@ -147,7 +182,7 @@ export default function ReportsPage() {
             </div>
             <div className="mt-3">
               <span className="tabular text-2xl font-bold text-foreground">
-                AED {invSummary?.totalValuation ? Number(invSummary.totalValuation).toLocaleString() : "89,400.00"}
+                {loading ? "—" : `AED ${money(invSummary?.totals.value)}`}
               </span>
               <p className="text-[11px] text-muted-foreground mt-1">
                 Weighted average unit cost
@@ -166,10 +201,10 @@ export default function ReportsPage() {
             </div>
             <div className="mt-3">
               <span className="tabular text-2xl font-bold text-foreground">
-                {financial?.marginPercent ? `${financial.marginPercent}%` : "34.8%"}
+                {loading ? "—" : financial ? `${financial.grossMarginPercent}%` : "—"}
               </span>
               <p className="text-[11px] text-muted-foreground mt-1">
-                AED {financial?.grossProfit ? Number(financial.grossProfit).toLocaleString() : "51,590.00"} margin
+                {financial ? `AED ${money(financial.grossProfit)} margin` : "No data for this range"}
               </p>
             </div>
           </CardContent>
@@ -178,14 +213,14 @@ export default function ReportsPage() {
         <Card className="hover:shadow-md transition-all">
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-muted-foreground">UAE VAT Output (5%)</span>
+              <span className="text-xs font-medium text-muted-foreground">VAT Output</span>
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600 dark:text-violet-400">
                 <ShieldCheck className="h-4 w-4" />
               </div>
             </div>
             <div className="mt-3">
               <span className="tabular text-2xl font-bold text-foreground">
-                AED {financial?.taxCollected ? Number(financial.taxCollected).toLocaleString() : "7,412.50"}
+                {loading ? "—" : `AED ${money(financial?.taxCollected)}`}
               </span>
               <p className="text-[11px] text-muted-foreground mt-1">
                 FTA tax return audit ready
@@ -203,39 +238,40 @@ export default function ReportsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="text-base">Top Performing Products</CardTitle>
-                <CardDescription className="text-xs mt-1">Highest sales volume across all outlets</CardDescription>
+                <CardDescription className="text-xs mt-1">Highest revenue in the selected range</CardDescription>
               </div>
-              <Badge variant="secondary" className="text-[10px]">Ranked by Volume</Badge>
+              <Badge variant="secondary" className="text-[10px]">Ranked by Revenue</Badge>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="divide-y divide-border">
-              {(topProducts.length > 0
-                ? topProducts
-                : [
-                    { sku: "PVC-ELB-001", name: 'PVC 90° Elbow 1" High Pressure', quantitySold: 420, revenue: "1,050.00" },
-                    { sku: "EL-CBL-3CX25", name: "Ducab 3-Core 2.5mm² Flexible Copper Cable", quantitySold: 85, revenue: "20,825.00" },
-                    { sku: "PNT-JOT-MATT-18L", name: "Jotun Fenomastic Pure Colours Matt 18L", quantitySold: 64, revenue: "13,440.00" },
-                    { sku: "SAN-ANG-VLV", name: 'Grohe 1/2" Chrome Angle Valve', quantitySold: 130, revenue: "4,940.00" },
-                  ]
-              ).map((p, idx) => (
-                <div key={p.sku} className="flex items-center justify-between py-3.5 first:pt-0 last:pb-0">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-secondary text-xs font-bold font-mono text-muted-foreground">
-                      #{idx + 1}
-                    </span>
-                    <div>
-                      <p className="text-xs font-semibold text-foreground">{p.name}</p>
-                      <p className="text-[10px] font-mono text-muted-foreground">SKU: {p.sku}</p>
+            {loading ? (
+              <p className="py-6 text-center text-xs text-muted-foreground">Loading...</p>
+            ) : topProducts.length === 0 ? (
+              <div className="py-8 text-center">
+                <Layers className="mx-auto h-8 w-8 text-muted-foreground/30" />
+                <p className="mt-2 text-xs text-muted-foreground">No sales in this range yet.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {topProducts.map((p, idx) => (
+                  <div key={p.variantId} className="flex items-center justify-between py-3.5 first:pt-0 last:pb-0">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-secondary text-xs font-bold font-mono text-muted-foreground">
+                        #{idx + 1}
+                      </span>
+                      <div>
+                        <p className="text-xs font-semibold text-foreground">{p.productName}</p>
+                        <p className="text-[10px] font-mono text-muted-foreground">SKU: {p.sku}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs font-mono font-bold text-foreground">AED {money(p.revenue)}</p>
+                      <p className="text-[10px] text-muted-foreground">{p.quantity} units sold</p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-xs font-mono font-bold text-foreground">AED {Number(p.revenue).toLocaleString()}</p>
-                    <p className="text-[10px] text-muted-foreground">{p.quantitySold} units sold</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -254,17 +290,21 @@ export default function ReportsPage() {
             <div className="rounded-xl border border-border p-4 space-y-3 bg-secondary/20">
               <div className="flex justify-between items-center text-xs">
                 <span className="text-muted-foreground">Active Catalog Items</span>
-                <span className="font-semibold text-foreground">{invSummary?.totalItemsCount ?? 5240} SKUs</span>
+                <span className="font-semibold text-foreground">
+                  {loading ? "—" : `${invSummary?.totals.variants ?? 0} SKUs`}
+                </span>
               </div>
               <div className="flex justify-between items-center text-xs">
                 <span className="text-muted-foreground">Low Stock Warnings</span>
                 <Badge variant="warning" className="text-[10px]">
-                  {invSummary?.lowStockCount ?? 12} Products below reorder level
+                  {loading ? "—" : `${invSummary?.lowStock.length ?? 0} Products below reorder level`}
                 </Badge>
               </div>
               <div className="flex justify-between items-center text-xs">
                 <span className="text-muted-foreground">Out of Stock</span>
-                <span className="font-semibold text-muted-foreground">{invSummary?.outOfStockCount ?? 3} SKUs</span>
+                <span className="font-semibold text-muted-foreground">
+                  {loading ? "—" : `${invSummary?.totals.outOfStock ?? 0} SKUs`}
+                </span>
               </div>
             </div>
 
