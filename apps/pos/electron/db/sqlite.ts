@@ -856,6 +856,41 @@ const MIGRATIONS: Array<
       ALTER TABLE local_sale_items ADD COLUMN unit_conversion_factor TEXT NOT NULL DEFAULT '1';
     `,
   },
+  {
+    version: 13,
+    sql: `
+      -- The per-tender breakdown a sale was actually paid with. commitSale
+      -- already received this in full (draft.payments) but never wrote it
+      -- anywhere — findSale/recentSales have hardcoded payments: [] since
+      -- they were built, which a receipt (Stage 4) cannot print "tender"
+      -- from. amount is what was TENDERED (e.g. "100" on a 100 note for a
+      -- 78 sale), matching PaymentDialog's own figure — change is computed
+      -- at read time as sum(amount) - total, the same subtraction the
+      -- payment dialog itself does.
+      CREATE TABLE IF NOT EXISTS local_sale_payments (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        sale_local_id TEXT NOT NULL REFERENCES local_sales(local_id) ON DELETE CASCADE,
+        method        TEXT NOT NULL,
+        amount        TEXT NOT NULL,
+        reference     TEXT,
+        sort_order    INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE INDEX IF NOT EXISTS idx_local_sale_payments_sale ON local_sale_payments(sale_local_id);
+
+      -- A manual "no sale" drawer open (Stage 4.3) — never a cash_movement,
+      -- which is money-shaped (amount NOT NULL, feeds day-close's cash
+      -- reconciliation) and has no "just checking the drawer" type. This is
+      -- pure audit trail, pushed through the outbox like anything else
+      -- created offline; the server writes it straight into audit_log.
+      CREATE TABLE IF NOT EXISTS local_drawer_opens (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        local_id    TEXT NOT NULL UNIQUE,
+        reason      TEXT NOT NULL,
+        occurred_at TEXT NOT NULL,
+        synced_at   TEXT
+      );
+    `,
+  },
 ];
 
 export function migrate(database: Database.Database): void {

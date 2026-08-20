@@ -542,6 +542,14 @@ export function commitSale(draft: SaleDraftInput): Record<string, unknown> {
       decrementStock.run(Number(line.quantity) * Number(conversionFactor), line.variantId);
     });
 
+    const insertPayment = db.prepare(
+      `INSERT INTO local_sale_payments (sale_local_id, method, amount, reference, sort_order)
+       VALUES (?, ?, ?, ?, ?)`,
+    );
+    draft.payments.forEach((payment, index) => {
+      insertPayment.run(draft.localId, payment.method, payment.amount, payment.reference ?? null, index);
+    });
+
     enqueue(db, {
       localId: draft.localId,
       entity: "sale",
@@ -709,7 +717,7 @@ export function recentSales(limit = 20): unknown[] {
     ...sale,
     synced: sale.syncedAt !== null,
     lines: saleLines(db, sale.localId as string),
-    payments: [],
+    payments: salePayments(db, sale.localId as string),
   }));
 }
 
@@ -730,8 +738,17 @@ export function findSale(reference: string): unknown | null {
     ...sale,
     synced: sale.syncedAt !== null,
     lines: saleLines(db, sale.localId as string),
-    payments: [],
+    payments: salePayments(db, sale.localId as string),
   };
+}
+
+function salePayments(db: Database.Database, localId: string): unknown[] {
+  return db
+    .prepare(
+      `SELECT method, amount, reference
+       FROM local_sale_payments WHERE sale_local_id = ? ORDER BY sort_order`,
+    )
+    .all(localId);
 }
 
 function saleLines(db: Database.Database, localId: string): unknown[] {
@@ -1256,6 +1273,33 @@ export function clearSettledDeltas(): void {
        WHERE r.synced_at IS NOT NULL
      )`,
   ).run();
+}
+
+// -----------------------------------------------------------------------------
+// Cash drawer
+// -----------------------------------------------------------------------------
+
+/**
+ * Records a MANUAL drawer open — never a cash_movement, which is money-shaped
+ * (a required amount, feeding day-close's cash reconciliation) and has no
+ * "just checking the till" type. Pure audit trail: local first, like a sale,
+ * so the reason survives even if the till is offline when the drawer opens.
+ */
+export function recordDrawerOpen(reason: string): void {
+  const db = getDatabase();
+  const localId = randomUUID();
+  const occurredAt = new Date().toISOString();
+
+  db.prepare(
+    `INSERT INTO local_drawer_opens (local_id, reason, occurred_at) VALUES (?, ?, ?)`,
+  ).run(localId, reason, occurredAt);
+
+  enqueue(db, {
+    localId,
+    entity: "drawer_open",
+    occurredAt,
+    payload: { reason },
+  });
 }
 
 // -----------------------------------------------------------------------------

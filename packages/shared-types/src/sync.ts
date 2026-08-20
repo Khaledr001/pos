@@ -122,6 +122,24 @@ export interface SyncPullResponse {
    * anything at all: if true, its own local ceiling must stay a no-op.
    */
   allowNegativeStock: boolean;
+  /**
+   * The seller's own identity — what a compliant tax invoice must print
+   * (TRN, legal name, address), not something derivable from any synced
+   * table. Sent on every pull, like `allowNegativeStock`: one small object,
+   * not worth its own entity and its own checkpoint.
+   */
+  business: SyncBusinessInfo;
+}
+
+export interface SyncBusinessInfo {
+  /** Falls back to the tenant's registered name when never set at signup. */
+  legalName: string;
+  trn: string | null;
+  phone: string | null;
+  email: string | null;
+  addressLines: string[];
+  currency: string;
+  taxLabel: string;
 }
 
 // -----------------------------------------------------------------------------

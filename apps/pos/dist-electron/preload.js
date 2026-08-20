@@ -58,10 +58,17 @@ const api = {
     }
   },
   printer: {
-    /** Thermal 58mm/80mm or A4. Rendering happens in the main process. */
-    printReceipt: (saleId, format) => electron.ipcRenderer.invoke("printer:receipt", saleId, format),
+    /**
+     * Thermal 58mm/80mm or A4. Rendering happens in the main process. Omit
+     * `format` to use this terminal's own configured printer — the cashier
+     * does not choose a size at the till. `duplicate` marks the printed page
+     * — pass true on a reprint of a sale that already left the till once.
+     */
+    printReceipt: (saleId, format, duplicate) => electron.ipcRenderer.invoke("printer:receipt", saleId, format, duplicate ?? false),
     printTest: (format) => electron.ipcRenderer.invoke("printer:test", format),
-    list: () => electron.ipcRenderer.invoke("printer:list")
+    list: () => electron.ipcRenderer.invoke("printer:list"),
+    getConfig: () => electron.ipcRenderer.invoke("printer:get-config"),
+    setConfig: (config) => electron.ipcRenderer.invoke("printer:set-config", config)
   },
   cashDrawer: {
     /**

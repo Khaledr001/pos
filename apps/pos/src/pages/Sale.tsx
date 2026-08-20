@@ -39,7 +39,11 @@ export function Sale({ cashSessionId }: { cashSessionId: string | null }) {
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [customerOpen, setCustomerOpen] = useState(false);
   const [editing, setEditing] = useState<CartLine | null>(null);
-  const [completed, setCompleted] = useState<{ change: Money.Minor4 } | null>(null);
+  const [completed, setCompleted] = useState<{
+    localId: string;
+    change: Money.Minor4;
+    hasCustomer: boolean;
+  } | null>(null);
   const [focusSignal, setFocusSignal] = useState(0);
   const [scanMiss, setScanMiss] = useState<string | null>(null);
   const [heldOpen, setHeldOpen] = useState(false);
@@ -164,7 +168,7 @@ export function Sale({ cashSessionId }: { cashSessionId: string | null }) {
     }
 
     setPaymentOpen(false);
-    setCompleted({ change });
+    setCompleted({ localId: draft.localId, change, hasCustomer: cart.customer !== null });
     cart.clear();
     setFocusSignal((n) => n + 1);
   }
@@ -827,9 +831,25 @@ function SaleCompleteDialog({
   result,
   onClose,
 }: {
-  result: { change: Money.Minor4 } | null;
+  result: { localId: string; change: Money.Minor4; hasCustomer: boolean } | null;
   onClose: () => void;
 }) {
+  const [printing, setPrinting] = useState<"receipt" | "a4" | null>(null);
+  const [printError, setPrintError] = useState<string | null>(null);
+
+  async function print(format?: "a4") {
+    if (!result) return;
+    setPrinting(format ?? "receipt");
+    setPrintError(null);
+    try {
+      await window.devsfleet.printer.printReceipt(result.localId, format);
+    } catch (err) {
+      setPrintError(err instanceof Error ? err.message : "Printing failed.");
+    } finally {
+      setPrinting(null);
+    }
+  }
+
   return (
     <Dialog
       open={result !== null}
@@ -841,12 +861,23 @@ function SaleCompleteDialog({
           <button
             type="button"
             className="btn btn-ghost"
-            disabled={!hasBridge()}
-            onClick={onClose}
+            disabled={!hasBridge() || printing !== null}
+            onClick={() => void print()}
           >
             <Printer className="size-4" aria-hidden />
-            Print receipt
+            {printing === "receipt" ? "Printing..." : "Print receipt"}
           </button>
+          {result?.hasCustomer && (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              disabled={!hasBridge() || printing !== null}
+              onClick={() => void print("a4")}
+            >
+              <Printer className="size-4" aria-hidden />
+              {printing === "a4" ? "Printing..." : "Print A4 invoice"}
+            </button>
+          )}
           <button type="button" className="btn btn-primary" onClick={onClose} autoFocus>
             Next customer
           </button>
@@ -871,6 +902,10 @@ function SaleCompleteDialog({
           Queued for sync. The invoice number is assigned when it reaches the
           server.
         </p>
+
+        {printError && (
+          <p className="text-[12px] text-signal-red">{printError}</p>
+        )}
       </div>
     </Dialog>
   );

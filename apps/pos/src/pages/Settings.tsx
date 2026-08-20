@@ -1,8 +1,8 @@
 import type { PrintFormat, SyncStatusSnapshot } from "@devsfleet/shared-types";
-import { AlertTriangle, Cpu, LogOut, Moon, Printer, RefreshCw, Sun } from "lucide-react";
+import { AlertTriangle, Copy, Cpu, LogOut, Moon, Printer, RefreshCw, Search, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 import { KeyRail } from "../components/KeyRail.js";
-import { clearPosApiSession, dataMode, hasBridge } from "../lib/pos-data.js";
+import { clearPosApiSession, dataMode, hasBridge, posData, type PosSaleReceipt } from "../lib/pos-data.js";
 import { applyTheme, type PosTheme } from "../main.js";
 import { useAuth } from "../store/auth.js";
 
@@ -36,6 +36,15 @@ export function Settings() {
     () => (document.documentElement.getAttribute("data-theme") as PosTheme) ?? "light",
   );
 
+  const [devicePath, setDevicePath] = useState("");
+  const [defaultFormat, setDefaultFormat] = useState<PrintFormat>("thermal_80");
+  const [savingConfig, setSavingConfig] = useState(false);
+
+  const [reprintQuery, setReprintQuery] = useState("");
+  const [reprintSale, setReprintSale] = useState<PosSaleReceipt | null>(null);
+  const [reprinting, setReprinting] = useState(false);
+  const [reprintError, setReprintError] = useState<string | null>(null);
+
   function toggleTheme() {
     const next: PosTheme = theme === "light" ? "dark" : "light";
     applyTheme(next);
@@ -56,6 +65,10 @@ export function Settings() {
     if (!hasBridge()) return;
     void window.devsfleet.device.info().then(setDevice);
     void window.devsfleet.sync.status().then(setSync);
+    void window.devsfleet.printer.getConfig().then((config) => {
+      setDevicePath(config.devicePath);
+      setDefaultFormat(config.format);
+    });
     refreshAttention();
 
     /**
@@ -90,6 +103,49 @@ export function Settings() {
       setPrintResult(`Sent a test page to the ${format.replace("_", " ")} printer.`);
     } catch (error) {
       setPrintResult(error instanceof Error ? error.message : "Printing failed.");
+    }
+  }
+
+  async function savePrinterConfig() {
+    setSavingConfig(true);
+    try {
+      await window.devsfleet.printer.setConfig({ devicePath, format: defaultFormat });
+      setPrintResult("Printer settings saved.");
+    } catch (error) {
+      setPrintResult(error instanceof Error ? error.message : "Failed to save printer settings.");
+    } finally {
+      setSavingConfig(false);
+    }
+  }
+
+  async function findForReprint() {
+    setReprintError(null);
+    setReprintSale(null);
+    if (!reprintQuery.trim()) return;
+    try {
+      const sale = await posData.findSale(reprintQuery.trim());
+      if (!sale) {
+        setReprintError("No sale found with that invoice number.");
+        return;
+      }
+      setReprintSale(sale);
+    } catch (error) {
+      setReprintError(error instanceof Error ? error.message : "Lookup failed.");
+    }
+  }
+
+  async function reprintSaleReceipt() {
+    if (!reprintSale) return;
+    setReprinting(true);
+    setReprintError(null);
+    try {
+      // Always marked DUPLICATE — this is never the first copy off the till.
+      await window.devsfleet.printer.printReceipt(reprintSale.localId, undefined, true);
+      setPrintResult(`Reprinted ${reprintSale.saleNumber ?? reprintSale.localId} (marked duplicate).`);
+    } catch (error) {
+      setReprintError(error instanceof Error ? error.message : "Printing failed.");
+    } finally {
+      setReprinting(false);
     }
   }
 
@@ -204,7 +260,41 @@ export function Settings() {
           )}
 
           <Section title="Hardware" icon={Printer}>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid gap-2.5 sm:grid-cols-2">
+              <label className="text-[12px] text-zinc-400">
+                Printer device path
+                <input
+                  type="text"
+                  value={devicePath}
+                  onChange={(e) => setDevicePath(e.target.value)}
+                  placeholder="/dev/usb/lp0"
+                  className="field num mt-1 w-full text-[13px]"
+                  disabled={!hasBridge()}
+                />
+              </label>
+              <label className="text-[12px] text-zinc-400">
+                Receipt size
+                <select
+                  value={defaultFormat}
+                  onChange={(e) => setDefaultFormat(e.target.value as PrintFormat)}
+                  className="field mt-1 w-full text-[13px]"
+                  disabled={!hasBridge()}
+                >
+                  <option value="thermal_58">58mm thermal</option>
+                  <option value="thermal_80">80mm thermal</option>
+                </select>
+              </label>
+            </div>
+            <button
+              type="button"
+              className="btn btn-ghost mt-1"
+              disabled={!hasBridge() || savingConfig}
+              onClick={() => void savePrinterConfig()}
+            >
+              {savingConfig ? "Saving..." : "Save printer settings"}
+            </button>
+
+            <div className="mt-3 flex flex-wrap gap-2">
               {(["thermal_58", "thermal_80", "a4"] as PrintFormat[]).map((format) => (
                 <button
                   key={format}
@@ -233,6 +323,61 @@ export function Settings() {
                 Hardware is only reachable from the Electron app, not a browser
                 preview.
               </p>
+            )}
+          </Section>
+
+          <Section title="Reprint a Receipt" icon={Copy}>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search
+                  className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-zinc-500"
+                  aria-hidden
+                />
+                <input
+                  type="text"
+                  value={reprintQuery}
+                  onChange={(e) => setReprintQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && void findForReprint()}
+                  placeholder="Invoice number"
+                  className="field num w-full pl-8 text-[13px]"
+                  disabled={!hasBridge()}
+                />
+              </div>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                disabled={!hasBridge()}
+                onClick={() => void findForReprint()}
+              >
+                Find
+              </button>
+            </div>
+
+            {reprintError && (
+              <p className="text-[12px] text-signal-red">{reprintError}</p>
+            )}
+
+            {reprintSale && (
+              <div className="rounded-lg border border-steel-700 bg-steel-900/60 p-3">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-[13px] font-medium text-chalk">
+                    {reprintSale.saleNumber ?? `Pending — ${reprintSale.localId.slice(0, 8)}`}
+                  </span>
+                  <span className="num text-[12px] text-zinc-400">
+                    {new Date(reprintSale.occurredAt).toLocaleString("en-GB")}
+                  </span>
+                </div>
+                <p className="num mt-1 text-[13px] text-brass">AED {reprintSale.total}</p>
+                <button
+                  type="button"
+                  className="btn btn-ghost mt-2 text-[12px]"
+                  disabled={reprinting}
+                  onClick={() => void reprintSaleReceipt()}
+                >
+                  <Copy className="size-3.5" aria-hidden />
+                  {reprinting ? "Printing..." : "Reprint (marked DUPLICATE)"}
+                </button>
+              </div>
             )}
           </Section>
 

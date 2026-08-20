@@ -144,13 +144,22 @@ const api = {
   },
 
   printer: {
-    /** Thermal 58mm/80mm or A4. Rendering happens in the main process. */
-    printReceipt: (saleId: string, format: PrintFormat): Promise<void> =>
-      ipcRenderer.invoke("printer:receipt", saleId, format),
+    /**
+     * Thermal 58mm/80mm or A4. Rendering happens in the main process. Omit
+     * `format` to use this terminal's own configured printer — the cashier
+     * does not choose a size at the till. `duplicate` marks the printed page
+     * — pass true on a reprint of a sale that already left the till once.
+     */
+    printReceipt: (saleId: string, format?: PrintFormat, duplicate?: boolean): Promise<void> =>
+      ipcRenderer.invoke("printer:receipt", saleId, format, duplicate ?? false),
     printTest: (format: PrintFormat): Promise<void> =>
       ipcRenderer.invoke("printer:test", format),
     list: (): Promise<Array<{ name: string; isDefault: boolean }>> =>
       ipcRenderer.invoke("printer:list"),
+    getConfig: (): Promise<{ devicePath: string; format: PrintFormat }> =>
+      ipcRenderer.invoke("printer:get-config"),
+    setConfig: (config: { devicePath: string; format: PrintFormat }): Promise<void> =>
+      ipcRenderer.invoke("printer:set-config", config),
   },
 
   cashDrawer: {

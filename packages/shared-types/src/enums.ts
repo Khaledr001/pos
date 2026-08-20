@@ -255,6 +255,8 @@ export const SYNC_ENTITIES = asConst([
    * why this one is deliberately not `user:read`-gated.
    */
   "user",
+  /** A manual cash-drawer open (Stage 4.3) — pure audit trail, written straight into audit_log. */
+  "drawer_open",
 ]);
 export type SyncEntity = (typeof SYNC_ENTITIES)[number];
 

@@ -105,9 +105,11 @@ export interface DevsfleetBridge {
     onStatusChange(callback: (status: SyncStatusSnapshot) => void): () => void;
   };
   printer: {
-    printReceipt(saleId: string, format: PrintFormat): Promise<void>;
+    printReceipt(saleId: string, format?: PrintFormat, duplicate?: boolean): Promise<void>;
     printTest(format: PrintFormat): Promise<void>;
     list(): Promise<Array<{ name: string; isDefault: boolean }>>;
+    getConfig(): Promise<{ devicePath: string; format: PrintFormat }>;
+    setConfig(config: { devicePath: string; format: PrintFormat }): Promise<void>;
   };
   cashDrawer: {
     open(reason: string): Promise<void>;

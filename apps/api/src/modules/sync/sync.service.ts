@@ -217,10 +217,10 @@ export class SyncService {
      * the customer is holding the wrong one. The rate is resolved here, once,
      * so the terminal never has to guess.
      */
-    const settings = await this.db.run(async (tx) => {
-      const tenant = await tx.query.tenants.findFirst({ columns: { settings: true } });
-      return resolveTenantSettings(tenant?.settings);
-    });
+    const tenantRow = await this.db.run((tx) =>
+      tx.query.tenants.findFirst({ columns: { name: true, settings: true } }),
+    );
+    const settings = resolveTenantSettings(tenantRow?.settings);
     const defaultTaxRate = String(settings.tax.defaultRate);
 
     /**
@@ -524,6 +524,15 @@ export class SyncService {
       serverTime: new Date().toISOString(),
       // Already resolved above for tax; reused rather than queried twice.
       allowNegativeStock: settings.sales.allowNegativeStock,
+      business: {
+        legalName: settings.legalName ?? tenantRow?.name ?? "",
+        trn: settings.trn ?? null,
+        phone: settings.phone ?? null,
+        email: settings.email ?? null,
+        addressLines: settings.addressLines ?? [],
+        currency: settings.currency.base,
+        taxLabel: settings.tax.label,
+      },
     };
   }
 
@@ -877,6 +886,35 @@ export class SyncService {
             ? { message: "Uploaded, but the drawer session it belonged to was not found" }
             : {}),
         };
+      }
+
+      /**
+       * A manual "no sale" drawer open. Pure audit trail — there is no
+       * document to create, so this is the one push case that writes
+       * straight into audit_log rather than delegating to a service, the
+       * same way PlatformService's own audit rows are written inside the
+       * transaction they belong to: the audit trail is the entire point.
+       */
+      case "drawer_open": {
+        const { reason } = this.parsePayload(
+          z.object({ reason: z.string().trim().min(1) }),
+          "drawer_open",
+          payload,
+        );
+        const user = RequestContext.requireUser();
+
+        await this.db.run((tx) =>
+          tx.insert(schema.auditLog).values({
+            tenantId: user.tenantId!,
+            branchId,
+            userId: user.id,
+            entityType: "cash_drawer",
+            action: "open",
+            reason,
+          }),
+        );
+
+        return { localId: item.localId, outcome: "applied" };
       }
 
       default:

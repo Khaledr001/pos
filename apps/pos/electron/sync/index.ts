@@ -189,6 +189,15 @@ async function pullChanges(): Promise<void> {
       checkpoint: string;
       hasMore: boolean;
       allowNegativeStock: boolean;
+      business: {
+        legalName: string;
+        trn: string | null;
+        phone: string | null;
+        email: string | null;
+        addressLines: string[];
+        currency: string;
+        taxLabel: string;
+      };
     }>("/sync/pull", {
       deviceId: deviceId(),
       since: getState("checkpoint"),
@@ -200,6 +209,9 @@ async function pullChanges(): Promise<void> {
     // refuses anything — a tenant that has deliberately opted into
     // overselling offline must not find a till suddenly blocking it.
     setState("allow_negative_stock", response.allowNegativeStock ? "1" : "0");
+    // The seller's own identity for a compliant tax invoice header — read by
+    // the receipt template, which has no other way to know it offline.
+    setState("business_info", JSON.stringify(response.business));
     emit({ lastPullAt: new Date().toISOString(), lastCheckpoint: response.checkpoint });
 
     if (!response.hasMore) return;
