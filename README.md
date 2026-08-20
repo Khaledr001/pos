@@ -46,8 +46,10 @@ pnpm dev               # all apps
 | POS | Electron window |
 | MinIO console | http://localhost:9001 |
 
-Seeded login: `admin@devsfleet.com` / `ChangeMe123!` · POS PIN `1234`.
-Change both before deploying.
+Seeded login: `admin@devsfleet.com` / `ChangeMe123!`.
+POS PINs are per role: cashier `1234` (use this at a till), manager `2580`,
+admin `4321` — they must stay distinct, or PIN sign-in refuses at that branch.
+Change all of them before deploying.
 
 Working on POS screens only? `pnpm --filter @devsfleet/pos dev:ui` runs the
 renderer alone at http://localhost:5173 — sample data, no Electron window, no

@@ -80,7 +80,15 @@ pnpm db:studio         # drizzle studio
 pnpm db:reset          # DESTRUCTIVE — drops the public schema
 ```
 
-Seeded login: `admin@devsfleet.com` / `ChangeMe123!`, POS PIN `1234`.
+Seeded login: `admin@devsfleet.com` / `ChangeMe123!`.
+
+POS PINs are seeded **per role**, never shared — `cashier1@devsfleet.com` is
+`1234` (the one to type at a till), the branch manager `2580`, the tenant admin
+`4321`. Two people reachable at one branch answering to the same PIN makes
+`resolvePinHolder` refuse *every* sign-in there rather than guess which of them
+is on shift, and the tenant-wide admin is a candidate at every branch — so one
+shared PIN locks the whole POS out. `packages/db/scripts/seed.ts` refuses to run
+if two roles are configured with the same PIN.
 
 ---
 

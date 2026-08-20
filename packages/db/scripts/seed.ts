@@ -46,7 +46,32 @@ const db = drizzle(client, { schema, casing: "snake_case" });
  */
 const BCRYPT_ROUNDS = Number(process.env.BCRYPT_ROUNDS ?? 12);
 const DEFAULT_PASSWORD = process.env.SEED_ADMIN_PASSWORD ?? "ChangeMe123!";
-const DEFAULT_PIN = process.env.SEED_ADMIN_PIN ?? "1234";
+
+/**
+ * A PIN PER ROLE — never one PIN shared by everybody.
+ *
+ * `resolvePinHolder` (apps/api/src/modules/auth/auth.service.ts) refuses to
+ * guess when two people reachable at one branch answer to the same PIN:
+ * attributing a whole shift — every sale, drawer count and audit row — to the
+ * wrong cashier is worse than refusing to sign anyone in.
+ *
+ * This seed used to hash ONE pin and hand the same hash to all three users of
+ * every tenant. Because the admin is tenant-wide (`branchId: null`) they are a
+ * candidate at EVERY branch, so that refusal fired on every single POS
+ * sign-in: a freshly seeded install could not log a cashier in at all, and the
+ * error it produced ("more than one person at this branch uses that PIN")
+ * pointed at the staff data rather than at the seed that wrote it.
+ *
+ * `1234` stays with the CASHIER, because that is the PIN the docs tell you to
+ * type at a till and a cashier is who signs in there.
+ */
+const PINS = {
+  admin: process.env.SEED_ADMIN_PIN ?? "4321",
+  manager: process.env.SEED_MANAGER_PIN ?? "2580",
+  cashier: process.env.SEED_CASHIER_PIN ?? "1234",
+} as const;
+
+type SeededRole = keyof typeof PINS;
 
 interface TenantSeedConfig {
   name: string;
@@ -241,7 +266,12 @@ const TENANTS_CONFIG: TenantSeedConfig[] = [
   },
 ];
 
-async function seedTenant(tx: any, config: TenantSeedConfig, passwordHash: string, pinHash: string) {
+async function seedTenant(
+  tx: any,
+  config: TenantSeedConfig,
+  passwordHash: string,
+  pinHashes: Record<SeededRole, string>,
+) {
   console.log(`\n══════════════════════════════════════════════════════════════`);
   console.log(`  Seeding Tenant: ${config.name} (${config.slug})`);
   console.log(`══════════════════════════════════════════════════════════════`);
@@ -302,8 +332,16 @@ async function seedTenant(tx: any, config: TenantSeedConfig, passwordHash: strin
   }
   console.log(`✓ ${roles.size} system roles created`);
 
-  // 4. Users (Admin, Manager, Cashier)
-  const usersToSeed = [
+  // 4. Users (Admin, Manager, Cashier) — each with their OWN pin, see PINS.
+  const usersToSeed: Array<{
+    name: string;
+    email: string;
+    role: SeededRole;
+    branchId: string | null;
+    maxDiscount: string;
+    canRefund: boolean;
+    canCost: boolean;
+  }> = [
     { name: "Super Administrator", email: config.adminEmail, role: "admin", branchId: null, maxDiscount: "100", canRefund: true, canCost: true },
     { name: "Branch Manager", email: `manager@${config.slug}.com`, role: "manager", branchId: mainBranch.id, maxDiscount: "25", canRefund: true, canCost: true },
     { name: "Counter Cashier 1", email: `cashier1@${config.slug}.com`, role: "cashier", branchId: mainBranch.id, maxDiscount: "10", canRefund: false, canCost: false },
@@ -328,7 +366,7 @@ async function seedTenant(tx: any, config: TenantSeedConfig, passwordHash: strin
           name: u.name,
           email: u.email,
           passwordHash,
-          pinHash,
+          pinHash: pinHashes[u.role],
           maxDiscountPercent: u.maxDiscount,
           maxSaleAmount: null,
           canApproveRefund: u.canRefund,
@@ -962,8 +1000,38 @@ async function seedTenant(tx: any, config: TenantSeedConfig, passwordHash: strin
 
 async function main() {
   console.log("Starting full multi-tenant SaaS seeding...");
+
+  /**
+   * Refuse rather than seed an install nobody can sign into.
+   *
+   * The admin is tenant-wide, so they are a PIN candidate at every branch: two
+   * roles sharing a PIN means `resolvePinHolder` refuses every sign-in at the
+   * branch they share it with. Overriding these by env is fine; overriding two
+   * of them to the SAME value is the exact bug this guard exists to stop
+   * coming back.
+   */
+  const duplicated = Object.entries(PINS).filter(
+    ([role, pin]) => Object.entries(PINS).some(([other, p]) => other !== role && p === pin),
+  );
+  if (duplicated.length > 0) {
+    console.error(
+      `\n❌ Two seeded roles share a PIN: ${duplicated.map(([r, p]) => `${r}=${p}`).join(", ")}.\n` +
+        "   The tenant-wide admin is a PIN candidate at every branch, so a shared PIN makes\n" +
+        "   POS sign-in refuse everywhere. Give each of SEED_ADMIN_PIN / SEED_MANAGER_PIN /\n" +
+        "   SEED_CASHIER_PIN a distinct value.",
+    );
+    process.exit(1);
+  }
+
   const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, BCRYPT_ROUNDS);
-  const pinHash = await bcrypt.hash(DEFAULT_PIN, BCRYPT_ROUNDS);
+  // Hashed per role. bcrypt salts every call, so these differ even where the
+  // PINs would not — but the PINS guard above is what actually keeps them
+  // distinct, since a hash comparison cannot tell you two PINs are equal.
+  const pinHashes: Record<SeededRole, string> = {
+    admin: await bcrypt.hash(PINS.admin, BCRYPT_ROUNDS),
+    manager: await bcrypt.hash(PINS.manager, BCRYPT_ROUNDS),
+    cashier: await bcrypt.hash(PINS.cashier, BCRYPT_ROUNDS),
+  };
 
   try {
     await db.transaction(async (tx) => {
@@ -971,17 +1039,24 @@ async function main() {
       await tx.execute(sql`SELECT set_config('app.is_platform_admin', 'on', true)`);
 
       for (const tenantConfig of TENANTS_CONFIG) {
-        await seedTenant(tx, tenantConfig, passwordHash, pinHash);
+        await seedTenant(tx, tenantConfig, passwordHash, pinHashes);
       }
     });
 
     console.log(`\n══════════════════════════════════════════════════════════════`);
     console.log(`🎉 MULTI-TENANT SEEDING COMPLETE!`);
     console.log(`══════════════════════════════════════════════════════════════\n`);
-    console.log(`Available Tenant Accounts (Password for all: ${DEFAULT_PASSWORD} | PIN: ${DEFAULT_PIN}):\n`);
+    console.log(`Available Tenant Accounts (Password for all: ${DEFAULT_PASSWORD}):\n`);
     for (const t of TENANTS_CONFIG) {
       console.log(`  🏢 ${t.name.padEnd(42)} [${t.slug.padEnd(16)}] Login: ${t.adminEmail}`);
     }
+    console.log(
+      `\nPOS PINs are per ROLE, not shared — two people answering to one PIN at a\n` +
+        `branch makes sign-in refuse (see PINS in this file):\n` +
+        `    cashier1@<slug>.com  PIN ${PINS.cashier}   ← the one to type at a till\n` +
+        `    manager@<slug>.com   PIN ${PINS.manager}\n` +
+        `    <tenant admin>       PIN ${PINS.admin}   (tenant-wide: a candidate at every branch)`,
+    );
     console.log("\nAll core, commerce, purchasing, inventory, financial, and AI tables populated.\n");
   } catch (err) {
     console.error("\n❌ Seeding failed with error:", err);

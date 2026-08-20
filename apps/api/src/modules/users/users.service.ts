@@ -123,6 +123,8 @@ export class UsersService {
     const tenantId = RequestContext.requireTenantId();
     const rounds = this.config.get("BCRYPT_ROUNDS", { infer: true });
 
+    if (dto.pin) await this.assertPinIsUnambiguous(dto.pin, dto.branchId ?? null);
+
     // Hashed outside the transaction — bcrypt at 12 rounds is ~250ms of lock
     // time that buys nothing.
     const passwordHash = await bcrypt.hash(dto.password, rounds);
@@ -295,6 +297,23 @@ export class UsersService {
 
   async setPin(id: string, dto: SetPinDto): Promise<void> {
     const rounds = this.config.get("BCRYPT_ROUNDS", { infer: true });
+
+    if (dto.pin) {
+      // Against THIS user's branch, not the caller's — a manager may be
+      // setting a PIN for staff at a branch they oversee but do not sit at.
+      const target = await this.db.run(async (tx) =>
+        tx.query.users.findFirst({
+          where: (t, { and: a, eq: e, isNull: n }) => a(e(t.id, id), n(t.deletedAt)),
+          columns: { branchId: true },
+        }),
+      );
+      if (!target) throw new AppError(ERROR_CODES.NOT_FOUND, `User ${id} not found`);
+
+      // `id` is excluded: re-setting somebody's PIN to what they already have
+      // is a no-op, not a collision with themselves.
+      await this.assertPinIsUnambiguous(dto.pin, target.branchId, id);
+    }
+
     const pinHash = dto.pin ? await bcrypt.hash(dto.pin, rounds) : null;
 
     await this.db.run(async (tx) => {
@@ -310,6 +329,66 @@ export class UsersService {
 
       if (!user) throw new AppError(ERROR_CODES.NOT_FOUND, `User ${id} not found`);
     });
+  }
+
+  /**
+   * Refuse a PIN somebody else at the same branch already answers to.
+   *
+   * `resolvePinHolder` (auth.service.ts) will not guess between two people
+   * sharing a PIN — it refuses the sign-in outright, because attributing a
+   * shift's sales and drawer counts to the wrong cashier is worse. That
+   * refusal is the right call but it surfaces at the till, mid-shift, to a
+   * cashier who cannot fix it. Checking here moves the failure to the person
+   * actually choosing the PIN, while they are still looking at the form.
+   *
+   * Branch reachability mirrors `resolvePinHolder` exactly: a user with no
+   * branch (an owner, an area manager) is a candidate at EVERY branch, so
+   * they collide with everyone; a branch user collides only within their own
+   * branch, plus those tenant-wide users.
+   *
+   * Deliberately not a database constraint: bcrypt salts every hash, so two
+   * rows holding the same PIN do not look alike and no unique index can see
+   * it. One `compare` per candidate is the only way to know, which is the
+   * same cost `resolvePinHolder` already pays on every sign-in.
+   *
+   * What this CANNOT cover, for the same reason: MOVING a user to a branch
+   * where somebody already holds their PIN. Only the hash is stored, so there
+   * is no plaintext to re-check them against at that moment.
+   * `resolvePinHolder` staying strict is what still catches that one.
+   */
+  private async assertPinIsUnambiguous(
+    pin: string,
+    branchId: string | null,
+    exceptUserId?: string,
+  ): Promise<void> {
+    const candidates = await this.db.run(async (tx) =>
+      tx
+        .select({
+          id: schema.users.id,
+          name: schema.users.name,
+          branchId: schema.users.branchId,
+          pinHash: schema.users.pinHash,
+        })
+        .from(schema.users)
+        .where(and(eq(schema.users.isActive, true), isNull(schema.users.deletedAt))),
+    );
+
+    for (const candidate of candidates) {
+      if (!candidate.pinHash) continue;
+      if (candidate.id === exceptUserId) continue;
+      // Reachable together at some branch?
+      const sharesABranch =
+        branchId === null || candidate.branchId === null || candidate.branchId === branchId;
+      if (!sharesABranch) continue;
+
+      if (await bcrypt.compare(pin, candidate.pinHash)) {
+        throw new AppError(
+          ERROR_CODES.CONFLICT,
+          `${candidate.name} already uses that PIN at this branch. Two people sharing a PIN ` +
+            "cannot sign in at all — pick a different one.",
+        );
+      }
+    }
   }
 
   /**
