@@ -64,6 +64,7 @@ const NAV_SECTIONS: Array<{
     items: [
       { label: "Products", href: "/products", icon: Package, permission: "product:read" },
       { label: "Inventory", href: "/inventory", icon: Boxes, permission: "inventory:read" },
+      { label: "Transfers", href: "/transfers", icon: Truck, permission: "transfer:read" },
       { label: "Suppliers", href: "/suppliers", icon: Truck, permission: "supplier:read" },
       { label: "Sales & Orders", href: "/sales", icon: ShoppingCart, permission: "sale:read" },
       { label: "Day Close", href: "/day-close", icon: Wallet, permission: "day_close:read" },
