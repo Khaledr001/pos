@@ -471,8 +471,8 @@ later step to avoid an earlier one.
 
 | # | Work | Accept when |
 |---|---|---|
-| 6.1 | `orders` module using the existing tables and permissions | Create, confirm, cancel, partial fulfilment |
-| 6.2 | Stock reservation on confirmation, release on cancel/expiry | `inventory.reservedQuantity` moves; available-to-sell drops |
+| 6.1 | ~~`orders` module using the existing tables and permissions~~ **DONE** (75dc43a) | ~~Create, confirm, cancel, partial fulfilment~~ — done. Every fulfilment is its own sale via `SalesService.create()` (same checks a walk-in gets), linked back with `sales.orderId`, charged at the price the order quoted. Verified live: full create→confirm→partial-fulfil→fulfil-remainder→completed lifecycle, over-fulfilment refused, double-confirm/cancel guarded. |
+| 6.2 | ~~Stock reservation on confirmation, release on cancel/expiry~~ **DONE, expiry excepted** (75dc43a) | ~~`inventory.reservedQuantity` moves; available-to-sell drops~~ — done for confirm/fulfil/cancel: `StockService.reserveStock`/`releaseReservedStock` are new, cancel releases only the unfulfilled remainder (never double-releasing an already-fulfilled line). **Not done**: release-on-EXPIRY, which needs a scheduled job that doesn't exist yet — deferred to Stage 10 (operational hardening), where a job runner would first need to exist for anything to schedule. |
 | 6.3 | Quotation → order → invoice | Your §19 status chain works end to end |
 | 6.4 | Quotation PDF | A quote can be printed and attached |
 
