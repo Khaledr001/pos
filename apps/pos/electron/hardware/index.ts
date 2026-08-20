@@ -9,6 +9,7 @@ import { renderA4Invoice } from "./a4-invoice.js";
 import {
   createThermalPrinter,
   getPrinterDevicePath,
+  isPrinterReachable,
   isThermalFormat,
   setPrinterDevicePath,
 } from "./printer.js";
@@ -101,6 +102,23 @@ export function registerHardwareHandlers(ipcMain: IpcMain): void {
       setState("printer_format", config.format);
     },
   );
+
+  /**
+   * What this terminal would print on right now, and whether the hardware is
+   * actually there.
+   *
+   * The till auto-prints the bill the moment a sale completes, and a terminal
+   * with no printer wired must not answer that with a red error on every sale.
+   * `reachable` is what lets the sale screen offer the A4 copy — which needs no
+   * hardware at all — instead of pretending a print failed.
+   */
+  ipcMain.handle("printer:probe", async () => {
+    const format = (getState("printer_format") as PrintFormat) || "thermal_80";
+    const devicePath = getPrinterDevicePath();
+    // A4 needs no device: it writes a PDF and hands it to the OS viewer.
+    if (!isThermalFormat(format)) return { format, devicePath, reachable: true };
+    return { format, devicePath, reachable: await isPrinterReachable(format) };
+  });
 
   ipcMain.handle("printer:list", async () => {
     // No OS-level enumeration — the terminal talks to one configured device

@@ -1,7 +1,7 @@
 import type { PaymentMethod, Permission } from "@devsfleet/shared-types";
 import { Money } from "@devsfleet/shared-utils";
-import { ArrowLeft, Check, CheckCircle2, Loader2, Plus, Printer, Search as SearchIcon, UserPlus } from "lucide-react";
-import { useCallback, useState } from "react";
+import { ArrowLeft, Check, CheckCircle2, FileText, Loader2, Plus, Printer, Search as SearchIcon, UserPlus } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Dialog } from "../components/Dialog.js";
 import { HeldCartsDialog } from "../components/HeldCartsDialog.js";
 import { KeyRail, type KeyAction } from "../components/KeyRail.js";
@@ -52,6 +52,19 @@ export function Sale({ cashSessionId }: { cashSessionId: string | null }) {
 
   const empty = cart.lines.length === 0;
   const blocked = violations.length > 0;
+
+  /**
+   * Why payment cannot be taken, in the cashier's words rather than as a
+   * greyed-out control. A disabled button with no reason on it sends somebody
+   * to find a manager to ask why the till "is broken".
+   */
+  const chargeBlockedReason = empty
+    ? "Scan or search for an item first"
+    : blocked
+      ? "A manager has to approve the flagged line"
+      : !cashSessionId
+        ? "Open the cash drawer before taking payment"
+        : null;
 
   /**
    * A scan resolves against the local catalogue and lands straight in the cart.
@@ -282,6 +295,8 @@ export function Sale({ cashSessionId }: { cashSessionId: string | null }) {
         <ReceiptPanel
           onPickCustomer={() => setCustomerOpen(true)}
           onEditLine={setEditing}
+          onCharge={charge}
+          chargeBlockedReason={chargeBlockedReason}
         />
       </div>
 
@@ -360,7 +375,10 @@ export function Sale({ cashSessionId }: { cashSessionId: string | null }) {
         />
       )}
 
+      {/* Keyed per sale: the dialog mounts fresh so one sale's print state
+          can never be showing while the next sale's bill is going out. */}
       <SaleCompleteDialog
+        key={completed?.localId ?? "idle"}
         result={completed}
         onClose={() => setCompleted(null)}
       />
@@ -827,6 +845,22 @@ function LineEditor({
 
 // -----------------------------------------------------------------------------
 
+/**
+ * What happens after the money is taken.
+ *
+ * The bill prints itself. A cashier should not have to ask for the thing every
+ * customer expects, and the drawer kick for a cash sale rides along with that
+ * same print job — so making the print a manual click also made the drawer a
+ * manual click.
+ *
+ * The terminal is wired to one printer of one size, so that size is what
+ * prints automatically. A4 is offered alongside it because a wholesale
+ * customer asks for a full tax invoice at the counter, and it needs no
+ * hardware at all: it renders a PDF and opens it in the OS viewer.
+ *
+ * A terminal with no printer wired says so instead of reporting a failure it
+ * could have predicted — and still offers the A4 copy, which will work.
+ */
 function SaleCompleteDialog({
   result,
   onClose,
@@ -834,50 +868,97 @@ function SaleCompleteDialog({
   result: { localId: string; change: Money.Minor4; hasCustomer: boolean } | null;
   onClose: () => void;
 }) {
-  const [printing, setPrinting] = useState<"receipt" | "a4" | null>(null);
-  const [printError, setPrintError] = useState<string | null>(null);
+  const [outcome, setOutcome] = useState<PrintOutcome>({ status: "idle" });
+  const [terminalFormat, setTerminalFormat] = useState<string>("thermal_80");
+  /** Formats already printed for THIS sale — a second copy is stamped DUPLICATE. */
+  const printedFormats = useRef<Set<string>>(new Set());
 
-  async function print(format?: "a4") {
-    if (!result) return;
-    setPrinting(format ?? "receipt");
-    setPrintError(null);
-    try {
-      await window.devsfleet.printer.printReceipt(result.localId, format);
-    } catch (err) {
-      setPrintError(err instanceof Error ? err.message : "Printing failed.");
-    } finally {
-      setPrinting(null);
-    }
-  }
+  const print = useCallback(
+    async (format: string) => {
+      if (!result) return;
+      const reprint = printedFormats.current.has(format);
+      setOutcome({ status: "printing", format });
+      try {
+        await window.devsfleet.printer.printReceipt(result.localId, format, reprint);
+        printedFormats.current.add(format);
+        setOutcome({ status: "printed", format, reprint });
+      } catch (err) {
+        setOutcome({
+          status: "failed",
+          format,
+          message: err instanceof Error ? err.message : "Printing failed.",
+        });
+      }
+    },
+    [result],
+  );
+
+  // Mounted fresh per sale (keyed on localId at the call site), so this runs
+  // once per completed sale and never carries the previous one's state.
+  useEffect(() => {
+    if (!result || !hasBridge()) return;
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const probe = await window.devsfleet.printer.probe();
+        if (cancelled) return;
+        setTerminalFormat(probe.format);
+        if (!probe.reachable) {
+          setOutcome({ status: "no-printer", devicePath: probe.devicePath });
+          return;
+        }
+        await print(probe.format);
+      } catch (err) {
+        if (!cancelled) {
+          setOutcome({
+            status: "failed",
+            format: "",
+            message: err instanceof Error ? err.message : "Could not reach the printer.",
+          });
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [result, print]);
+
+  const busy = outcome.status === "printing";
+  // A terminal configured for A4 would otherwise show the same button twice.
+  const formats = terminalFormat === "a4" ? ["a4"] : [terminalFormat, "a4"];
 
   return (
     <Dialog
       open={result !== null}
       onClose={onClose}
       title="Sale complete"
-      width="sm"
+      // Wide enough for the two bill formats and "Next customer" to sit on one
+      // row — a wrapped "80mm / receipt" reads as two controls at a glance.
+      width="md"
       footer={
         <>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            disabled={!hasBridge() || printing !== null}
-            onClick={() => void print()}
-          >
-            <Printer className="size-4" aria-hidden />
-            {printing === "receipt" ? "Printing..." : "Print receipt"}
-          </button>
-          {result?.hasCustomer && (
+          {formats.map((format) => (
             <button
+              key={format}
               type="button"
               className="btn btn-ghost"
-              disabled={!hasBridge() || printing !== null}
-              onClick={() => void print("a4")}
+              disabled={!hasBridge() || busy}
+              onClick={() => void print(format)}
             >
-              <Printer className="size-4" aria-hidden />
-              {printing === "a4" ? "Printing..." : "Print A4 invoice"}
+              {format === "a4" ? (
+                <FileText className="size-4" aria-hidden />
+              ) : (
+                <Printer className="size-4" aria-hidden />
+              )}
+              {outcome.status === "printing" && outcome.format === format
+                ? "Printing..."
+                : printedFormats.current.has(format)
+                  ? `Reprint ${formatLabel(format)}`
+                  : formatLabel(format)}
             </button>
-          )}
+          ))}
           <button type="button" className="btn btn-primary" onClick={onClose} autoFocus>
             Next customer
           </button>
@@ -898,15 +979,60 @@ function SaleCompleteDialog({
           <p className="text-[14px] text-zinc-400">Paid in full. No change due.</p>
         )}
 
+        <PrintStatus outcome={outcome} />
+
         <p className="text-[12px] text-zinc-500">
           Queued for sync. The invoice number is assigned when it reaches the
           server.
         </p>
-
-        {printError && (
-          <p className="text-[12px] text-signal-red">{printError}</p>
-        )}
       </div>
     </Dialog>
   );
+}
+
+type PrintOutcome =
+  | { status: "idle" }
+  | { status: "printing"; format: string }
+  | { status: "printed"; format: string; reprint: boolean }
+  | { status: "failed"; format: string; message: string }
+  | { status: "no-printer"; devicePath: string };
+
+function formatLabel(format: string): string {
+  if (format === "a4") return "A4 invoice";
+  if (format === "thermal_58") return "58mm receipt";
+  if (format === "thermal_80") return "80mm receipt";
+  return format;
+}
+
+function PrintStatus({ outcome }: { outcome: PrintOutcome }) {
+  switch (outcome.status) {
+    case "printing":
+      return (
+        <p className="flex items-center gap-2 text-[12px] text-zinc-400">
+          <Loader2 className="size-3.5 animate-spin" aria-hidden />
+          Printing the {formatLabel(outcome.format)}...
+        </p>
+      );
+    case "printed":
+      return (
+        <p className="text-[12px] text-signal-green">
+          {formatLabel(outcome.format)} printed{outcome.reprint ? " (marked DUPLICATE)" : ""}.
+        </p>
+      );
+    case "failed":
+      return (
+        <p className="rounded-lg border border-signal-red/40 bg-signal-red/10 px-3 py-2 text-[12px] text-signal-red">
+          {outcome.message}
+        </p>
+      );
+    case "no-printer":
+      return (
+        <p className="rounded-lg border border-signal-amber/40 bg-signal-amber/10 px-3 py-2 text-[12px] text-signal-amber">
+          No printer at <span className="num">{outcome.devicePath}</span>. Set it up on
+          the Settings screen, or print the A4 invoice instead.
+        </p>
+      );
+    default:
+      return null;
+  }
 }

@@ -92,6 +92,12 @@ const api = {
      */
     printReceipt: (saleId, format, duplicate) => electron.ipcRenderer.invoke("printer:receipt", saleId, format, duplicate ?? false),
     printTest: (format) => electron.ipcRenderer.invoke("printer:test", format),
+    /**
+     * The configured format and whether the device is actually there. The sale
+     * screen asks before auto-printing, so a till with no printer wired offers
+     * the A4 copy rather than reporting a failure it could have predicted.
+     */
+    probe: () => electron.ipcRenderer.invoke("printer:probe"),
     list: () => electron.ipcRenderer.invoke("printer:list"),
     getConfig: () => electron.ipcRenderer.invoke("printer:get-config"),
     setConfig: (config) => electron.ipcRenderer.invoke("printer:set-config", config)

@@ -151963,6 +151963,10 @@ function createThermalPrinter(format) {
 function isThermalFormat(format) {
   return format === "thermal_58" || format === "thermal_80";
 }
+async function isPrinterReachable(format) {
+  const printer = createThermalPrinter(format);
+  return printer.isPrinterConnected();
+}
 function businessInfo() {
   const raw = getState("business_info");
   if (!raw) {
@@ -152007,6 +152011,12 @@ function registerHardwareHandlers(ipcMain) {
       setState("printer_format", config.format);
     }
   );
+  ipcMain.handle("printer:probe", async () => {
+    const format = getState("printer_format") || "thermal_80";
+    const devicePath = getPrinterDevicePath();
+    if (!isThermalFormat(format)) return { format, devicePath, reachable: true };
+    return { format, devicePath, reachable: await isPrinterReachable(format) };
+  });
   ipcMain.handle("printer:list", async () => {
     return [{ name: getPrinterDevicePath(), isDefault: true }];
   });

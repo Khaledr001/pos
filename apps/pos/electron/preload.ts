@@ -188,6 +188,13 @@ const api = {
       ipcRenderer.invoke("printer:receipt", saleId, format, duplicate ?? false),
     printTest: (format: PrintFormat): Promise<void> =>
       ipcRenderer.invoke("printer:test", format),
+    /**
+     * The configured format and whether the device is actually there. The sale
+     * screen asks before auto-printing, so a till with no printer wired offers
+     * the A4 copy rather than reporting a failure it could have predicted.
+     */
+    probe: (): Promise<{ format: PrintFormat; devicePath: string; reachable: boolean }> =>
+      ipcRenderer.invoke("printer:probe"),
     list: (): Promise<Array<{ name: string; isDefault: boolean }>> =>
       ipcRenderer.invoke("printer:list"),
     getConfig: (): Promise<{ devicePath: string; format: PrintFormat }> =>

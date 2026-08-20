@@ -138,6 +138,7 @@ export interface DevsfleetBridge {
   printer: {
     printReceipt(saleId: string, format?: PrintFormat, duplicate?: boolean): Promise<void>;
     printTest(format: PrintFormat): Promise<void>;
+    probe(): Promise<{ format: PrintFormat; devicePath: string; reachable: boolean }>;
     list(): Promise<Array<{ name: string; isDefault: boolean }>>;
     getConfig(): Promise<{ devicePath: string; format: PrintFormat }>;
     setConfig(config: { devicePath: string; format: PrintFormat }): Promise<void>;

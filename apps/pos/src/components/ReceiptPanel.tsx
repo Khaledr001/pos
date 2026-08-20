@@ -1,5 +1,5 @@
 import { Money } from "@devsfleet/shared-utils";
-import { AlertTriangle, Minus, Plus, Trash2, UserPlus, X } from "lucide-react";
+import { AlertTriangle, CreditCard, Minus, Plus, Trash2, UserPlus, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { amount, money, TAX } from "../lib/money.js";
 import { posData, type PosVariantUnit } from "../lib/pos-data.js";
@@ -25,9 +25,14 @@ import {
 export function ReceiptPanel({
   onPickCustomer,
   onEditLine,
+  onCharge,
+  chargeBlockedReason,
 }: {
   onPickCustomer: () => void;
   onEditLine: (line: CartLine) => void;
+  onCharge: () => void;
+  /** Why payment cannot be taken right now, or null when it can. */
+  chargeBlockedReason: string | null;
 }) {
   const { lines, customer, setCustomer, removeLine, adjustQuantity, documentDiscountPercent } =
     useCart();
@@ -142,6 +147,43 @@ export function ReceiptPanel({
             {money(totals.total)}
           </span>
         </div>
+
+        {/*
+          Take payment, at the bottom of the cart — where the transaction ends
+          and where every cashier who has used a till before will look for it.
+          F4 does the same thing, but a function key is not a button: on a
+          touchscreen with no keyboard it does not exist, and it is the one
+          action on this screen that must never be hunted for.
+        */}
+        <button
+          type="button"
+          onClick={onCharge}
+          disabled={chargeBlockedReason !== null}
+          className={[
+            "mt-4 flex w-full items-center justify-between gap-3 rounded-xl px-4 py-4 transition-colors",
+            chargeBlockedReason
+              ? "cursor-not-allowed border border-pos-border bg-pos-raised text-pos-text-3"
+              : "bg-brass text-[#1a1205] hover:bg-brass-400",
+          ].join(" ")}
+        >
+          <span className="flex items-center gap-2">
+            <CreditCard className="size-5" aria-hidden />
+            <span className="text-[16px] font-semibold">Take payment</span>
+            <kbd
+              className={[
+                "num rounded px-1.5 py-0.5 text-[10px] font-semibold",
+                chargeBlockedReason ? "bg-pos-border text-pos-text-3" : "bg-black/15",
+              ].join(" ")}
+            >
+              F4
+            </kbd>
+          </span>
+          <span className="num text-[18px] font-bold">{money(totals.total)}</span>
+        </button>
+
+        {chargeBlockedReason && (
+          <p className="mt-2 text-center text-[11px] text-pos-text-3">{chargeBlockedReason}</p>
+        )}
       </div>
     </aside>
   );
