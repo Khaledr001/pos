@@ -16,12 +16,16 @@ import renderer from "vite-plugin-electron-renderer";
  * bundled, and it must stay in the main process regardless — the renderer has
  * no filesystem access by design.
  *
- * `pdfkit` is externalised too, for a subtler reason: at runtime it loads its
- * standard fonts (Helvetica, etc.) from a `data/*.afm` folder next to its own
- * module file. Bundled into one main.js, that folder no longer exists next to
- * anything, and `new PDFDocument()` throws ENOENT the first time an A4 invoice
- * is rendered. Left as a real `require("pdfkit")`, Node resolves it inside
- * node_modules where its own `data/` folder is still sitting beside it.
+ * `@devsfleet/pdf-documents` is externalised for the same class of reason,
+ * one level up: at runtime it loads pdfkit's standard fonts (Helvetica, etc.)
+ * from a `data/*.afm` folder next to pdfkit's own module file, and its own
+ * Arabic `.ttf` files from a folder next to ITS module file. Bundled into one
+ * main.js, both folders stop existing next to anything, and rendering the A4
+ * invoice throws ENOENT the moment it runs. Left as a real
+ * `require("@devsfleet/pdf-documents")`, Node resolves the package inside
+ * node_modules where both folders are still sitting beside it — which is also
+ * why `pdfkit` itself needs no entry here: rollup's bundling never reaches
+ * past this external boundary to see it.
  */
 
 /**
@@ -58,7 +62,7 @@ export default defineConfig({
             // actual diff, not a compressed one-liner nobody can check.
             minify: false,
             rollupOptions: {
-              external: ["electron", "better-sqlite3", "node-thermal-printer", "pdfkit"],
+              external: ["electron", "better-sqlite3", "node-thermal-printer", "@devsfleet/pdf-documents"],
             },
           },
         },

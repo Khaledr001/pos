@@ -1,4 +1,4 @@
-import type { PrintFormat } from "@devsfleet/shared-types";
+import { DEFAULT_TENANT_SETTINGS, type PrintFormat } from "@devsfleet/shared-types";
 import { app, shell, type IpcMain } from "electron";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -57,6 +57,8 @@ function businessInfo(): ReceiptBusiness {
       addressLines: [],
       currency: "AED",
       taxLabel: "VAT",
+      branchName: null,
+      timezone: DEFAULT_TENANT_SETTINGS.locale.timezone,
     };
   }
   return JSON.parse(raw) as ReceiptBusiness;
@@ -70,6 +72,29 @@ function customerName(customerId: string | null): string | null {
   return row?.name ?? null;
 }
 
+/**
+ * The fuller customer record the A4 layout's BILLED TO block wants — company,
+ * phone, TRN — beyond the bare name the thermal receipt gets away with at
+ * 32/48 columns. `address` has no local column to read: the offline mirror
+ * never synced it, so it prints nothing there rather than a stale guess.
+ */
+function customerInfo(customerId: string | null): {
+  name: string;
+  company: string | null;
+  phone: string | null;
+  trn: string | null;
+  address: string | null;
+} | null {
+  if (!customerId) return null;
+  const row = getDatabase()
+    .prepare(`SELECT name, company, phone, trn FROM customers WHERE id = ?`)
+    .get(customerId) as
+    | { name: string; company: string | null; phone: string | null; trn: string | null }
+    | undefined;
+  if (!row) return null;
+  return { ...row, address: null };
+}
+
 /** One folder for every A4 invoice this terminal has produced — reprints overwrite by name, not append. */
 function invoicesDir(): string {
   const dir = join(app.getPath("userData"), "invoices");
@@ -80,7 +105,7 @@ function invoicesDir(): string {
 async function saveAndOpenA4(
   sale: ReceiptSale,
   business: ReceiptBusiness,
-  options: { duplicate?: boolean; customerName?: string | null },
+  options: Parameters<typeof renderA4Invoice>[2] & { duplicate?: boolean },
 ): Promise<void> {
   const buffer = await renderA4Invoice(sale, business, options);
   const name = sale.saleNumber ?? `PENDING-${sale.localId.slice(0, 8)}`;
@@ -142,7 +167,7 @@ export function registerHardwareHandlers(ipcMain: IpcMain): void {
       if (resolved === "a4") {
         await saveAndOpenA4(sale, businessInfo(), {
           duplicate,
-          customerName: customerName(sale.customerId),
+          customer: customerInfo(sale.customerId),
         });
         return;
       }
@@ -179,11 +204,14 @@ export function registerHardwareHandlers(ipcMain: IpcMain): void {
           lines: [
             {
               productName: "Test Line Item",
+              variantName: "Default",
               productSku: "TEST-SKU",
               quantity: "1",
               unitPrice: "10.00",
               discountPercent: "0",
               taxPercent: "5",
+              lineSubtotal: "10.00",
+              taxAmount: "0.50",
               total: "10.50",
             },
           ],

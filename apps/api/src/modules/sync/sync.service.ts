@@ -220,8 +220,17 @@ export class SyncService {
      * the customer is holding the wrong one. The rate is resolved here, once,
      * so the terminal never has to guess.
      */
-    const tenantRow = await this.db.run((tx) =>
-      tx.query.tenants.findFirst({ columns: { name: true, settings: true } }),
+    const [tenantRow, branchRow] = await this.db.run((tx) =>
+      Promise.all([
+        tx.query.tenants.findFirst({ columns: { name: true, settings: true } }),
+        // This terminal's own branch name — printed on its A4 invoice
+        // letterhead the same way the admin panel's does, and not derivable
+        // from anything else this pull already sends.
+        tx.query.branches.findFirst({
+          where: (t, { eq: e }) => e(t.id, device.branchId),
+          columns: { name: true },
+        }),
+      ]),
     );
     const settings = resolveTenantSettings(tenantRow?.settings);
     const defaultTaxRate = String(settings.tax.defaultRate);
@@ -536,6 +545,8 @@ export class SyncService {
         addressLines: settings.addressLines ?? [],
         currency: settings.currency.base,
         taxLabel: settings.tax.label,
+        branchName: branchRow?.name ?? null,
+        timezone: settings.locale.timezone,
       },
     };
   }

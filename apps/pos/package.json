@@ -19,6 +19,7 @@
     "test:electron": "ELECTRON_RUN_AS_NODE=1 electron ./node_modules/vitest/vitest.mjs run --config vitest.electron.config.ts --passWithNoTests"
   },
   "dependencies": {
+    "@devsfleet/pdf-documents": "workspace:*",
     "@devsfleet/shared-types": "workspace:*",
     "@devsfleet/shared-utils": "workspace:*",
     "bcryptjs": "^3.0.2",
@@ -27,7 +28,6 @@
     "electron-updater": "^6.6.2",
     "lucide-react": "^1.31.0",
     "node-thermal-printer": "^4.6.0",
-    "pdfkit": "^0.19.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.9.3",
@@ -37,7 +37,6 @@
     "@electron/rebuild": "^4.0.1",
     "@tailwindcss/vite": "^4.3.3",
     "@types/better-sqlite3": "^7.6.13",
-    "@types/pdfkit": "^0.17.6",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.0.3",

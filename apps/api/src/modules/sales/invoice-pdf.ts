@@ -1,4 +1,4 @@
-import { renderTaxDocument, type TaxDocumentInput } from "../../common/pdf/tax-document.js";
+import { renderTaxDocument, type TaxDocumentInput } from "@devsfleet/pdf-documents";
 
 /**
  * A sale as an A4 bilingual tax invoice.

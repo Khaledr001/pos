@@ -39,16 +39,22 @@ const FONT_FILES = {
 } as const;
 
 /**
- * Found by trying the places the file legitimately lives, rather than by
- * assuming one: `dist/assets` in a built container, `assets/` when tests run
- * from source. Returns null if absent, and the caller then omits the Arabic
- * rather than printing tofu.
+ * `assets/fonts` is a sibling of this package's own root, not of `dist/` —
+ * true whether this module is running compiled (`dist/tax-document.js`) or
+ * straight from source under vitest (`src/tax-document.ts`), since both sit
+ * one directory below the package root. That symmetry is also why the two
+ * consuming apps never need to copy these files anywhere themselves: `pnpm
+ * deploy` (the API's Docker image) and electron-builder (the POS installer)
+ * each carry this package's own `assets/` folder along with it, listed
+ * alongside `dist` in this package's `package.json` "files".
+ *
+ * Returns null if the files are somehow absent, and the caller then omits
+ * the Arabic rather than printing tofu.
  */
 function resolveFont(file: string): string | null {
   const candidates = [
-    join(__dirname, "../../assets/fonts", file), // dist/common/pdf → dist/assets
-    join(process.cwd(), "assets/fonts", file), // running from apps/api
-    join(__dirname, "../../../assets/fonts", file), // src/common/pdf → apps/api/assets
+    join(__dirname, "../assets/fonts", file),
+    join(process.cwd(), "assets/fonts", file),
   ];
   return candidates.find((path) => existsSync(path)) ?? null;
 }

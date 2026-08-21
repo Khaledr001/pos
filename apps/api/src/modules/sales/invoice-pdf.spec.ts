@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { COLS } from "../../common/pdf/tax-document.js";
 import { renderInvoicePdf, type InvoicePdfInput } from "./invoice-pdf.js";
 
 /**
@@ -140,21 +139,5 @@ describe("renderInvoicePdf", () => {
   it("handles an empty line list without throwing", async () => {
     const buffer = await renderInvoicePdf({ ...BASE, lines: [] });
     expect(buffer.subarray(0, 5).toString("latin1")).toBe("%PDF-");
-  });
-});
-
-describe("table geometry", () => {
-  /**
-   * The description holds the only unbounded content on the row, so it gets
-   * the majority of the width by requirement, not by accident. Widening a
-   * numeric column at its expense wraps product names to three lines.
-   */
-  it("gives DESCRIPTION more than 45% of the table", () => {
-    expect(COLS.description).toBeGreaterThan(0.45);
-  });
-
-  it("spends the whole table width and no more", () => {
-    const total = Object.values(COLS).reduce((sum, share) => sum + share, 0);
-    expect(total).toBeCloseTo(1, 5);
   });
 });

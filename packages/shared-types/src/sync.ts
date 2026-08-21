@@ -140,6 +140,13 @@ export interface SyncBusinessInfo {
   addressLines: string[];
   currency: string;
   taxLabel: string;
+  /** THIS terminal's own branch — not knowable from anything else synced offline. */
+  branchName: string | null;
+  /**
+   * The business's own timezone, for printing a tax document with the date
+   * and time it actually happened in the shop, not the server's UTC.
+   */
+  timezone: string;
 }
 
 // -----------------------------------------------------------------------------

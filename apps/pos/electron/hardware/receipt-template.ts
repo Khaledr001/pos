@@ -13,11 +13,16 @@ import type { printer as ThermalPrinterInstance } from "node-thermal-printer";
 
 export interface ReceiptLine {
   productName: string;
+  /** "Default" for a product sold with no variant of its own. */
+  variantName: string;
   productSku: string;
   quantity: string;
   unitPrice: string;
   discountPercent: string;
   taxPercent: string;
+  /** Line value before tax, after any line discount. */
+  lineSubtotal: string;
+  taxAmount: string;
   total: string;
 }
 
@@ -47,6 +52,10 @@ export interface ReceiptBusiness {
   addressLines: string[];
   currency: string;
   taxLabel: string;
+  /** THIS terminal's own branch — set on activation, pulled fresh on every sync. */
+  branchName: string | null;
+  /** The business's own timezone, so a printed receipt reads the shop's clock. */
+  timezone: string;
 }
 
 const METHOD_LABEL: Record<string, string> = {

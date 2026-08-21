@@ -1,0 +1,25 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    /**
+     * CommonJS, not ESM — deliberately unlike shared-utils/shared-types.
+     *
+     * Both real consumers of this package are CJS: apps/api's Nest build
+     * (NestJS's decorator metadata requires it) and apps/pos's Electron main
+     * bundle (rollup emits `require()` there too). A CJS package required
+     * synchronously from a CJS caller is ordinary module resolution; an ESM
+     * package required the same way needs Node's `require(esm)` path, which
+     * breaks the moment anything in the transitive graph — here, pdfkit
+     * itself — is CJS with an ambiguous format. Matching the consumers'
+     * module system side-steps that class of failure entirely rather than
+     * working around it.
+     */
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "lib": ["ES2023"]
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "**/*.spec.ts"]
+}

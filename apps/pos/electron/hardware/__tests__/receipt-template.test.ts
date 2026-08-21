@@ -34,6 +34,8 @@ const BUSINESS: ReceiptBusiness = {
   addressLines: ["Shop 4, Al Wahda Street", "Abu Dhabi, UAE"],
   currency: "AED",
   taxLabel: "VAT",
+  branchName: "Abu Dhabi Branch",
+  timezone: "Asia/Dubai",
 };
 
 const SALE: ReceiptSale = {
@@ -43,11 +45,14 @@ const SALE: ReceiptSale = {
   lines: [
     {
       productName: "PVC 90° Elbow 1 Inch",
+      variantName: "Default",
       productSku: "PVC-ELB-90-1IN",
       quantity: "10",
       unitPrice: "2.75",
       discountPercent: "0",
       taxPercent: "5",
+      lineSubtotal: "27.50",
+      taxAmount: "1.38",
       total: "28.88",
     },
   ],

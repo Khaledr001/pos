@@ -902,6 +902,18 @@ const MIGRATIONS: Array<
       ALTER TABLE variant_prices ADD COLUMN min_quantity TEXT NOT NULL DEFAULT '1';
     `,
   },
+  {
+    version: 15,
+    sql: `
+      -- The A4 invoice this till prints now shares its layout with the admin
+      -- panel's (Stage: POS bill redesign), which prints "Product — Variant"
+      -- on a line whenever the variant isn't the default — sale_items already
+      -- carries this server-side. Default matches that table's own default,
+      -- so a row committed before this migration still reads exactly as it
+      -- always displayed: no variant suffix.
+      ALTER TABLE local_sale_items ADD COLUMN variant_name TEXT NOT NULL DEFAULT 'Default';
+    `,
+  },
 ];
 
 export function migrate(database: Database.Database): void {

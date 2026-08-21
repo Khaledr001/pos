@@ -114,6 +114,9 @@ importers:
       '@devsfleet/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@devsfleet/pdf-documents':
+        specifier: workspace:*
+        version: link:../../packages/pdf-documents
       '@devsfleet/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
@@ -168,9 +171,6 @@ importers:
       passport-jwt:
         specifier: ^4.0.1
         version: 4.0.1
-      pdfkit:
-        specifier: ^0.19.1
-        version: 0.19.1
       pino-http:
         specifier: ^10.5.0
         version: 10.5.0
@@ -208,9 +208,6 @@ importers:
       '@types/passport-jwt':
         specifier: ^4.0.1
         version: 4.0.1
-      '@types/pdfkit':
-        specifier: ^0.17.6
-        version: 0.17.6
       '@types/supertest':
         specifier: ^6.0.3
         version: 6.0.3
@@ -232,6 +229,9 @@ importers:
 
   apps/pos:
     dependencies:
+      '@devsfleet/pdf-documents':
+        specifier: workspace:*
+        version: link:../../packages/pdf-documents
       '@devsfleet/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
@@ -256,9 +256,6 @@ importers:
       node-thermal-printer:
         specifier: ^4.6.0
         version: 4.6.0
-      pdfkit:
-        specifier: ^0.19.1
-        version: 0.19.1
       react:
         specifier: ^19.2.0
         version: 19.2.8
@@ -281,9 +278,6 @@ importers:
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
-      '@types/pdfkit':
-        specifier: ^0.17.6
-        version: 0.17.6
       '@types/react':
         specifier: ^19.2.0
         version: 19.2.18
@@ -348,6 +342,22 @@ importers:
       tsx:
         specifier: ^4.20.3
         version: 4.23.12
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.50.0)(tsx@4.23.12)
+
+  packages/pdf-documents:
+    dependencies:
+      pdfkit:
+        specifier: ^0.19.1
+        version: 0.19.1
+    devDependencies:
+      '@types/pdfkit':
+        specifier: ^0.17.6
+        version: 0.17.6
       typescript:
         specifier: ^5.9.2
         version: 5.9.3

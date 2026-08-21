@@ -5,7 +5,7 @@ const node_path = require("node:path");
 const Database = require("better-sqlite3");
 const node_fs = require("node:fs");
 const node_crypto = require("node:crypto");
-const PDFDocument = require("pdfkit");
+const pdfDocuments = require("@devsfleet/pdf-documents");
 const nodeThermalPrinter = require("node-thermal-printer");
 const node_os = require("node:os");
 const nodeCrypto = require("crypto");
@@ -839,6 +839,18 @@ const MIGRATIONS = [
       -- every already-synced row keep meaning exactly what it always did.
       ALTER TABLE variant_prices ADD COLUMN min_quantity TEXT NOT NULL DEFAULT '1';
     `
+  },
+  {
+    version: 15,
+    sql: `
+      -- The A4 invoice this till prints now shares its layout with the admin
+      -- panel's (Stage: POS bill redesign), which prints "Product — Variant"
+      -- on a line whenever the variant isn't the default — sale_items already
+      -- carries this server-side. Default matches that table's own default,
+      -- so a row committed before this migration still reads exactly as it
+      -- always displayed: no variant suffix.
+      ALTER TABLE local_sale_items ADD COLUMN variant_name TEXT NOT NULL DEFAULT 'Default';
+    `
   }
 ];
 function migrate(database) {
@@ -858,6 +870,11 @@ function migrate(database) {
     })();
   }
 }
+const DEFAULT_TENANT_SETTINGS = {
+  locale: {
+    timezone: "Asia/Dubai"
+  }
+};
 const MONEY_SCALE = 4;
 const SCALE_FACTOR = 10000n;
 function toMinor(value) {
@@ -1220,10 +1237,10 @@ function commitSale(draft) {
     );
     const insertItem = db2.prepare(
       `INSERT INTO local_sale_items
-         (sale_local_id, variant_id, product_name, product_sku, quantity,
+         (sale_local_id, variant_id, product_name, variant_name, product_sku, quantity,
           unit_price, discount_percent, tax_percent, line_subtotal, tax_amount,
           total, sort_order, unit_id, unit_conversion_factor)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
     const decrementStock = db2.prepare(
       `UPDATE inventory
@@ -1236,13 +1253,14 @@ function commitSale(draft) {
         draft.localId,
         line.variantId,
         line.productName,
+        line.variantName ?? "Default",
         line.productSku,
         line.quantity,
         line.unitPrice,
         line.discountPercent,
         line.taxPercent,
-        line.total,
-        "0",
+        line.lineSubtotal,
+        line.taxAmount,
         line.total,
         index,
         line.unitId ?? null,
@@ -1414,8 +1432,10 @@ function salePayments(db2, localId) {
 function saleLines(db2, localId) {
   return db2.prepare(
     `SELECT variant_id AS variantId, product_name AS productName,
+              variant_name AS variantName,
               product_sku AS productSku, quantity, unit_price AS unitPrice,
-              discount_percent AS discountPercent, tax_percent AS taxPercent, total,
+              discount_percent AS discountPercent, tax_percent AS taxPercent,
+              line_subtotal AS lineSubtotal, tax_amount AS taxAmount, total,
               unit_id AS unitId, unit_conversion_factor AS unitConversionFactor
        FROM local_sale_items WHERE sale_local_id = ? ORDER BY sort_order`
   ).all(localId);
@@ -1740,18 +1760,18 @@ function setState(key, value) {
        ON CONFLICT(key) DO UPDATE SET value = excluded.value`
   ).run(key, value);
 }
-const METHOD_LABEL$1 = {
+const METHOD_LABEL = {
   cash: "Cash",
   card: "Card",
   bank_transfer: "Bank Transfer",
   credit: "On Account",
   loyalty_points: "Loyalty Points"
 };
-function money$1(value) {
+function money(value) {
   const n = Number(value || "0");
   return n.toLocaleString(void 0, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
-function formatDate$1(iso) {
+function formatDate(iso) {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
 }
@@ -1777,25 +1797,25 @@ function buildReceipt(printer, sale, business, options = {}) {
   printer.newLine();
   printer.alignLeft();
   printer.println(`Invoice: ${sale.saleNumber ?? `PENDING-${sale.localId.slice(0, 8)}`}`);
-  printer.println(`Date: ${formatDate$1(sale.occurredAt)}`);
+  printer.println(`Date: ${formatDate(sale.occurredAt)}`);
   if (options.customerName) printer.println(`Customer: ${options.customerName}`);
   printer.drawLine();
   for (const line of sale.lines) {
     printer.println(line.productName);
     printer.leftRight(
-      `  ${line.quantity} x ${money$1(line.unitPrice)}`,
-      `${business.currency} ${money$1(line.total)}`
+      `  ${line.quantity} x ${money(line.unitPrice)}`,
+      `${business.currency} ${money(line.total)}`
     );
   }
   printer.drawLine();
-  printer.leftRight("Subtotal", `${business.currency} ${money$1(sale.subtotal)}`);
+  printer.leftRight("Subtotal", `${business.currency} ${money(sale.subtotal)}`);
   if (Number(sale.discountAmount) > 0) {
-    printer.leftRight("Discount", `-${business.currency} ${money$1(sale.discountAmount)}`);
+    printer.leftRight("Discount", `-${business.currency} ${money(sale.discountAmount)}`);
   }
-  printer.leftRight(`${business.taxLabel}`, `${business.currency} ${money$1(sale.taxAmount)}`);
+  printer.leftRight(`${business.taxLabel}`, `${business.currency} ${money(sale.taxAmount)}`);
   printer.setTextDoubleHeight();
   printer.bold(true);
-  printer.leftRight("TOTAL", `${business.currency} ${money$1(sale.total)}`);
+  printer.leftRight("TOTAL", `${business.currency} ${money(sale.total)}`);
   printer.bold(false);
   printer.setTextNormal();
   printer.drawLine();
@@ -1803,12 +1823,12 @@ function buildReceipt(printer, sale, business, options = {}) {
   const change = Math.max(0, tendered - Number(sale.total || "0"));
   for (const payment of sale.payments) {
     printer.leftRight(
-      METHOD_LABEL$1[payment.method] ?? payment.method,
-      `${business.currency} ${money$1(payment.amount)}`
+      METHOD_LABEL[payment.method] ?? payment.method,
+      `${business.currency} ${money(payment.amount)}`
     );
   }
   if (change > 0) {
-    printer.leftRight("Change", `${business.currency} ${money$1(String(change))}`);
+    printer.leftRight("Change", `${business.currency} ${money(String(change))}`);
   }
   printer.newLine();
   printer.alignCenter();
@@ -1816,104 +1836,48 @@ function buildReceipt(printer, sale, business, options = {}) {
   printer.newLine();
   printer.cut();
 }
-const METHOD_LABEL = {
-  cash: "Cash",
-  card: "Card",
-  bank_transfer: "Bank Transfer",
-  credit: "On Account",
-  loyalty_points: "Loyalty Points"
-};
-const TABLE_COLS = ["Qty", "Unit price", "Disc %", "Tax %", "Total"];
-function money(value) {
-  const n = Number(value || "0");
-  return n.toLocaleString(void 0, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-function formatDate(iso) {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toISOString().slice(0, 10);
-}
 function renderA4Invoice(sale, business, options = {}) {
-  return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: "A4", margin: 50 });
-    const chunks = [];
-    doc.on("data", (chunk) => chunks.push(chunk));
-    doc.on("end", () => resolve(Buffer.concat(chunks)));
-    doc.on("error", reject);
-    doc.fontSize(18).font("Helvetica-Bold").text(business.legalName || "Tax Invoice");
-    doc.fontSize(9).font("Helvetica").fillColor("#555");
-    for (const line of business.addressLines) doc.text(line);
-    if (business.phone) doc.text(`Tel: ${business.phone}`);
-    if (business.trn) doc.text(`TRN: ${business.trn}`);
-    doc.moveDown(0.5);
-    if (options.duplicate) {
-      doc.fontSize(10).font("Helvetica-Bold").fillColor("#b00").text("DUPLICATE");
-    }
-    doc.fontSize(14).fillColor("#000").font("Helvetica-Bold").text("TAX INVOICE");
-    doc.fontSize(9).font("Helvetica").fillColor("#555").text(`${sale.saleNumber ?? `PENDING-${sale.localId.slice(0, 8)}`} — ${formatDate(sale.occurredAt)}`);
-    doc.moveDown();
-    if (options.customerName) {
-      doc.fontSize(10).fillColor("#000").font("Helvetica-Bold").text(options.customerName);
-      doc.moveDown();
-    }
-    const startX = doc.page.margins.left;
-    const tableWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
-    const nameWidth = tableWidth * 0.36;
-    const colWidth = (tableWidth - nameWidth) / TABLE_COLS.length;
-    function row(cells, y2, opts = {}) {
-      doc.font(opts.bold ? "Helvetica-Bold" : "Helvetica").fontSize(9).fillColor(opts.color ?? "#000");
-      doc.text(cells[0] ?? "", startX, y2, { width: nameWidth });
-      cells.slice(1).forEach((cell, i) => {
-        doc.text(cell, startX + nameWidth + i * colWidth, y2, { width: colWidth, align: "right" });
-      });
-      return doc.heightOfString(cells[0] ?? "", { width: nameWidth });
-    }
-    let y = doc.y;
-    row(["Item", ...TABLE_COLS], y, { bold: true, color: "#555" });
-    y += 16;
-    doc.moveTo(startX, y - 4).lineTo(startX + tableWidth, y - 4).strokeColor("#ddd").stroke();
-    for (const line of sale.lines) {
-      const height = row(
-        [
-          `${line.productName} (${line.productSku})`,
-          line.quantity,
-          money(line.unitPrice),
-          `${line.discountPercent}%`,
-          `${line.taxPercent}%`,
-          money(line.total)
-        ],
-        y
-      );
-      y += Math.max(height, 12) + 6;
-    }
-    y += 10;
-    doc.moveTo(startX, y).lineTo(startX + tableWidth, y).strokeColor("#ddd").stroke();
-    y += 10;
-    const totalsX = startX + tableWidth - 200;
-    for (const [label, value] of [
-      ["Subtotal", sale.subtotal],
-      ...Number(sale.discountAmount) > 0 ? [["Discount", `-${sale.discountAmount}`]] : [],
-      [business.taxLabel, sale.taxAmount]
-    ]) {
-      doc.font("Helvetica").fontSize(9).fillColor("#555").text(label, totalsX, y, { width: 100 });
-      doc.text(`${business.currency} ${money(value)}`, totalsX + 100, y, { width: 100, align: "right" });
-      y += 14;
-    }
-    doc.font("Helvetica-Bold").fontSize(11).fillColor("#000").text("Total", totalsX, y, { width: 100 });
-    doc.text(`${business.currency} ${money(sale.total)}`, totalsX + 100, y, { width: 100, align: "right" });
-    y += 24;
-    const tendered = sale.payments.reduce((sum, p) => sum + Number(p.amount || "0"), 0);
-    const change = Math.max(0, tendered - Number(sale.total || "0"));
-    for (const payment of sale.payments) {
-      doc.font("Helvetica").fontSize(9).fillColor("#555").text(METHOD_LABEL[payment.method] ?? payment.method, totalsX, y, { width: 100 });
-      doc.text(`${business.currency} ${money(payment.amount)}`, totalsX + 100, y, { width: 100, align: "right" });
-      y += 14;
-    }
-    if (change > 0) {
-      doc.font("Helvetica").fontSize(9).fillColor("#555").text("Change", totalsX, y, { width: 100 });
-      doc.text(`${business.currency} ${money(String(change))}`, totalsX + 100, y, { width: 100, align: "right" });
-    }
-    doc.end();
-  });
+  const paid = sale.payments.reduce((sum, p) => sum + Number(p.amount || "0"), 0);
+  const due = Math.max(0, Number(sale.total || "0") - paid);
+  const document2 = {
+    kind: "invoice",
+    business: {
+      legalName: business.legalName,
+      trn: business.trn,
+      phone: business.phone,
+      email: business.email,
+      addressLines: business.addressLines
+    },
+    branchName: business.branchName,
+    documentNumber: sale.saleNumber ?? `PENDING-${sale.localId.slice(0, 8)}`,
+    issuedAt: new Date(sale.occurredAt),
+    currency: business.currency,
+    taxLabel: business.taxLabel,
+    timezone: business.timezone,
+    customer: options.customer ?? null,
+    lines: sale.lines.map((line) => ({
+      productName: line.productName,
+      variantName: line.variantName,
+      productSku: line.productSku,
+      quantity: line.quantity,
+      unitPrice: line.unitPrice,
+      beforeTax: line.lineSubtotal,
+      taxAmount: line.taxAmount,
+      taxPercent: line.taxPercent,
+      total: line.total
+    })),
+    subtotal: sale.subtotal,
+    discountAmount: sale.discountAmount,
+    taxAmount: sale.taxAmount,
+    total: sale.total,
+    payments: sale.payments.map((p) => ({ method: p.method, amount: p.amount })),
+    dueAmount: due.toFixed(2),
+    // A reprint of a duplicate is still the SAME sale, not a cancelled one —
+    // "voided" is reserved for a sale actually voided at the till.
+    voided: false,
+    notes: options.duplicate ? "DUPLICATE — reprinted copy." : null
+  };
+  return pdfDocuments.renderTaxDocument(document2);
 }
 const COLUMNS = {
   thermal_58: 32,
@@ -1958,7 +1922,9 @@ function businessInfo() {
       email: null,
       addressLines: [],
       currency: "AED",
-      taxLabel: "VAT"
+      taxLabel: "VAT",
+      branchName: null,
+      timezone: DEFAULT_TENANT_SETTINGS.locale.timezone
     };
   }
   return JSON.parse(raw);
@@ -1967,6 +1933,12 @@ function customerName(customerId) {
   if (!customerId) return null;
   const row = getDatabase().prepare(`SELECT name FROM customers WHERE id = ?`).get(customerId);
   return row?.name ?? null;
+}
+function customerInfo(customerId) {
+  if (!customerId) return null;
+  const row = getDatabase().prepare(`SELECT name, company, phone, trn FROM customers WHERE id = ?`).get(customerId);
+  if (!row) return null;
+  return { ...row, address: null };
 }
 function invoicesDir() {
   const dir = node_path.join(electron.app.getPath("userData"), "invoices");
@@ -2010,7 +1982,7 @@ function registerHardwareHandlers(ipcMain) {
       if (resolved === "a4") {
         await saveAndOpenA4(sale, businessInfo(), {
           duplicate,
-          customerName: customerName(sale.customerId)
+          customer: customerInfo(sale.customerId)
         });
         return;
       }
@@ -2038,11 +2010,14 @@ function registerHardwareHandlers(ipcMain) {
           lines: [
             {
               productName: "Test Line Item",
+              variantName: "Default",
               productSku: "TEST-SKU",
               quantity: "1",
               unitPrice: "10.00",
               discountPercent: "0",
               taxPercent: "5",
+              lineSubtotal: "10.00",
+              taxAmount: "0.50",
               total: "10.50"
             }
           ],

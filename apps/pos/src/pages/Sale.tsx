@@ -141,11 +141,17 @@ export function Sale({ cashSessionId }: { cashSessionId: string | null }) {
       lines: cart.lines.map((line, index) => ({
         variantId: line.product.id,
         productName: line.product.name,
+        variantName: line.product.variantName ?? "Default",
         productSku: line.product.sku,
         quantity: line.quantity,
         unitPrice: line.unitPrice,
         discountPercent: line.discountPercent,
         taxPercent: line.product.taxPercent,
+        // Before-tax and tax, from the same calculation the receipt on
+        // screen is already showing — the A4 invoice this sale can print
+        // later has to foot to the exact figures the cashier just saw.
+        lineSubtotal: Money.toDecimalString(totals.lines[index]?.net ?? 0n, 2),
+        taxAmount: Money.toDecimalString(totals.lines[index]?.tax ?? 0n, 2),
         total: Money.toDecimalString(totals.lines[index]?.total ?? 0n, 2),
         ...(line.unit
           ? { unitId: line.unit.unitId, unitConversionFactor: line.unit.conversionFactor }
