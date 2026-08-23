@@ -1,11 +1,14 @@
 import {
   Body, Controller, Delete, Get, HttpCode, HttpStatus,
-  Param, ParseUUIDPipe, Patch, Post, Query, UploadedFile, UseInterceptors,
+  Param, ParseUUIDPipe, Patch, Post, Query, Res, UploadedFile, UseInterceptors,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
+import type { Response } from "express";
 import { Audited, RequirePermissions } from "../../common/decorators/index.js";
 import { zodPipe } from "../../common/pipes/zod-validation.pipe.js";
+import { BulkImportService } from "./bulk-import.service.js";
+import { BulkImportOptionsSchema, type BulkImportOptionsDto } from "./bulk-import.dto.js";
 import { ProductsService } from "./products.service.js";
 import {
   CreateProductSchema, CreateProductSupplierLinkSchema, CreateVariantUnitSchema,
@@ -21,7 +24,47 @@ import {
 @ApiTags("products")
 @Controller("products")
 export class ProductsController {
-  constructor(private readonly products: ProductsService) {}
+  constructor(
+    private readonly products: ProductsService,
+    private readonly bulkImport: BulkImportService,
+  ) {}
+
+  // --- bulk import ----------------------------------------------------------
+
+  /**
+   * Import products from an Excel/CSV file.
+   *
+   * DRY RUN BY DEFAULT — `dryRun=true` reports what would change without
+   * writing anything. Pass `dryRun=false` to commit.
+   */
+  @Post("import")
+  @RequirePermissions("product:write")
+  @Audited("products", "import")
+  @UseInterceptors(FileInterceptor("file"))
+  @ApiOperation({ summary: "Bulk import products from Excel/CSV" })
+  async importProducts(
+    @UploadedFile() file: Express.Multer.File,
+    @Query(zodPipe(BulkImportOptionsSchema)) options: BulkImportOptionsDto,
+  ) {
+    return this.bulkImport.import(file.buffer, options);
+  }
+
+  /**
+   * Download a template Excel file with correct headers and a "Valid Values"
+   * reference sheet populated from this tenant's categories, brands and units.
+   */
+  @Get("import/template")
+  @RequirePermissions("product:read")
+  @ApiOperation({ summary: "Download the bulk import Excel template" })
+  async downloadTemplate(@Res() res: Response) {
+    const buffer = await this.bulkImport.generateTemplate();
+    res.set({
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": 'attachment; filename="import-template.xlsx"',
+      "Content-Length": buffer.length,
+    });
+    res.end(buffer);
+  }
 
   /**
    * Declared before `:id` on purpose. Express matches in order, so a literal

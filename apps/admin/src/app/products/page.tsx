@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   Package, Search, Plus, RefreshCw, X, AlertCircle, CheckCircle2, Boxes, Trash2,
-  Pencil, Image as ImageIcon, Upload, Star,
+  Pencil, Image as ImageIcon, Upload, Star, FileUp, Download, Loader2,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api-client";
@@ -149,6 +149,19 @@ export default function ProductsPage() {
   const [fBranchId, setFBranchId] = useState("");
   const [branches, setBranches] = useState<{ id: string; name: string; code: string }[]>([]);
 
+  // Import dialog
+  const [importOpen, setImportOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importBranchId, setImportBranchId] = useState("");
+  const [importRunning, setImportRunning] = useState(false);
+  const [importResult, setImportResult] = useState<{
+    created: number; updated: number; unchanged: number; rejected: number;
+    autoCreated: { categories: string[]; brands: string[] };
+    errors: { row: number; reason: string }[];
+    dryRun: boolean;
+  } | null>(null);
+  const importFileRef = useRef<HTMLInputElement>(null);
+
   // Packagings dialog
   const [packagingProduct, setPackagingProduct] = useState<Product | null>(null);
 
@@ -290,6 +303,10 @@ export default function ProductsPage() {
           <Button variant="outline" size="sm" onClick={fetchProducts} disabled={loading}>
             <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
             Refresh
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => { setImportResult(null); setImportFile(null); setImportOpen(true); }}>
+            <FileUp className="h-4 w-4" />
+            Import
           </Button>
           <Button size="sm" onClick={() => { setActionError(null); setIsModalOpen(true); }}>
             <Plus className="h-4 w-4" />
@@ -581,6 +598,26 @@ export default function ProductsPage() {
           setActionSuccess("Product updated.");
           fetchProducts();
         }}
+      />
+
+      <ImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        file={importFile}
+        setFile={setImportFile}
+        branchId={importBranchId}
+        setBranchId={setImportBranchId}
+        branches={branches}
+        running={importRunning}
+        setRunning={setImportRunning}
+        result={importResult}
+        setResult={setImportResult}
+        fileInputRef={importFileRef}
+        onSuccess={() => {
+          setActionSuccess("Products imported successfully.");
+          fetchProducts();
+        }}
+        tokens={tokens}
       />
     </div>
   );
@@ -1170,6 +1207,301 @@ function PackagingsDialog({
           <Button type="button" variant="outline" onClick={onClose}>
             Close
           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Import Dialog ─────────────────────────────────────────────────────────
+
+function ImportDialog({
+  open,
+  onClose,
+  file,
+  setFile,
+  branchId,
+  setBranchId,
+  branches,
+  running,
+  setRunning,
+  result,
+  setResult,
+  fileInputRef,
+  onSuccess,
+  tokens,
+}: {
+  open: boolean;
+  onClose: () => void;
+  file: File | null;
+  setFile: (f: File | null) => void;
+  branchId: string;
+  setBranchId: (v: string) => void;
+  branches: { id: string; name: string; code: string }[];
+  running: boolean;
+  setRunning: (v: boolean) => void;
+  result: {
+    created: number; updated: number; unchanged: number; rejected: number;
+    autoCreated: { categories: string[]; brands: string[] };
+    errors: { row: number; reason: string }[];
+    dryRun: boolean;
+  } | null;
+  setResult: (v: typeof result) => void;
+  fileInputRef: React.RefObject<HTMLInputElement | null>;
+  onSuccess: () => void;
+  tokens: { accessToken: string } | null;
+}) {
+  const [dragOver, setDragOver] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const f = e.dataTransfer.files[0];
+    if (f) { setFile(f); setResult(null); setError(null); }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (f) { setFile(f); setResult(null); setError(null); }
+  };
+
+  const runImport = async (dryRun: boolean) => {
+    if (!file) return;
+    setRunning(true);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const params = new URLSearchParams();
+      params.set("dryRun", String(dryRun));
+      if (branchId) params.set("branchId", branchId);
+
+      const res = await api.postForm<typeof result>(
+        `/products/import?${params.toString()}`,
+        formData,
+        { accessToken: tokens?.accessToken },
+      );
+      setResult(res);
+
+      if (!dryRun && res && res.created > 0) {
+        onSuccess();
+      }
+    } catch (err: any) {
+      setError(err?.message || "Import failed.");
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const downloadTemplate = async () => {
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1"}/products/import/template`,
+        { headers: tokens?.accessToken ? { authorization: `Bearer ${tokens.accessToken}` } : {} },
+      );
+      if (!res.ok) throw new Error(`Download failed (${res.status})`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "import-template.xlsx";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch (err: any) {
+      setError(err?.message || "Failed to download template.");
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <FileUp className="h-5 w-5" />
+            Bulk Import Products
+          </DialogTitle>
+          <DialogDescription>
+            Upload an Excel (.xlsx) or CSV file to import products in bulk.
+            Missing categories and brands are auto-created. SKUs are auto-generated when blank.
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* Template Download */}
+        <button
+          type="button"
+          onClick={downloadTemplate}
+          className="flex items-center gap-2 text-xs text-primary hover:underline cursor-pointer mb-1"
+        >
+          <Download className="h-3.5 w-3.5" />
+          Download template with valid values
+        </button>
+
+        {/* File Drop Zone */}
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={handleDrop}
+          onClick={() => fileInputRef.current?.click()}
+          className={cn(
+            "flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-8 cursor-pointer transition-colors",
+            dragOver
+              ? "border-primary bg-primary/5"
+              : file
+                ? "border-emerald-500/50 bg-emerald-500/5"
+                : "border-muted-foreground/25 hover:border-muted-foreground/50",
+          )}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.csv"
+            onChange={handleFileChange}
+            className="hidden"
+          />
+          {file ? (
+            <>
+              <CheckCircle2 className="h-8 w-8 text-emerald-500" />
+              <p className="text-sm font-medium text-foreground">{file.name}</p>
+              <p className="text-xs text-muted-foreground">
+                {(file.size / 1024).toFixed(1)} KB · Click to change
+              </p>
+            </>
+          ) : (
+            <>
+              <Upload className="h-8 w-8 text-muted-foreground/50" />
+              <p className="text-sm text-muted-foreground">
+                Drop your Excel or CSV file here, or click to browse
+              </p>
+            </>
+          )}
+        </div>
+
+        {/* Branch Selector */}
+        {branches.length > 0 && (
+          <div>
+            <label className="block text-xs font-medium text-foreground mb-1.5">
+              Branch (for opening stock)
+            </label>
+            <select
+              value={branchId}
+              onChange={(e) => setBranchId(e.target.value)}
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="">No branch (skip stock)</option>
+              {branches.map((b) => (
+                <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Error */}
+        {error && (
+          <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        {/* Results */}
+        {result && (
+          <div className="space-y-3">
+            <div className={cn(
+              "rounded-lg border p-4",
+              result.dryRun
+                ? "border-amber-500/30 bg-amber-500/5"
+                : "border-emerald-500/30 bg-emerald-500/5",
+            )}>
+              <p className={cn(
+                "text-xs font-semibold uppercase tracking-wider mb-3",
+                result.dryRun ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400",
+              )}>
+                {result.dryRun ? "⚡ Dry Run Preview" : "✅ Import Complete"}
+              </p>
+              <div className="grid grid-cols-4 gap-3">
+                {[
+                  { label: "Created", value: result.created, color: "text-emerald-600 dark:text-emerald-400" },
+                  { label: "Updated", value: result.updated, color: "text-blue-600 dark:text-blue-400" },
+                  { label: "Unchanged", value: result.unchanged, color: "text-muted-foreground" },
+                  { label: "Rejected", value: result.rejected, color: "text-destructive" },
+                ].map((stat) => (
+                  <div key={stat.label} className="text-center">
+                    <p className={cn("text-2xl font-bold tabular-nums", stat.color)}>{stat.value}</p>
+                    <p className="text-xs text-muted-foreground">{stat.label}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Auto-created entities */}
+            {(result.autoCreated.categories.length > 0 || result.autoCreated.brands.length > 0) && (
+              <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3">
+                <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 mb-2">
+                  Auto-created
+                </p>
+                {result.autoCreated.categories.length > 0 && (
+                  <p className="text-xs text-foreground">
+                    <span className="font-medium">Categories:</span>{" "}
+                    {result.autoCreated.categories.join(", ")}
+                  </p>
+                )}
+                {result.autoCreated.brands.length > 0 && (
+                  <p className="text-xs text-foreground mt-1">
+                    <span className="font-medium">Brands:</span>{" "}
+                    {result.autoCreated.brands.join(", ")}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Errors */}
+            {result.errors.length > 0 && (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+                <p className="text-xs font-semibold text-destructive mb-2">
+                  {result.errors.length} error(s)
+                </p>
+                <div className="max-h-40 overflow-y-auto space-y-1">
+                  {result.errors.map((err, i) => (
+                    <p key={i} className="text-xs text-muted-foreground">
+                      <span className="font-mono text-destructive">Row {err.row}:</span>{" "}
+                      {err.reason}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Actions */}
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button type="button" variant="outline" onClick={onClose} disabled={running}>
+            {result && !result.dryRun ? "Done" : "Cancel"}
+          </Button>
+
+          {file && (!result || result.dryRun) && (
+            <Button
+              variant="outline"
+              onClick={() => runImport(true)}
+              disabled={running}
+            >
+              {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+              {running ? "Analyzing…" : "Preview (Dry Run)"}
+            </Button>
+          )}
+
+          {result && result.dryRun && result.created + result.updated > 0 && (
+            <Button
+              onClick={() => runImport(false)}
+              disabled={running}
+            >
+              {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
+              {running ? "Importing…" : `Import ${result.created + result.updated} products`}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
