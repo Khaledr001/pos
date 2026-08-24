@@ -30,6 +30,13 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface StaffUser {
   id: string;
@@ -227,7 +234,7 @@ export default function UsersPage() {
             Cashiers, store managers, and back-office operators with granular discount limits and branch scoping.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <Button variant="outline" size="sm" onClick={fetchUsers} disabled={loading}>
             <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
             Refresh
@@ -394,32 +401,34 @@ export default function UsersPage() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-foreground mb-1.5">Role *</label>
-                <select
-                  required
-                  value={fRoleId}
-                  onChange={(e) => setFRoleId(e.target.value)}
-                  className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <option value="">— Select role —</option>
-                  {roles.map((r) => (
-                    <option key={r.id} value={r.id}>{r.name}</option>
-                  ))}
-                </select>
+                <Select value={fRoleId} onValueChange={setFRoleId}>
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue placeholder="— Select Role —" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {roles.map((r) => (
+                      <SelectItem key={r.id} value={r.id}>
+                        {r.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <label className="block text-xs font-medium text-foreground mb-1.5">Assigned Branch</label>
-                <select
-                  value={fBranchId}
-                  onChange={(e) => setFBranchId(e.target.value)}
-                  className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <option value="">All Branches (Tenant Wide)</option>
-                  {branches.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name} ({b.code})
-                    </option>
-                  ))}
-                </select>
+                <Select value={fBranchId || "all"} onValueChange={(val) => setFBranchId(val === "all" ? "" : val)}>
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue placeholder="All Branches (Tenant Wide)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Branches (Tenant Wide)</SelectItem>
+                    {branches.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name} ({b.code})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <label className="block text-xs font-medium text-foreground mb-1.5">Password *</label>

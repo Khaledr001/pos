@@ -3,10 +3,10 @@
 import React, { useEffect, useState, useCallback } from "react";
 import {
   Search, RefreshCw, CreditCard, Banknote, Receipt, ShoppingCart,
-  Download, AlertCircle, FileText,
+  Printer, AlertCircle, FileText,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
-import { api, apiDownload, saveBlob } from "@/lib/api-client";
+import { api, apiDownload, printBlob } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -116,20 +116,20 @@ export default function SalesPage() {
     }
   }, [tokens]);
 
-  const downloadInvoice = useCallback(async (sale: Sale) => {
-    setDownloading(sale.id);
+  const [printing, setPrinting] = useState<string | null>(null);
+
+  const printInvoice = useCallback(async (sale: Sale) => {
+    setPrinting(sale.id);
     setError(null);
     try {
-      const { blob, filename } = await apiDownload(`/sales/${sale.id}/invoice`, {
+      const { blob } = await apiDownload(`/sales/${sale.id}/invoice`, {
         accessToken: tokens?.accessToken,
       });
-      // The server names the file after the invoice number; the fallback only
-      // matters if a proxy strips the header.
-      saveBlob(blob, filename ?? `${sale.saleNumber || sale.id}.pdf`);
+      printBlob(blob, `Invoice ${sale.saleNumber || sale.id}`);
     } catch (err: any) {
-      setError(err?.message || "Failed to download the invoice.");
+      setError(err?.message || "Failed to load the invoice for printing.");
     } finally {
-      setDownloading(null);
+      setPrinting(null);
     }
   }, [tokens]);
 
@@ -246,7 +246,7 @@ export default function SalesPage() {
                     <th className="px-4 py-3.5 text-right font-medium">VAT (5%)</th>
                     <th className="px-4 py-3.5 text-right font-medium">Total (AED)</th>
                     <th className="px-4 py-3.5 text-center font-medium">Status</th>
-                    <th className="px-4 py-3.5 text-right font-medium">Invoice</th>
+                    <th className="px-4 py-3.5 text-right font-medium">Print</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -314,16 +314,16 @@ export default function SalesPage() {
                             variant="outline"
                             size="sm"
                             // Stops the row's own click firing underneath, which
-                            // would open the dialog on every download.
+                            // would open the dialog on every print.
                             onClick={(e) => {
                               e.stopPropagation();
-                              void downloadInvoice(sale);
+                              void printInvoice(sale);
                             }}
-                            disabled={downloading === sale.id}
-                            aria-label={`Download invoice ${sale.saleNumber || ""} as PDF`}
+                            disabled={printing === sale.id}
+                            aria-label={`Print invoice ${sale.saleNumber || ""} `}
                           >
-                            <Download className="h-3.5 w-3.5" />
-                            {downloading === sale.id ? "…" : "PDF"}
+                            <Printer className="h-3.5 w-3.5" />
+                            {printing === sale.id ? "…" : "Print"}
                           </Button>
                         </td>
                       </tr>
@@ -473,11 +473,12 @@ export default function SalesPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setSelected(null)}>Close</Button>
             <Button
-              onClick={() => selected && void downloadInvoice(selected)}
-              disabled={!selected || downloading === selected?.id}
+              onClick={() => selected && void printInvoice(selected)}
+              disabled={!selected || printing === selected?.id}
+              className="gap-2"
             >
-              <Download className="h-4 w-4" />
-              {downloading === selected?.id ? "Preparing…" : "Download bill (PDF)"}
+              <Printer className="h-4 w-4" />
+              {printing === selected?.id ? "Opening print…" : "Print Tax Invoice"}
             </Button>
           </DialogFooter>
         </DialogContent>

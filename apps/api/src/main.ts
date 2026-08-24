@@ -27,7 +27,7 @@ async function bootstrap(): Promise<void> {
   app.setGlobalPrefix(prefix, {
     // Probes stay at the root: load balancers and the POS should not have to
     // know the API version to ask whether the service is alive.
-    // exclude: ["health", "ready"],
+    exclude: ["health", "ready"],
   });
 
   /**

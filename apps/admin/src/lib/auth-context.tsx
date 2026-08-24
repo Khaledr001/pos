@@ -2,7 +2,16 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import type { AuthTokens } from "@devsfleet/shared-types";
-import { api, clearSession, login as apiLogin } from "./api-client";
+import {
+  api,
+  clearSession,
+  login as apiLogin,
+  setSessionExpiredCallback,
+  setTokensUpdatedCallback,
+  getTokenExpiresAt,
+  PROACTIVE_REFRESH_LEAD,
+  refreshAccessToken,
+} from "./api-client";
 
 export interface UserProfile {
   id: string;
@@ -20,7 +29,7 @@ interface AuthContextType {
   user: UserProfile | null;
   tokens: AuthTokens | null;
   isLoading: boolean;
-  login: (email: string, pass: string) => Promise<void>;
+  login: (email: string, pass: string, tenantSlug?: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -50,6 +59,68 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  /**
+   * Wire up the session callbacks once on mount.
+   *
+   * 1. sessionExpired: Clears React state when token refresh fails before navigation.
+   * 2. tokensUpdated: Keeps React state in sync when background/reactive refresh succeeds.
+   */
+  useEffect(() => {
+    setSessionExpiredCallback(() => {
+      setUser(null);
+      setTokens(null);
+    });
+    setTokensUpdatedCallback((newTokens) => {
+      setTokens(newTokens);
+    });
+  }, []);
+
+  /**
+   * Proactive token refresh timer.
+   *
+   * Rather than waiting for a request to fail with a 401, we proactively refresh
+   * the access token ~2 minutes before it expires. This ensures active users never
+   * experience auth hiccups, lag, or dropped queries.
+   */
+  useEffect(() => {
+    if (!tokens?.refreshToken || !user) return;
+
+    const checkAndRefreshToken = async () => {
+      const expiresAt = getTokenExpiresAt();
+      if (!expiresAt) return;
+
+      const remainingMs = expiresAt - Date.now();
+      if (remainingMs <= PROACTIVE_REFRESH_LEAD) {
+        const fresh = await refreshAccessToken();
+        if (!fresh && remainingMs <= 0) {
+          // Access token is expired and refresh token is invalid/revoked
+          logout();
+        }
+      }
+    };
+
+    // Run check on mount / token change
+    checkAndRefreshToken();
+
+    // Check periodically every 30 seconds
+    const interval = setInterval(checkAndRefreshToken, 30_000);
+
+    // Also check when tab becomes active after backgrounding
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        checkAndRefreshToken();
+      }
+    };
+    window.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("focus", onVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("focus", onVisibilityChange);
+    };
+  }, [tokens?.refreshToken, user]);
+
   const login = async (email: string, pass: string, tenantSlug?: string) => {
     setIsLoading(true);
     try {
@@ -60,7 +131,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         expiresIn: res.expiresIn,
       };
       setTokens(tokenPair);
-      localStorage.setItem(TOKEN_KEY, JSON.stringify(tokenPair));
+
+      const withExpiry = {
+        ...tokenPair,
+        expiresAt: Date.now() + (res.expiresIn ?? 900) * 1000,
+      };
+      localStorage.setItem(TOKEN_KEY, JSON.stringify(withExpiry));
 
       if (res.user) {
         const profile: UserProfile = {

@@ -8,6 +8,13 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface AuditEntry {
   id: string;
@@ -91,17 +98,26 @@ export default function AuditLogPage() {
             Who did what, to which record, and when. Append-only — nothing here can be edited.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <select
-            value={entityFilter}
-            onChange={(e) => { setEntityFilter(e.target.value); setPage(1); }}
-            className="flex h-9 rounded-lg border border-input bg-transparent px-3 py-1 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <Select
+            value={entityFilter || "all"}
+            onValueChange={(val) => {
+              setEntityFilter(val === "all" ? "" : val);
+              setPage(1);
+            }}
           >
-            <option value="">All entity types</option>
-            {entityTypes.map((t) => (
-              <option key={t} value={t}>{t}</option>
-            ))}
-          </select>
+            <SelectTrigger className="w-[180px] h-9 text-xs">
+              <SelectValue placeholder="All entity types" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All entity types</SelectItem>
+              {entityTypes.map((t) => (
+                <SelectItem key={t} value={t}>
+                  {t}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button variant="outline" size="sm" onClick={fetchEntries} disabled={loading}>
             <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
             Refresh

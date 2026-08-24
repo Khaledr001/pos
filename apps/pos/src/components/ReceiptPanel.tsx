@@ -1,6 +1,7 @@
 import { Money } from "@devsfleet/shared-utils";
 import { AlertTriangle, CreditCard, Minus, Plus, Trash2, UserPlus, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
+import { Select } from "./Select.js";
 import { amount, money, TAX } from "../lib/money.js";
 import { posData, type PosVariantUnit } from "../lib/pos-data.js";
 import {
@@ -12,15 +13,13 @@ import {
 } from "../store/cart.js";
 
 /**
- * The cart, set as the receipt it will print.
+ * The cart receipt panel.
  *
- * Deliberately typeset like the paper output: numbered lines, monospaced
- * columns, a dashed tear line above the totals. The cashier is then checking
- * one object rather than reconciling two representations of it, which is the
- * cheapest error reduction available on this screen.
- *
- * Line numbers are real information here, not decoration — a customer says
- * "take off number 3", and the same numbers appear on the printed receipt.
+ * Typeset like the paper receipt:
+ * - Numbered lines with quick quantity adjustments
+ * - Monospaced currency columns
+ * - Subtotal, discount & VAT calculations
+ * - Instant "Take Payment" trigger
  */
 export function ReceiptPanel({
   onPickCustomer,
@@ -41,21 +40,21 @@ export function ReceiptPanel({
   const violationKeys = new Set(violations.map((line) => line.key));
 
   return (
-    <aside className="flex w-[26rem] shrink-0 flex-col border-l border-pos-border bg-pos-panel">
-      {/* Customer. Walk-in is the default; naming one is the exception. */}
-      <div className="border-b border-pos-border p-3">
+    <aside className="flex w-[22rem] sm:w-[24rem] xl:w-[25rem] shrink-0 flex-col border-l border-[var(--pos-border)] bg-[var(--pos-panel)]">
+      {/* Customer Header */}
+      <div className="border-b border-[var(--pos-border)] p-2.5">
         {customer ? (
-          <div className="flex items-center gap-3 rounded-lg bg-pos-raised px-3 py-2.5">
+          <div className="flex items-center gap-2.5 rounded-xl bg-[var(--pos-raised)] px-3 py-2 border border-[var(--pos-border)]">
             <div className="min-w-0 flex-1">
-              <div className="truncate text-[13px] font-medium">{customer.name}</div>
+              <div className="truncate text-xs font-bold text-[var(--pos-text)]">{customer.name}</div>
               {customer.company && (
-                <div className="truncate text-[11px] text-pos-text-3">{customer.company}</div>
+                <div className="truncate text-[10px] text-[var(--pos-text-3)]">{customer.company}</div>
               )}
             </div>
             {Number(customer.creditLimit) > 0 && (
               <div className="text-right">
-                <div className="eyebrow">Credit left</div>
-                <div className="num text-[12px] text-pos-text-2">
+                <div className="eyebrow text-[9px]">Credit left</div>
+                <div className="num text-[11px] font-semibold text-[var(--pos-text-2)]">
                   {amount(
                     Money.subtract(
                       Money.toMinor(customer.creditLimit),
@@ -69,7 +68,7 @@ export function ReceiptPanel({
               type="button"
               onClick={() => setCustomer(null)}
               aria-label="Remove customer"
-              className="rounded p-1 text-pos-text-3 transition-colors hover:bg-pos-hover hover:text-pos-text"
+              className="rounded-lg p-1 text-[var(--pos-text-3)] transition-colors hover:bg-[var(--pos-hover)] hover:text-[var(--pos-text)]"
             >
               <X className="size-3.5" />
             </button>
@@ -78,22 +77,24 @@ export function ReceiptPanel({
           <button
             type="button"
             onClick={onPickCustomer}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-pos-border px-3 py-2.5 text-[13px] text-pos-text-3 transition-colors hover:border-pos-text-3 hover:text-pos-text"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--pos-border)] px-3 py-2 text-xs font-medium text-[var(--pos-text-3)] transition-colors hover:border-[var(--pos-accent)] hover:text-[var(--pos-text)] hover:bg-[var(--pos-raised)]/40"
           >
-            <UserPlus className="size-4" aria-hidden />
+            <UserPlus className="size-3.5 text-[var(--pos-accent)]" />
             Walk-in customer
-            <kbd className="num ml-1 rounded bg-pos-raised px-1.5 py-0.5 text-[10px]">F2</kbd>
+            <kbd className="num ml-1 rounded-md bg-[var(--pos-raised)] border border-[var(--pos-border)] px-1.5 py-0.2 text-[9px] font-semibold">
+              F2
+            </kbd>
           </button>
         )}
       </div>
 
-      {/* Lines */}
-      <ol className="min-h-0 flex-1 overflow-y-auto">
+      {/* Cart Line Items */}
+      <ol className="min-h-0 flex-1 overflow-y-auto divide-y divide-[var(--pos-border)]/60 scrollbar-thin">
         {lines.length === 0 && (
-          <li className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
-            <p className="text-[13px] text-zinc-500">No items yet</p>
-            <p className="text-[12px] text-zinc-600">
-              Scan a barcode, or search on the left.
+          <li className="flex h-full flex-col items-center justify-center gap-1.5 px-6 text-center text-[var(--pos-text-3)]">
+            <p className="text-xs font-semibold text-[var(--pos-text)]">Cart is empty</p>
+            <p className="text-[11px] text-[var(--pos-text-3)]">
+              Scan a barcode (F1), or search items on the left.
             </p>
           </li>
         )}
@@ -117,9 +118,9 @@ export function ReceiptPanel({
         })}
       </ol>
 
-      {/* Totals. The tear line is where the paper would be torn off. */}
-      <div className="tear shrink-0 p-4">
-        <dl className="space-y-1.5 text-[13px]">
+      {/* Totals Summary */}
+      <div className="tear shrink-0 p-3.5 border-t border-[var(--pos-border)] bg-[var(--pos-raised)]/30">
+        <dl className="space-y-1 text-xs">
           <Row label="Subtotal" value={amount(totals.subtotal)} />
           {Money.isPositive(totals.discountAmount) && (
             <Row
@@ -138,70 +139,60 @@ export function ReceiptPanel({
           />
         </dl>
 
-        <div className="mt-3 flex items-baseline justify-between border-t border-pos-border pt-3">
-          <span className="eyebrow">Total</span>
+        <div className="mt-2.5 flex items-baseline justify-between border-t border-[var(--pos-border)]/60 pt-2">
+          <span className="eyebrow text-xs">Total Amount</span>
           <span
             key={totals.total.toString()}
-            className="num animate-total text-[2.75rem] font-bold leading-none tracking-tight text-brass"
+            className="num animate-total text-2xl md:text-3xl font-bold leading-none tracking-tight text-[var(--pos-accent)]"
           >
             {money(totals.total)}
           </span>
         </div>
 
-        {/*
-          Take payment, at the bottom of the cart — where the transaction ends
-          and where every cashier who has used a till before will look for it.
-          F4 does the same thing, but a function key is not a button: on a
-          touchscreen with no keyboard it does not exist, and it is the one
-          action on this screen that must never be hunted for.
-        */}
+        {/* Charge Button */}
         <button
           type="button"
           onClick={onCharge}
           disabled={chargeBlockedReason !== null}
           className={[
-            "mt-4 flex w-full items-center justify-between gap-3 rounded-xl px-4 py-4 transition-colors",
+            "mt-3 flex w-full items-center justify-between gap-3 rounded-xl px-3.5 py-3 transition-all cursor-pointer font-bold",
             chargeBlockedReason
-              ? "cursor-not-allowed border border-pos-border bg-pos-raised text-pos-text-3"
-              : "bg-brass text-[#1a1205] hover:bg-brass-400",
+              ? "cursor-not-allowed border border-[var(--pos-border)] bg-[var(--pos-raised)] text-[var(--pos-text-3)]"
+              : "bg-[var(--pos-accent)] text-black hover:bg-[var(--pos-accent-alt)] shadow-xs",
           ].join(" ")}
         >
           <span className="flex items-center gap-2">
-            <CreditCard className="size-5" aria-hidden />
-            <span className="text-[16px] font-semibold">Take payment</span>
+            <CreditCard className="size-4.5" />
+            <span className="text-sm">Take payment</span>
             <kbd
               className={[
-                "num rounded px-1.5 py-0.5 text-[10px] font-semibold",
-                chargeBlockedReason ? "bg-pos-border text-pos-text-3" : "bg-black/15",
+                "num rounded px-1.5 py-0.5 text-[9px] font-bold",
+                chargeBlockedReason ? "bg-[var(--pos-border)] text-[var(--pos-text-3)]" : "bg-black/15",
               ].join(" ")}
             >
               F4
             </kbd>
           </span>
-          <span className="num text-[18px] font-bold">{money(totals.total)}</span>
+          <span className="num text-base font-bold">{money(totals.total)}</span>
         </button>
 
         {chargeBlockedReason && (
-          <p className="mt-2 text-center text-[11px] text-pos-text-3">{chargeBlockedReason}</p>
+          <p className="mt-1.5 text-center text-[10px] text-[var(--pos-text-3)] font-medium">
+            {chargeBlockedReason}
+          </p>
         )}
       </div>
     </aside>
   );
 }
 
-/**
- * Packagings offered for one variant, fetched once per product shown and
- * cached for the life of this component — a dropdown's option list, not
- * anything the committed sale depends on, so there is no staleness risk in
- * holding it locally rather than on the cart line itself.
- */
 function useVariantUnits(variantId: string): PosVariantUnit[] {
   const [units, setUnits] = useState<PosVariantUnit[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     void posData.unitsForVariant(variantId).then((found) => {
-      if (!cancelled) setUnits(found);
+      if (!cancelled) setUnits(found ?? []);
     });
     return () => {
       cancelled = true;
@@ -232,20 +223,17 @@ function LineRow({
   const setQuantity = useCart((s) => s.setQuantity);
   const availableUnits = useVariantUnits(line.product.id);
 
-  // Local text while the cashier is mid-edit — a plain-string quantity like
-  // "1.5" or "2 boxes" of screws needs to pass through an intermediate "1."
-  // or "" without either committing as a value or deleting the line, which
-  // is exactly what binding straight to `line.quantity` would do.
   const [quantityText, setQuantityText] = useState(line.quantity);
   useEffect(() => setQuantityText(line.quantity), [line.quantity]);
+
+  const stock = Number(line.product.stock);
+  const maxReached = Number.isFinite(stock) && stock > 0 && Number(line.quantity) >= stock;
 
   function commitQuantity() {
     const parsed = Number(quantityText);
     if (Number.isFinite(parsed) && parsed > 0) {
       setQuantity(line.key, quantityText);
     } else {
-      // Invalid or cleared mid-edit — revert rather than delete. Removing
-      // the line is what the minus stepper is for, deliberately.
       setQuantityText(line.quantity);
     }
   }
@@ -253,12 +241,12 @@ function LineRow({
   return (
     <li
       className={[
-        "animate-line-in border-b border-pos-border px-3 py-2.5",
-        flagged ? "bg-signal-red/8" : "",
+        "animate-line-in px-3 py-2 transition-colors",
+        flagged ? "bg-signal-red/10" : "hover:bg-[var(--pos-raised)]/40",
       ].join(" ")}
     >
-      <div className="flex items-start gap-2.5">
-        <span className="num mt-0.5 w-5 shrink-0 text-right text-[11px] text-pos-text-3">
+      <div className="flex items-start gap-2">
+        <span className="num mt-0.5 w-4 shrink-0 text-right text-[10px] text-[var(--pos-text-3)] font-bold">
           {index + 1}
         </span>
 
@@ -266,21 +254,22 @@ function LineRow({
           <button
             type="button"
             onClick={() => onEditLine(line)}
-            className="block w-full truncate text-left text-[13px] font-medium hover:text-brass"
+            className="block w-full truncate text-left text-xs font-bold text-[var(--pos-text)] hover:text-[var(--pos-accent)] transition-colors"
             title="Edit price or discount"
           >
             {line.product.name}
           </button>
 
-          <div className="mt-1.5 flex flex-wrap items-center gap-2">
-            <div className="flex items-center rounded-md border border-pos-border bg-pos-raised">
+          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+            {/* Stepper */}
+            <div className="flex items-center rounded-md border border-[var(--pos-border)] bg-[var(--pos-raised)] overflow-hidden">
               <button
                 type="button"
                 onClick={() => adjustQuantity(line.key, -1)}
                 aria-label={`Reduce quantity of ${line.product.name}`}
-                className="px-2 py-1 text-pos-text-3 transition-colors hover:text-pos-text"
+                className="px-1.5 py-0.5 text-[var(--pos-text-3)] hover:text-[var(--pos-text)] transition-colors"
               >
-                <Minus className="size-3" />
+                <Minus className="size-2.5" />
               </button>
               <input
                 value={quantityText}
@@ -291,72 +280,76 @@ function LineRow({
                 }}
                 inputMode="decimal"
                 aria-label={`Quantity of ${line.product.name}`}
-                className="num w-12 border-0 bg-transparent text-center text-[13px] font-semibold focus:outline-none"
+                className="num w-9 border-0 bg-transparent text-center text-xs font-bold focus:outline-none"
               />
               <button
                 type="button"
+                disabled={maxReached}
                 onClick={() => adjustQuantity(line.key, 1)}
                 aria-label={`Increase quantity of ${line.product.name}`}
-                className="px-2 py-1 text-pos-text-3 transition-colors hover:text-pos-text"
+                className={`px-1.5 py-0.5 transition-colors ${
+                  maxReached
+                    ? "text-[var(--pos-text-3)]/30 cursor-not-allowed"
+                    : "text-[var(--pos-text-3)] hover:text-[var(--pos-text)]"
+                }`}
+                title={maxReached ? `Max available stock (${stock}) reached` : "Add one"}
               >
-                <Plus className="size-3" />
+                <Plus className="size-2.5" />
               </button>
             </div>
 
             {availableUnits.length > 0 ? (
-              <select
+              <Select
+                size="sm"
                 value={line.unit?.id ?? ""}
-                onChange={(e) => {
-                  const chosen = availableUnits.find((u) => u.id === e.target.value) ?? null;
+                onChange={(unitId) => {
+                  const chosen = availableUnits.find((u) => u.id === unitId) ?? null;
                   setLineUnit(line.key, chosen);
                 }}
-                aria-label={`Unit for ${line.product.name}`}
-                className="rounded-md border border-pos-border bg-pos-raised px-1.5 py-1 text-[11px] text-pos-text-2 focus:outline-none"
-              >
-                <option value="">{line.product.unitAbbr}</option>
-                {availableUnits.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.unitAbbr}
-                  </option>
-                ))}
-              </select>
+                aria-label={`Packaging for ${line.product.name}`}
+                options={[
+                  { value: "", label: line.product.unitAbbr },
+                  ...availableUnits.map((u) => ({ value: u.id, label: u.unitAbbr })),
+                ]}
+                className="w-18"
+              />
             ) : (
-              <span className="text-[11px] text-pos-text-3">{line.product.unitAbbr} ×</span>
+              <span className="text-[10px] text-[var(--pos-text-3)]">{line.product.unitAbbr} ×</span>
             )}
 
-            <span className="num text-[12px] text-pos-text-2">
+            <span className="num text-[11px] text-[var(--pos-text-2)] font-mono">
               {amount(Money.toMinor(line.unitPrice))}
             </span>
 
             {line.discountPercent !== "0" && (
-              <span className="num rounded bg-brass/15 px-1.5 py-0.5 text-[10px] font-semibold text-brass">
+              <span className="num rounded bg-signal-green/10 text-signal-green px-1 py-0.2 text-[9px] font-bold">
                 −{line.discountPercent}%
               </span>
             )}
             {line.floorOverridden && (
-              <span className="rounded bg-signal-amber/15 px-1.5 py-0.5 text-[10px] font-semibold text-signal-amber">
+              <span className="rounded bg-signal-amber/10 text-signal-amber px-1 py-0.2 text-[9px] font-bold">
                 override
               </span>
             )}
           </div>
 
           {flagged && (
-            <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-signal-red">
-              <AlertTriangle className="size-3 shrink-0" aria-hidden />
-              Below the {amount(scaledFloor(line) ?? 0n)} floor price — needs a manager
+            <p className="mt-1 flex items-center gap-1 text-[10px] text-signal-red font-medium">
+              <AlertTriangle className="size-2.5 shrink-0" />
+              Below {amount(scaledFloor(line) ?? 0n)} floor — needs manager
             </p>
           )}
         </div>
 
-        <div className="flex flex-col items-end gap-1.5">
-          <span className="num text-[14px] font-semibold">{lineTotal}</span>
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <span className="num font-mono text-xs font-bold text-[var(--pos-text)]">{lineTotal}</span>
           <button
             type="button"
             onClick={() => removeLine(line.key)}
             aria-label={`Remove ${line.product.name}`}
-            className="rounded p-1 text-pos-text-3 transition-colors hover:bg-signal-red/15 hover:text-signal-red"
+            className="rounded p-1 text-[var(--pos-text-3)] hover:text-signal-red hover:bg-signal-red/10 transition-colors"
           >
-            <Trash2 className="size-3.5" />
+            <Trash2 className="size-3" />
           </button>
         </div>
       </div>
@@ -375,8 +368,10 @@ function Row({
 }) {
   return (
     <div className="flex justify-between">
-      <dt className="text-pos-text-2">{label}</dt>
-      <dd className={`num ${tone === "brass" ? "text-brass" : "text-pos-text"}`}>{value}</dd>
+      <dt className="text-[var(--pos-text-3)]">{label}</dt>
+      <dd className={`num font-mono font-semibold ${tone === "brass" ? "text-[var(--pos-accent)]" : "text-[var(--pos-text)]"}`}>
+        {value}
+      </dd>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import type { Permission } from "@devsfleet/shared-types";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { RequireAuth } from "@/lib/require-auth";
 import { Sidebar } from "./sidebar";
@@ -16,9 +16,6 @@ import { cn } from "@/lib/utils";
  * without an entry is still guarded — it just requires nothing beyond being
  * signed in, which is the safe default here because the API refuses the data
  * regardless. The map matches by prefix, so nested routes inherit.
- *
- * The API is the boundary. This is what stops the panel offering somebody a
- * screen it will then refuse to fill.
  */
 const ROUTE_PERMISSIONS: Array<[string, Permission]> = [
   ["/users", "user:read"],
@@ -49,6 +46,12 @@ function permissionFor(pathname: string): Permission | undefined {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Close mobile sidebar automatically on navigation
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
 
   // If we are on /login, render without shell
   if (pathname === "/login") {
@@ -58,16 +61,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const permission = permissionFor(pathname);
 
   return (
-    <div className="flex min-h-screen bg-background">
-      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} />
+    <div className="flex min-h-screen w-full bg-background overflow-x-hidden">
+      {/* Responsive Sidebar */}
+      <Sidebar
+        collapsed={collapsed}
+        onToggle={() => setCollapsed(!collapsed)}
+        mobileOpen={mobileOpen}
+        onMobileClose={() => setMobileOpen(false)}
+      />
+
+      {/* Main Content Area */}
       <div
         className={cn(
-          "flex flex-1 flex-col transition-all duration-300 ease-in-out",
-          collapsed ? "pl-[72px]" : "pl-[264px]",
+          "flex flex-1 flex-col min-w-0 w-full transition-all duration-300 ease-in-out",
+          collapsed ? "lg:pl-[72px]" : "lg:pl-[264px]",
+          "pl-0",
         )}
       >
-        <Header />
-        <main className="flex-1 p-6 md:p-8">
+        <Header onOpenMobileMenu={() => setMobileOpen(true)} />
+        <main className="flex-1 p-3 sm:p-4 md:p-6 min-w-0 max-w-full overflow-x-auto">
           <RequireAuth {...(permission ? { permission } : {})}>{children}</RequireAuth>
         </main>
       </div>

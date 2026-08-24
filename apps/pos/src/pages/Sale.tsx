@@ -328,23 +328,23 @@ export function Sale({ cashSessionId }: { cashSessionId: string | null }) {
         open={labelling}
         onClose={() => setLabelling(false)}
         title="Hold this cart"
-        description="Give it a name so you can find it again."
+        description="Give it a reference name so you can restore it later."
         width="sm"
         footer={
           <div className="flex gap-2">
             <button
               type="button"
               onClick={() => setLabelling(false)}
-              className="flex-1 rounded-lg border border-steel-600 px-4 py-2.5 text-[14px] text-steel-300 hover:bg-steel-800"
+              className="btn btn-ghost flex-1 text-xs"
             >
               Cancel
             </button>
             <button
               type="button"
               onClick={() => void park()}
-              className="flex-1 rounded-lg bg-brass-500 px-4 py-2.5 text-[14px] font-medium text-steel-950 hover:bg-brass-400"
+              className="btn btn-primary flex-1 text-xs font-bold"
             >
-              Hold
+              Hold Cart
             </button>
           </div>
         }
@@ -357,8 +357,8 @@ export function Sale({ cashSessionId }: { cashSessionId: string | null }) {
             if (event.key === "Enter") void park();
           }}
           maxLength={80}
-          placeholder="e.g. blue van guy"
-          className="w-full rounded-lg border border-steel-600 bg-steel-900 px-3 py-2.5 text-[15px] text-steel-100 placeholder:text-steel-500 focus:border-brass-500 focus:outline-none"
+          placeholder="e.g. Counter pickup, Blue van"
+          className="field text-xs bg-[var(--pos-raised)] border-[var(--pos-border)] text-[var(--pos-text)]"
         />
       </Dialog>
 
@@ -804,10 +804,10 @@ function LineEditor({
         </div>
       </div>
 
-      <div className="mt-4 flex items-baseline justify-between rounded-lg bg-steel-800 px-3.5 py-3">
+      <div className="mt-4 flex items-baseline justify-between rounded-xl border border-[var(--pos-border)] bg-[var(--pos-raised)] px-3.5 py-3">
         <span className="eyebrow">Effective unit price</span>
         <span
-          className={`num text-lg font-semibold ${belowFloor ? "text-signal-red" : "text-chalk"}`}
+          className={`num font-mono text-lg font-bold ${belowFloor ? "text-signal-red" : "text-[var(--pos-text)]"}`}
         >
           {amount(effective)}
         </span>
@@ -977,17 +977,17 @@ function SaleCompleteDialog({
         {result && Money.isPositive(result.change) ? (
           <div>
             <div className="eyebrow">Change due</div>
-            <div className="num mt-1 text-4xl font-bold text-brass">
+            <div className="num font-mono mt-1 text-4xl font-bold text-[var(--pos-accent)]">
               {money(result.change)}
             </div>
           </div>
         ) : (
-          <p className="text-[14px] text-zinc-400">Paid in full. No change due.</p>
+          <p className="text-xs font-medium text-[var(--pos-text-2)]">Paid in full. No change due.</p>
         )}
 
         <PrintStatus outcome={outcome} />
 
-        <p className="text-[12px] text-zinc-500">
+        <p className="text-[11px] text-[var(--pos-text-3)]">
           Queued for sync. The invoice number is assigned when it reaches the
           server.
         </p>
@@ -1004,9 +1004,9 @@ type PrintOutcome =
   | { status: "no-printer"; devicePath: string };
 
 function formatLabel(format: string): string {
-  if (format === "a4") return "A4 invoice";
-  if (format === "thermal_58") return "58mm receipt";
-  if (format === "thermal_80") return "80mm receipt";
+  if (format === "a4") return "A4 Tax Invoice";
+  if (format === "thermal_58") return "58mm Receipt";
+  if (format === "thermal_80") return "80mm Receipt";
   return format;
 }
 
@@ -1014,28 +1014,27 @@ function PrintStatus({ outcome }: { outcome: PrintOutcome }) {
   switch (outcome.status) {
     case "printing":
       return (
-        <p className="flex items-center gap-2 text-[12px] text-zinc-400">
+        <p className="flex items-center gap-2 text-xs text-[var(--pos-text-3)]">
           <Loader2 className="size-3.5 animate-spin" aria-hidden />
-          Printing the {formatLabel(outcome.format)}...
+          Printing {formatLabel(outcome.format)}…
         </p>
       );
     case "printed":
       return (
-        <p className="text-[12px] text-signal-green">
-          {formatLabel(outcome.format)} printed{outcome.reprint ? " (marked DUPLICATE)" : ""}.
+        <p className="text-xs font-semibold text-signal-green">
+          {formatLabel(outcome.format)} printed{outcome.reprint ? " (DUPLICATE)" : ""}.
         </p>
       );
     case "failed":
       return (
-        <p className="rounded-lg border border-signal-red/40 bg-signal-red/10 px-3 py-2 text-[12px] text-signal-red">
+        <p className="rounded-xl border border-signal-red/30 bg-signal-red/10 p-2.5 text-xs text-signal-red font-medium">
           {outcome.message}
         </p>
       );
     case "no-printer":
       return (
-        <p className="rounded-lg border border-signal-amber/40 bg-signal-amber/10 px-3 py-2 text-[12px] text-signal-amber">
-          No printer at <span className="num">{outcome.devicePath}</span>. Set it up on
-          the Settings screen, or print the A4 invoice instead.
+        <p className="rounded-xl border border-signal-amber/30 bg-signal-amber/10 p-2.5 text-xs text-signal-amber font-medium">
+          No thermal printer found at <span className="font-mono">{outcome.devicePath}</span>. Check Settings or print A4 invoice.
         </p>
       );
     default:

@@ -12,6 +12,8 @@ const DEFAULT_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:30
 const TOKEN_KEY = "devsfleet_auth_tokens";
 const USER_KEY = "devsfleet_auth_user";
 const BASE_URL_OVERRIDE_KEY = "devsfleet_api_base_url";
+/** Milliseconds before the access token expires at which we proactively refresh. */
+const PROACTIVE_REFRESH_LEAD_MS = 2 * 60 * 1000; // 2 minutes
 
 /**
  * Which API this admin build talks to — usually fixed at build time via
@@ -53,6 +55,29 @@ export function setApiBaseUrlOverride(url: string): void {
  */
 let refreshing: Promise<string | null> | null = null;
 
+/**
+ * Called once by AuthProvider so that when tokens are refreshed in the background,
+ * React AuthContext state is updated in sync with localStorage.
+ */
+let onTokensUpdated: ((tokens: AuthTokens) => void) | null = null;
+
+export function setTokensUpdatedCallback(fn: (tokens: AuthTokens) => void): void {
+  onTokensUpdated = fn;
+}
+
+/**
+ * Called once by AuthProvider so that when a refresh fails the React tree
+ * is cleaned up BEFORE the browser navigates. Without this, the redirect
+ * fires while `user` and `tokens` are still populated in context, producing
+ * a "ghost" logged-in UI during navigation — which looks exactly like
+ * "authentication failed without logout".
+ */
+let onSessionExpired: (() => void) | null = null;
+
+export function setSessionExpiredCallback(fn: () => void): void {
+  onSessionExpired = fn;
+}
+
 function readTokens(): AuthTokens | null {
   if (typeof window === "undefined") return null;
   try {
@@ -63,30 +88,67 @@ function readTokens(): AuthTokens | null {
   }
 }
 
-/** Wipes the session and sends the browser to the login screen. */
+/**
+ * The absolute UTC timestamp (ms) at which the current access token expires.
+ *
+ * When tokens are stored we record `expiresAt = Date.now() + expiresIn * 1000`
+ * alongside the token pair. Auth-context reads this to schedule a proactive
+ * refresh before the token actually expires, so components never see a 401.
+ */
+export function getTokenExpiresAt(): number | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(TOKEN_KEY);
+    if (!raw) return null;
+    const stored = JSON.parse(raw) as AuthTokens & { expiresAt?: number };
+    return stored.expiresAt ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** How long (ms) before `expiresAt` to fire the proactive refresh. */
+export const PROACTIVE_REFRESH_LEAD = PROACTIVE_REFRESH_LEAD_MS;
+
+/** Wipes the session and clears all stored authentication data. */
 export function clearSession(): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
 }
 
-async function refreshAccessToken(): Promise<string | null> {
+/**
+ * Exchanges the current refresh token for a new access & refresh token pair.
+ * Updates localStorage, informs AuthContext via callback, and returns the new accessToken.
+ */
+export async function refreshAccessToken(): Promise<string | null> {
   const current = readTokens();
   if (!current?.refreshToken) return null;
 
-  const response = await fetch(`${getBaseUrl()}/auth/refresh`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ refreshToken: current.refreshToken }),
-  });
+  try {
+    const response = await fetch(`${getBaseUrl()}/auth/refresh`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ refreshToken: current.refreshToken }),
+    });
 
-  if (!response.ok) return null;
+    if (!response.ok) return null;
 
-  const payload = (await response.json()) as ApiResponse<AuthTokens>;
-  if (!payload.success) return null;
+    const payload = (await response.json()) as ApiResponse<AuthTokens>;
+    if (!payload.success || !payload.data) return null;
 
-  localStorage.setItem(TOKEN_KEY, JSON.stringify(payload.data));
-  return payload.data.accessToken;
+    // Persist the new pair with an absolute expiry timestamp so the proactive
+    // refresh timer in auth-context can know exactly when to fire next time.
+    const withExpiry = {
+      ...payload.data,
+      expiresAt: Date.now() + (payload.data.expiresIn ?? 900) * 1000,
+    };
+    localStorage.setItem(TOKEN_KEY, JSON.stringify(withExpiry));
+    onTokensUpdated?.(payload.data);
+    return payload.data.accessToken;
+  } catch {
+    return null;
+  }
 }
 
 export interface RequestOptions extends Omit<RequestInit, "body"> {
@@ -128,16 +190,14 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   /**
    * One silent refresh, then one retry.
    *
-   * An access token lives fifteen minutes. Without this the admin panel simply
-   * broke a quarter of an hour into every session — requests failing with
-   * "unauthorised" while a perfectly good refresh token sat in storage — and
-   * the only cure the user could find was to log in again.
+   * An access token lives fifteen minutes. Without this the admin panel breaks
+   * every quarter of an hour — requests failing with "unauthorised" while a
+   * valid refresh token sits in storage.
    *
-   * Skipped when the caller supplied its own token: that is a server component
-   * passing a token it owns, and rewriting browser storage on its behalf would
-   * be wrong.
+   * We intercept 401 in all client-side browser fetches (excluding auth endpoints).
    */
-  if (response.status === 401 && !explicitToken && typeof window !== "undefined") {
+  const isAuthRoute = path.includes("/auth/login") || path.includes("/auth/refresh");
+  if (response.status === 401 && !isAuthRoute && typeof window !== "undefined") {
     refreshing ??= refreshAccessToken().finally(() => {
       refreshing = null;
     });
@@ -146,9 +206,18 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
     if (fresh) {
       token = fresh;
       response = await send(fresh);
+
+      // If the retried request with a brand-new token is STILL rejected, the
+      // session is unrecoverable (e.g. token claims invalid, account deactivated).
+      if (response.status === 401) {
+        onSessionExpired?.();
+        clearSession();
+        window.location.href = `/login?next=${encodeURIComponent(window.location.pathname)}`;
+        throw new AppError(ERROR_CODES.TOKEN_EXPIRED, "Your session has expired. Sign in again.");
+      }
     } else {
-      // The refresh token is dead too. Anything else would leave the app
-      // rendering a shell it can no longer fill.
+      // The refresh token is dead or revoked. Clear React state and redirect.
+      onSessionExpired?.();
       clearSession();
       window.location.href = `/login?next=${encodeURIComponent(window.location.pathname)}`;
       throw new AppError(ERROR_CODES.TOKEN_EXPIRED, "Your session has expired. Sign in again.");
@@ -183,11 +252,7 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
  *
  * `apiFetch` cannot serve this: it parses every response as JSON and unwraps
  * `.data`, which turns a PDF into a parse error. This shares the same token
- * and the same single-refresh rule — a download half an hour into a session
- * must not be the one request that fails on an expired token.
- *
- * Returns the blob and the filename the server named, so a caller does not
- * have to reinvent one from the URL.
+ * and the same single-refresh rule.
  */
 export async function apiDownload(
   path: string,
@@ -201,7 +266,7 @@ export async function apiDownload(
 
   let response = await send(token);
 
-  if (response.status === 401 && !options.accessToken && typeof window !== "undefined") {
+  if (response.status === 401 && typeof window !== "undefined") {
     refreshing ??= refreshAccessToken().finally(() => {
       refreshing = null;
     });
@@ -209,7 +274,14 @@ export async function apiDownload(
     if (fresh) {
       token = fresh;
       response = await send(fresh);
+      if (response.status === 401) {
+        onSessionExpired?.();
+        clearSession();
+        window.location.href = `/login?next=${encodeURIComponent(window.location.pathname)}`;
+        throw new AppError(ERROR_CODES.TOKEN_EXPIRED, "Your session has expired. Sign in again.");
+      }
     } else {
+      onSessionExpired?.();
       clearSession();
       window.location.href = `/login?next=${encodeURIComponent(window.location.pathname)}`;
       throw new AppError(ERROR_CODES.TOKEN_EXPIRED, "Your session has expired. Sign in again.");
@@ -217,11 +289,6 @@ export async function apiDownload(
   }
 
   if (!response.ok) {
-    /**
-     * A failure here still arrives as the JSON error envelope, because the
-     * exception filter owns every error path — so the real message is
-     * readable, and worth surfacing rather than showing a bare status.
-     */
     let message = `Download failed (${response.status})`;
     let code: string = ERROR_CODES.INTERNAL_ERROR;
     try {
@@ -257,6 +324,52 @@ export function saveBlob(blob: Blob, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(href), 0);
 }
 
+/**
+ * Opens a PDF Blob directly in the browser's native print preview dialog
+ * without forcing the user to save/download the file first.
+ */
+export function printBlob(blob: Blob, title = "Print Document"): void {
+  if (typeof window === "undefined") return;
+
+  const pdfBlob =
+    blob.type === "application/pdf" ? blob : new Blob([blob], { type: "application/pdf" });
+  const blobUrl = URL.createObjectURL(pdfBlob);
+
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "fixed";
+  iframe.style.right = "0";
+  iframe.style.bottom = "0";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "0";
+  iframe.setAttribute("title", title);
+  iframe.src = blobUrl;
+
+  const cleanup = () => {
+    setTimeout(() => {
+      iframe.remove();
+      URL.revokeObjectURL(blobUrl);
+    }, 60000);
+  };
+
+  iframe.onload = () => {
+    try {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      cleanup();
+    } catch {
+      // If direct iframe printing is blocked by browser policy, open in a print window
+      const printWin = window.open(blobUrl, "_blank");
+      if (printWin) {
+        printWin.focus();
+      }
+      cleanup();
+    }
+  };
+
+  document.body.appendChild(iframe);
+}
+
 export const api = {
   get: <T>(path: string, options?: RequestOptions) =>
     apiFetch<T>(path, { ...options, method: "GET" }),
@@ -273,3 +386,24 @@ export const api = {
 
 export const login = (email: string, password: string, tenantSlug?: string) =>
   api.post<AuthSession>("/auth/login", { email, password, tenantSlug });
+
+/**
+ * Bare connectivity ping — does NOT use apiFetch.
+ *
+ * /health is @Public() and needs no auth. Using api.get() here would attach
+ * an Authorization header, run the JSON-envelope unwrap, and — crucially —
+ * trigger the 401-refresh logic on any network hiccup, burning a refresh
+ * attempt on a route that never checks credentials. A plain fetch avoids all
+ * of that and keeps health checks free of auth side-effects.
+ *
+ * Returns true when the server responds with any 2xx, false otherwise.
+ */
+export async function healthCheck(): Promise<boolean> {
+  if (typeof window === "undefined") return true;
+  try {
+    const res = await fetch(`${getBaseUrl()}/health`, { method: "GET" });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}

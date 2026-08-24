@@ -1,7 +1,26 @@
 import { DEFAULT_TENANT_SETTINGS, type PaymentMethod } from "@devsfleet/shared-types";
 import { Money, calculateDocument } from "@devsfleet/shared-utils";
-import { Banknote, CreditCard, Landmark, Plus, Receipt, Search, Trash2, Undo2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import {
+  AlertCircle,
+  ArrowRight,
+  Banknote,
+  CheckCircle2,
+  CreditCard,
+  Landmark,
+  Loader2,
+  Minus,
+  Package,
+  Plus,
+  Receipt,
+  RotateCcw,
+  Search,
+  Trash2,
+  Undo2,
+  User,
+  X,
+} from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Dialog } from "../components/Dialog.js";
 import { KeyRail } from "../components/KeyRail.js";
 import { ProductSearch } from "../components/ProductSearch.js";
@@ -10,27 +29,12 @@ import { posData, type PosProduct, type PosSaleReceipt } from "../lib/pos-data.j
 import { useAuth } from "../store/auth.js";
 
 /**
- * Returns, and exchanges.
+ * POS Returns & Exchanges.
  *
- * A return is always against an original sale — never a free-standing negative
- * amount. That constraint is the whole control: it caps what can come back at
- * what actually went out, keeps the refund priced at what the customer paid
- * rather than today's price, and leaves the original invoice untouched.
- *
- * The refund itself is recorded as a linked sale with negative quantities, so
- * the ledger stays append-only and the original document is never rewritten.
- *
- * Only a same-till original is supported — `posData.findSale` has no path to
- * a sale from another terminal until both have synced.
- *
- * EXCHANGE is a return plus a new sale, not a third kind of document — there
- * is no server concept of one. Both sides are recorded in full (the return
- * refunds its whole value, the new sale is paid in full) rather than netted
- * into a single partial tender: each document stays self-contained and
- * independently auditable, and a walk-in customer needs nothing extra to
- * support it. The net figure shown to the cashier — what actually changes
- * hands — is exactly the same number either way; only the bookkeeping behind
- * it differs from a single blended payment.
+ * Enforces audit controls:
+ * 1. Returns are linked to an original sale receipt to prevent unauthorized cash drains.
+ * 2. Exchange handles both return & new sale in a single atomic transaction.
+ * 3. Line items support Restock (returns to shelf inventory) or Scrap (written off).
  */
 
 const TAX_MODE = DEFAULT_TENANT_SETTINGS.tax.mode;
@@ -55,8 +59,11 @@ interface ExchangeLine {
 
 export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
   const { can } = useAuth();
+  const navigate = useNavigate();
+
   const [reference, setReference] = useState("");
   const [sale, setSale] = useState<PosSaleReceipt | null>(null);
+  const [searching, setSearching] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [dispositions, setDispositions] = useState<Record<string, "restock" | "scrap">>({});
@@ -74,14 +81,8 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
 
   const allowed = can("sale:return");
 
-  /**
-   * Most returns are same-day: the customer bought the wrong size an hour ago
-   * and has walked back in. Listing this till's recent sales turns the common
-   * case into one tap, and leaves typing an invoice number for the genuinely
-   * older ones.
-   */
   useEffect(() => {
-    void posData.recentSales(8).then(setRecent);
+    void posData.recentSales(8).then((list) => setRecent(list ?? []));
   }, []);
 
   function pickSale(found: PosSaleReceipt) {
@@ -100,11 +101,20 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
   async function find() {
     const trimmed = reference.trim();
     if (!trimmed) return;
-    const found = await posData.findSale(trimmed);
-    if (found) pickSale(found);
-    else {
-      setSale(null);
+    setSearching(true);
+    setNotFound(false);
+    try {
+      const found = await posData.findSale(trimmed);
+      if (found) {
+        pickSale(found);
+      } else {
+        setSale(null);
+        setNotFound(true);
+      }
+    } catch {
       setNotFound(true);
+    } finally {
+      setSearching(false);
     }
   }
 
@@ -139,13 +149,10 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
   });
   const exchangeTotal = exchangeTotals.total;
   const isExchange = exchangeLines.length > 0;
-  /** Positive = the customer owes more; negative = they are still owed money. */
+  /** Positive = the customer owes more; negative = store owes refund to customer. */
   const net = Money.subtract(exchangeTotal, refund);
   const activeSaleMethod = PAYMENT_METHODS_UI.find((m) => m.method === saleMethod);
 
-  // An exchange still needs an actual return leg — the server refuses a
-  // return with zero lines, and "buy something new, return nothing" is just
-  // a sale, which belongs on the Sale screen instead.
   const canConfirm = anySelected;
 
   function addExchangeItem(product: PosProduct) {
@@ -161,6 +168,22 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
     setExchangeLines((lines) =>
       lines.map((l) => (l.key === key ? { ...l, quantity: raw === "" ? "" : raw } : l)),
     );
+  }
+
+  function handleReturnAll() {
+    if (!sale) return;
+    const allQ: Record<string, string> = {};
+    sale.lines.forEach((l, idx) => {
+      allQ[String(idx)] = String(l.quantity);
+    });
+    setQuantities(allQ);
+  }
+
+  function stepQuantity(idx: number, max: number, delta: number) {
+    const key = String(idx);
+    const curr = Number(quantities[key] ?? "0");
+    const next = Math.max(0, Math.min(max, curr + delta));
+    setQuantities((q) => ({ ...q, [key]: next === 0 ? "" : String(next) }));
   }
 
   async function submit() {
@@ -241,9 +264,6 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
       try {
         await posData.commitSale(saleDraft);
       } catch (err) {
-        // The return already went through — do not let the cashier think
-        // NOTHING happened and retry the whole exchange from scratch, which
-        // would return the same lines twice.
         alert(
           `The return was recorded, but the new items could not be rung up: ${
             err instanceof Error ? err.message : "unknown error"
@@ -256,7 +276,7 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
         setQuantities({});
         setDispositions({});
         setExchangeLines([]);
-        void posData.recentSales(8).then(setRecent);
+        void posData.recentSales(8).then((list) => setRecent(list ?? []));
         return;
       }
     }
@@ -268,99 +288,136 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
     setQuantities({});
     setDispositions({});
     setExchangeLines([]);
-    void posData.recentSales(8).then(setRecent);
+    void posData.recentSales(8).then((list) => setRecent(list ?? []));
   }
 
   return (
     <>
-      <div className="min-h-0 flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-3xl space-y-5">
+      <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6 bg-[var(--pos-bg)]">
+        <div className="mx-auto max-w-4xl space-y-5">
+          {/* Permission warning */}
           {!allowed && (
-            <p className="rounded-lg border border-signal-red/40 bg-signal-red/10 px-4 py-3 text-[13px] text-signal-red">
-              Your role cannot process returns. Ask a manager to sign in.
-            </p>
+            <div className="rounded-xl border border-signal-red/30 bg-signal-red/10 p-3.5 text-xs text-signal-red font-medium flex items-center gap-2">
+              <AlertCircle className="size-4 shrink-0" />
+              <span>Your current cashier role does not have permission to process returns. Please ask a manager.</span>
+            </div>
           )}
 
-          <div className="panel p-5">
-            <label htmlFor="sale-ref" className="eyebrow">
-              Find the original sale
+          {/* ── Search Original Sale Box ── */}
+          <div className="panel p-5 border border-[var(--pos-border)] rounded-2xl bg-[var(--pos-panel)] shadow-xs">
+            <label htmlFor="sale-ref" className="eyebrow block text-xs font-bold uppercase tracking-wider text-[var(--pos-text-3)] mb-2">
+              Find Original Sale Receipt
             </label>
-            <div className="mt-2 flex gap-2">
+            <div className="flex gap-2">
               <div className="relative flex-1">
-                <Search
-                  className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-zinc-500"
-                  aria-hidden
-                />
+                <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[var(--pos-text-3)]" />
                 <input
                   id="sale-ref"
                   autoFocus
                   value={reference}
-                  onChange={(e) => setReference(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && find()}
-                  className="field num pl-10"
-                  placeholder="Invoice number from the receipt, e.g. INV-2026-000123"
+                  onChange={(e) => {
+                    setReference(e.target.value);
+                    setNotFound(false);
+                  }}
+                  onKeyDown={(e) => e.key === "Enter" && void find()}
+                  className="field num pl-10 text-xs w-full bg-[var(--pos-raised)] border-[var(--pos-border)] text-[var(--pos-text)]"
+                  placeholder="Scan receipt barcode or type invoice number, e.g. INV-2026-000123"
                   disabled={!allowed}
                 />
+                {reference && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReference("");
+                      setNotFound(false);
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--pos-text-3)] hover:text-[var(--pos-text)]"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                )}
               </div>
               <button
                 type="button"
-                className="btn btn-ghost"
-                onClick={find}
-                disabled={!allowed}
+                className="btn btn-primary text-xs px-5 font-bold"
+                onClick={() => void find()}
+                disabled={!allowed || searching || !reference.trim()}
               >
-                Find
+                {searching ? <Loader2 className="size-4 animate-spin" /> : "Find Sale"}
               </button>
             </div>
-            <p className="mt-2 text-[12px] text-zinc-500">
-              Scan the barcode on the receipt, or type the number printed at the top.
+            <p className="mt-2 text-[11px] text-[var(--pos-text-3)]">
+              Scan barcode from thermal receipt or enter invoice reference.
             </p>
           </div>
 
+          {/* Not Found Banner */}
           {notFound && (
-            <p className="rounded-lg border border-steel-700 bg-steel-850 px-4 py-8 text-center text-[13px] text-zinc-500">
-              No sale found for "{reference}". A sale made on another terminal
-              only becomes searchable here after both have synced.
-            </p>
+            <div className="rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-panel)] p-8 text-center shadow-xs">
+              <RotateCcw className="size-10 mx-auto text-[var(--pos-text-3)]/50 mb-2" />
+              <p className="text-sm font-bold text-[var(--pos-text)]">
+                No sale found matching &ldquo;{reference}&rdquo;
+              </p>
+              <p className="text-xs text-[var(--pos-text-3)] mt-1 max-w-md mx-auto">
+                Check invoice number spelling. If the sale was made on another terminal, ensure both terminals have completed sync.
+              </p>
+            </div>
           )}
 
+          {/* ── Recent Sales on this Till (When no sale is selected) ── */}
           {!sale && (
-            <div className="panel overflow-hidden">
-              <h2 className="border-b border-steel-700 px-5 py-3.5 text-[13px] font-semibold">
-                Recent sales from this till
-              </h2>
+            <div className="panel border border-[var(--pos-border)] rounded-2xl bg-[var(--pos-panel)] shadow-xs overflow-hidden">
+              <div className="flex items-center justify-between border-b border-[var(--pos-border)] px-5 py-3.5 bg-[var(--pos-raised)]/40">
+                <h2 className="text-xs font-bold uppercase tracking-wider text-[var(--pos-text)] flex items-center gap-2">
+                  <Receipt className="size-4 text-[var(--pos-accent)]" />
+                  Recent Sales on this Counter
+                </h2>
+                <span className="text-[11px] text-[var(--pos-text-3)]">
+                  Click to process same-day return
+                </span>
+              </div>
+
               {recent.length === 0 ? (
-                <p className="px-5 py-8 text-center text-[13px] text-zinc-500">
-                  Nothing sold on this terminal yet. Once you ring up a sale it
-                  appears here, so a same-day return needs no invoice number.
+                <p className="p-8 text-center text-xs text-[var(--pos-text-3)]">
+                  No sales recorded on this till yet. Completed sales will appear here for fast return processing.
                 </p>
               ) : (
-                <ul>
+                <ul className="divide-y divide-[var(--pos-border)]/60">
                   {recent.map((entry) => (
                     <li key={entry.localId}>
                       <button
                         type="button"
                         disabled={!allowed}
                         onClick={() => pickSale(entry)}
-                        className="flex w-full items-center gap-4 border-b border-steel-800 px-5 py-3 text-left transition-colors hover:bg-steel-800 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="flex w-full items-center justify-between p-4 text-left hover:bg-[var(--pos-raised)]/60 transition-colors cursor-pointer select-none"
                       >
-                        <Receipt className="size-4 shrink-0 text-zinc-600" aria-hidden />
-                        <div className="min-w-0 flex-1">
-                          <div className="num text-[13px] font-medium">
-                            {entry.saleNumber ?? "Awaiting invoice number"}
+                        <div className="flex items-center gap-3">
+                          <div className="size-8 rounded-lg bg-[var(--pos-raised)] flex items-center justify-center text-[var(--pos-accent)]">
+                            <Receipt className="size-4" />
                           </div>
-                          <div className="text-[11px] text-zinc-500">
-                            {new Date(entry.occurredAt).toLocaleTimeString("en-GB", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}{" "}
-                            · {entry.lines.length}{" "}
-                            {entry.lines.length === 1 ? "item" : "items"}
-                            {!entry.synced && " · not yet synced"}
+                          <div>
+                            <p className="font-mono font-bold text-xs text-[var(--pos-text)]">
+                              {entry.saleNumber ?? `Draft · ${entry.localId.slice(0, 8)}`}
+                            </p>
+                            <p className="text-[11px] text-[var(--pos-text-3)]">
+                              {new Date(entry.occurredAt).toLocaleTimeString("en-GB", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}{" "}
+                              · {entry.lines.length} {entry.lines.length === 1 ? "item" : "items"}
+                              {!entry.synced && " · local queue"}
+                            </p>
                           </div>
                         </div>
-                        <span className="num text-[13px] font-semibold">
-                          {amount(Money.toMinor(entry.total))}
-                        </span>
+
+                        <div className="text-right">
+                          <span className="font-mono font-bold text-sm text-[var(--pos-text)] block">
+                            AED {parseFloat(entry.total).toFixed(2)}
+                          </span>
+                          <span className="text-[10px] text-[var(--pos-accent)] font-semibold flex items-center gap-0.5 justify-end">
+                            Select <ArrowRight className="size-3" />
+                          </span>
+                        </div>
                       </button>
                     </li>
                   ))}
@@ -369,186 +426,234 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
             </div>
           )}
 
+          {/* ── Active Sale Lines & Return Quantities ── */}
           {sale && (
-            <div className="panel overflow-hidden">
-              <div className="flex items-center justify-between border-b border-steel-700 px-5 py-4">
+            <div className="panel border border-[var(--pos-border)] rounded-2xl bg-[var(--pos-panel)] shadow-xs overflow-hidden space-y-0">
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-[var(--pos-border)] p-4 bg-[var(--pos-raised)]/40">
                 <div className="flex items-center gap-3">
-                  <Receipt className="size-4 text-brass" aria-hidden />
+                  <div className="size-9 rounded-xl bg-[var(--pos-accent)]/15 text-[var(--pos-accent)] flex items-center justify-center">
+                    <Receipt className="size-4.5" />
+                  </div>
                   <div>
-                    <div className="num text-[14px] font-semibold">
-                      {sale.saleNumber ?? "Not yet numbered"}
-                    </div>
-                    <div className="text-[11px] text-zinc-500">
+                    <p className="font-mono font-bold text-sm text-[var(--pos-text)]">
+                      {sale.saleNumber ?? `Sale · ${sale.localId.slice(0, 8)}`}
+                    </p>
+                    <p className="text-[11px] text-[var(--pos-text-3)]">
                       {new Date(sale.occurredAt).toLocaleString("en-GB", {
                         dateStyle: "medium",
                         timeStyle: "short",
                       })}
-                    </div>
+                    </p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="eyebrow">Sale total</div>
-                  <div className="num text-[14px] font-semibold">
-                    {amount(Money.toMinor(sale.total))}
-                  </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleReturnAll}
+                    className="btn btn-ghost text-xs h-8 px-2.5"
+                  >
+                    Return All Items
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSale(null)}
+                    className="btn btn-ghost text-xs h-8 px-2.5 text-[var(--pos-text-3)]"
+                  >
+                    Change Sale
+                  </button>
                 </div>
               </div>
 
-              <ul>
+              {/* Items List */}
+              <ul className="divide-y divide-[var(--pos-border)]/60">
                 {sale.lines.map((line, index) => {
                   const key = String(index);
                   const max = Number(line.quantity);
-                  const selected = quantities[key] ?? "";
-                  const returning = Number(selected) > 0;
+                  const selectedQty = quantities[key] ?? "";
+                  const returning = Number(selectedQty) > 0;
                   const disposition = dispositions[key] ?? "restock";
 
                   return (
-                    <li
-                      key={key}
-                      className="flex items-center gap-4 border-b border-steel-800 px-5 py-3"
-                    >
-                      <span className="num w-5 text-right text-[11px] text-zinc-600">
-                        {index + 1}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-[13px] font-medium">
-                          {line.productName}
-                        </div>
-                        <div className="num mt-0.5 text-[11px] text-zinc-500">
-                          {line.productSku} · sold {fmtQuantity(line.quantity)} ×{" "}
-                          {amount(Money.toMinor(line.unitPrice))}
+                    <li key={key} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
+                      {/* Product Details */}
+                      <div className="flex items-start gap-3 flex-1 min-w-0">
+                        <span className="size-6 rounded bg-[var(--pos-raised)] text-[var(--pos-text-3)] font-mono text-[11px] font-bold flex items-center justify-center shrink-0">
+                          {index + 1}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-bold text-xs text-[var(--pos-text)] truncate">
+                            {line.productName}
+                          </p>
+                          <p className="font-mono text-[11px] text-[var(--pos-text-3)]">
+                            SKU: {line.productSku} · Sold {fmtQuantity(line.quantity)} × AED{" "}
+                            {parseFloat(line.unitPrice).toFixed(2)}
+                          </p>
                         </div>
                       </div>
 
-                      {returning && (
-                        <div className="flex items-center gap-1 rounded-lg border border-steel-700 bg-steel-800 p-0.5">
+                      {/* Controls: Disposition & Stepper */}
+                      <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
+                        {returning && (
+                          <div className="flex items-center rounded-lg border border-[var(--pos-border)] bg-[var(--pos-raised)] p-0.5 text-xs">
+                            <button
+                              type="button"
+                              onClick={() => setDispositions((d) => ({ ...d, [key]: "restock" }))}
+                              className={[
+                                "px-2 py-1 rounded text-[11px] font-semibold transition-all",
+                                disposition === "restock"
+                                  ? "bg-[var(--pos-panel)] text-[var(--pos-text)] shadow-xs"
+                                  : "text-[var(--pos-text-3)] hover:text-[var(--pos-text)]",
+                              ].join(" ")}
+                            >
+                              Restock
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDispositions((d) => ({ ...d, [key]: "scrap" }))}
+                              className={[
+                                "px-2 py-1 rounded text-[11px] font-semibold transition-all",
+                                disposition === "scrap"
+                                  ? "bg-signal-red/10 text-signal-red font-bold"
+                                  : "text-[var(--pos-text-3)] hover:text-[var(--pos-text)]",
+                              ].join(" ")}
+                            >
+                              Scrap
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Quantity Stepper */}
+                        <div className="flex items-center rounded-lg border border-[var(--pos-border)] bg-[var(--pos-raised)] overflow-hidden">
                           <button
                             type="button"
-                            onClick={() => setDispositions((d) => ({ ...d, [key]: "restock" }))}
-                            className={[
-                              "rounded px-2 py-1 text-[11px] font-medium transition-colors",
-                              disposition === "restock"
-                                ? "bg-brass/15 text-brass"
-                                : "text-zinc-500 hover:text-chalk",
-                            ].join(" ")}
+                            onClick={() => stepQuantity(index, max, -1)}
+                            className="px-2 py-1 text-[var(--pos-text-3)] hover:text-[var(--pos-text)] transition-colors"
                           >
-                            Restock
+                            <Minus className="size-3" />
                           </button>
+                          <input
+                            id={`return-${key}`}
+                            value={selectedQty}
+                            onChange={(e) => {
+                              const raw = Number(e.target.value);
+                              const clamped = Number.isFinite(raw)
+                                ? Math.max(0, Math.min(raw, max))
+                                : 0;
+                              setQuantities((q) => ({
+                                ...q,
+                                [key]: e.target.value === "" ? "" : String(clamped),
+                              }));
+                            }}
+                            inputMode="decimal"
+                            placeholder="0"
+                            disabled={!allowed}
+                            className="w-12 text-center text-xs font-mono font-bold bg-transparent border-none focus:outline-none"
+                          />
                           <button
                             type="button"
-                            onClick={() => setDispositions((d) => ({ ...d, [key]: "scrap" }))}
-                            className={[
-                              "rounded px-2 py-1 text-[11px] font-medium transition-colors",
-                              disposition === "scrap"
-                                ? "bg-signal-red/15 text-signal-red"
-                                : "text-zinc-500 hover:text-chalk",
-                            ].join(" ")}
+                            onClick={() => stepQuantity(index, max, 1)}
+                            className="px-2 py-1 text-[var(--pos-text-3)] hover:text-[var(--pos-text)] transition-colors"
                           >
-                            Scrap
+                            <Plus className="size-3" />
                           </button>
                         </div>
-                      )}
-
-                      <div className="flex items-center gap-2">
-                        <label htmlFor={`return-${key}`} className="eyebrow">
-                          Return
-                        </label>
-                        <input
-                          id={`return-${key}`}
-                          value={selected}
-                          onChange={(e) => {
-                            const raw = Number(e.target.value);
-                            // Cannot return more than was sold. The cap is the
-                            // point of doing this against the original sale.
-                            const clamped = Number.isFinite(raw)
-                              ? Math.max(0, Math.min(raw, max))
-                              : 0;
-                            setQuantities((q) => ({
-                              ...q,
-                              [key]: e.target.value === "" ? "" : String(clamped),
-                            }));
-                          }}
-                          inputMode="decimal"
-                          placeholder="0"
-                          disabled={!allowed}
-                          className="field num w-24 text-right"
-                        />
                       </div>
                     </li>
                   );
                 })}
               </ul>
 
-              <div className="tear flex items-baseline justify-between px-5 py-4">
-                <span className="eyebrow">Refund due</span>
-                <span className="num text-3xl font-bold text-brass">{money(refund)}</span>
+              {/* Refund Summary Tear Line */}
+              <div className="border-t border-[var(--pos-border)] p-4 flex items-baseline justify-between bg-[var(--pos-raised)]/30">
+                <span className="text-xs font-bold uppercase tracking-wider text-[var(--pos-text-3)]">
+                  Refund Due from Return
+                </span>
+                <span className="font-mono text-2xl font-bold text-[var(--pos-accent)]">
+                  AED {parseFloat(Money.toDecimalString(refund, 2)).toFixed(2)}
+                </span>
               </div>
             </div>
           )}
 
+          {/* ── Exchange Items Section ── */}
           {sale && (
-            <div className="panel overflow-hidden">
-              <div className="flex items-center justify-between border-b border-steel-700 px-5 py-3.5">
-                <h2 className="text-[13px] font-semibold">Exchange for something else</h2>
+            <div className="panel border border-[var(--pos-border)] rounded-2xl bg-[var(--pos-panel)] shadow-xs overflow-hidden">
+              <div className="flex items-center justify-between border-b border-[var(--pos-border)] px-5 py-3.5 bg-[var(--pos-raised)]/40">
+                <div>
+                  <h2 className="text-xs font-bold uppercase tracking-wider text-[var(--pos-text)]">
+                    Exchange for Replacement Items
+                  </h2>
+                  <p className="text-[11px] text-[var(--pos-text-3)]">
+                    Add new products to offset against the refund amount
+                  </p>
+                </div>
+
                 <button
                   type="button"
-                  className="btn btn-ghost gap-1.5 py-1.5! px-2.5! text-[12px]"
+                  className="btn btn-primary text-xs h-8 px-3"
                   onClick={() => setAddItemOpen(true)}
                   disabled={!allowed}
                 >
-                  <Plus className="size-3.5" aria-hidden />
-                  Add item
+                  <Plus className="size-3.5 mr-1" />
+                  Add Item
                 </button>
               </div>
 
               {exchangeLines.length === 0 ? (
-                <p className="px-5 py-6 text-center text-[12px] text-zinc-500">
-                  Optional. Add new items here to exchange instead of just
-                  refunding — the till settles only the difference.
+                <p className="p-6 text-center text-xs text-[var(--pos-text-3)]">
+                  Optional. If the customer is replacing with other goods, add them here to calculate the net difference.
                 </p>
               ) : (
-                <ul>
+                <ul className="divide-y divide-[var(--pos-border)]/60">
                   {exchangeLines.map((line) => (
-                    <li
-                      key={line.key}
-                      className="flex items-center gap-4 border-b border-steel-800 px-5 py-3"
-                    >
+                    <li key={line.key} className="flex items-center justify-between gap-3 p-4">
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-[13px] font-medium">
+                        <p className="font-bold text-xs text-[var(--pos-text)] truncate">
                           {line.product.name}
-                        </div>
-                        <div className="num mt-0.5 text-[11px] text-zinc-500">
-                          {line.product.sku} · {amount(Money.toMinor(line.product.sellingPrice))}{" "}
-                          each
-                        </div>
+                        </p>
+                        <p className="font-mono text-[11px] text-[var(--pos-text-3)]">
+                          {line.product.sku} · AED {parseFloat(line.product.sellingPrice).toFixed(2)} each
+                        </p>
                       </div>
-                      <input
-                        value={line.quantity}
-                        onChange={(e) => setExchangeQuantity(line.key, e.target.value)}
-                        inputMode="decimal"
-                        className="field num w-20 text-right"
-                        aria-label={`Quantity of ${line.product.name}`}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeExchangeItem(line.key)}
-                        aria-label={`Remove ${line.product.name}`}
-                        className="rounded p-1.5 text-zinc-600 hover:bg-signal-red/15 hover:text-signal-red"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </button>
+
+                      <div className="flex items-center gap-3">
+                        <input
+                          value={line.quantity}
+                          onChange={(e) => setExchangeQuantity(line.key, e.target.value)}
+                          inputMode="decimal"
+                          className="field num w-16 text-center text-xs font-mono font-bold bg-[var(--pos-raised)] border-[var(--pos-border)]"
+                          aria-label={`Quantity of ${line.product.name}`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeExchangeItem(line.key)}
+                          aria-label={`Remove ${line.product.name}`}
+                          className="size-8 rounded-lg text-[var(--pos-text-3)] hover:text-signal-red hover:bg-signal-red/10 flex items-center justify-center transition-colors"
+                        >
+                          <Trash2 className="size-4" />
+                        </button>
+                      </div>
                     </li>
                   ))}
                 </ul>
               )}
 
+              {/* Net Balance calculation */}
               {isExchange && (
-                <div className="tear flex items-baseline justify-between px-5 py-4">
-                  <span className="eyebrow">
-                    {Money.isNegative(net) ? "Refund due" : "Customer pays"}
-                  </span>
-                  <span className="num text-3xl font-bold text-brass">
-                    {money(Money.abs(net))}
+                <div className="border-t border-[var(--pos-border)] p-4 flex items-baseline justify-between bg-[var(--pos-raised)]/40">
+                  <div>
+                    <span className="text-xs font-bold uppercase tracking-wider text-[var(--pos-text-3)] block">
+                      {Money.isNegative(net) ? "Net Refund to Customer" : "Net Charge to Customer"}
+                    </span>
+                    <span className="text-[11px] text-[var(--pos-text-3)]">
+                      Return AED {parseFloat(Money.toDecimalString(refund, 2)).toFixed(2)} vs Exchange AED {parseFloat(Money.toDecimalString(exchangeTotal, 2)).toFixed(2)}
+                    </span>
+                  </div>
+                  <span className="font-mono text-2xl font-bold text-[var(--pos-accent)]">
+                    AED {parseFloat(Money.toDecimalString(Money.abs(net), 2)).toFixed(2)}
                   </span>
                 </div>
               )}
@@ -557,38 +662,44 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
         </div>
       </div>
 
+      {/* ── KeyRail ── */}
       <KeyRail
         actions={[
-          { combo: "Enter", label: "Find sale", onPress: find, disabled: !allowed },
-          {
-            combo: "F4",
-            label: !canConfirm
-              ? "Refund"
-              : isExchange
-                ? Money.isNegative(net)
-                  ? `Refund ${money(Money.abs(net))}`
-                  : Money.isZero(net)
-                    ? "Even exchange"
-                    : `Charge ${money(net)}`
-                : `Refund ${money(refund)}`,
-            onPress: () => setConfirming(true),
-            disabled: !canConfirm || !allowed,
-            primary: true,
-          },
+          { combo: "Esc", label: "Back to sale", onPress: () => navigate("/") },
+          ...(sale
+            ? [
+                {
+                  combo: "F4",
+                  label: !canConfirm
+                    ? "Select items to refund"
+                    : isExchange
+                      ? Money.isNegative(net)
+                        ? `Refund ${money(Money.abs(net))}`
+                        : Money.isZero(net)
+                          ? "Even exchange"
+                          : `Charge ${money(net)}`
+                      : `Refund ${money(refund)}`,
+                  onPress: () => setConfirming(true),
+                  disabled: !canConfirm || !allowed,
+                  primary: true,
+                },
+              ]
+            : []),
         ]}
       />
 
+      {/* ── Confirmation Modal Dialog ── */}
       <Dialog
         open={confirming}
         onClose={() => !submitting && setConfirming(false)}
-        title={isExchange ? "Confirm the exchange" : "Confirm the refund"}
-        description="This creates a linked return. The original invoice is not modified."
-        width="sm"
+        title={isExchange ? "Confirm Exchange & Return" : "Confirm Customer Refund"}
+        description="Records an audit-linked return against the original invoice."
+        width="md"
         footer={
           <>
             <button
               type="button"
-              className="btn btn-ghost"
+              className="btn btn-ghost text-xs"
               onClick={() => setConfirming(false)}
               disabled={submitting}
             >
@@ -596,137 +707,118 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
             </button>
             <button
               type="button"
-              className="btn btn-primary"
+              className="btn btn-primary text-xs font-bold"
               onClick={() => void submit()}
               disabled={submitting}
             >
-              <Undo2 className="size-4" aria-hidden />
+              {submitting ? (
+                <Loader2 className="size-4 animate-spin mr-1.5" />
+              ) : (
+                <Undo2 className="size-4 mr-1.5" />
+              )}
               {submitting
-                ? "Recording…"
+                ? "Processing…"
                 : isExchange
                   ? Money.isNegative(net)
-                    ? `Refund ${money(Money.abs(net))}`
+                    ? `Process Refund (${money(Money.abs(net))})`
                     : Money.isZero(net)
-                      ? "Confirm"
+                      ? "Complete Exchange"
                       : `Charge ${money(net)}`
-                  : `Refund ${money(refund)}`}
+                  : `Process Refund (${money(refund)})`}
             </button>
           </>
         }
       >
-        <div className="space-y-4">
-          <p className="text-[13px] text-zinc-400">
-            {anySelected
-              ? `${money(refund)} goes back to the customer. Restocked lines return to sellable inventory at this branch; scrapped lines are written off.`
-              : "No lines are being refunded in cash."}
-            {isExchange &&
-              " The new items are rung up as their own sale, priced today."}
-          </p>
-
+        <div className="space-y-4 text-xs">
+          {/* Refund Method */}
           {anySelected && (
             <div>
-              <span className="eyebrow">Refund method</span>
-              <div className="mt-2 grid grid-cols-3 gap-2">
+              <span className="eyebrow block mb-1.5">Refund Payment Method</span>
+              <div className="grid grid-cols-3 gap-2">
                 {PAYMENT_METHODS_UI.map(({ method, label, icon: Icon }) => (
                   <button
                     key={method}
                     type="button"
                     onClick={() => setRefundMethod(method)}
                     className={[
-                      "flex flex-col items-center gap-1.5 rounded-lg border px-2 py-3 text-[12px] font-medium transition-colors",
+                      "flex flex-col items-center gap-1.5 rounded-xl border p-2.5 text-xs font-semibold transition-all cursor-pointer",
                       refundMethod === method
-                        ? "border-brass bg-brass/12 text-brass"
-                        : "border-steel-700 bg-steel-800 text-zinc-400 hover:bg-steel-750",
+                        ? "border-[var(--pos-accent)] bg-[var(--pos-accent)]/10 text-[var(--pos-accent)] shadow-xs"
+                        : "border-[var(--pos-border)] bg-[var(--pos-raised)] text-[var(--pos-text-2)] hover:bg-[var(--pos-hover)]",
                     ].join(" ")}
                   >
-                    <Icon className="size-4" aria-hidden />
-                    {label}
+                    <Icon className="size-4" />
+                    <span>{label}</span>
                   </button>
                 ))}
               </div>
-              <p className="mt-2 text-[11px] text-zinc-500">
-                Independent of how the sale was paid — a card sale can be refunded
-                in cash, and the reverse happens too.
-              </p>
             </div>
           )}
 
+          {/* Refund Reference if Card / Transfer */}
           {anySelected && activeRefundMethod?.needsReference && (
             <div>
-              <label htmlFor="refund-ref" className="eyebrow">
-                Refund reference
+              <label htmlFor="refund-ref" className="eyebrow block">
+                Refund Auth / Transaction Reference
               </label>
               <input
                 id="refund-ref"
                 value={refundReference}
                 onChange={(e) => setRefundReference(e.target.value)}
-                placeholder={refundMethod === "card" ? "Auth code" : "Transfer reference"}
-                className="field mt-1.5"
+                placeholder={refundMethod === "card" ? "Card refund auth code" : "Bank transfer reference"}
+                className="field mt-1 text-xs bg-[var(--pos-raised)] border-[var(--pos-border)] text-[var(--pos-text)]"
                 autoComplete="off"
               />
             </div>
           )}
 
-          {isExchange && (
+          {/* Exchange Payment Method if customer owes net difference */}
+          {isExchange && Money.isPositive(net) && (
             <div>
-              <span className="eyebrow">New items — payment method</span>
-              <div className="mt-2 grid grid-cols-3 gap-2">
+              <span className="eyebrow block mb-1.5">Collect Remaining Balance Via</span>
+              <div className="grid grid-cols-3 gap-2">
                 {PAYMENT_METHODS_UI.map(({ method, label, icon: Icon }) => (
                   <button
                     key={method}
                     type="button"
                     onClick={() => setSaleMethod(method)}
                     className={[
-                      "flex flex-col items-center gap-1.5 rounded-lg border px-2 py-3 text-[12px] font-medium transition-colors",
+                      "flex flex-col items-center gap-1.5 rounded-xl border p-2.5 text-xs font-semibold transition-all cursor-pointer",
                       saleMethod === method
-                        ? "border-brass bg-brass/12 text-brass"
-                        : "border-steel-700 bg-steel-800 text-zinc-400 hover:bg-steel-750",
+                        ? "border-[var(--pos-accent)] bg-[var(--pos-accent)]/10 text-[var(--pos-accent)] shadow-xs"
+                        : "border-[var(--pos-border)] bg-[var(--pos-raised)] text-[var(--pos-text-2)] hover:bg-[var(--pos-hover)]",
                     ].join(" ")}
                   >
-                    <Icon className="size-4" aria-hidden />
-                    {label}
+                    <Icon className="size-4" />
+                    <span>{label}</span>
                   </button>
                 ))}
               </div>
             </div>
           )}
 
-          {isExchange && activeSaleMethod?.needsReference && (
-            <div>
-              <label htmlFor="sale-ref-input" className="eyebrow">
-                Sale reference
-              </label>
-              <input
-                id="sale-ref-input"
-                value={saleReference}
-                onChange={(e) => setSaleReference(e.target.value)}
-                placeholder={saleMethod === "card" ? "Auth code" : "Transfer reference"}
-                className="field mt-1.5"
-                autoComplete="off"
-              />
-            </div>
-          )}
-
+          {/* Reason */}
           <div>
-            <label htmlFor="return-reason" className="eyebrow">
-              Reason (optional)
+            <label htmlFor="return-reason" className="eyebrow block">
+              Return Reason (Optional)
             </label>
             <input
               id="return-reason"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="Wrong size, changed mind, damaged…"
-              className="field mt-1.5"
+              placeholder="e.g. Wrong size, customer changed mind, defective item"
+              className="field mt-1 text-xs bg-[var(--pos-raised)] border-[var(--pos-border)] text-[var(--pos-text)]"
               autoComplete="off"
             />
           </div>
         </div>
       </Dialog>
 
+      {/* ── Product Search Modal for Exchange ── */}
       <Dialog
         open={addItemOpen}
         onClose={() => setAddItemOpen(false)}
-        title="Add an exchange item"
+        title="Add Exchange Product"
         width="lg"
       >
         <div className="flex h-[28rem] flex-col">

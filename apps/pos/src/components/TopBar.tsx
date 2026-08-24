@@ -1,21 +1,28 @@
 import type { SyncStatusSnapshot } from "@devsfleet/shared-types";
-import { CloudOff, RefreshCw, Store, User, Wallet } from "lucide-react";
-import { useEffect, useState } from "react";
-import { dataMode, hasBridge } from "../lib/pos-data.js";
-import { amount } from "../lib/money.js";
-import { useAuth } from "../store/auth.js";
+import {
+  CloudOff,
+  Lock,
+  RefreshCw,
+  Store,
+  User,
+  Wallet,
+  Zap,
+} from "lucide-react";
+import React, { useEffect, useState } from "react";
 import { Money } from "@devsfleet/shared-utils";
+import { amount } from "../lib/money.js";
+import { hasBridge } from "../lib/pos-data.js";
+import { useAuth } from "../store/auth.js";
 
 /**
- * Status strip.
+ * POS Status Strip (TopBar).
  *
- * Answers the four questions a cashier or a manager asks without being asked:
- * which branch and till am I on, who is signed in, is the drawer open, and is
- * this terminal talking to the server.
- *
- * The sync state is deliberately prominent. A till that has been quietly
- * offline for two days still sells perfectly well — and that is exactly the
- * problem, because nobody notices until the stock figures are a day stale.
+ * Answers at a glance:
+ * - Active branch and till terminal
+ * - Signed-in cashier & assigned role
+ * - Real-time cash drawer float status
+ * - Sync telemetry, network connectivity & queued outbox items
+ * - Live counter clock
  */
 export function TopBar({
   cashSessionFloat,
@@ -28,11 +35,46 @@ export function TopBar({
   const [sync, setSync] = useState<SyncStatusSnapshot | null>(null);
   const [browserApiOnline, setBrowserApiOnline] = useState<boolean>(true);
   const [clock, setClock] = useState(() => new Date());
+  const [manualSyncing, setManualSyncing] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => setClock(new Date()), 30_000);
     return () => clearInterval(timer);
   }, []);
+
+  const checkApiHealth = async () => {
+    try {
+      const rawUrl =
+        (import.meta.env.VITE_API_URL as string | undefined) ||
+        "http://localhost:3001/api/v1";
+      const parsed = new URL(rawUrl);
+      
+      // Probe root /health first
+      let ok = false;
+      try {
+        const res = await fetch(`${parsed.origin}/health`, {
+          signal: AbortSignal.timeout(2500),
+        });
+        ok = res.ok;
+      } catch {}
+
+      // Fallback to prefixed /health if root failed
+      if (!ok) {
+        try {
+          const res = await fetch(`${rawUrl.replace(/\/+$/, "")}/health`, {
+            signal: AbortSignal.timeout(2500),
+          });
+          ok = res.ok;
+        } catch {}
+      }
+
+      setBrowserApiOnline(ok);
+      return ok;
+    } catch {
+      setBrowserApiOnline(false);
+      return false;
+    }
+  };
 
   useEffect(() => {
     if (hasBridge()) {
@@ -41,106 +83,154 @@ export function TopBar({
       return window.devsfleet.sync.onStatusChange(setSync);
     } else {
       // Browser mode: poll API health
-      const checkApiHealth = async () => {
-        try {
-          const rawUrl = (import.meta.env.VITE_API_URL as string | undefined) || "http://localhost:3001/api/v1";
-          const parsed = new URL(rawUrl);
-          const healthUrl = `${parsed.origin}/health`;
-          const res = await fetch(healthUrl, { signal: AbortSignal.timeout(3000) });
-          setBrowserApiOnline(res.ok);
-        } catch {
-          setBrowserApiOnline(false);
-        }
-      };
-
       void checkApiHealth();
-      const healthTimer = setInterval(() => void checkApiHealth(), 10_000);
+      const healthTimer = setInterval(() => void checkApiHealth(), 8_000);
       return () => clearInterval(healthTimer);
     }
   }, []);
 
+  async function handleSyncClick() {
+    setManualSyncing(true);
+    try {
+      if (hasBridge()) {
+        await window.devsfleet.sync.now();
+      } else {
+        await checkApiHealth();
+        onSyncNow?.();
+      }
+    } finally {
+      setTimeout(() => setManualSyncing(false), 800);
+    }
+  }
+
   const isElectron = hasBridge();
   const isOnline = isElectron ? (sync?.online ?? false) : browserApiOnline;
+  const isSyncing = (sync?.syncing ?? false) || manualSyncing;
   const pending = sync?.pendingPushCount ?? 0;
 
   return (
-    <header className="flex h-13 shrink-0 items-center justify-between gap-4 border-b border-pos-border bg-pos-panel px-4">
-      <div className="flex items-center gap-5">
-        <div className="flex items-center gap-2.5">
-          <Store className="size-4 text-brass" aria-hidden />
-          <div className="leading-tight">
-            <div className="text-[13px] font-semibold">{terminal?.branchName}</div>
-            <div className="num text-[10px] text-pos-text-3">{terminal?.deviceName}</div>
+    <header className="flex h-13 shrink-0 items-center justify-between gap-4 border-b border-[var(--pos-border)] bg-[var(--pos-panel)] px-3 md:px-4 select-none">
+      {/* ── Left: Terminal & Cashier Identity ── */}
+      <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+        {/* Branch & Till */}
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="size-7 rounded-lg bg-[var(--pos-raised)] text-[var(--pos-accent)] flex items-center justify-center shrink-0 border border-[var(--pos-border)]">
+            <Store className="size-3.5" />
+          </div>
+          <div className="leading-tight min-w-0">
+            <div className="text-xs font-bold text-[var(--pos-text)] truncate">
+              {terminal?.branchName ?? "Counter Till"}
+            </div>
+            <div className="num font-mono text-[10px] text-[var(--pos-text-3)] truncate">
+              {terminal?.deviceName ?? "Till #1"}
+            </div>
           </div>
         </div>
 
-        <div className="h-7 w-px bg-pos-border" />
+        <div className="h-5 w-px bg-[var(--pos-border)] hidden sm:block" />
 
-        <div className="flex items-center gap-2 text-[13px]">
-          <User className="size-4 text-zinc-500" aria-hidden />
-          <span className={cashier ? "font-medium" : "text-pos-text-3"}>
+        {/* Active Cashier */}
+        <div className="hidden sm:flex items-center gap-2 text-xs">
+          <div className="size-6 rounded-full bg-[var(--pos-raised)] flex items-center justify-center text-[var(--pos-text-3)] border border-[var(--pos-border)]">
+            <User className="size-3" />
+          </div>
+          <span
+            className={
+              cashier
+                ? "font-semibold text-[var(--pos-text)] truncate max-w-[120px]"
+                : "text-[var(--pos-text-3)]"
+            }
+          >
             {cashier?.name ?? "Not signed in"}
           </span>
           {cashier && (
-            <span className="rounded bg-pos-raised px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-pos-text-2">
+            <span className="rounded-md bg-[var(--pos-raised)] px-1.5 py-0.2 text-[9px] font-bold uppercase tracking-wider text-[var(--pos-text-2)] border border-[var(--pos-border)]">
               {cashier.roleName}
             </span>
           )}
         </div>
       </div>
 
-      <div className="flex items-center gap-4">
-        {/* Drawer state. Absent means no session is open and cash cannot be taken. */}
-        <div className="flex items-center gap-2 text-[13px]">
-          <Wallet
-            className={cashSessionFloat ? "size-4 text-signal-green" : "size-4 text-pos-text-3"}
-            aria-hidden
-          />
+      {/* ── Right: Drawer Status, Sync Health & Clock ── */}
+      <div className="flex items-center gap-2 sm:gap-3.5 shrink-0">
+        {/* Drawer State Capsule */}
+        <div
+          className={[
+            "flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs transition-colors",
+            cashSessionFloat
+              ? "bg-signal-green/10 border-signal-green/30 text-signal-green"
+              : "bg-[var(--pos-raised)] border-[var(--pos-border)] text-[var(--pos-text-3)]",
+          ].join(" ")}
+          title={
+            cashSessionFloat
+              ? `Cash drawer open with ${amount(Money.toMinor(cashSessionFloat))} float`
+              : "Cash drawer is currently closed"
+          }
+        >
           {cashSessionFloat ? (
-            <span className="num">{amount(Money.toMinor(cashSessionFloat))}</span>
+            <>
+              <Wallet className="size-3.5 shrink-0" />
+              <span className="font-mono font-bold text-xs">
+                {amount(Money.toMinor(cashSessionFloat))}
+              </span>
+            </>
           ) : (
-            <span className="text-pos-text-3">Drawer closed</span>
+            <>
+              <Lock className="size-3.5 shrink-0" />
+              <span className="text-[11px] font-medium">Drawer closed</span>
+            </>
           )}
         </div>
 
-        <div className="h-7 w-px bg-pos-border" />
+        <div className="h-5 w-px bg-[var(--pos-border)] hidden sm:block" />
 
+        {/* Sync & Connectivity Indicator Button */}
         <button
           type="button"
-          onClick={onSyncNow}
-          disabled={!hasBridge()}
+          onClick={() => void handleSyncClick()}
+          disabled={isSyncing}
           title={
             isOnline
-              ? "Online connected to central backend API. Click to sync now."
+              ? "Connected to central backend API. Click to trigger immediate sync."
               : isElectron
-                ? "Disconnected from API. Proceeding with local SQLite mirror (sales queued locally)."
-                : "Disconnected from backend API. Proceeding with offline sample data."
+                ? "Disconnected from API. Offline-first SQLite active (sales queued locally)."
+                : "Disconnected from backend API. Click to check health."
           }
-          className="flex items-center gap-2 rounded-md px-2 py-1.5 text-[12px] transition-colors hover:bg-pos-raised disabled:cursor-default disabled:hover:bg-transparent"
+          className={[
+            "flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer",
+            isOnline
+              ? "bg-signal-green/10 text-signal-green border-signal-green/30 hover:bg-signal-green/15"
+              : "bg-signal-amber/10 text-signal-amber border-signal-amber/30 hover:bg-signal-amber/15",
+          ].join(" ")}
         >
           {isOnline ? (
             <RefreshCw
-              className={`size-3.5 text-signal-green ${sync?.syncing ? "animate-spin" : ""}`}
-              aria-hidden
+              className={`size-3 shrink-0 ${isSyncing ? "animate-spin" : ""}`}
             />
           ) : (
-            <CloudOff className="size-3.5 text-signal-amber" aria-hidden />
+            <CloudOff className="size-3 shrink-0" />
           )}
-          <span className={isOnline ? "text-signal-green font-medium" : "text-signal-amber font-medium"}>
-            {isOnline ? "Online connected" : "Disconnected"}
+
+          <span className="hidden md:inline text-[11px]">
+            {isSyncing ? "Syncing…" : isOnline ? "Online" : "Disconnected"}
           </span>
+
           {pending > 0 && (
-            <span className="num rounded-full bg-signal-amber/20 px-1.5 py-0.5 text-[10px] font-semibold text-signal-amber">
+            <span className="font-mono rounded-full bg-signal-amber/20 px-1.5 py-0.2 text-[9px] font-bold text-signal-amber ml-0.5">
               {pending} queued
             </span>
           )}
         </button>
 
+        {/* Live Clock */}
         <time
-          className="num text-[13px] text-pos-text-2"
+          className="font-mono text-base font-bold text-[var(--pos-text-2)] hidden sm:inline"
           dateTime={clock.toISOString()}
         >
-          {clock.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+          {clock.toLocaleTimeString("en-GB", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
         </time>
       </div>
     </header>

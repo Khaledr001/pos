@@ -30,6 +30,13 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -479,36 +486,34 @@ export default function InventoryPage() {
           <form onSubmit={handleAdjust} className="space-y-4">
             <div>
               <label className="block text-xs font-medium text-foreground mb-1.5">Product / Variant *</label>
-              <select
-                required
-                value={adjVariantId}
-                onChange={(e) => setAdjVariantId(e.target.value)}
-                className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <option value="">— Select variant —</option>
-                {uniqueVariants.map((v) => (
-                  <option key={v.variantId} value={v.variantId}>
-                    {v.variantSku} · {v.productName}
-                  </option>
-                ))}
-              </select>
+              <Select value={adjVariantId} onValueChange={setAdjVariantId}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="— Select Variant —" />
+                </SelectTrigger>
+                <SelectContent>
+                  {uniqueVariants.map((v) => (
+                    <SelectItem key={v.variantId} value={v.variantId}>
+                      {v.variantSku} · {v.productName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div>
               <label className="block text-xs font-medium text-foreground mb-1.5">Branch Location *</label>
-              <select
-                required
-                value={adjBranchId}
-                onChange={(e) => setAdjBranchId(e.target.value)}
-                className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <option value="">— Select branch —</option>
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name} ({b.code})
-                  </option>
-                ))}
-              </select>
+              <Select value={adjBranchId} onValueChange={setAdjBranchId}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="— Select Branch —" />
+                </SelectTrigger>
+                <SelectContent>
+                  {branches.map((b) => (
+                    <SelectItem key={b.id} value={b.id}>
+                      {b.name} ({b.code})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div>
@@ -539,24 +544,24 @@ export default function InventoryPage() {
                 Cancel
               </Button>
               <Button type="submit" disabled={submitting}>
-                {submitting ? "Applying..." : "Post Adjustment"}
+                {submitting ? "Applying…" : "Post Adjustment"}
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* ── Inter-Branch Transfer Dialog ── */}
+      {/* ── Inter-Branch Transfer Modal ────────────────────────────────────── */}
       <Dialog open={isTransferOpen} onOpenChange={setIsTransferOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
-                <ArrowRightLeft className="h-4 w-4" />
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <ArrowRightLeft className="size-5" />
               </div>
               <div>
-                <DialogTitle>Inter-Branch Stock Transfer</DialogTitle>
-                <DialogDescription>Move available units between stores and warehouses</DialogDescription>
+                <DialogTitle>Transfer Stock Between Branches</DialogTitle>
+                <DialogDescription>Move physical stock from one branch to another immediately.</DialogDescription>
               </div>
             </div>
           </DialogHeader>
@@ -570,77 +575,74 @@ export default function InventoryPage() {
           <form onSubmit={handleTransfer} className="space-y-4">
             <div>
               <label className="block text-xs font-medium text-foreground mb-1.5">Product SKU *</label>
-              <select
-                required
-                value={trVariantId}
-                onChange={(e) => setTrVariantId(e.target.value)}
-                className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <option value="">— Select variant —</option>
-                {uniqueVariants.map((v) => (
-                  <option key={v.variantId} value={v.variantId}>
-                    {v.variantSku} · {v.productName}
-                  </option>
-                ))}
-              </select>
+              <Select value={trVariantId} onValueChange={setTrVariantId}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="— Select Variant —" />
+                </SelectTrigger>
+                <SelectContent>
+                  {uniqueVariants.map((v) => (
+                    <SelectItem key={v.variantId} value={v.variantId}>
+                      {v.variantSku} · {v.productName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <label className="block text-xs font-medium text-foreground mb-1.5">From Branch *</label>
-                <select
-                  required
-                  value={trFromBranch}
-                  onChange={(e) => setTrFromBranch(e.target.value)}
-                  className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <option value="">— Source —</option>
-                  {branches.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.code} ({b.name.slice(0, 15)}...)
-                    </option>
-                  ))}
-                </select>
+                <Select value={trFromBranch} onValueChange={setTrFromBranch}>
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue placeholder="— Source —" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {branches.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name} ({b.code})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div>
                 <label className="block text-xs font-medium text-foreground mb-1.5">To Branch *</label>
-                <select
-                  required
-                  value={trToBranch}
-                  onChange={(e) => setTrToBranch(e.target.value)}
-                  className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <option value="">— Destination —</option>
-                  {branches.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.code} ({b.name.slice(0, 15)}...)
-                    </option>
-                  ))}
-                </select>
+                <Select value={trToBranch} onValueChange={setTrToBranch}>
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue placeholder="— Destination —" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {branches.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name} ({b.code})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-foreground mb-1.5">Quantity to Transfer *</label>
+              <label className="block text-xs font-medium text-foreground mb-1.5">Transfer Quantity *</label>
               <Input
                 required
                 type="number"
-                min="1"
-                step="1"
+                min="0.001"
+                step="any"
                 value={trQty}
                 onChange={(e) => setTrQty(e.target.value)}
-                placeholder="e.g. 10"
+                placeholder="e.g. 25"
                 className="font-mono"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-foreground mb-1.5">Transfer Notes (optional)</label>
+              <label className="block text-xs font-medium text-foreground mb-1.5">Transfer Notes (Optional)</label>
               <Input
                 value={trNotes}
                 onChange={(e) => setTrNotes(e.target.value)}
-                placeholder="e.g. Delivery via Store Van 3"
+                placeholder="Reference # or driver info"
               />
             </div>
 
@@ -649,7 +651,7 @@ export default function InventoryPage() {
                 Cancel
               </Button>
               <Button type="submit" disabled={submitting}>
-                {submitting ? "Transferring..." : "Complete Transfer"}
+                {submitting ? "Transferring…" : "Execute Transfer"}
               </Button>
             </DialogFooter>
           </form>

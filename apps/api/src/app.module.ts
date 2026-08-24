@@ -108,7 +108,12 @@ import { TransfersModule } from "./modules/transfers/transfers.module.js";
         },
         autoLogging: {
           // The POS polls /health every few seconds; logging it buries everything else.
-          ignore: (req) => req.url === "/health" || req.url === "/ready",
+          // Match both the prefixed path (via globalPrefix) and the bare path.
+          ignore: (req) =>
+            req.url === "/health" ||
+            req.url === "/ready" ||
+            req.url === "/api/v1/health" ||
+            req.url === "/api/v1/ready",
         },
       },
     }),

@@ -1,17 +1,14 @@
-import { Clock, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Clock, ShoppingCart, Trash2 } from "lucide-react";
+import React, { useEffect, useState } from "react";
 import { Dialog } from "./Dialog.js";
 import { money } from "../lib/money.js";
 import { posData, type PosHeldCart } from "../lib/pos-data.js";
 import { Money } from "@devsfleet/shared-utils";
 
 /**
- * Parked carts.
+ * Parked Carts Dialog.
  *
- * A customer goes back to the van for their wallet; the till has to be free
- * before they return. The list is what a cashier scans to find the right one,
- * so it leads with the label they typed and the total — an id would be useless
- * and a line-by-line preview would be slower to read than the cart itself.
+ * Allows cashiers to restore or discard suspended carts.
  */
 export function HeldCartsDialog({
   open,
@@ -27,7 +24,7 @@ export function HeldCartsDialog({
 
   useEffect(() => {
     if (!open) return;
-    void posData.listHeldCarts().then(setCarts);
+    void posData.listHeldCarts().then((list) => setCarts(list ?? []));
   }, [open]);
 
   async function restore(id: string) {
@@ -47,42 +44,50 @@ export function HeldCartsDialog({
   }
 
   return (
-    <Dialog open={open} onClose={onClose} title="Held carts" width="lg">
+    <Dialog open={open} onClose={onClose} title="Held Carts (Parked Sales)" width="md">
       {carts.length === 0 ? (
-        <p className="px-1 py-8 text-center text-[13px] text-steel-400">
-          Nothing is parked. Press F8 during a sale to hold it.
-        </p>
+        <div className="py-12 text-center text-[var(--pos-text-3)]">
+          <ShoppingCart className="size-10 mx-auto mb-2 opacity-30 text-[var(--pos-text-3)]" />
+          <p className="text-xs font-semibold text-[var(--pos-text)]">No carts currently on hold</p>
+          <p className="text-[11px] text-[var(--pos-text-3)] mt-0.5">
+            Press F8 while building a cart to park it for later.
+          </p>
+        </div>
       ) : (
-        <ul className="flex flex-col gap-px">
+        <ul className="divide-y divide-[var(--pos-border)] border border-[var(--pos-border)] rounded-xl overflow-hidden bg-[var(--pos-panel)]">
           {carts.map((cart) => (
             <li
               key={cart.id}
-              className="flex items-center gap-3 bg-steel-850 px-3 py-2.5 first:rounded-t-lg last:rounded-b-lg"
+              className="flex items-center justify-between gap-3 p-3.5 hover:bg-[var(--pos-raised)]/60 transition-colors"
             >
               <button
                 type="button"
                 disabled={busy}
                 onClick={() => void restore(cart.id)}
-                className="flex min-w-0 flex-1 items-center gap-3 text-left disabled:opacity-50"
+                className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left disabled:opacity-50 cursor-pointer"
               >
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[14px] text-steel-100">
-                    {cart.label || "Unlabelled cart"}
+                <div className="min-w-0 flex-1">
+                  <span className="block truncate text-xs font-bold text-[var(--pos-text)]">
+                    {cart.label || "Unlabelled Cart"}
                   </span>
-                  <span className="mt-0.5 flex items-center gap-2 text-[12px] text-steel-400">
-                    <Clock size={12} aria-hidden />
-                    {heldFor(cart.heldAt)}
-                    <span aria-hidden>·</span>
-                    {cart.lineCount} {cart.lineCount === 1 ? "line" : "lines"}
+                  <div className="mt-0.5 flex items-center gap-2 text-[11px] text-[var(--pos-text-3)]">
+                    <span className="flex items-center gap-1">
+                      <Clock className="size-3" />
+                      {heldFor(cart.heldAt)}
+                    </span>
+                    <span>·</span>
+                    <span>
+                      {cart.lineCount} {cart.lineCount === 1 ? "line" : "lines"}
+                    </span>
                     {cart.customerName && (
                       <>
-                        <span aria-hidden>·</span>
-                        <span className="truncate">{cart.customerName}</span>
+                        <span>·</span>
+                        <span className="truncate font-medium text-[var(--pos-text-2)]">{cart.customerName}</span>
                       </>
                     )}
-                  </span>
-                </span>
-                <span className="shrink-0 font-mono text-[15px] tabular-nums text-brass-300">
+                  </div>
+                </div>
+                <span className="shrink-0 font-mono font-bold text-sm text-[var(--pos-accent)]">
                   {money(Money.toMinor(cart.total))}
                 </span>
               </button>
@@ -91,9 +96,9 @@ export function HeldCartsDialog({
                 type="button"
                 aria-label={`Discard ${cart.label || "cart"}`}
                 onClick={() => void discard(cart.id)}
-                className="shrink-0 rounded p-1.5 text-steel-500 hover:bg-signal-red/15 hover:text-signal-red"
+                className="size-7 rounded-lg text-[var(--pos-text-3)] hover:text-signal-red hover:bg-signal-red/10 flex items-center justify-center transition-colors shrink-0"
               >
-                <Trash2 size={15} aria-hidden />
+                <Trash2 className="size-3.5" />
               </button>
             </li>
           ))}
@@ -103,12 +108,6 @@ export function HeldCartsDialog({
   );
 }
 
-/**
- * "12 min" rather than a timestamp.
- *
- * How long ago is the question a cashier is actually asking — a cart parked
- * four hours ago is probably abandoned, and 14:32 does not say that at a glance.
- */
 function heldFor(iso: string): string {
   const minutes = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000));
   if (minutes < 1) return "just now";

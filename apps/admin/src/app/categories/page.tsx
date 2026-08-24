@@ -13,6 +13,13 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Category {
   id: string;
@@ -159,7 +166,7 @@ export default function CategoriesPage() {
             The tree products are organised under — up to 5 levels deep.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <Button variant="outline" size="sm" onClick={fetchTree} disabled={loading}>
             <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
             Refresh
@@ -284,20 +291,20 @@ export default function CategoriesPage() {
               <Input required value={fName} onChange={(e) => setFName(e.target.value)} placeholder="e.g. Plumbing" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-foreground mb-1.5">Parent category</label>
-              <select
-                value={fParentId}
-                onChange={(e) => setFParentId(e.target.value)}
-                className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <option value="">— Top level —</option>
-                {parentOptions.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {"  ".repeat(c.depth)}
-                    {c.name}
-                  </option>
-                ))}
-              </select>
+              <label className="block text-xs font-medium text-foreground mb-1.5">Parent Category</label>
+              <Select value={fParentId || "root"} onValueChange={(val) => setFParentId(val === "root" ? "" : val)}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="— Top Level Category —" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="root">— Top Level Category —</SelectItem>
+                  {parentOptions.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {"— ".repeat(c.depth)}{c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div>

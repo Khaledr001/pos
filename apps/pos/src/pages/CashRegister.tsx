@@ -1,22 +1,36 @@
 import { Money } from "@devsfleet/shared-utils";
-import { ArrowDownLeft, ArrowUpRight, Lock, Unlock } from "lucide-react";
-import { useState } from "react";
+import {
+  AlertCircle,
+  ArrowDownLeft,
+  ArrowUpRight,
+  Banknote,
+  CheckCircle2,
+  Clock,
+  History,
+  Lock,
+  Plus,
+  ShieldAlert,
+  Unlock,
+  Wallet,
+  Zap,
+} from "lucide-react";
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Dialog } from "../components/Dialog.js";
+import { Keypad } from "../components/Keypad.js";
 import { KeyRail } from "../components/KeyRail.js";
 import { useHotkeys } from "../lib/keyboard.js";
 import { amount, money, parseAmount } from "../lib/money.js";
-import { posData, type PosCashSession } from "../lib/pos-data.js";
+import { hasBridge, posData, type PosCashSession } from "../lib/pos-data.js";
 
 /**
- * The cash drawer.
+ * The Cash Drawer Register.
  *
- * One session per cashier per shift. The float going in and the count coming
- * out are both recorded, so the difference is stated rather than absorbed —
- * a drawer that is quietly reconciled is a drawer nobody can audit.
- *
- * The expected figure is computed and shown only AFTER the cashier has entered
- * their count. Showing the target first turns a count into a confirmation, and
- * a short drawer stops being visible.
+ * Controls cash float custody per shift:
+ * - Recorded opening float
+ * - Live expected drawer calculation (Float + Cash Sales + Pay-Ins - Pay-Outs)
+ * - Blind closing reconciliation to prevent rubber-stamping
+ * - Variance detection (Shortfall requires mandatory explanation note)
  */
 export function CashRegister({
   session,
@@ -25,11 +39,10 @@ export function CashRegister({
   session: PosCashSession | null;
   onChanged: () => void;
 }) {
+  const navigate = useNavigate();
   const [openDialog, setOpenDialog] = useState(false);
   const [closeDialog, setCloseDialog] = useState(false);
-  const [movementDialog, setMovementDialog] = useState<"cash_in" | "cash_out" | null>(
-    null,
-  );
+  const [movementDialog, setMovementDialog] = useState<"cash_in" | "cash_out" | null>(null);
 
   useHotkeys({
     f5: () => (session ? setMovementDialog("cash_in") : setOpenDialog(true)),
@@ -46,94 +59,193 @@ export function CashRegister({
       )
     : 0n;
 
+  async function triggerDrawerPulse() {
+    if (!hasBridge()) return;
+    try {
+      await window.devsfleet.cashDrawer.open("Cash drawer manual test");
+    } catch {
+      // Hardware failure does not block session
+    }
+  }
+
   return (
     <>
-      <div className="min-h-0 flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-2xl space-y-5">
-          {!session ? (
-            <div className="panel flex flex-col items-center gap-4 px-6 py-14 text-center">
-              <Lock className="size-8 text-zinc-600" aria-hidden />
+      <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6 bg-[var(--pos-bg)]">
+        <div className="mx-auto max-w-3xl space-y-5">
+          {/* ── Page Header ── */}
+          <div className="flex items-center justify-between border-b border-[var(--pos-border)] pb-4">
+            <div className="flex items-center gap-2.5">
+              <Wallet className="size-5 text-[var(--pos-accent)]" />
               <div>
-                <h2 className="text-base font-semibold">The drawer is closed</h2>
-                <p className="mt-1 text-[13px] text-zinc-500">
-                  Count the opening float and open the drawer to start selling.
+                <h1 className="text-base font-bold tracking-tight text-[var(--pos-text)]">
+                  Cash Register Drawer
+                </h1>
+                <p className="text-xs text-[var(--pos-text-3)]">
+                  Shift float reconciliation, cash movements and drawer counts
+                </p>
+              </div>
+            </div>
+
+            {session && hasBridge() && (
+              <button
+                type="button"
+                onClick={() => void triggerDrawerPulse()}
+                className="btn btn-ghost text-xs h-8 px-3"
+                title="Send kick pulse to open physical drawer"
+              >
+                <Zap className="size-3.5 mr-1 text-signal-green" />
+                Open Drawer (Kick)
+              </button>
+            )}
+          </div>
+
+          {/* ── Closed Drawer State ── */}
+          {!session ? (
+            <div className="panel border border-[var(--pos-border)] rounded-2xl bg-[var(--pos-panel)] flex flex-col items-center gap-4 px-6 py-16 text-center shadow-xs">
+              <div className="size-16 rounded-2xl bg-[var(--pos-raised)] flex items-center justify-center text-[var(--pos-text-3)]">
+                <Lock className="size-8" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-[var(--pos-text)]">The Cash Drawer is Closed</h2>
+                <p className="mt-1 text-xs text-[var(--pos-text-3)] max-w-sm mx-auto">
+                  Count the opening float in the cash drawer to start this shift and enable cash checkout.
                 </p>
               </div>
               <button
                 type="button"
-                className="btn btn-primary"
+                className="btn btn-primary px-6 h-11 text-xs font-bold shadow-xs"
                 onClick={() => setOpenDialog(true)}
               >
-                <Unlock className="size-4" aria-hidden />
-                Open drawer
+                <Unlock className="size-4 mr-1.5" />
+                Open Drawer with Float (F5)
               </button>
             </div>
           ) : (
             <>
-              <div className="panel p-5">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <span className="eyebrow">Drawer open since</span>
-                    <p className="num mt-1 text-[13px] text-zinc-300">
-                      {new Date(session.openedAt).toLocaleString("en-GB", {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                      })}
-                    </p>
+              {/* ── Active Session Audit Card ── */}
+              <div className="panel border border-[var(--pos-border)] rounded-2xl bg-[var(--pos-panel)] p-5 shadow-xs space-y-5">
+                {/* Header Status */}
+                <div className="flex items-center justify-between border-b border-[var(--pos-border)]/60 pb-3.5">
+                  <div className="flex items-center gap-2">
+                    <Clock className="size-4 text-[var(--pos-accent)]" />
+                    <div>
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--pos-text-3)] block">
+                        Drawer Session Active Since
+                      </span>
+                      <p className="font-mono text-xs font-semibold text-[var(--pos-text)] mt-0.5">
+                        {new Date(session.openedAt).toLocaleString("en-GB", {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })}
+                      </p>
+                    </div>
                   </div>
-                  <span className="rounded-full bg-signal-green/15 px-2.5 py-1 text-[11px] font-semibold text-signal-green">
-                    Open
+
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-signal-green/10 border border-signal-green/30 px-3 py-1 text-xs font-bold text-signal-green">
+                    <span className="size-2 rounded-full bg-signal-green animate-pulse" />
+                    Active Drawer
                   </span>
                 </div>
 
-                <dl className="mt-5 space-y-2.5 text-[14px]">
-                  <Row label="Opening float" value={amount(Money.toMinor(session.openingAmount))} />
-                  <Row label="Cash sales" value={amount(Money.toMinor(session.cashSales))} />
-                  <Row label="Paid in" value={amount(Money.toMinor(session.cashIn))} />
-                  <Row
-                    label="Paid out"
-                    // The sign is only meaningful when money actually left the
-                    // drawer. "−0.00" reads as a defect.
-                    value={
-                      Money.isPositive(Money.toMinor(session.cashOut))
-                        ? `−${amount(Money.toMinor(session.cashOut))}`
-                        : amount(0n)
-                    }
-                  />
-                </dl>
+                {/* Audit Grid Rows */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  {/* Opening Float */}
+                  <div className="rounded-xl border border-[var(--pos-border)] bg-[var(--pos-raised)] p-3.5">
+                    <span className="text-[11px] font-semibold text-[var(--pos-text-3)] block">
+                      Opening Float
+                    </span>
+                    <span className="font-mono text-lg font-bold text-[var(--pos-text)] mt-1 block">
+                      {amount(Money.toMinor(session.openingAmount))}
+                    </span>
+                    <span className="text-[10px] text-[var(--pos-text-3)]">Counted at start of shift</span>
+                  </div>
 
-                <div className="tear mt-4 flex items-baseline justify-between pt-4">
-                  <span className="eyebrow">Expected in drawer</span>
-                  <span className="num text-2xl font-bold text-brass">
+                  {/* Cash Sales */}
+                  <div className="rounded-xl border border-[var(--pos-border)] bg-[var(--pos-raised)] p-3.5">
+                    <span className="text-[11px] font-semibold text-[var(--pos-text-3)] block">
+                      Cash Sales Revenue
+                    </span>
+                    <span className="font-mono text-lg font-bold text-signal-green mt-1 block">
+                      +{amount(Money.toMinor(session.cashSales))}
+                    </span>
+                    <span className="text-[10px] text-[var(--pos-text-3)]">From completed cash sales</span>
+                  </div>
+
+                  {/* Paid In */}
+                  <div className="rounded-xl border border-[var(--pos-border)] bg-[var(--pos-raised)] p-3.5">
+                    <span className="text-[11px] font-semibold text-[var(--pos-text-3)] block">
+                      Manual Cash In (Top-ups)
+                    </span>
+                    <span className="font-mono text-lg font-bold text-[var(--pos-text)] mt-1 block">
+                      +{amount(Money.toMinor(session.cashIn))}
+                    </span>
+                    <span className="text-[10px] text-[var(--pos-text-3)]">Extra change / added float</span>
+                  </div>
+
+                  {/* Paid Out */}
+                  <div className="rounded-xl border border-[var(--pos-border)] bg-[var(--pos-raised)] p-3.5">
+                    <span className="text-[11px] font-semibold text-[var(--pos-text-3)] block">
+                      Manual Cash Out (Payouts)
+                    </span>
+                    <span
+                      className={[
+                        "font-mono text-lg font-bold mt-1 block",
+                        Money.isPositive(Money.toMinor(session.cashOut))
+                          ? "text-signal-amber"
+                          : "text-[var(--pos-text)]",
+                      ].join(" ")}
+                    >
+                      {Money.isPositive(Money.toMinor(session.cashOut))
+                        ? `−${amount(Money.toMinor(session.cashOut))}`
+                        : amount(0n)}
+                    </span>
+                    <span className="text-[10px] text-[var(--pos-text-3)]">Petty cash / vendor drops</span>
+                  </div>
+                </div>
+
+                {/* Expected Drawer Total */}
+                <div className="rounded-xl border border-[var(--pos-border)] bg-[var(--pos-raised)] p-4 flex items-baseline justify-between">
+                  <div>
+                    <span className="text-xs font-bold uppercase tracking-wider text-[var(--pos-text-3)] block">
+                      Expected Cash in Drawer
+                    </span>
+                    <span className="text-[11px] text-[var(--pos-text-3)]">
+                      Float + Sales + Cash In − Cash Out
+                    </span>
+                  </div>
+                  <span className="font-mono text-2xl md:text-3xl font-bold text-[var(--pos-accent)]">
                     {money(expected)}
                   </span>
                 </div>
               </div>
 
+              {/* ── Action Buttons ── */}
               <div className="grid grid-cols-3 gap-3">
                 <button
                   type="button"
-                  className="btn btn-ghost"
+                  className="btn btn-ghost h-12 text-xs font-bold justify-center"
                   onClick={() => setMovementDialog("cash_in")}
                 >
-                  <ArrowDownLeft className="size-4 text-signal-green" aria-hidden />
-                  Pay in
+                  <ArrowDownLeft className="size-4 text-signal-green mr-1.5" />
+                  Pay In (F5)
                 </button>
+
                 <button
                   type="button"
-                  className="btn btn-ghost"
+                  className="btn btn-ghost h-12 text-xs font-bold justify-center"
                   onClick={() => setMovementDialog("cash_out")}
                 >
-                  <ArrowUpRight className="size-4 text-signal-amber" aria-hidden />
-                  Pay out
+                  <ArrowUpRight className="size-4 text-signal-amber mr-1.5" />
+                  Pay Out (F6)
                 </button>
+
                 <button
                   type="button"
-                  className="btn btn-ghost"
+                  className="btn btn-primary h-12 text-xs font-bold justify-center"
                   onClick={() => setCloseDialog(true)}
                 >
-                  <Lock className="size-4" aria-hidden />
-                  Close drawer
+                  <Lock className="size-4 mr-1.5" />
+                  Close Drawer (F8)
                 </button>
               </div>
             </>
@@ -141,8 +253,10 @@ export function CashRegister({
         </div>
       </div>
 
+      {/* ── KeyRail ── */}
       <KeyRail
         actions={[
+          { combo: "Esc", label: "Back to sale", onPress: () => navigate("/") },
           session
             ? { combo: "F5", label: "Pay in", onPress: () => setMovementDialog("cash_in") }
             : { combo: "F5", label: "Open drawer", onPress: () => setOpenDialog(true), primary: true },
@@ -161,14 +275,20 @@ export function CashRegister({
         ]}
       />
 
+      {/* ── Amount Dialog (Open / Pay In / Pay Out) ── */}
       <AmountDialog
         open={openDialog}
-        title="Open the drawer"
-        description="Count the float that is physically in the drawer now."
-        label="Opening float"
-        confirmLabel="Open drawer"
+        title="Open Cash Drawer"
+        description="Count and enter the initial cash float physically in the till."
+        label="Opening Float Amount (AED)"
+        confirmLabel="Open Drawer"
         onClose={() => setOpenDialog(false)}
         onConfirm={async (value) => {
+          if (hasBridge()) {
+            try {
+              await window.devsfleet.cashDrawer.open("Open shift float count");
+            } catch {}
+          }
           await posData.openCashSession(Money.toDecimalString(value, 2));
           setOpenDialog(false);
           onChanged();
@@ -177,18 +297,23 @@ export function CashRegister({
 
       <AmountDialog
         open={movementDialog !== null}
-        title={movementDialog === "cash_in" ? "Pay in" : "Pay out"}
+        title={movementDialog === "cash_in" ? "Record Cash In (Pay In)" : "Record Cash Out (Pay Out)"}
         description={
           movementDialog === "cash_in"
-            ? "Cash added to the drawer from outside a sale."
-            : "Cash removed from the drawer — a supplier paid in cash, a float taken to the bank."
+            ? "Cash added to the drawer outside of a sale (e.g. extra float, till top-up)."
+            : "Cash removed from the drawer (e.g. petty cash expense, supplier payment, bank drop)."
         }
-        label="Amount"
-        confirmLabel="Record"
+        label="Movement Amount (AED)"
+        confirmLabel={movementDialog === "cash_in" ? "Record Pay In" : "Record Pay Out"}
         requireReason
         onClose={() => setMovementDialog(null)}
         onConfirm={async (value, reason) => {
           if (!movementDialog) return;
+          if (hasBridge()) {
+            try {
+              await window.devsfleet.cashDrawer.open(`Cash movement: ${movementDialog}`);
+            } catch {}
+          }
           await posData.recordCashMovement(
             movementDialog,
             Money.toDecimalString(value, 2),
@@ -199,6 +324,7 @@ export function CashRegister({
         }}
       />
 
+      {/* ── Close Drawer Reconciliation Dialog ── */}
       {session && (
         <CloseDrawerDialog
           open={closeDialog}
@@ -215,16 +341,7 @@ export function CashRegister({
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between">
-      <dt className="text-zinc-400">{label}</dt>
-      <dd className="num">{value}</dd>
-    </div>
-  );
-}
-
-// -----------------------------------------------------------------------------
+// ── Amount Dialog Sub-Component ──────────────────────────────────────────────
 
 function AmountDialog({
   open,
@@ -247,8 +364,10 @@ function AmountDialog({
 }) {
   const [input, setInput] = useState("");
   const [reason, setReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
   const value = parseAmount(input);
-  const ready = value !== null && Money.isPositive(value) && (!requireReason || reason.trim());
+  const ready = value !== null && Money.isPositive(value) && (!requireReason || reason.trim().length > 0);
 
   return (
     <Dialog
@@ -256,64 +375,89 @@ function AmountDialog({
       onClose={onClose}
       title={title}
       description={description}
-      width="sm"
-      footer={
-        <>
-          <button type="button" className="btn btn-ghost" onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={!ready}
-            onClick={async () => {
-              if (value) await onConfirm(value, reason.trim() || undefined);
-              setInput("");
-              setReason("");
-            }}
-          >
-            {confirmLabel}
-          </button>
-        </>
-      }
+      width="lg"
     >
-      <label htmlFor="amount-input" className="eyebrow">
-        {label}
-      </label>
-      <input
-        id="amount-input"
-        autoFocus
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        inputMode="decimal"
-        className="field num mt-1.5 text-right text-2xl font-semibold"
-        placeholder="0.00"
-      />
+      <div className="grid gap-6 sm:grid-cols-[1fr_16rem]">
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="amount-input" className="eyebrow block mb-1">
+              {label}
+            </label>
+            <input
+              id="amount-input"
+              autoFocus
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              inputMode="decimal"
+              className="field num text-right text-2xl font-bold bg-[var(--pos-raised)] border-[var(--pos-border)] text-[var(--pos-text)]"
+              placeholder="0.00"
+            />
+          </div>
 
-      {requireReason && (
-        <>
-          <label htmlFor="movement-reason" className="eyebrow mt-4 block">
-            Reason
-          </label>
-          <input
-            id="movement-reason"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            className="field mt-1.5"
-            placeholder="Why is this cash moving?"
+          {requireReason && (
+            <div>
+              <label htmlFor="movement-reason" className="eyebrow block mb-1">
+                Reason for Movement (Mandatory)
+              </label>
+              <input
+                id="movement-reason"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                className="field text-xs bg-[var(--pos-raised)] border-[var(--pos-border)] text-[var(--pos-text)]"
+                placeholder="e.g. Petty cash for packaging, bank drop, till top-up"
+              />
+              <p className="mt-1 text-[11px] text-[var(--pos-text-3)]">
+                Recorded against your cashier name for audit trail logs.
+              </p>
+            </div>
+          )}
+
+          <div className="pt-2 flex gap-3">
+            <button
+              type="button"
+              className="btn btn-ghost flex-1 text-xs"
+              onClick={onClose}
+              disabled={submitting}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary flex-1 text-xs font-bold justify-center"
+              disabled={!ready || submitting}
+              onClick={async () => {
+                if (value) {
+                  setSubmitting(true);
+                  try {
+                    await onConfirm(value, reason.trim() || undefined);
+                    setInput("");
+                    setReason("");
+                  } finally {
+                    setSubmitting(false);
+                  }
+                }
+              }}
+            >
+              {confirmLabel}
+            </button>
+          </div>
+        </div>
+
+        {/* Touch Keypad */}
+        <div className="space-y-3">
+          <Keypad
+            showDecimal
+            onDigit={(d) => setInput((v) => v + d)}
+            onBackspace={() => setInput((v) => v.slice(0, -1))}
+            onClear={() => setInput("")}
           />
-          {/* Mandatory on purpose: an unexplained drawer movement is exactly
-              what a shrinkage report goes looking for. */}
-          <p className="mt-1.5 text-[11px] text-zinc-500">
-            Recorded against your name and shown in the shrinkage report.
-          </p>
-        </>
-      )}
+        </div>
+      </div>
     </Dialog>
   );
 }
 
-// -----------------------------------------------------------------------------
+// ── Close Drawer Blind Count Dialog ──────────────────────────────────────────
 
 function CloseDrawerDialog({
   open,
@@ -329,6 +473,7 @@ function CloseDrawerDialog({
   const [input, setInput] = useState("");
   const [notes, setNotes] = useState("");
   const [revealed, setRevealed] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const counted = parseAmount(input);
   const variance = counted !== null ? Money.subtract(counted, expected) : null;
@@ -339,102 +484,130 @@ function CloseDrawerDialog({
     <Dialog
       open={open}
       onClose={onClose}
-      title="Close the drawer"
-      description="Count what is physically in the drawer, then enter the figure."
-      width="sm"
-      footer={
-        <>
-          <button type="button" className="btn btn-ghost" onClick={onClose}>
-            Cancel
-          </button>
-          {!revealed ? (
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={counted === null}
-              onClick={() => setRevealed(true)}
-            >
-              Check the count
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={counted === null || (short && !notes.trim())}
-              onClick={async () => {
-                if (counted !== null) await onConfirm(counted, notes.trim() || undefined);
-                setInput("");
-                setNotes("");
+      title="Close Shift Drawer (End of Shift Count)"
+      description="Perform a blind physical count of cash currently in the drawer."
+      width="lg"
+    >
+      <div className="grid gap-6 sm:grid-cols-[1fr_16rem]">
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="counted" className="eyebrow block mb-1">
+              Physically Counted Amount (AED)
+            </label>
+            <input
+              id="counted"
+              autoFocus
+              value={input}
+              onChange={(e) => {
+                setInput(e.target.value);
                 setRevealed(false);
               }}
-            >
-              Close drawer
-            </button>
+              inputMode="decimal"
+              className="field num text-right text-2xl font-bold bg-[var(--pos-raised)] border-[var(--pos-border)] text-[var(--pos-text)]"
+              placeholder="0.00"
+            />
+          </div>
+
+          {!revealed && (
+            <p className="text-[11px] text-[var(--pos-text-3)] bg-[var(--pos-raised)] p-2.5 rounded-lg">
+              Target expected cash stays hidden until you submit your physical count to ensure an accurate, honest audit.
+            </p>
           )}
-        </>
-      }
-    >
-      <label htmlFor="counted" className="eyebrow">
-        Counted in drawer
-      </label>
-      <input
-        id="counted"
-        autoFocus
-        value={input}
-        onChange={(e) => {
-          setInput(e.target.value);
-          setRevealed(false);
-        }}
-        inputMode="decimal"
-        className="field num mt-1.5 text-right text-2xl font-semibold"
-        placeholder="0.00"
-      />
 
-      {!revealed && (
-        <p className="mt-3 text-[12px] text-zinc-500">
-          The expected figure stays hidden until you have counted, so this is a
-          count rather than a confirmation.
-        </p>
-      )}
+          {revealed && variance !== null && (
+            <div className="space-y-2.5 rounded-xl border border-[var(--pos-border)] bg-[var(--pos-raised)] p-3.5 text-xs animate-line-in">
+              <div className="flex justify-between text-[var(--pos-text-2)]">
+                <span>Expected in Drawer</span>
+                <span className="font-mono font-semibold">{amount(expected)}</span>
+              </div>
+              <div className="flex justify-between text-[var(--pos-text-2)]">
+                <span>Counted Amount</span>
+                <span className="font-mono font-semibold">{amount(counted!)}</span>
+              </div>
+              <div className="border-t border-[var(--pos-border)] flex items-baseline justify-between pt-2">
+                <span className="font-bold uppercase tracking-wider text-[var(--pos-text-3)]">
+                  {short ? "Shortfall (Missing)" : over ? "Overage (Surplus)" : "Perfect Balance"}
+                </span>
+                <span
+                  className={`font-mono text-base font-bold ${
+                    short ? "text-signal-red" : over ? "text-signal-amber" : "text-signal-green"
+                  }`}
+                >
+                  {amount(Money.abs(variance))}
+                </span>
+              </div>
+            </div>
+          )}
 
-      {revealed && variance !== null && (
-        <div className="mt-4 space-y-2.5 rounded-lg bg-steel-800 p-4">
-          <div className="flex justify-between text-[13px]">
-            <span className="text-zinc-400">Expected</span>
-            <span className="num">{amount(expected)}</span>
-          </div>
-          <div className="flex justify-between text-[13px]">
-            <span className="text-zinc-400">Counted</span>
-            <span className="num">{amount(counted!)}</span>
-          </div>
-          <div className="tear flex items-baseline justify-between pt-2.5">
-            <span className="eyebrow">{short ? "Short" : over ? "Over" : "Balanced"}</span>
-            <span
-              className={`num text-xl font-bold ${
-                short ? "text-signal-red" : over ? "text-signal-amber" : "text-signal-green"
-              }`}
+          {revealed && short && (
+            <div>
+              <label htmlFor="variance-notes" className="eyebrow block mb-1 text-signal-red">
+                Explain the Shortfall (Mandatory)
+              </label>
+              <input
+                id="variance-notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                className="field text-xs bg-[var(--pos-raised)] border-signal-red/50 text-[var(--pos-text)]"
+                placeholder="Reason for missing cash count..."
+                autoFocus
+              />
+            </div>
+          )}
+
+          <div className="pt-2 flex gap-3">
+            <button
+              type="button"
+              className="btn btn-ghost flex-1 text-xs"
+              onClick={onClose}
+              disabled={submitting}
             >
-              {amount(Money.abs(variance))}
-            </span>
+              Cancel
+            </button>
+            {!revealed ? (
+              <button
+                type="button"
+                className="btn btn-primary flex-1 text-xs font-bold justify-center"
+                disabled={counted === null}
+                onClick={() => setRevealed(true)}
+              >
+                Check & Verify Count
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-primary flex-1 text-xs font-bold justify-center"
+                disabled={counted === null || (short && !notes.trim()) || submitting}
+                onClick={async () => {
+                  if (counted !== null) {
+                    setSubmitting(true);
+                    try {
+                      await onConfirm(counted, notes.trim() || undefined);
+                      setInput("");
+                      setNotes("");
+                      setRevealed(false);
+                    } finally {
+                      setSubmitting(false);
+                    }
+                  }
+                }}
+              >
+                {submitting ? "Closing…" : "Confirm & Close Drawer"}
+              </button>
+            )}
           </div>
         </div>
-      )}
 
-      {revealed && short && (
-        <>
-          <label htmlFor="variance-notes" className="eyebrow mt-4 block">
-            Explain the shortfall
-          </label>
-          <input
-            id="variance-notes"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            className="field mt-1.5"
-            placeholder="What happened?"
-            autoFocus
+        {/* Touch Keypad */}
+        <div className="space-y-3">
+          <Keypad
+            showDecimal
+            onDigit={(d) => setInput((v) => v + d)}
+            onBackspace={() => setInput((v) => v.slice(0, -1))}
+            onClear={() => setInput("")}
           />
-        </>
-      )}
+        </div>
+      </div>
     </Dialog>
   );
 }

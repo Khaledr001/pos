@@ -17,6 +17,13 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Device {
   id: string;
@@ -145,7 +152,7 @@ export default function DevicesPage() {
             Devices registered to sign in and sync against this business.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <Button variant="outline" size="sm" onClick={fetchDevices} disabled={loading}>
             <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
             Refresh
@@ -255,17 +262,18 @@ export default function DevicesPage() {
             </div>
             <div>
               <label className="block text-xs font-medium text-foreground mb-1.5">Branch *</label>
-              <select
-                required
-                value={fBranchId}
-                onChange={(e) => setFBranchId(e.target.value)}
-                className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <option value="">— Select branch —</option>
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
-                ))}
-              </select>
+              <Select value={fBranchId} onValueChange={setFBranchId}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="— Select Branch —" />
+                </SelectTrigger>
+                <SelectContent>
+                  {branches.map((b) => (
+                    <SelectItem key={b.id} value={b.id}>
+                      {b.name} ({b.code})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>Cancel</Button>

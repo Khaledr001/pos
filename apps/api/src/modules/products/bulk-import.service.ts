@@ -82,7 +82,7 @@ async function readWorkbook(buffer: Buffer): Promise<ParseResult> {
 
   // Try xlsx first, fall back to csv
   try {
-    await workbook.xlsx.load(buffer);
+    await workbook.xlsx.load(buffer as any);
   } catch {
     // If xlsx fails, try csv
     const text = buffer.toString("utf-8");

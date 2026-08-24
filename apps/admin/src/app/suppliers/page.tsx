@@ -172,7 +172,7 @@ export default function SuppliersPage() {
             Distributors, manufacturers, and trade suppliers with UAE TRN registration and purchase credit terms.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <Button variant="outline" size="sm" onClick={fetchSuppliers} disabled={loading}>
             <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
             Refresh

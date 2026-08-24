@@ -1,5 +1,6 @@
 import { Loader2, MonitorSmartphone } from "lucide-react";
 import { useState } from "react";
+import { Select } from "../components/Select.js";
 import { clearApiTokens } from "../lib/api-client.js";
 import {
   adminLoginForRegistration,
@@ -166,22 +167,17 @@ export function RegisterTerminal() {
             </form>
           ) : (
             <form onSubmit={handleRegister} className="flex flex-col gap-4">
-              <label className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-1.5">
                 <span className="text-[12px] font-medium text-pos-text-2">Branch</span>
-                <select
-                  required
+                <Select
                   value={selectedBranch}
-                  onChange={(e) => setSelectedBranch(e.target.value)}
-                  className="input appearance-none bg-pos-raised"
-                >
-                  <option value="" disabled>Select a branch</option>
-                  {branches.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  onChange={setSelectedBranch}
+                  placeholder="Select branch location..."
+                  options={branches.map((b) => ({ value: b.id, label: b.name }))}
+                  className="w-full"
+                  size="md"
+                />
+              </div>
               <label className="flex flex-col gap-1.5">
                 <span className="text-[12px] font-medium text-pos-text-2">Terminal Name</span>
                 <input

@@ -2,11 +2,11 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  FileText, Plus, RefreshCw, X, AlertCircle, CheckCircle2, Search, Download,
+  FileText, Plus, RefreshCw, X, AlertCircle, CheckCircle2, Search, Printer,
   Send, Ban, ShoppingCart, ClipboardList, Trash2,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
-import { api, apiDownload, saveBlob } from "@/lib/api-client";
+import { api, apiDownload, printBlob } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,13 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -25,6 +32,7 @@ interface QuotationRow {
   status: string;
   customerName: string | null;
   total: string;
+  currency?: string;
   validUntil: string | null;
   /** Derived server-side — a stored "expired" would need a job that may not run. */
   expired: boolean;
@@ -34,8 +42,9 @@ interface QuotationRow {
 interface QuotationItem {
   id: string;
   productName: string;
-  variantName: string;
-  productSku: string;
+  variantName?: string;
+  productSku?: string;
+  sku?: string;
   quantity: string;
   unitPrice: string;
   discountPercent: string;
@@ -57,6 +66,7 @@ interface QuotationDetail {
   notes: string | null;
   createdAt: string;
   customer: { id: string; name: string; company: string | null; phone: string | null } | null;
+  customerName?: string | null;
   items: QuotationItem[];
 }
 
@@ -110,8 +120,6 @@ export default function QuotationsPage() {
     setLoading(true);
     setError(null);
     try {
-      // `{items, total}` with no `meta`, so the interceptor does NOT flatten
-      // it — the list arrives nested under `data`, which api.get unwraps to.
       const res = await api.get<{ items: QuotationRow[]; total: number }>("/quotations", {
         accessToken: tokens?.accessToken,
         query: { page, pageSize: PAGE_SIZE, ...(status ? { status } : {}) },
@@ -143,16 +151,16 @@ export default function QuotationsPage() {
     }
   }, [tokens]);
 
-  const download = useCallback(async (row: { id: string; quotationNumber: string }) => {
+  const printQuotation = useCallback(async (row: { id: string; quotationNumber: string }) => {
     setBusy(`pdf:${row.id}`);
     setError(null);
     try {
-      const { blob, filename } = await apiDownload(`/quotations/${row.id}/pdf`, {
+      const { blob } = await apiDownload(`/quotations/${row.id}/pdf`, {
         accessToken: tokens?.accessToken,
       });
-      saveBlob(blob, filename ?? `${row.quotationNumber}.pdf`);
+      printBlob(blob, `Quotation ${row.quotationNumber}`);
     } catch (err: any) {
-      setError(err?.message || "Failed to download the quotation.");
+      setError(err?.message || "Failed to load the quotation for printing.");
     } finally {
       setBusy(null);
     }
@@ -212,7 +220,7 @@ export default function QuotationsPage() {
             Quote a price, hold it until it expires, then turn it into a sale or an order.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <Button variant="outline" size="sm" onClick={fetchRows} disabled={loading}>
             <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
             Refresh
@@ -247,16 +255,19 @@ export default function QuotationsPage() {
             className="pl-10 h-10 bg-secondary/30"
           />
         </div>
-        <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          className="h-10 rounded-lg border border-input bg-transparent px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-48"
-        >
-          <option value="">All statuses</option>
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
+        <Select value={status || "all"} onValueChange={(val) => setStatus(val === "all" ? "" : val)}>
+          <SelectTrigger className="h-10 sm:w-48 text-xs">
+            <SelectValue placeholder="All statuses" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All statuses</SelectItem>
+            {STATUSES.map((s) => (
+              <SelectItem key={s} value={s}>
+                {s.charAt(0).toUpperCase() + s.slice(1)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <Card className="overflow-hidden">
@@ -287,7 +298,7 @@ export default function QuotationsPage() {
                     <th className="px-4 py-3.5 font-medium">Valid until</th>
                     <th className="px-4 py-3.5 text-right font-medium">Total</th>
                     <th className="px-4 py-3.5 text-center font-medium">Status</th>
-                    <th className="px-4 py-3.5 text-right font-medium">PDF</th>
+                    <th className="px-4 py-3.5 text-right font-medium">Print</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -340,13 +351,14 @@ export default function QuotationsPage() {
                           onClick={(e) => {
                             // Otherwise the row's own click opens the dialog too.
                             e.stopPropagation();
-                            void download(row);
+                            void printQuotation(row);
                           }}
                           disabled={busy === `pdf:${row.id}`}
-                          aria-label={`Download ${row.quotationNumber} as PDF`}
+                          aria-label={`Print quotation ${row.quotationNumber}`}
+                          className="gap-1.5"
                         >
-                          <Download className="h-3.5 w-3.5" />
-                          {busy === `pdf:${row.id}` ? "…" : "PDF"}
+                          <Printer className="h-3.5 w-3.5" />
+                          {busy === `pdf:${row.id}` ? "…" : "Print"}
                         </Button>
                       </td>
                     </tr>
@@ -379,7 +391,7 @@ export default function QuotationsPage() {
         loading={detailLoading}
         busy={busy}
         onClose={() => setSelected(null)}
-        onDownload={download}
+        onPrint={printQuotation}
         onAct={act}
       />
 
@@ -404,14 +416,14 @@ function QuotationDetailDialog({
   loading,
   busy,
   onClose,
-  onDownload,
+  onPrint,
   onAct,
 }: {
   quotation: QuotationDetail | null;
   loading: boolean;
   busy: string | null;
   onClose: () => void;
-  onDownload: (row: { id: string; quotationNumber: string }) => void;
+  onPrint: (row: { id: string; quotationNumber: string }) => void;
   onAct: (id: string, path: string, label: string, body?: unknown) => void;
 }) {
   const q = quotation;
@@ -433,7 +445,7 @@ function QuotationDetailDialog({
             <div>
               <DialogTitle className="font-mono">{q?.quotationNumber}</DialogTitle>
               <DialogDescription>
-                {q?.customer?.name ?? "No customer"}
+                {q?.customer?.name || q?.customerName || "No customer"}
                 {q?.validUntil ? ` · valid until ${q.validUntil}` : ""}
               </DialogDescription>
             </div>
@@ -472,7 +484,9 @@ function QuotationDetailDialog({
                           {item.productName}
                           {item.variantName && item.variantName !== "Default" ? ` — ${item.variantName}` : ""}
                         </div>
-                        <div className="font-mono text-[10px] text-muted-foreground">{item.productSku}</div>
+                        <div className="font-mono text-[10px] text-muted-foreground">
+                          {item.productSku || item.sku}
+                        </div>
                       </td>
                       <td className="px-3 py-2 text-right font-mono">{item.quantity}</td>
                       <td className="px-3 py-2 text-right font-mono">{parseFloat(item.unitPrice).toFixed(2)}</td>
@@ -513,11 +527,12 @@ function QuotationDetailDialog({
 
           <Button
             variant="outline"
-            onClick={() => q && onDownload(q)}
+            onClick={() => q && onPrint(q)}
             disabled={!q || busy === `pdf:${q?.id}`}
+            className="gap-2"
           >
-            <Download className="h-4 w-4" />
-            PDF
+            <Printer className="h-4 w-4" />
+            {busy === `pdf:${q?.id}` ? "Opening print…" : "Print Quotation"}
           </Button>
 
           {open && q?.status === "draft" && (
@@ -757,32 +772,34 @@ function CreateQuotationDialog({
           <div className="grid gap-3 sm:grid-cols-3">
             <div>
               <label className="block text-xs font-medium text-foreground mb-1.5">Branch *</label>
-              <select
-                required
-                value={branchId}
-                onChange={(e) => setBranchId(e.target.value)}
-                className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <option value="">— Select branch —</option>
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
-                ))}
-              </select>
+              <Select value={branchId} onValueChange={setBranchId}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="— Select Branch —" />
+                </SelectTrigger>
+                <SelectContent>
+                  {branches.map((b) => (
+                    <SelectItem key={b.id} value={b.id}>
+                      {b.name} ({b.code})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <label className="block text-xs font-medium text-foreground mb-1.5">Customer</label>
-              <select
-                value={customerId}
-                onChange={(e) => setCustomerId(e.target.value)}
-                className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <option value="">— Walk-in (no customer) —</option>
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}{c.company ? ` (${c.company})` : ""}
-                  </option>
-                ))}
-              </select>
+              <Select value={customerId || "walk-in"} onValueChange={(val) => setCustomerId(val === "walk-in" ? "" : val)}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="— Walk-in (no customer) —" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="walk-in">— Walk-in (no customer) —</SelectItem>
+                  {customers.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}{c.company ? ` (${c.company})` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <label className="block text-xs font-medium text-foreground mb-1.5">Valid until</label>
