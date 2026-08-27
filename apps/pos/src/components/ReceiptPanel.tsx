@@ -40,21 +40,21 @@ export function ReceiptPanel({
   const violationKeys = new Set(violations.map((line) => line.key));
 
   return (
-    <aside className="flex w-[22rem] sm:w-[24rem] xl:w-[25rem] shrink-0 flex-col border-l border-[var(--pos-border)] bg-[var(--pos-panel)]">
+    <aside className="flex w-88 sm:w-[24rem] xl:w-100 shrink-0 flex-col border-l border-(--pos-border) bg-(--pos-panel)">
       {/* Customer Header */}
-      <div className="border-b border-[var(--pos-border)] p-2.5">
+      <div className="border-b border-(--pos-border) p-2.5">
         {customer ? (
-          <div className="flex items-center gap-2.5 rounded-xl bg-[var(--pos-raised)] px-3 py-2 border border-[var(--pos-border)]">
+          <div className="flex items-center gap-2.5 rounded-xl bg-(--pos-raised) px-3 py-2 border border-(--pos-border)">
             <div className="min-w-0 flex-1">
-              <div className="truncate text-xs font-bold text-[var(--pos-text)]">{customer.name}</div>
+              <div className="truncate text-xs font-bold text-(--pos-text)">{customer.name}</div>
               {customer.company && (
-                <div className="truncate text-[10px] text-[var(--pos-text-3)]">{customer.company}</div>
+                <div className="truncate text-[10px] text-(--pos-text-3)">{customer.company}</div>
               )}
             </div>
             {Number(customer.creditLimit) > 0 && (
               <div className="text-right">
                 <div className="eyebrow text-[9px]">Credit left</div>
-                <div className="num text-[11px] font-semibold text-[var(--pos-text-2)]">
+                <div className="num text-[11px] font-semibold text-(--pos-text-2)">
                   {amount(
                     Money.subtract(
                       Money.toMinor(customer.creditLimit),
@@ -68,7 +68,7 @@ export function ReceiptPanel({
               type="button"
               onClick={() => setCustomer(null)}
               aria-label="Remove customer"
-              className="rounded-lg p-1 text-[var(--pos-text-3)] transition-colors hover:bg-[var(--pos-hover)] hover:text-[var(--pos-text)]"
+              className="rounded-lg p-1 text-(--pos-text-3) transition-colors hover:bg-(--pos-hover) hover:text-(--pos-text)"
             >
               <X className="size-3.5" />
             </button>
@@ -77,11 +77,11 @@ export function ReceiptPanel({
           <button
             type="button"
             onClick={onPickCustomer}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--pos-border)] px-3 py-2 text-xs font-medium text-[var(--pos-text-3)] transition-colors hover:border-[var(--pos-accent)] hover:text-[var(--pos-text)] hover:bg-[var(--pos-raised)]/40"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-(--pos-border) px-3 py-2 text-xs font-medium text-(--pos-text-3) transition-colors hover:border-(--pos-accent) hover:text-(--pos-text) hover:bg-(--pos-raised)/40"
           >
-            <UserPlus className="size-3.5 text-[var(--pos-accent)]" />
+            <UserPlus className="size-3.5 text-(--pos-accent)" />
             Walk-in customer
-            <kbd className="num ml-1 rounded-md bg-[var(--pos-raised)] border border-[var(--pos-border)] px-1.5 py-0.2 text-[9px] font-semibold">
+            <kbd className="num ml-1 rounded-md bg-(--pos-raised) border border-(--pos-border) px-1.5 py-0.2 text-[9px] font-semibold">
               F2
             </kbd>
           </button>
@@ -89,11 +89,11 @@ export function ReceiptPanel({
       </div>
 
       {/* Cart Line Items */}
-      <ol className="min-h-0 flex-1 overflow-y-auto divide-y divide-[var(--pos-border)]/60 scrollbar-thin">
+      <ol className="min-h-0 flex-1 overflow-y-auto divide-y divide-(--pos-border)/60 scrollbar-thin">
         {lines.length === 0 && (
-          <li className="flex h-full flex-col items-center justify-center gap-1.5 px-6 text-center text-[var(--pos-text-3)]">
-            <p className="text-xs font-semibold text-[var(--pos-text)]">Cart is empty</p>
-            <p className="text-[11px] text-[var(--pos-text-3)]">
+          <li className="flex h-full flex-col items-center justify-center gap-1.5 px-6 text-center text-(--pos-text-3)">
+            <p className="text-xs font-semibold text-(--pos-text)">Cart is empty</p>
+            <p className="text-[11px] text-(--pos-text-3)">
               Scan a barcode (F1), or search items on the left.
             </p>
           </li>
@@ -119,7 +119,7 @@ export function ReceiptPanel({
       </ol>
 
       {/* Totals Summary */}
-      <div className="tear shrink-0 p-3.5 border-t border-[var(--pos-border)] bg-[var(--pos-raised)]/30">
+      <div className="tear shrink-0 p-3.5 border-t border-(--pos-border) bg-(--pos-raised)/30">
         <dl className="space-y-1 text-xs">
           <Row label="Subtotal" value={amount(totals.subtotal)} />
           {Money.isPositive(totals.discountAmount) && (
@@ -139,11 +139,11 @@ export function ReceiptPanel({
           />
         </dl>
 
-        <div className="mt-2.5 flex items-baseline justify-between border-t border-[var(--pos-border)]/60 pt-2">
+        <div className="mt-2.5 flex items-baseline justify-between border-t border-(--pos-border)/60 pt-2">
           <span className="eyebrow text-xs">Total Amount</span>
           <span
             key={totals.total.toString()}
-            className="num animate-total text-2xl md:text-3xl font-bold leading-none tracking-tight text-[var(--pos-accent)]"
+            className="num animate-total text-2xl md:text-3xl font-bold leading-none tracking-tight text-(--pos-accent)"
           >
             {money(totals.total)}
           </span>
@@ -157,8 +157,8 @@ export function ReceiptPanel({
           className={[
             "mt-3 flex w-full items-center justify-between gap-3 rounded-xl px-3.5 py-3 transition-all cursor-pointer font-bold",
             chargeBlockedReason
-              ? "cursor-not-allowed border border-[var(--pos-border)] bg-[var(--pos-raised)] text-[var(--pos-text-3)]"
-              : "bg-[var(--pos-accent)] text-black hover:bg-[var(--pos-accent-alt)] shadow-xs",
+              ? "cursor-not-allowed border border-(--pos-border) bg-(--pos-raised) text-(--pos-text-3)"
+              : "bg-(--pos-accent) text-black hover:bg-(--pos-accent-alt) shadow-xs",
           ].join(" ")}
         >
           <span className="flex items-center gap-2">
@@ -167,7 +167,7 @@ export function ReceiptPanel({
             <kbd
               className={[
                 "num rounded px-1.5 py-0.5 text-[9px] font-bold",
-                chargeBlockedReason ? "bg-[var(--pos-border)] text-[var(--pos-text-3)]" : "bg-black/15",
+                chargeBlockedReason ? "bg-(--pos-border) text-(--pos-text-3)" : "bg-black/15",
               ].join(" ")}
             >
               F4
@@ -177,7 +177,7 @@ export function ReceiptPanel({
         </button>
 
         {chargeBlockedReason && (
-          <p className="mt-1.5 text-center text-[10px] text-[var(--pos-text-3)] font-medium">
+          <p className="mt-1.5 text-center text-[10px] text-(--pos-text-3) font-medium">
             {chargeBlockedReason}
           </p>
         )}
@@ -242,11 +242,11 @@ function LineRow({
     <li
       className={[
         "animate-line-in px-3 py-2 transition-colors",
-        flagged ? "bg-signal-red/10" : "hover:bg-[var(--pos-raised)]/40",
+        flagged ? "bg-signal-red/10" : "hover:bg-(--pos-raised)/40",
       ].join(" ")}
     >
       <div className="flex items-start gap-2">
-        <span className="num mt-0.5 w-4 shrink-0 text-right text-[10px] text-[var(--pos-text-3)] font-bold">
+        <span className="num mt-0.5 w-4 shrink-0 text-right text-[10px] text-(--pos-text-3) font-bold">
           {index + 1}
         </span>
 
@@ -254,7 +254,7 @@ function LineRow({
           <button
             type="button"
             onClick={() => onEditLine(line)}
-            className="block w-full truncate text-left text-xs font-bold text-[var(--pos-text)] hover:text-[var(--pos-accent)] transition-colors"
+            className="block w-full truncate text-left text-xs font-bold text-(--pos-text) hover:text-(--pos-accent) transition-colors"
             title="Edit price or discount"
           >
             {line.product.name}
@@ -262,12 +262,12 @@ function LineRow({
 
           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
             {/* Stepper */}
-            <div className="flex items-center rounded-md border border-[var(--pos-border)] bg-[var(--pos-raised)] overflow-hidden">
+            <div className="flex items-center rounded-md border border-(--pos-border) bg-(--pos-raised) overflow-hidden">
               <button
                 type="button"
                 onClick={() => adjustQuantity(line.key, -1)}
                 aria-label={`Reduce quantity of ${line.product.name}`}
-                className="px-1.5 py-0.5 text-[var(--pos-text-3)] hover:text-[var(--pos-text)] transition-colors"
+                className="px-1.5 py-0.5 text-(--pos-text-3) hover:text-(--pos-text) transition-colors"
               >
                 <Minus className="size-2.5" />
               </button>
@@ -289,8 +289,8 @@ function LineRow({
                 aria-label={`Increase quantity of ${line.product.name}`}
                 className={`px-1.5 py-0.5 transition-colors ${
                   maxReached
-                    ? "text-[var(--pos-text-3)]/30 cursor-not-allowed"
-                    : "text-[var(--pos-text-3)] hover:text-[var(--pos-text)]"
+                    ? "text-(--pos-text-3)/30 cursor-not-allowed"
+                    : "text-(--pos-text-3) hover:text-(--pos-text)"
                 }`}
                 title={maxReached ? `Max available stock (${stock}) reached` : "Add one"}
               >
@@ -314,10 +314,10 @@ function LineRow({
                 className="w-18"
               />
             ) : (
-              <span className="text-[10px] text-[var(--pos-text-3)]">{line.product.unitAbbr} ×</span>
+              <span className="text-[10px] text-(--pos-text-3)">{line.product.unitAbbr} ×</span>
             )}
 
-            <span className="num text-[11px] text-[var(--pos-text-2)] font-mono">
+            <span className="num text-[11px] text-(--pos-text-2) font-mono">
               {amount(Money.toMinor(line.unitPrice))}
             </span>
 
@@ -342,12 +342,12 @@ function LineRow({
         </div>
 
         <div className="flex flex-col items-end gap-1 shrink-0">
-          <span className="num font-mono text-xs font-bold text-[var(--pos-text)]">{lineTotal}</span>
+          <span className="num font-mono text-xs font-bold text-(--pos-text)">{lineTotal}</span>
           <button
             type="button"
             onClick={() => removeLine(line.key)}
             aria-label={`Remove ${line.product.name}`}
-            className="rounded p-1 text-[var(--pos-text-3)] hover:text-signal-red hover:bg-signal-red/10 transition-colors"
+            className="rounded p-1 text-(--pos-text-3) hover:text-signal-red hover:bg-signal-red/10 transition-colors"
           >
             <Trash2 className="size-3" />
           </button>
@@ -368,8 +368,8 @@ function Row({
 }) {
   return (
     <div className="flex justify-between">
-      <dt className="text-[var(--pos-text-3)]">{label}</dt>
-      <dd className={`num font-mono font-semibold ${tone === "brass" ? "text-[var(--pos-accent)]" : "text-[var(--pos-text)]"}`}>
+      <dt className="text-(--pos-text-3)">{label}</dt>
+      <dd className={`num font-mono font-semibold ${tone === "brass" ? "text-(--pos-accent)" : "text-(--pos-text)"}`}>
         {value}
       </dd>
     </div>

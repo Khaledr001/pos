@@ -119,7 +119,7 @@ export default function PlatformDashboardPage() {
   return (
     <div className="space-y-6 pb-12 animate-fade-in">
       {/* ── Top Hero / Header ── */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-violet-950 via-slate-900 to-indigo-950 p-6 sm:p-8 text-white shadow-xl border border-violet-800/20">
+      <div className="relative overflow-hidden rounded-2xl bg-linear-to-br from-violet-950 via-slate-900 to-indigo-950 p-6 sm:p-8 text-white shadow-xl border border-violet-800/20">
         <div className="absolute right-0 top-0 -mt-8 -mr-8 h-64 w-64 rounded-full bg-violet-500/10 blur-3xl pointer-events-none" />
         <div className="absolute left-1/3 bottom-0 h-48 w-48 rounded-full bg-indigo-500/10 blur-3xl pointer-events-none" />
 
@@ -152,7 +152,7 @@ export default function PlatformDashboardPage() {
             <Button
               asChild
               size="sm"
-              className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-semibold text-xs h-9 shadow-md shadow-violet-900/40 border-0"
+              className="bg-linear-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-semibold text-xs h-9 shadow-md shadow-violet-900/40 border-0"
             >
               <Link href="/platform/tenants">
                 <Plus className="mr-1.5 h-4 w-4" />

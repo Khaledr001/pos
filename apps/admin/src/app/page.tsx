@@ -229,7 +229,7 @@ export default function DashboardPage() {
                   </span>
                   <div
                     className={cn(
-                      "flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-sm transition-transform duration-300 group-hover:scale-110",
+                      "flex h-9 w-9 items-center justify-center rounded-xl bg-linear-to-br text-white shadow-sm transition-transform duration-300 group-hover:scale-110",
                       kpi.gradient,
                     )}
                   >
@@ -342,7 +342,7 @@ export default function DashboardPage() {
                     <CardContent className="p-5">
                       <div
                         className={cn(
-                          "flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-sm transition-transform duration-300 group-hover:scale-110",
+                          "flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br text-white shadow-sm transition-transform duration-300 group-hover:scale-110",
                           item.gradient,
                         )}
                       >
@@ -368,7 +368,7 @@ export default function DashboardPage() {
           <Card className="overflow-hidden">
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-linear-to-br from-blue-500 to-indigo-600 text-white">
                   <Cpu className="h-4 w-4" />
                 </div>
                 <div>
@@ -422,7 +422,7 @@ export default function DashboardPage() {
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-linear-to-br from-emerald-500 to-teal-600 text-white">
                   <ShieldCheck className="h-4 w-4" />
                 </div>
                 <CardTitle className="text-sm">

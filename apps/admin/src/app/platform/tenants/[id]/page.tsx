@@ -246,7 +246,7 @@ export default function TenantDetailPage() {
       {/* ── Tenant Hero Banner ── */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-2xl border border-border/60 bg-muted/20 p-6">
         <div className="flex items-center gap-4">
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 text-primary font-black text-2xl">
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-primary/20 to-primary/5 border border-primary/20 text-primary font-black text-2xl">
             {tenant.name.slice(0, 2).toUpperCase()}
           </div>
           <div className="space-y-1">

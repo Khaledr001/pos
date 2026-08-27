@@ -114,13 +114,13 @@ export function ProductSearch({
       {/* ── Search Toolbar ── */}
       <div className="flex items-center gap-2">
         <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--pos-text-3)]" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-(--pos-text-3)" />
           <input
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onKeyDown}
-            className="field pl-9.5 pr-8 h-10 text-xs w-full bg-[var(--pos-panel)] border-[var(--pos-border)] text-[var(--pos-text)] rounded-xl"
+            className="field pl-9.5 pr-8 h-10 text-xs w-full bg-(--pos-panel) border-(--pos-border) text-(--pos-text) rounded-xl"
             placeholder="Scan barcode (F1), search product name or SKU..."
             aria-label="Search products"
             autoComplete="off"
@@ -133,25 +133,25 @@ export function ProductSearch({
                 setQuery("");
                 inputRef.current?.focus();
               }}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--pos-text-3)] hover:text-[var(--pos-text)]"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-(--pos-text-3) hover:text-(--pos-text)"
             >
               <X className="size-3.5" />
             </button>
           ) : (
-            <ScanBarcode className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-[var(--pos-text-3)]/60" />
+            <ScanBarcode className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-(--pos-text-3)/60" />
           )}
         </div>
 
         {/* View Mode Toggle */}
-        <div className="flex items-center rounded-xl bg-[var(--pos-panel)] border border-[var(--pos-border)] p-0.5 shrink-0">
+        <div className="flex items-center rounded-xl bg-(--pos-panel) border border-(--pos-border) p-0.5 shrink-0">
           <button
             type="button"
             onClick={() => changeViewMode("list")}
             className={[
               "flex items-center justify-center size-8 rounded-lg transition-colors",
               viewMode === "list"
-                ? "bg-[var(--pos-raised)] text-[var(--pos-accent)] shadow-xs"
-                : "text-[var(--pos-text-3)] hover:text-[var(--pos-text)]",
+                ? "bg-(--pos-raised) text-(--pos-accent) shadow-xs"
+                : "text-(--pos-text-3) hover:text-(--pos-text)",
             ].join(" ")}
             title="Compact List View"
           >
@@ -163,8 +163,8 @@ export function ProductSearch({
             className={[
               "flex items-center justify-center size-8 rounded-lg transition-colors",
               viewMode === "grid"
-                ? "bg-[var(--pos-raised)] text-[var(--pos-accent)] shadow-xs"
-                : "text-[var(--pos-text-3)] hover:text-[var(--pos-text)]",
+                ? "bg-(--pos-raised) text-(--pos-accent) shadow-xs"
+                : "text-(--pos-text-3) hover:text-(--pos-text)",
             ].join(" ")}
             title="Compact Grid View"
           >
@@ -180,18 +180,18 @@ export function ProductSearch({
         aria-label="Search results"
       >
         {loading ? (
-          <div className="py-12 text-center text-[var(--pos-text-3)]">
-            <Loader2 className="size-6 animate-spin mx-auto mb-2 text-[var(--pos-accent)]" />
+          <div className="py-12 text-center text-(--pos-text-3)">
+            <Loader2 className="size-6 animate-spin mx-auto mb-2 text-(--pos-accent)" />
             <span className="text-xs">Searching inventory…</span>
           </div>
         ) : results.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-14 text-center rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-panel)]">
-            <Package className="size-8 text-[var(--pos-text-3)]/40" />
-            <p className="text-xs font-semibold text-[var(--pos-text)]">
+          <div className="flex flex-col items-center gap-2 py-14 text-center rounded-2xl border border-(--pos-border) bg-(--pos-panel)">
+            <Package className="size-8 text-(--pos-text-3)/40" />
+            <p className="text-xs font-semibold text-(--pos-text)">
               {query ? `No items found matching "${query}"` : "Catalogue is empty"}
             </p>
             {query && (
-              <p className="text-[11px] text-[var(--pos-text-3)]">
+              <p className="text-[11px] text-(--pos-text-3)">
                 Check spelling or scan barcode on the packaging.
               </p>
             )}
@@ -213,26 +213,26 @@ export function ProductSearch({
                   className={[
                     "group relative flex items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left transition-all select-none",
                     isOutOfStock
-                      ? "border-[var(--pos-border)]/60 bg-[var(--pos-panel)]/50 opacity-60 cursor-not-allowed"
+                      ? "border-(--pos-border)/60 bg-(--pos-panel)/50 opacity-60 cursor-not-allowed"
                       : active
-                        ? "border-[var(--pos-accent)] bg-[var(--pos-raised)] cursor-pointer shadow-xs"
-                        : "border-[var(--pos-border)] bg-[var(--pos-panel)] hover:bg-[var(--pos-raised)]/70 hover:border-[var(--pos-accent)]/40 cursor-pointer",
+                        ? "border-(--pos-accent) bg-(--pos-raised) cursor-pointer shadow-xs"
+                        : "border-(--pos-border) bg-(--pos-panel) hover:bg-(--pos-raised)/70 hover:border-(--pos-accent)/40 cursor-pointer",
                   ].join(" ")}
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="truncate text-xs font-bold text-[var(--pos-text)]">
+                      <span className="truncate text-xs font-bold text-(--pos-text)">
                         {product.name}
                       </span>
                       {product.variantName && product.variantName !== "Default" && (
-                        <span className="shrink-0 text-[10px] font-medium px-1.5 py-0.2 rounded bg-[var(--pos-raised)] text-[var(--pos-text-2)] border border-[var(--pos-border)]">
+                        <span className="shrink-0 text-[10px] font-medium px-1.5 py-0.2 rounded bg-(--pos-raised) text-(--pos-text-2) border border-(--pos-border)">
                           {product.variantName}
                         </span>
                       )}
                     </div>
 
-                    <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[10px] text-[var(--pos-text-3)]">
-                      <span className="font-mono text-[var(--pos-text-2)]">{product.sku}</span>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[10px] text-(--pos-text-3)">
+                      <span className="font-mono text-(--pos-text-2)">{product.sku}</span>
                       {product.categoryName && (
                         <span>· {product.categoryName}</span>
                       )}
@@ -256,10 +256,10 @@ export function ProductSearch({
                   {/* Price & Action */}
                   <div className="flex items-center gap-2.5 shrink-0 text-right">
                     <div>
-                      <div className="font-mono text-xs font-bold text-[var(--pos-text)]">
+                      <div className="font-mono text-xs font-bold text-(--pos-text)">
                         {amount(Money.toMinor(product.sellingPrice))}
                       </div>
-                      <div className="text-[10px] text-[var(--pos-text-3)]">
+                      <div className="text-[10px] text-(--pos-text-3)">
                         per {product.unitAbbr}
                       </div>
                     </div>
@@ -278,7 +278,7 @@ export function ProductSearch({
                         Other Stores
                       </button>
                     ) : (
-                      <div className="size-6 rounded-md bg-[var(--pos-accent)]/15 text-[var(--pos-accent)] flex items-center justify-center group-hover:bg-[var(--pos-accent)] group-hover:text-black transition-colors">
+                      <div className="size-6 rounded-md bg-(--pos-accent)/15 text-(--pos-accent) flex items-center justify-center group-hover:bg-(--pos-accent) group-hover:text-black transition-colors">
                         <Plus className="size-3.5" />
                       </div>
                     )}
@@ -304,16 +304,16 @@ export function ProductSearch({
                   className={[
                     "group relative flex flex-col justify-between rounded-xl border p-3 text-left transition-all select-none",
                     isOutOfStock
-                      ? "border-[var(--pos-border)]/60 bg-[var(--pos-panel)]/50 opacity-60 cursor-not-allowed"
+                      ? "border-(--pos-border)/60 bg-(--pos-panel)/50 opacity-60 cursor-not-allowed"
                       : active
-                        ? "border-[var(--pos-accent)] bg-[var(--pos-raised)] cursor-pointer shadow-xs"
-                        : "border-[var(--pos-border)] bg-[var(--pos-panel)] hover:bg-[var(--pos-raised)] hover:border-[var(--pos-accent)]/40 cursor-pointer",
+                        ? "border-(--pos-accent) bg-(--pos-raised) cursor-pointer shadow-xs"
+                        : "border-(--pos-border) bg-(--pos-panel) hover:bg-(--pos-raised) hover:border-(--pos-accent)/40 cursor-pointer",
                   ].join(" ")}
                 >
                   <div>
                     {/* Top Tag & Stock */}
                     <div className="flex items-center justify-between gap-1 mb-1.5">
-                      <span className="font-mono text-[10px] text-[var(--pos-text-3)] truncate">
+                      <span className="font-mono text-[10px] text-(--pos-text-3) truncate">
                         {product.sku}
                       </span>
                       <span
@@ -331,23 +331,23 @@ export function ProductSearch({
                     </div>
 
                     {/* Product Name */}
-                    <p className="font-bold text-xs text-[var(--pos-text)] line-clamp-2 leading-tight">
+                    <p className="font-bold text-xs text-(--pos-text) line-clamp-2 leading-tight">
                       {product.name}
                     </p>
                     {product.variantName && product.variantName !== "Default" && (
-                      <p className="text-[10px] text-[var(--pos-text-2)] mt-0.5 truncate">
+                      <p className="text-[10px] text-(--pos-text-2) mt-0.5 truncate">
                         {product.variantName}
                       </p>
                     )}
                   </div>
 
                   {/* Price Bottom Row */}
-                  <div className="mt-3 flex items-center justify-between border-t border-[var(--pos-border)]/60 pt-2">
+                  <div className="mt-3 flex items-center justify-between border-t border-(--pos-border)/60 pt-2">
                     <div>
-                      <span className="font-mono font-bold text-xs text-[var(--pos-accent)] block">
+                      <span className="font-mono font-bold text-xs text-(--pos-accent) block">
                         {amount(Money.toMinor(product.sellingPrice))}
                       </span>
-                      <span className="text-[9px] text-[var(--pos-text-3)] block">
+                      <span className="text-[9px] text-(--pos-text-3) block">
                         per {product.unitAbbr}
                       </span>
                     </div>
@@ -365,7 +365,7 @@ export function ProductSearch({
                         <Building2 className="size-3" />
                       </button>
                     ) : (
-                      <div className="size-6 rounded-md bg-[var(--pos-raised)] text-[var(--pos-text-2)] flex items-center justify-center group-hover:bg-[var(--pos-accent)] group-hover:text-black transition-colors">
+                      <div className="size-6 rounded-md bg-(--pos-raised) text-(--pos-text-2) flex items-center justify-center group-hover:bg-(--pos-accent) group-hover:text-black transition-colors">
                         <Plus className="size-3.5" />
                       </div>
                     )}

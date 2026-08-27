@@ -106,7 +106,7 @@ export default function AuditLogPage() {
               setPage(1);
             }}
           >
-            <SelectTrigger className="w-[180px] h-9 text-xs">
+            <SelectTrigger className="w-45 h-9 text-xs">
               <SelectValue placeholder="All entity types" />
             </SelectTrigger>
             <SelectContent>
@@ -185,7 +185,7 @@ export default function AuditLogPage() {
                         {e.action}
                       </Badge>
                     </td>
-                    <td className="px-4 py-3.5 font-mono text-[10px] text-muted-foreground truncate max-w-[160px]">
+                    <td className="px-4 py-3.5 font-mono text-[10px] text-muted-foreground truncate max-w-40">
                       {e.entityId ?? "—"}
                     </td>
                   </tr>

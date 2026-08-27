@@ -105,7 +105,7 @@ export function RequestTransferModal({
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="field text-xs w-full bg-[var(--pos-raised)] border-[var(--pos-border)] text-[var(--pos-text)]"
+              className="field text-xs w-full bg-(--pos-raised) border-(--pos-border) text-(--pos-text)"
               rows={3}
               placeholder="e.g. Urgent customer order"
             />
@@ -129,27 +129,27 @@ export function RequestTransferModal({
         </div>
 
         {/* Right Side: Items Selection */}
-        <div className="space-y-3 flex flex-col h-[380px]">
+        <div className="space-y-3 flex flex-col h-95">
           <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--pos-text-3)]" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-(--pos-text-3)" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              className="field pl-9.5 text-xs w-full bg-[var(--pos-raised)] border-[var(--pos-border)] text-[var(--pos-text)]"
+              className="field pl-9.5 text-xs w-full bg-(--pos-raised) border-(--pos-border) text-(--pos-text)"
               placeholder="Search products to request…"
             />
 
             {query && searchResults.length > 0 && (
-              <ul className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-[var(--pos-border)] bg-[var(--pos-panel)] p-1 shadow-xl scrollbar-thin">
+              <ul className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-(--pos-border) bg-(--pos-panel) p-1 shadow-xl scrollbar-thin">
                 {searchResults.map((p) => (
                   <li key={p.id}>
                     <button
                       type="button"
                       onClick={() => addItem(p)}
-                      className="w-full text-left px-3 py-2 text-xs rounded-lg hover:bg-[var(--pos-raised)] flex items-center justify-between text-[var(--pos-text)] cursor-pointer"
+                      className="w-full text-left px-3 py-2 text-xs rounded-lg hover:bg-(--pos-raised) flex items-center justify-between text-(--pos-text) cursor-pointer"
                     >
                       <span className="font-semibold truncate">{p.name}</span>
-                      <span className="font-mono text-[10px] text-[var(--pos-text-3)] ml-2 shrink-0">{p.sku}</span>
+                      <span className="font-mono text-[10px] text-(--pos-text-3) ml-2 shrink-0">{p.sku}</span>
                     </button>
                   </li>
                 ))}
@@ -157,9 +157,9 @@ export function RequestTransferModal({
             )}
           </div>
 
-          <div className="flex-1 overflow-y-auto border border-[var(--pos-border)] bg-[var(--pos-raised)]/40 rounded-xl p-2.5 scrollbar-thin">
+          <div className="flex-1 overflow-y-auto border border-(--pos-border) bg-(--pos-raised)/40 rounded-xl p-2.5 scrollbar-thin">
             {items.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-[var(--pos-text-3)]">
+              <div className="h-full flex flex-col items-center justify-center text-(--pos-text-3)">
                 <Package className="size-8 opacity-20 mb-2" />
                 <p className="text-xs">Search and add items to this transfer</p>
               </div>
@@ -168,13 +168,13 @@ export function RequestTransferModal({
                 {items.map((item) => (
                   <li
                     key={item.variantId}
-                    className="flex items-center justify-between bg-[var(--pos-panel)] border border-[var(--pos-border)] p-2.5 rounded-xl"
+                    className="flex items-center justify-between bg-(--pos-panel) border border-(--pos-border) p-2.5 rounded-xl"
                   >
                     <div className="min-w-0 flex-1 mr-2">
-                      <div className="truncate text-xs font-bold text-[var(--pos-text)]">
+                      <div className="truncate text-xs font-bold text-(--pos-text)">
                         {item.product.name}
                       </div>
-                      <div className="font-mono text-[10px] text-[var(--pos-text-3)]">{item.product.sku}</div>
+                      <div className="font-mono text-[10px] text-(--pos-text-3)">{item.product.sku}</div>
                     </div>
                     <div className="flex items-center gap-2">
                       <input
@@ -182,13 +182,13 @@ export function RequestTransferModal({
                         min="1"
                         value={item.quantity}
                         onChange={(e) => updateQuantity(item.variantId, parseInt(e.target.value) || 0)}
-                        className="w-14 rounded-lg border border-[var(--pos-border)] bg-[var(--pos-raised)] px-2 py-1 text-center font-mono font-bold text-xs text-[var(--pos-text)] focus:outline-none"
+                        className="w-14 rounded-lg border border-(--pos-border) bg-(--pos-raised) px-2 py-1 text-center font-mono font-bold text-xs text-(--pos-text) focus:outline-none"
                       />
-                      <span className="text-[10px] text-[var(--pos-text-3)] w-8">{item.product.unitAbbr}</span>
+                      <span className="text-[10px] text-(--pos-text-3) w-8">{item.product.unitAbbr}</span>
                       <button
                         type="button"
                         onClick={() => updateQuantity(item.variantId, 0)}
-                        className="rounded p-1 text-[var(--pos-text-3)] hover:text-signal-red hover:bg-signal-red/10"
+                        className="rounded p-1 text-(--pos-text-3) hover:text-signal-red hover:bg-signal-red/10"
                       >
                         <Trash2 className="size-3.5" />
                       </button>

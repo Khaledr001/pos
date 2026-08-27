@@ -293,7 +293,7 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
 
   return (
     <>
-      <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6 bg-[var(--pos-bg)]">
+      <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6 bg-(--pos-bg)">
         <div className="mx-auto max-w-4xl space-y-5">
           {/* Permission warning */}
           {!allowed && (
@@ -304,13 +304,13 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
           )}
 
           {/* ── Search Original Sale Box ── */}
-          <div className="panel p-5 border border-[var(--pos-border)] rounded-2xl bg-[var(--pos-panel)] shadow-xs">
-            <label htmlFor="sale-ref" className="eyebrow block text-xs font-bold uppercase tracking-wider text-[var(--pos-text-3)] mb-2">
+          <div className="panel p-5 border border-(--pos-border) rounded-2xl bg-(--pos-panel) shadow-xs">
+            <label htmlFor="sale-ref" className="eyebrow block text-xs font-bold uppercase tracking-wider text-(--pos-text-3) mb-2">
               Find Original Sale Receipt
             </label>
             <div className="flex gap-2">
               <div className="relative flex-1">
-                <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[var(--pos-text-3)]" />
+                <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-(--pos-text-3)" />
                 <input
                   id="sale-ref"
                   autoFocus
@@ -320,7 +320,7 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
                     setNotFound(false);
                   }}
                   onKeyDown={(e) => e.key === "Enter" && void find()}
-                  className="field num pl-10 text-xs w-full bg-[var(--pos-raised)] border-[var(--pos-border)] text-[var(--pos-text)]"
+                  className="field num pl-10 text-xs w-full bg-(--pos-raised) border-(--pos-border) text-(--pos-text)"
                   placeholder="Scan receipt barcode or type invoice number, e.g. INV-2026-000123"
                   disabled={!allowed}
                 />
@@ -331,7 +331,7 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
                       setReference("");
                       setNotFound(false);
                     }}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--pos-text-3)] hover:text-[var(--pos-text)]"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-(--pos-text-3) hover:text-(--pos-text)"
                   >
                     <X className="size-3.5" />
                   </button>
@@ -346,19 +346,19 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
                 {searching ? <Loader2 className="size-4 animate-spin" /> : "Find Sale"}
               </button>
             </div>
-            <p className="mt-2 text-[11px] text-[var(--pos-text-3)]">
+            <p className="mt-2 text-[11px] text-(--pos-text-3)">
               Scan barcode from thermal receipt or enter invoice reference.
             </p>
           </div>
 
           {/* Not Found Banner */}
           {notFound && (
-            <div className="rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-panel)] p-8 text-center shadow-xs">
-              <RotateCcw className="size-10 mx-auto text-[var(--pos-text-3)]/50 mb-2" />
-              <p className="text-sm font-bold text-[var(--pos-text)]">
+            <div className="rounded-2xl border border-(--pos-border) bg-(--pos-panel) p-8 text-center shadow-xs">
+              <RotateCcw className="size-10 mx-auto text-(--pos-text-3)/50 mb-2" />
+              <p className="text-sm font-bold text-(--pos-text)">
                 No sale found matching &ldquo;{reference}&rdquo;
               </p>
-              <p className="text-xs text-[var(--pos-text-3)] mt-1 max-w-md mx-auto">
+              <p className="text-xs text-(--pos-text-3) mt-1 max-w-md mx-auto">
                 Check invoice number spelling. If the sale was made on another terminal, ensure both terminals have completed sync.
               </p>
             </div>
@@ -366,40 +366,40 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
 
           {/* ── Recent Sales on this Till (When no sale is selected) ── */}
           {!sale && (
-            <div className="panel border border-[var(--pos-border)] rounded-2xl bg-[var(--pos-panel)] shadow-xs overflow-hidden">
-              <div className="flex items-center justify-between border-b border-[var(--pos-border)] px-5 py-3.5 bg-[var(--pos-raised)]/40">
-                <h2 className="text-xs font-bold uppercase tracking-wider text-[var(--pos-text)] flex items-center gap-2">
-                  <Receipt className="size-4 text-[var(--pos-accent)]" />
+            <div className="panel border border-(--pos-border) rounded-2xl bg-(--pos-panel) shadow-xs overflow-hidden">
+              <div className="flex items-center justify-between border-b border-(--pos-border) px-5 py-3.5 bg-(--pos-raised)/40">
+                <h2 className="text-xs font-bold uppercase tracking-wider text-(--pos-text) flex items-center gap-2">
+                  <Receipt className="size-4 text-(--pos-accent)" />
                   Recent Sales on this Counter
                 </h2>
-                <span className="text-[11px] text-[var(--pos-text-3)]">
+                <span className="text-[11px] text-(--pos-text-3)">
                   Click to process same-day return
                 </span>
               </div>
 
               {recent.length === 0 ? (
-                <p className="p-8 text-center text-xs text-[var(--pos-text-3)]">
+                <p className="p-8 text-center text-xs text-(--pos-text-3)">
                   No sales recorded on this till yet. Completed sales will appear here for fast return processing.
                 </p>
               ) : (
-                <ul className="divide-y divide-[var(--pos-border)]/60">
+                <ul className="divide-y divide-(--pos-border)/60">
                   {recent.map((entry) => (
                     <li key={entry.localId}>
                       <button
                         type="button"
                         disabled={!allowed}
                         onClick={() => pickSale(entry)}
-                        className="flex w-full items-center justify-between p-4 text-left hover:bg-[var(--pos-raised)]/60 transition-colors cursor-pointer select-none"
+                        className="flex w-full items-center justify-between p-4 text-left hover:bg-(--pos-raised)/60 transition-colors cursor-pointer select-none"
                       >
                         <div className="flex items-center gap-3">
-                          <div className="size-8 rounded-lg bg-[var(--pos-raised)] flex items-center justify-center text-[var(--pos-accent)]">
+                          <div className="size-8 rounded-lg bg-(--pos-raised) flex items-center justify-center text-(--pos-accent)">
                             <Receipt className="size-4" />
                           </div>
                           <div>
-                            <p className="font-mono font-bold text-xs text-[var(--pos-text)]">
+                            <p className="font-mono font-bold text-xs text-(--pos-text)">
                               {entry.saleNumber ?? `Draft · ${entry.localId.slice(0, 8)}`}
                             </p>
-                            <p className="text-[11px] text-[var(--pos-text-3)]">
+                            <p className="text-[11px] text-(--pos-text-3)">
                               {new Date(entry.occurredAt).toLocaleTimeString("en-GB", {
                                 hour: "2-digit",
                                 minute: "2-digit",
@@ -411,10 +411,10 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
                         </div>
 
                         <div className="text-right">
-                          <span className="font-mono font-bold text-sm text-[var(--pos-text)] block">
+                          <span className="font-mono font-bold text-sm text-(--pos-text) block">
                             AED {parseFloat(entry.total).toFixed(2)}
                           </span>
-                          <span className="text-[10px] text-[var(--pos-accent)] font-semibold flex items-center gap-0.5 justify-end">
+                          <span className="text-[10px] text-(--pos-accent) font-semibold flex items-center gap-0.5 justify-end">
                             Select <ArrowRight className="size-3" />
                           </span>
                         </div>
@@ -428,18 +428,18 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
 
           {/* ── Active Sale Lines & Return Quantities ── */}
           {sale && (
-            <div className="panel border border-[var(--pos-border)] rounded-2xl bg-[var(--pos-panel)] shadow-xs overflow-hidden space-y-0">
+            <div className="panel border border-(--pos-border) rounded-2xl bg-(--pos-panel) shadow-xs overflow-hidden space-y-0">
               {/* Header */}
-              <div className="flex items-center justify-between border-b border-[var(--pos-border)] p-4 bg-[var(--pos-raised)]/40">
+              <div className="flex items-center justify-between border-b border-(--pos-border) p-4 bg-(--pos-raised)/40">
                 <div className="flex items-center gap-3">
-                  <div className="size-9 rounded-xl bg-[var(--pos-accent)]/15 text-[var(--pos-accent)] flex items-center justify-center">
+                  <div className="size-9 rounded-xl bg-(--pos-accent)/15 text-(--pos-accent) flex items-center justify-center">
                     <Receipt className="size-4.5" />
                   </div>
                   <div>
-                    <p className="font-mono font-bold text-sm text-[var(--pos-text)]">
+                    <p className="font-mono font-bold text-sm text-(--pos-text)">
                       {sale.saleNumber ?? `Sale · ${sale.localId.slice(0, 8)}`}
                     </p>
-                    <p className="text-[11px] text-[var(--pos-text-3)]">
+                    <p className="text-[11px] text-(--pos-text-3)">
                       {new Date(sale.occurredAt).toLocaleString("en-GB", {
                         dateStyle: "medium",
                         timeStyle: "short",
@@ -460,7 +460,7 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
                   <button
                     type="button"
                     onClick={() => setSale(null)}
-                    className="btn btn-ghost text-xs h-8 px-2.5 text-[var(--pos-text-3)]"
+                    className="btn btn-ghost text-xs h-8 px-2.5 text-(--pos-text-3)"
                   >
                     Change Sale
                   </button>
@@ -468,7 +468,7 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
               </div>
 
               {/* Items List */}
-              <ul className="divide-y divide-[var(--pos-border)]/60">
+              <ul className="divide-y divide-(--pos-border)/60">
                 {sale.lines.map((line, index) => {
                   const key = String(index);
                   const max = Number(line.quantity);
@@ -480,14 +480,14 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
                     <li key={key} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
                       {/* Product Details */}
                       <div className="flex items-start gap-3 flex-1 min-w-0">
-                        <span className="size-6 rounded bg-[var(--pos-raised)] text-[var(--pos-text-3)] font-mono text-[11px] font-bold flex items-center justify-center shrink-0">
+                        <span className="size-6 rounded bg-(--pos-raised) text-(--pos-text-3) font-mono text-[11px] font-bold flex items-center justify-center shrink-0">
                           {index + 1}
                         </span>
                         <div className="min-w-0 flex-1">
-                          <p className="font-bold text-xs text-[var(--pos-text)] truncate">
+                          <p className="font-bold text-xs text-(--pos-text) truncate">
                             {line.productName}
                           </p>
-                          <p className="font-mono text-[11px] text-[var(--pos-text-3)]">
+                          <p className="font-mono text-[11px] text-(--pos-text-3)">
                             SKU: {line.productSku} · Sold {fmtQuantity(line.quantity)} × AED{" "}
                             {parseFloat(line.unitPrice).toFixed(2)}
                           </p>
@@ -497,15 +497,15 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
                       {/* Controls: Disposition & Stepper */}
                       <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
                         {returning && (
-                          <div className="flex items-center rounded-lg border border-[var(--pos-border)] bg-[var(--pos-raised)] p-0.5 text-xs">
+                          <div className="flex items-center rounded-lg border border-(--pos-border) bg-(--pos-raised) p-0.5 text-xs">
                             <button
                               type="button"
                               onClick={() => setDispositions((d) => ({ ...d, [key]: "restock" }))}
                               className={[
                                 "px-2 py-1 rounded text-[11px] font-semibold transition-all",
                                 disposition === "restock"
-                                  ? "bg-[var(--pos-panel)] text-[var(--pos-text)] shadow-xs"
-                                  : "text-[var(--pos-text-3)] hover:text-[var(--pos-text)]",
+                                  ? "bg-(--pos-panel) text-(--pos-text) shadow-xs"
+                                  : "text-(--pos-text-3) hover:text-(--pos-text)",
                               ].join(" ")}
                             >
                               Restock
@@ -517,7 +517,7 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
                                 "px-2 py-1 rounded text-[11px] font-semibold transition-all",
                                 disposition === "scrap"
                                   ? "bg-signal-red/10 text-signal-red font-bold"
-                                  : "text-[var(--pos-text-3)] hover:text-[var(--pos-text)]",
+                                  : "text-(--pos-text-3) hover:text-(--pos-text)",
                               ].join(" ")}
                             >
                               Scrap
@@ -526,11 +526,11 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
                         )}
 
                         {/* Quantity Stepper */}
-                        <div className="flex items-center rounded-lg border border-[var(--pos-border)] bg-[var(--pos-raised)] overflow-hidden">
+                        <div className="flex items-center rounded-lg border border-(--pos-border) bg-(--pos-raised) overflow-hidden">
                           <button
                             type="button"
                             onClick={() => stepQuantity(index, max, -1)}
-                            className="px-2 py-1 text-[var(--pos-text-3)] hover:text-[var(--pos-text)] transition-colors"
+                            className="px-2 py-1 text-(--pos-text-3) hover:text-(--pos-text) transition-colors"
                           >
                             <Minus className="size-3" />
                           </button>
@@ -555,7 +555,7 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
                           <button
                             type="button"
                             onClick={() => stepQuantity(index, max, 1)}
-                            className="px-2 py-1 text-[var(--pos-text-3)] hover:text-[var(--pos-text)] transition-colors"
+                            className="px-2 py-1 text-(--pos-text-3) hover:text-(--pos-text) transition-colors"
                           >
                             <Plus className="size-3" />
                           </button>
@@ -567,11 +567,11 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
               </ul>
 
               {/* Refund Summary Tear Line */}
-              <div className="border-t border-[var(--pos-border)] p-4 flex items-baseline justify-between bg-[var(--pos-raised)]/30">
-                <span className="text-xs font-bold uppercase tracking-wider text-[var(--pos-text-3)]">
+              <div className="border-t border-(--pos-border) p-4 flex items-baseline justify-between bg-(--pos-raised)/30">
+                <span className="text-xs font-bold uppercase tracking-wider text-(--pos-text-3)">
                   Refund Due from Return
                 </span>
-                <span className="font-mono text-2xl font-bold text-[var(--pos-accent)]">
+                <span className="font-mono text-2xl font-bold text-(--pos-accent)">
                   AED {parseFloat(Money.toDecimalString(refund, 2)).toFixed(2)}
                 </span>
               </div>
@@ -580,13 +580,13 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
 
           {/* ── Exchange Items Section ── */}
           {sale && (
-            <div className="panel border border-[var(--pos-border)] rounded-2xl bg-[var(--pos-panel)] shadow-xs overflow-hidden">
-              <div className="flex items-center justify-between border-b border-[var(--pos-border)] px-5 py-3.5 bg-[var(--pos-raised)]/40">
+            <div className="panel border border-(--pos-border) rounded-2xl bg-(--pos-panel) shadow-xs overflow-hidden">
+              <div className="flex items-center justify-between border-b border-(--pos-border) px-5 py-3.5 bg-(--pos-raised)/40">
                 <div>
-                  <h2 className="text-xs font-bold uppercase tracking-wider text-[var(--pos-text)]">
+                  <h2 className="text-xs font-bold uppercase tracking-wider text-(--pos-text)">
                     Exchange for Replacement Items
                   </h2>
-                  <p className="text-[11px] text-[var(--pos-text-3)]">
+                  <p className="text-[11px] text-(--pos-text-3)">
                     Add new products to offset against the refund amount
                   </p>
                 </div>
@@ -603,18 +603,18 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
               </div>
 
               {exchangeLines.length === 0 ? (
-                <p className="p-6 text-center text-xs text-[var(--pos-text-3)]">
+                <p className="p-6 text-center text-xs text-(--pos-text-3)">
                   Optional. If the customer is replacing with other goods, add them here to calculate the net difference.
                 </p>
               ) : (
-                <ul className="divide-y divide-[var(--pos-border)]/60">
+                <ul className="divide-y divide-(--pos-border)/60">
                   {exchangeLines.map((line) => (
                     <li key={line.key} className="flex items-center justify-between gap-3 p-4">
                       <div className="min-w-0 flex-1">
-                        <p className="font-bold text-xs text-[var(--pos-text)] truncate">
+                        <p className="font-bold text-xs text-(--pos-text) truncate">
                           {line.product.name}
                         </p>
-                        <p className="font-mono text-[11px] text-[var(--pos-text-3)]">
+                        <p className="font-mono text-[11px] text-(--pos-text-3)">
                           {line.product.sku} · AED {parseFloat(line.product.sellingPrice).toFixed(2)} each
                         </p>
                       </div>
@@ -624,14 +624,14 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
                           value={line.quantity}
                           onChange={(e) => setExchangeQuantity(line.key, e.target.value)}
                           inputMode="decimal"
-                          className="field num w-16 text-center text-xs font-mono font-bold bg-[var(--pos-raised)] border-[var(--pos-border)]"
+                          className="field num w-16 text-center text-xs font-mono font-bold bg-(--pos-raised) border-(--pos-border)"
                           aria-label={`Quantity of ${line.product.name}`}
                         />
                         <button
                           type="button"
                           onClick={() => removeExchangeItem(line.key)}
                           aria-label={`Remove ${line.product.name}`}
-                          className="size-8 rounded-lg text-[var(--pos-text-3)] hover:text-signal-red hover:bg-signal-red/10 flex items-center justify-center transition-colors"
+                          className="size-8 rounded-lg text-(--pos-text-3) hover:text-signal-red hover:bg-signal-red/10 flex items-center justify-center transition-colors"
                         >
                           <Trash2 className="size-4" />
                         </button>
@@ -643,16 +643,16 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
 
               {/* Net Balance calculation */}
               {isExchange && (
-                <div className="border-t border-[var(--pos-border)] p-4 flex items-baseline justify-between bg-[var(--pos-raised)]/40">
+                <div className="border-t border-(--pos-border) p-4 flex items-baseline justify-between bg-(--pos-raised)/40">
                   <div>
-                    <span className="text-xs font-bold uppercase tracking-wider text-[var(--pos-text-3)] block">
+                    <span className="text-xs font-bold uppercase tracking-wider text-(--pos-text-3) block">
                       {Money.isNegative(net) ? "Net Refund to Customer" : "Net Charge to Customer"}
                     </span>
-                    <span className="text-[11px] text-[var(--pos-text-3)]">
+                    <span className="text-[11px] text-(--pos-text-3)">
                       Return AED {parseFloat(Money.toDecimalString(refund, 2)).toFixed(2)} vs Exchange AED {parseFloat(Money.toDecimalString(exchangeTotal, 2)).toFixed(2)}
                     </span>
                   </div>
-                  <span className="font-mono text-2xl font-bold text-[var(--pos-accent)]">
+                  <span className="font-mono text-2xl font-bold text-(--pos-accent)">
                     AED {parseFloat(Money.toDecimalString(Money.abs(net), 2)).toFixed(2)}
                   </span>
                 </div>
@@ -743,8 +743,8 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
                     className={[
                       "flex flex-col items-center gap-1.5 rounded-xl border p-2.5 text-xs font-semibold transition-all cursor-pointer",
                       refundMethod === method
-                        ? "border-[var(--pos-accent)] bg-[var(--pos-accent)]/10 text-[var(--pos-accent)] shadow-xs"
-                        : "border-[var(--pos-border)] bg-[var(--pos-raised)] text-[var(--pos-text-2)] hover:bg-[var(--pos-hover)]",
+                        ? "border-(--pos-accent) bg-(--pos-accent)/10 text-(--pos-accent) shadow-xs"
+                        : "border-(--pos-border) bg-(--pos-raised) text-(--pos-text-2) hover:bg-(--pos-hover)",
                     ].join(" ")}
                   >
                     <Icon className="size-4" />
@@ -766,7 +766,7 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
                 value={refundReference}
                 onChange={(e) => setRefundReference(e.target.value)}
                 placeholder={refundMethod === "card" ? "Card refund auth code" : "Bank transfer reference"}
-                className="field mt-1 text-xs bg-[var(--pos-raised)] border-[var(--pos-border)] text-[var(--pos-text)]"
+                className="field mt-1 text-xs bg-(--pos-raised) border-(--pos-border) text-(--pos-text)"
                 autoComplete="off"
               />
             </div>
@@ -785,8 +785,8 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
                     className={[
                       "flex flex-col items-center gap-1.5 rounded-xl border p-2.5 text-xs font-semibold transition-all cursor-pointer",
                       saleMethod === method
-                        ? "border-[var(--pos-accent)] bg-[var(--pos-accent)]/10 text-[var(--pos-accent)] shadow-xs"
-                        : "border-[var(--pos-border)] bg-[var(--pos-raised)] text-[var(--pos-text-2)] hover:bg-[var(--pos-hover)]",
+                        ? "border-(--pos-accent) bg-(--pos-accent)/10 text-(--pos-accent) shadow-xs"
+                        : "border-(--pos-border) bg-(--pos-raised) text-(--pos-text-2) hover:bg-(--pos-hover)",
                     ].join(" ")}
                   >
                     <Icon className="size-4" />
@@ -807,7 +807,7 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="e.g. Wrong size, customer changed mind, defective item"
-              className="field mt-1 text-xs bg-[var(--pos-raised)] border-[var(--pos-border)] text-[var(--pos-text)]"
+              className="field mt-1 text-xs bg-(--pos-raised) border-(--pos-border) text-(--pos-text)"
               autoComplete="off"
             />
           </div>

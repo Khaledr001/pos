@@ -55,7 +55,7 @@ export function ManagerOverrideDialog({
             type="password"
             value={pin}
             readOnly
-            className="field text-center tracking-[0.5em] text-2xl font-bold bg-[var(--pos-raised)] border-[var(--pos-border)] text-[var(--pos-text)]"
+            className="field text-center tracking-[0.5em] text-2xl font-bold bg-(--pos-raised) border-(--pos-border) text-(--pos-text)"
             placeholder="••••"
           />
         </div>

@@ -30,3 +30,4 @@ export * from "./paint.js";
 export * from "./purchasing.js";
 export * from "./whatsapp.js";
 export * from "./sync.js";
+export * from "./system.js";

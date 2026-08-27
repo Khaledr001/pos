@@ -46,19 +46,19 @@ export function HeldCartsDialog({
   return (
     <Dialog open={open} onClose={onClose} title="Held Carts (Parked Sales)" width="md">
       {carts.length === 0 ? (
-        <div className="py-12 text-center text-[var(--pos-text-3)]">
-          <ShoppingCart className="size-10 mx-auto mb-2 opacity-30 text-[var(--pos-text-3)]" />
-          <p className="text-xs font-semibold text-[var(--pos-text)]">No carts currently on hold</p>
-          <p className="text-[11px] text-[var(--pos-text-3)] mt-0.5">
+        <div className="py-12 text-center text-(--pos-text-3)">
+          <ShoppingCart className="size-10 mx-auto mb-2 opacity-30 text-(--pos-text-3)" />
+          <p className="text-xs font-semibold text-(--pos-text)">No carts currently on hold</p>
+          <p className="text-[11px] text-(--pos-text-3) mt-0.5">
             Press F8 while building a cart to park it for later.
           </p>
         </div>
       ) : (
-        <ul className="divide-y divide-[var(--pos-border)] border border-[var(--pos-border)] rounded-xl overflow-hidden bg-[var(--pos-panel)]">
+        <ul className="divide-y divide-(--pos-border) border border-(--pos-border) rounded-xl overflow-hidden bg-(--pos-panel)">
           {carts.map((cart) => (
             <li
               key={cart.id}
-              className="flex items-center justify-between gap-3 p-3.5 hover:bg-[var(--pos-raised)]/60 transition-colors"
+              className="flex items-center justify-between gap-3 p-3.5 hover:bg-(--pos-raised)/60 transition-colors"
             >
               <button
                 type="button"
@@ -67,10 +67,10 @@ export function HeldCartsDialog({
                 className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left disabled:opacity-50 cursor-pointer"
               >
                 <div className="min-w-0 flex-1">
-                  <span className="block truncate text-xs font-bold text-[var(--pos-text)]">
+                  <span className="block truncate text-xs font-bold text-(--pos-text)">
                     {cart.label || "Unlabelled Cart"}
                   </span>
-                  <div className="mt-0.5 flex items-center gap-2 text-[11px] text-[var(--pos-text-3)]">
+                  <div className="mt-0.5 flex items-center gap-2 text-[11px] text-(--pos-text-3)">
                     <span className="flex items-center gap-1">
                       <Clock className="size-3" />
                       {heldFor(cart.heldAt)}
@@ -82,12 +82,12 @@ export function HeldCartsDialog({
                     {cart.customerName && (
                       <>
                         <span>·</span>
-                        <span className="truncate font-medium text-[var(--pos-text-2)]">{cart.customerName}</span>
+                        <span className="truncate font-medium text-(--pos-text-2)">{cart.customerName}</span>
                       </>
                     )}
                   </div>
                 </div>
-                <span className="shrink-0 font-mono font-bold text-sm text-[var(--pos-accent)]">
+                <span className="shrink-0 font-mono font-bold text-sm text-(--pos-accent)">
                   {money(Money.toMinor(cart.total))}
                 </span>
               </button>
@@ -96,7 +96,7 @@ export function HeldCartsDialog({
                 type="button"
                 aria-label={`Discard ${cart.label || "cart"}`}
                 onClick={() => void discard(cart.id)}
-                className="size-7 rounded-lg text-[var(--pos-text-3)] hover:text-signal-red hover:bg-signal-red/10 flex items-center justify-center transition-colors shrink-0"
+                className="size-7 rounded-lg text-(--pos-text-3) hover:text-signal-red hover:bg-signal-red/10 flex items-center justify-center transition-colors shrink-0"
               >
                 <Trash2 className="size-3.5" />
               </button>

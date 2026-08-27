@@ -267,7 +267,7 @@ export default function CustomersPage() {
                         <td className="px-4 py-3.5">
                           <div className="flex items-center gap-3">
                             <Avatar className="h-8 w-8">
-                              <AvatarFallback className={cn("bg-gradient-to-br text-white text-[10px] font-bold", TYPE_GRADIENT[c.type] ?? "from-slate-400 to-slate-600")}>
+                              <AvatarFallback className={cn("bg-linear-to-br text-white text-[10px] font-bold", TYPE_GRADIENT[c.type] ?? "from-slate-400 to-slate-600")}>
                                 {c.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
                               </AvatarFallback>
                             </Avatar>
@@ -340,7 +340,7 @@ export default function CustomersPage() {
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-linear-to-br from-emerald-500 to-teal-600 text-white">
                 <Users className="h-4 w-4" />
               </div>
               <div>

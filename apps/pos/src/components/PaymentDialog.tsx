@@ -190,8 +190,8 @@ export function PaymentDialog({
                   className={[
                     "flex flex-col items-center gap-1.5 rounded-xl border p-2.5 text-xs font-semibold transition-all cursor-pointer",
                     method === value
-                      ? "border-[var(--pos-accent)] bg-[var(--pos-accent)]/10 text-[var(--pos-accent)] shadow-xs"
-                      : "border-[var(--pos-border)] bg-[var(--pos-raised)] text-[var(--pos-text-2)] hover:bg-[var(--pos-hover)]",
+                      ? "border-(--pos-accent) bg-(--pos-accent)/10 text-(--pos-accent) shadow-xs"
+                      : "border-(--pos-border) bg-(--pos-raised) text-(--pos-text-2) hover:bg-(--pos-hover)",
                   ].join(" ")}
                 >
                   <Icon className="size-4" />
@@ -214,9 +214,9 @@ export function PaymentDialog({
               inputMode="decimal"
               autoComplete="off"
               placeholder={amount(outstanding)}
-              className="field num text-right text-xl font-bold bg-[var(--pos-raised)] border-[var(--pos-border)] text-[var(--pos-text)]"
+              className="field num text-right text-xl font-bold bg-(--pos-raised) border-(--pos-border) text-(--pos-text)"
             />
-            <p className="mt-1 text-[11px] text-[var(--pos-text-3)]">
+            <p className="mt-1 text-[11px] text-(--pos-text-3)">
               {method === "cash" && cashSettlement !== outstanding && Money.isPositive(outstanding)
                 ? `Leave empty to take ${money(cashSettlement)} (rounded to 25 fils cash coins).`
                 : `Leave empty to take the full remaining ${money(Money.max(outstanding, 0n))}.`}
@@ -234,7 +234,7 @@ export function PaymentDialog({
                 value={reference}
                 onChange={(e) => setReference(e.target.value)}
                 placeholder={method === "card" ? "Card terminal auth code" : "Bank transfer reference"}
-                className="field text-xs bg-[var(--pos-raised)] border-[var(--pos-border)] text-[var(--pos-text)]"
+                className="field text-xs bg-(--pos-raised) border-(--pos-border) text-(--pos-text)"
                 autoComplete="off"
               />
             </div>
@@ -251,7 +251,7 @@ export function PaymentDialog({
           {overrideNeeded && !creditOverrideAllowed && (
             <button
               type="button"
-              className="btn border border-[var(--pos-accent)]/50 bg-[var(--pos-accent)]/10 text-[var(--pos-accent)] hover:bg-[var(--pos-accent)]/20 w-full text-xs font-semibold"
+              className="btn border border-(--pos-accent)/50 bg-(--pos-accent)/10 text-(--pos-accent) hover:bg-(--pos-accent)/20 w-full text-xs font-semibold"
               onClick={() => setShowOverrideDialog(true)}
               disabled={!Money.isPositive(pending)}
             >
@@ -261,7 +261,7 @@ export function PaymentDialog({
 
           <button
             type="button"
-            className="btn btn-ghost w-full text-xs font-bold border border-[var(--pos-border)]"
+            className="btn btn-ghost w-full text-xs font-bold border border-(--pos-border)"
             onClick={addTender}
             disabled={!Money.isPositive(pending) || creditBlocked}
           >
@@ -270,7 +270,7 @@ export function PaymentDialog({
 
           {/* Tenders taken so far list */}
           {tenders.length > 0 && (
-            <div className="space-y-1.5 border-t border-[var(--pos-border)] pt-3">
+            <div className="space-y-1.5 border-t border-(--pos-border) pt-3">
               <span className="eyebrow block text-[10px]">Tenders Applied</span>
               <ul className="space-y-1">
                 {tenders.map((tender) => {
@@ -278,25 +278,25 @@ export function PaymentDialog({
                   return (
                     <li
                       key={tender.id}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-[var(--pos-border)] bg-[var(--pos-raised)] px-3 py-2 text-xs"
+                      className="flex items-center justify-between gap-3 rounded-xl border border-(--pos-border) bg-(--pos-raised) px-3 py-2 text-xs"
                     >
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold text-[var(--pos-text)]">{meta?.label}</span>
+                        <span className="font-semibold text-(--pos-text)">{meta?.label}</span>
                         {tender.reference && (
-                          <span className="font-mono text-[11px] text-[var(--pos-text-3)]">
+                          <span className="font-mono text-[11px] text-(--pos-text-3)">
                             · {tender.reference}
                           </span>
                         )}
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-[var(--pos-text)]">
+                        <span className="font-mono font-bold text-(--pos-text)">
                           {amount(tender.amount)}
                         </span>
                         <button
                           type="button"
                           onClick={() => removeTender(tender.id)}
                           aria-label="Remove payment"
-                          className="rounded p-1 text-[var(--pos-text-3)] hover:bg-signal-red/10 hover:text-signal-red transition-colors"
+                          className="rounded p-1 text-(--pos-text-3) hover:bg-signal-red/10 hover:text-signal-red transition-colors"
                         >
                           <Trash2 className="size-3.5" />
                         </button>
@@ -318,13 +318,13 @@ export function PaymentDialog({
             onClear={() => setInput("")}
           />
 
-          <div className="space-y-2 rounded-xl border border-[var(--pos-border)] bg-[var(--pos-raised)] p-3 text-xs">
+          <div className="space-y-2 rounded-xl border border-(--pos-border) bg-(--pos-raised) p-3 text-xs">
             <Line label="Total Due" value={amount(total)} />
             <Line label="Paid So Far" value={amount(paid)} />
             {Money.isPositive(rounding) && (
               <Line label="Rounding" value={`−${amount(rounding)}`} tone="brass" />
             )}
-            <div className="border-t border-[var(--pos-border)] pt-2">
+            <div className="border-t border-(--pos-border) pt-2">
               {settled ? (
                 <Line
                   label="Change Due"
@@ -369,14 +369,14 @@ function Line({
 }) {
   return (
     <div className="flex items-baseline justify-between">
-      <span className="text-[var(--pos-text-3)] font-semibold">{label}</span>
+      <span className="text-(--pos-text-3) font-semibold">{label}</span>
       <span
         className={`font-mono font-bold ${large ? "text-lg" : "text-xs"} ${
           tone === "brass"
-            ? "text-[var(--pos-accent)]"
+            ? "text-(--pos-accent)"
             : tone === "green"
               ? "text-signal-green"
-              : "text-[var(--pos-text)]"
+              : "text-(--pos-text)"
         }`}
       >
         {value}

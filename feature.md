@@ -361,7 +361,7 @@ Numbering follows your list. "Where" cites the strongest evidence.
 | 46 | WhatsApp | 🔴 | Schema ✅ (`whatsapp_conversations`, `whatsapp_messages`, `ai_actions`), env config ✅ incl. webhook signature secret. **No API module.** The admin page is hardcoded mock threads with scripted replies and no network call. |
 | 47 | AI in POS | 🔴 | No module, no UI. |
 | 49 | Audit log | 🟡 | Append-only table ✅, `@Audited` on many routes ✅, platform actions ✅. **Price-override authoriser is never recorded** (§9). POS-side actions are not audited. |
-| 50 | Notifications | 🔴 | No table, no API, no UI. Low stock is pull-only. Admin's notification dropdown is two hardcoded fakes. |
+| 50 | Notifications | 🟡 | `notifications` table, module, WebSocket push ✅ (D17). Admin navbar panel is real — list, unread badge, mark read/all-read, live via socket with a 60s poll fallback. Only emitter: low-stock threshold crossing, hooked into `StockService.post()`. Sale/order/system/due-reminder triggers, retention, `/notifications` page, dismiss and broadcast routes 🔴. POS side untouched — still row 3. |
 | 51 | System health | ✅ | Online/sync/last-sync/pending count in `TopBar`; `/health` + `/ready`. |
 | 52 | Updates | 🔴 | `electron-updater` is a dependency; no update flow, no version check, no rollback. |
 | 53 | Backup & recovery | 🔴 | Nothing. |

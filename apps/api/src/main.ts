@@ -3,6 +3,7 @@ import "reflect-metadata";
 import { Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { NestFactory } from "@nestjs/core";
+import { IoAdapter } from "@nestjs/platform-socket.io";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import compression from "compression";
 import helmet from "helmet";
@@ -18,6 +19,11 @@ async function bootstrap(): Promise<void> {
   });
 
   app.useLogger(app.get(PinoLogger));
+
+  // NotificationsGateway is the only @WebSocketGateway() in the app. Explicit
+  // rather than relying on Nest's lazy default, so a second gateway later
+  // does not silently depend on this having been picked automatically.
+  app.useWebSocketAdapter(new IoAdapter(app));
 
   const config = app.get(ConfigService<Env, true>);
   const port = config.get("API_PORT", { infer: true });

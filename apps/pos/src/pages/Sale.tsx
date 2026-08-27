@@ -358,7 +358,7 @@ export function Sale({ cashSessionId }: { cashSessionId: string | null }) {
           }}
           maxLength={80}
           placeholder="e.g. Counter pickup, Blue van"
-          className="field text-xs bg-[var(--pos-raised)] border-[var(--pos-border)] text-[var(--pos-text)]"
+          className="field text-xs bg-(--pos-raised) border-(--pos-border) text-(--pos-text)"
         />
       </Dialog>
 
@@ -804,10 +804,10 @@ function LineEditor({
         </div>
       </div>
 
-      <div className="mt-4 flex items-baseline justify-between rounded-xl border border-[var(--pos-border)] bg-[var(--pos-raised)] px-3.5 py-3">
+      <div className="mt-4 flex items-baseline justify-between rounded-xl border border-(--pos-border) bg-(--pos-raised) px-3.5 py-3">
         <span className="eyebrow">Effective unit price</span>
         <span
-          className={`num font-mono text-lg font-bold ${belowFloor ? "text-signal-red" : "text-[var(--pos-text)]"}`}
+          className={`num font-mono text-lg font-bold ${belowFloor ? "text-signal-red" : "text-(--pos-text)"}`}
         >
           {amount(effective)}
         </span>
@@ -977,17 +977,17 @@ function SaleCompleteDialog({
         {result && Money.isPositive(result.change) ? (
           <div>
             <div className="eyebrow">Change due</div>
-            <div className="num font-mono mt-1 text-4xl font-bold text-[var(--pos-accent)]">
+            <div className="num font-mono mt-1 text-4xl font-bold text-(--pos-accent)">
               {money(result.change)}
             </div>
           </div>
         ) : (
-          <p className="text-xs font-medium text-[var(--pos-text-2)]">Paid in full. No change due.</p>
+          <p className="text-xs font-medium text-(--pos-text-2)">Paid in full. No change due.</p>
         )}
 
         <PrintStatus outcome={outcome} />
 
-        <p className="text-[11px] text-[var(--pos-text-3)]">
+        <p className="text-[11px] text-(--pos-text-3)">
           Queued for sync. The invoice number is assigned when it reaches the
           server.
         </p>
@@ -1014,7 +1014,7 @@ function PrintStatus({ outcome }: { outcome: PrintOutcome }) {
   switch (outcome.status) {
     case "printing":
       return (
-        <p className="flex items-center gap-2 text-xs text-[var(--pos-text-3)]">
+        <p className="flex items-center gap-2 text-xs text-(--pos-text-3)">
           <Loader2 className="size-3.5 animate-spin" aria-hidden />
           Printing {formatLabel(outcome.format)}…
         </p>

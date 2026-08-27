@@ -269,15 +269,15 @@ export function Settings() {
 
   return (
     <>
-      <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6 bg-[var(--pos-bg)]">
+      <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6 bg-(--pos-bg)">
         <div className="mx-auto max-w-5xl space-y-5">
           {/* ── Page Header ── */}
-          <div className="flex items-center justify-between border-b border-[var(--pos-border)] pb-4">
+          <div className="flex items-center justify-between border-b border-(--pos-border) pb-4">
             <div>
-              <h1 className="text-lg font-bold tracking-tight text-[var(--pos-text)]">
+              <h1 className="text-lg font-bold tracking-tight text-(--pos-text)">
                 Terminal Settings & Diagnostics
               </h1>
-              <p className="text-xs text-[var(--pos-text-3)] mt-0.5">
+              <p className="text-xs text-(--pos-text-3) mt-0.5">
                 Hardware connections, sync telemetry, outbox reconciliation and reprint tools
               </p>
             </div>
@@ -311,7 +311,7 @@ export function Settings() {
                     className="rounded-xl border border-signal-amber/30 bg-signal-amber/5 p-3.5"
                   >
                     <div className="flex items-baseline justify-between gap-3">
-                      <span className="text-xs font-bold text-[var(--pos-text)]">
+                      <span className="text-xs font-bold text-(--pos-text)">
                         {item.entity} · {new Date(item.occurredAt).toLocaleString("en-GB")}
                       </span>
                       <span
@@ -325,7 +325,7 @@ export function Settings() {
                         {item.kind === "rejected" ? "Rejected" : "Warning"}
                       </span>
                     </div>
-                    <p className="mt-1.5 text-xs text-[var(--pos-text-2)]">{item.reason}</p>
+                    <p className="mt-1.5 text-xs text-(--pos-text-2)">{item.reason}</p>
                     <div className="mt-3 flex gap-2">
                       {item.kind === "rejected" ? (
                         <>
@@ -359,7 +359,7 @@ export function Settings() {
                   </div>
                 ))}
               </div>
-              <p className="pt-1 text-[11px] text-[var(--pos-text-3)]">
+              <p className="pt-1 text-[11px] text-(--pos-text-3)">
                 <strong>Rejected</strong> sales were refused by the backend. Retry after fixing the constraint, or discard.
               </p>
             </Section>
@@ -371,7 +371,7 @@ export function Settings() {
             <div className="space-y-5">
               {/* Terminal Details */}
               <Section title="Terminal Identity" icon={Cpu}>
-                <div className="divide-y divide-[var(--pos-border)]/60">
+                <div className="divide-y divide-(--pos-border)/60">
                   <Field label="Business" value={terminal?.tenantName ?? "—"} />
                   <Field label="Branch" value={terminal?.branchName ?? "—"} />
                   <Field label="Till Name" value={terminal?.deviceName ?? "—"} mono />
@@ -392,7 +392,7 @@ export function Settings() {
 
               {/* Sync Status */}
               <Section title="Sync & Connectivity" icon={RefreshCw}>
-                <div className="divide-y divide-[var(--pos-border)]/60">
+                <div className="divide-y divide-(--pos-border)/60">
                   <Field
                     label="Connection"
                     value={sync?.online ? "Online (Live API Connected)" : "Offline (Local Queue)"}
@@ -423,7 +423,7 @@ export function Settings() {
                   />
                 </div>
 
-                <div className="mt-3 flex items-center justify-between pt-2 border-t border-[var(--pos-border)]/60">
+                <div className="mt-3 flex items-center justify-between pt-2 border-t border-(--pos-border)/60">
                   <button
                     type="button"
                     className="btn btn-ghost text-xs"
@@ -433,7 +433,7 @@ export function Settings() {
                     <RefreshCw className={cn("size-3.5 mr-1", syncingNow && "animate-spin")} />
                     {syncingNow ? "Syncing now…" : "Force Sync Now"}
                   </button>
-                  <span className="text-[11px] text-[var(--pos-text-3)]">
+                  <span className="text-[11px] text-(--pos-text-3)">
                     Auto-polls every 30 seconds
                   </span>
                 </div>
@@ -441,12 +441,12 @@ export function Settings() {
 
               {/* Shift & Session */}
               <Section title="Current Shift" icon={LogOut}>
-                <div className="divide-y divide-[var(--pos-border)]/60">
+                <div className="divide-y divide-(--pos-border)/60">
                   <Field label="Active Cashier" value={cashier?.name ?? "—"} />
                   <Field label="Role" value={cashier?.roleName ?? "—"} />
                 </div>
 
-                <div className="mt-4 pt-2 border-t border-[var(--pos-border)]/60">
+                <div className="mt-4 pt-2 border-t border-(--pos-border)/60">
                   <button
                     type="button"
                     className="btn btn-danger w-full justify-center"
@@ -455,7 +455,7 @@ export function Settings() {
                     <LogOut className="size-4 mr-1.5" />
                     End Shift & Sign Out
                   </button>
-                  <p className="mt-2 text-center text-[11px] text-[var(--pos-text-3)]">
+                  <p className="mt-2 text-center text-[11px] text-(--pos-text-3)">
                     Close your cash drawer count on the main sale screen before signing out.
                   </p>
                 </div>
@@ -469,7 +469,7 @@ export function Settings() {
                 <div className="space-y-3">
                   <div className="flex gap-2">
                     <div className="relative flex-1">
-                      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--pos-text-3)]" />
+                      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-(--pos-text-3)" />
                       <input
                         type="text"
                         value={reprintQuery}
@@ -503,18 +503,18 @@ export function Settings() {
                   )}
 
                   {reprintSale && (
-                    <div className="rounded-xl border border-[var(--pos-border)] bg-[var(--pos-raised)] p-3.5 space-y-2.5">
+                    <div className="rounded-xl border border-(--pos-border) bg-(--pos-raised) p-3.5 space-y-2.5">
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <p className="font-mono font-bold text-sm text-[var(--pos-text)]">
+                          <p className="font-mono font-bold text-sm text-(--pos-text)">
                             {reprintSale.saleNumber ?? `Draft — ${reprintSale.localId.slice(0, 8)}`}
                           </p>
-                          <p className="text-[11px] text-[var(--pos-text-3)]">
+                          <p className="text-[11px] text-(--pos-text-3)">
                             {new Date(reprintSale.occurredAt).toLocaleString("en-GB")} ·{" "}
                             {reprintSale.lines?.length ?? 0} line items
                           </p>
                         </div>
-                        <span className="font-mono font-bold text-sm text-[var(--pos-accent)]">
+                        <span className="font-mono font-bold text-sm text-(--pos-accent)">
                           AED {parseFloat(reprintSale.total).toFixed(2)}
                         </span>
                       </div>
@@ -541,7 +541,7 @@ export function Settings() {
               <Section title="Hardware: Printer & Cash Drawer" icon={Printer}>
                 <div className="space-y-3">
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <label className="text-xs font-medium text-[var(--pos-text-2)] space-y-1 block">
+                    <label className="text-xs font-medium text-(--pos-text-2) space-y-1 block">
                       <span>Printer Device Path</span>
                       <input
                         type="text"
@@ -553,7 +553,7 @@ export function Settings() {
                       />
                     </label>
 
-                    <div className="text-xs font-medium text-[var(--pos-text-2)] space-y-1 block">
+                    <div className="text-xs font-medium text-(--pos-text-2) space-y-1 block">
                       <span className="block">Default Paper Format</span>
                       <Select
                         value={defaultFormat}
@@ -596,8 +596,8 @@ export function Settings() {
                   </div>
 
                   {/* Test Prints */}
-                  <div className="border-t border-[var(--pos-border)]/60 pt-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--pos-text-3)] mb-2">
+                  <div className="border-t border-(--pos-border)/60 pt-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-(--pos-text-3) mb-2">
                       Printer Output Diagnostics
                     </p>
                     <div className="flex flex-wrap gap-2">
@@ -612,7 +612,7 @@ export function Settings() {
                           {testingFormat === fmt ? (
                             <Loader2 className="size-3 animate-spin mr-1" />
                           ) : (
-                            <Printer className="size-3 mr-1 text-[var(--pos-text-3)]" />
+                            <Printer className="size-3 mr-1 text-(--pos-text-3)" />
                           )}
                           Test {fmt === "a4" ? "A4 Full Page" : `${fmt.split("_")[1]}mm Receipt`}
                         </button>
@@ -628,7 +628,7 @@ export function Settings() {
                           ? "bg-signal-green/10 text-signal-green border-signal-green/30"
                           : printResult.tone === "red"
                             ? "bg-signal-red/10 text-signal-red border-signal-red/30"
-                            : "bg-[var(--pos-raised)] text-[var(--pos-text-2)] border-[var(--pos-border)]",
+                            : "bg-(--pos-raised) text-(--pos-text-2) border-(--pos-border)",
                       )}
                     >
                       {printResult.text}
@@ -636,7 +636,7 @@ export function Settings() {
                   )}
 
                   {!hasBridge() && (
-                    <p className="text-[11px] text-[var(--pos-text-3)] italic">
+                    <p className="text-[11px] text-(--pos-text-3) italic">
                       Hardware direct ESC/POS printer & drawer commands are available when running inside the Electron POS wrapper.
                     </p>
                   )}
@@ -647,23 +647,23 @@ export function Settings() {
               <Section title="Appearance" icon={Sun}>
                 <div className="flex items-center justify-between">
                   <div>
-                    <span className="text-xs font-semibold text-[var(--pos-text)] block">
+                    <span className="text-xs font-semibold text-(--pos-text) block">
                       Color Theme
                     </span>
-                    <span className="text-[11px] text-[var(--pos-text-3)]">
+                    <span className="text-[11px] text-(--pos-text-3)">
                       Optimized for trade counter and warehouse lighting
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-1.5 rounded-xl bg-[var(--pos-raised)] p-1 border border-[var(--pos-border)]">
+                  <div className="flex items-center gap-1.5 rounded-xl bg-(--pos-raised) p-1 border border-(--pos-border)">
                     <button
                       type="button"
                       onClick={() => toggleTheme("light")}
                       className={cn(
                         "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all",
                         theme === "light"
-                          ? "bg-[var(--pos-panel)] text-[var(--pos-text)] shadow-xs"
-                          : "text-[var(--pos-text-3)] hover:text-[var(--pos-text)]",
+                          ? "bg-(--pos-panel) text-(--pos-text) shadow-xs"
+                          : "text-(--pos-text-3) hover:text-(--pos-text)",
                       )}
                     >
                       <Sun className="size-3.5 text-amber-500" />
@@ -675,8 +675,8 @@ export function Settings() {
                       className={cn(
                         "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all",
                         theme === "dark"
-                          ? "bg-[var(--pos-panel)] text-[var(--pos-text)] shadow-xs"
-                          : "text-[var(--pos-text-3)] hover:text-[var(--pos-text)]",
+                          ? "bg-(--pos-panel) text-(--pos-text) shadow-xs"
+                          : "text-(--pos-text-3) hover:text-(--pos-text)",
                       )}
                     >
                       <Moon className="size-3.5 text-indigo-400" />
@@ -711,12 +711,12 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="panel p-5 border border-[var(--pos-border)] rounded-2xl bg-[var(--pos-panel)] shadow-xs">
-      <h2 className="mb-3.5 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[var(--pos-text)]">
+    <section className="panel p-5 border border-(--pos-border) rounded-2xl bg-(--pos-panel) shadow-xs">
+      <h2 className="mb-3.5 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-(--pos-text)">
         <Icon
           className={cn(
             "size-4 shrink-0",
-            tone === "amber" ? "text-signal-amber" : "text-[var(--pos-accent)]",
+            tone === "amber" ? "text-signal-amber" : "text-(--pos-accent)",
           )}
         />
         <span>{title}</span>
@@ -745,12 +745,12 @@ function Field({
 
   return (
     <div className="flex items-center justify-between gap-4 py-2 text-xs">
-      <span className="shrink-0 text-[var(--pos-text-3)]">{label}</span>
+      <span className="shrink-0 text-(--pos-text-3)">{label}</span>
       <span
         className={cn(
           "truncate text-right font-medium",
           mono ? "num text-xs font-mono" : "",
-          tone ? tones[tone] : "text-[var(--pos-text)]",
+          tone ? tones[tone] : "text-(--pos-text)",
         )}
       >
         {value}

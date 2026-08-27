@@ -250,7 +250,7 @@ export default function PlatformAuditLogsPage() {
                             </span>
                           )}
                         </td>
-                        <td className="py-3 px-4 text-muted-foreground truncate max-w-[200px]">
+                        <td className="py-3 px-4 text-muted-foreground truncate max-w-50">
                           {log.reason || "—"}
                         </td>
                         <td className="py-3 px-4 font-mono text-muted-foreground">

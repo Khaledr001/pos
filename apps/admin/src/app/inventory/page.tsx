@@ -316,7 +316,7 @@ export default function InventoryPage() {
       <Card className="overflow-hidden">
         <CardHeader className="pb-0 border-b border-border bg-secondary/30">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-linear-to-br from-emerald-500 to-teal-600 text-white">
               <Boxes className="h-4 w-4" />
             </div>
             <div>
@@ -396,7 +396,7 @@ export default function InventoryPage() {
         <CardHeader className="pb-0 border-b border-border bg-secondary/30">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 text-white">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-linear-to-br from-violet-500 to-purple-600 text-white">
                 <History className="h-4 w-4" />
               </div>
               <div>
@@ -451,7 +451,7 @@ export default function InventoryPage() {
                       {tx.quantity > 0 ? `+${tx.quantity}` : tx.quantity}
                     </td>
                     <td className="px-4 py-3.5 text-right text-foreground">{tx.balanceAfter}</td>
-                    <td className="px-4 py-3.5 text-muted-foreground truncate max-w-[200px]">
+                    <td className="px-4 py-3.5 text-muted-foreground truncate max-w-50">
                       {tx.reference ?? tx.notes ?? "—"}
                     </td>
                   </tr>
@@ -467,7 +467,7 @@ export default function InventoryPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 text-white">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-linear-to-br from-amber-500 to-orange-600 text-white">
                 <SlidersHorizontal className="h-4 w-4" />
               </div>
               <div>

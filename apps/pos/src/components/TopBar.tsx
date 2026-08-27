@@ -109,42 +109,42 @@ export function TopBar({
   const pending = sync?.pendingPushCount ?? 0;
 
   return (
-    <header className="flex h-13 shrink-0 items-center justify-between gap-4 border-b border-[var(--pos-border)] bg-[var(--pos-panel)] px-3 md:px-4 select-none">
+    <header className="flex h-13 shrink-0 items-center justify-between gap-4 border-b border-(--pos-border) bg-(--pos-panel) px-3 md:px-4 select-none">
       {/* ── Left: Terminal & Cashier Identity ── */}
       <div className="flex items-center gap-3 sm:gap-4 min-w-0">
         {/* Branch & Till */}
         <div className="flex items-center gap-2 min-w-0">
-          <div className="size-7 rounded-lg bg-[var(--pos-raised)] text-[var(--pos-accent)] flex items-center justify-center shrink-0 border border-[var(--pos-border)]">
+          <div className="size-7 rounded-lg bg-(--pos-raised) text-(--pos-accent) flex items-center justify-center shrink-0 border border-(--pos-border)">
             <Store className="size-3.5" />
           </div>
           <div className="leading-tight min-w-0">
-            <div className="text-xs font-bold text-[var(--pos-text)] truncate">
+            <div className="text-xs font-bold text-(--pos-text) truncate">
               {terminal?.branchName ?? "Counter Till"}
             </div>
-            <div className="num font-mono text-[10px] text-[var(--pos-text-3)] truncate">
+            <div className="num font-mono text-[10px] text-(--pos-text-3) truncate">
               {terminal?.deviceName ?? "Till #1"}
             </div>
           </div>
         </div>
 
-        <div className="h-5 w-px bg-[var(--pos-border)] hidden sm:block" />
+        <div className="h-5 w-px bg-(--pos-border) hidden sm:block" />
 
         {/* Active Cashier */}
         <div className="hidden sm:flex items-center gap-2 text-xs">
-          <div className="size-6 rounded-full bg-[var(--pos-raised)] flex items-center justify-center text-[var(--pos-text-3)] border border-[var(--pos-border)]">
+          <div className="size-6 rounded-full bg-(--pos-raised) flex items-center justify-center text-(--pos-text-3) border border-(--pos-border)">
             <User className="size-3" />
           </div>
           <span
             className={
               cashier
-                ? "font-semibold text-[var(--pos-text)] truncate max-w-[120px]"
-                : "text-[var(--pos-text-3)]"
+                ? "font-semibold text-(--pos-text) truncate max-w-30"
+                : "text-(--pos-text-3)"
             }
           >
             {cashier?.name ?? "Not signed in"}
           </span>
           {cashier && (
-            <span className="rounded-md bg-[var(--pos-raised)] px-1.5 py-0.2 text-[9px] font-bold uppercase tracking-wider text-[var(--pos-text-2)] border border-[var(--pos-border)]">
+            <span className="rounded-md bg-(--pos-raised) px-1.5 py-0.2 text-[9px] font-bold uppercase tracking-wider text-(--pos-text-2) border border-(--pos-border)">
               {cashier.roleName}
             </span>
           )}
@@ -159,7 +159,7 @@ export function TopBar({
             "flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs transition-colors",
             cashSessionFloat
               ? "bg-signal-green/10 border-signal-green/30 text-signal-green"
-              : "bg-[var(--pos-raised)] border-[var(--pos-border)] text-[var(--pos-text-3)]",
+              : "bg-(--pos-raised) border-(--pos-border) text-(--pos-text-3)",
           ].join(" ")}
           title={
             cashSessionFloat
@@ -182,7 +182,7 @@ export function TopBar({
           )}
         </div>
 
-        <div className="h-5 w-px bg-[var(--pos-border)] hidden sm:block" />
+        <div className="h-5 w-px bg-(--pos-border) hidden sm:block" />
 
         {/* Sync & Connectivity Indicator Button */}
         <button
@@ -224,7 +224,7 @@ export function TopBar({
 
         {/* Live Clock */}
         <time
-          className="font-mono text-base font-bold text-[var(--pos-text-2)] hidden sm:inline"
+          className="font-mono text-base font-bold text-(--pos-text-2) hidden sm:inline"
           dateTime={clock.toISOString()}
         >
           {clock.toLocaleTimeString("en-GB", {

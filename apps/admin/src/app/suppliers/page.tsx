@@ -270,7 +270,7 @@ export default function SuppliersPage() {
                           {s.trn && <span className="text-[10px] text-muted-foreground font-mono">TRN: {s.trn}</span>}
                         </div>
                       </td>
-                      <td className="px-4 py-3.5 text-muted-foreground max-w-[200px] truncate">
+                      <td className="px-4 py-3.5 text-muted-foreground max-w-50 truncate">
                         {s.address ?? "—"}
                       </td>
                       <td className="px-4 py-3.5 text-right font-mono font-medium text-foreground">
@@ -321,7 +321,7 @@ export default function SuppliersPage() {
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-linear-to-br from-blue-500 to-indigo-600 text-white">
                 <Truck className="h-4 w-4" />
               </div>
               <div>

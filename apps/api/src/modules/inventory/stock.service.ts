@@ -4,6 +4,8 @@ import { AppError, ERROR_CODES, Money } from "@devsfleet/shared-utils";
 import { Injectable, Logger } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import { RequestContext } from "../../common/context/request-context.js";
+import { DomainEvents } from "../../common/events/domain-events.js";
+import { DOMAIN_EVENTS } from "../../common/events/event-names.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 
 /**
@@ -48,6 +50,16 @@ export interface StockMovementInput {
   /** Unit cost at the time of movement. Feeds the weighted-average cost. */
   unitCost?: string;
   deviceId?: string;
+  /**
+   * Skip the low-stock crossing check for this movement.
+   *
+   * For a bulk writer whose movements are not each individually meaningful —
+   * a stock take reconciling hundreds of variants, a warehouse-wide import —
+   * where per-movement alerts would flood every recipient's inbox rather than
+   * surface anything actionable. Unset by default: a single sale or transfer
+   * IS individually meaningful, and that is the common case.
+   */
+  suppressEvents?: boolean;
 }
 
 @Injectable()
@@ -358,6 +370,7 @@ export class StockService {
     notes?: string;
     unitCost?: string;
     deviceId?: string;
+    suppressEvents?: boolean;
   }): Promise<string> {
     const { tx, variantId, branchId, signedQuantity } = input;
 
@@ -428,6 +441,7 @@ export class StockService {
       .returning({
         quantity: schema.inventory.quantity,
         averageCost: schema.inventory.averageCost,
+        reservedQuantity: schema.inventory.reservedQuantity,
       });
 
     if (!balance) {
@@ -456,7 +470,67 @@ export class StockService {
       throw new AppError(ERROR_CODES.INTERNAL_ERROR, "Could not write the stock ledger");
     }
 
+    // Crossing INTO low stock can only happen on a decrease — an inbound
+    // movement only ever raises `available`, never drops it — so the extra
+    // read below is skipped entirely on stock coming in.
+    if (!input.suppressEvents && signedQuantity < 0n) {
+      await this.checkLowStockCrossing({
+        tx,
+        tenantId,
+        variantId,
+        branchId,
+        availableAfter: Money.subtract(Money.toMinor(balance.quantity), Money.toMinor(balance.reservedQuantity)),
+        magnitudeOut: -signedQuantity,
+      });
+    }
+
     return ledgerRow.id;
+  }
+
+  /**
+   * Record a LOW_STOCK_THRESHOLD_CROSSED event if this movement just pushed
+   * `available` (on hand minus reserved) to or below the variant's minStock,
+   * having been above it before this movement.
+   *
+   * One extra indexed read per outbound movement — the cost the crossing
+   * check needs `minStock`, which `post()`'s own upsert has no reason to
+   * return. Measure this against the sale path if it ever shows up; the
+   * escape hatch is `suppressEvents` on the caller's input, for a bulk writer
+   * where per-movement alerts are the wrong shape (see StockMovementInput).
+   */
+  private async checkLowStockCrossing(input: {
+    tx: Transaction;
+    tenantId: string;
+    variantId: string;
+    branchId: string;
+    availableAfter: Money.Minor4;
+    magnitudeOut: Money.Minor4;
+  }): Promise<void> {
+    const variant = await input.tx.query.productVariants.findFirst({
+      where: (t, { eq: e }) => e(t.id, input.variantId),
+      columns: { minStock: true },
+    });
+    if (!variant) return;
+
+    // A variant with no reorder point set has opted out of this entirely —
+    // matches the predicate InventoryService.lowStock() already uses.
+    const minStock = Money.toMinor(variant.minStock);
+    if (minStock <= 0n) return;
+
+    const availableBefore = Money.add(input.availableAfter, input.magnitudeOut);
+    const crossed = input.availableAfter <= minStock && availableBefore > minStock;
+    if (!crossed) return;
+
+    DomainEvents.record({
+      name: DOMAIN_EVENTS.LOW_STOCK_THRESHOLD_CROSSED,
+      tenantId: input.tenantId,
+      payload: {
+        variantId: input.variantId,
+        branchId: input.branchId,
+        available: Money.toDecimalString(input.availableAfter, 4),
+        minStock: variant.minStock,
+      },
+    });
   }
 
   /**

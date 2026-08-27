@@ -33,6 +33,17 @@ export function getApiBaseUrlOverride(): string {
   return localStorage.getItem(BASE_URL_OVERRIDE_KEY) ?? "";
 }
 
+/**
+ * Origin only — no `/api/v1` suffix.
+ *
+ * The notifications WebSocket gateway is mounted at the engine.io root,
+ * outside the REST path prefix, so a socket connection needs the bare origin
+ * the REST base URL was built from, not the base URL itself.
+ */
+export function getApiOrigin(): string {
+  return new URL(getBaseUrl()).origin;
+}
+
 /** Empty or the default clears the override rather than storing it verbatim. */
 export function setApiBaseUrlOverride(url: string): void {
   if (typeof window === "undefined") return;

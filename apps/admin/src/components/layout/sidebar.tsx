@@ -278,7 +278,7 @@ export function Sidebar({
               )}
             >
               {isParentActive && (
-                <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full gradient-brand" />
+                <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.75 rounded-r-full gradient-brand" />
               )}
               <Icon className="h-5 w-5 shrink-0 transition-colors" />
             </Link>
@@ -327,13 +327,13 @@ export function Sidebar({
           }}
         >
           {isParentActive && (
-            <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full gradient-brand" />
+            <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.75 rounded-r-full gradient-brand" />
           )}
 
           <div className="flex items-center gap-3 min-w-0 flex-1">
             <Icon
               className={cn(
-                "h-[18px] w-[18px] shrink-0 transition-colors",
+                "h-4.5 w-4.5 shrink-0 transition-colors",
                 isParentActive
                   ? "text-primary"
                   : "text-muted-foreground group-hover:text-sidebar-accent-foreground",
@@ -420,11 +420,11 @@ export function Sidebar({
         )}
       >
         {isActive && (
-          <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full gradient-brand" />
+          <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.75 rounded-r-full gradient-brand" />
         )}
         <Icon
           className={cn(
-            "h-[18px] w-[18px] shrink-0 transition-colors",
+            "h-4.5 w-4.5 shrink-0 transition-colors",
             isActive
               ? "text-primary"
               : "text-muted-foreground group-hover:text-sidebar-accent-foreground",
@@ -462,13 +462,13 @@ export function Sidebar({
       <aside
         className={cn(
           "fixed bottom-0 left-0 z-50 lg:z-40 flex flex-col border-r border-sidebar-border bg-sidebar transition-all duration-300 ease-in-out",
-          isImpersonating ? "top-[42px]" : "top-0",
+          isImpersonating ? "top-10.5" : "top-0",
           // Mobile: slide-out drawer
           mobileOpen
-            ? "translate-x-0 w-[280px] max-w-[85vw] shadow-2xl"
+            ? "translate-x-0 w-70 max-w-[85vw] shadow-2xl"
             : "-translate-x-full lg:translate-x-0",
           // Desktop: collapsed vs expanded
-          collapsed ? "lg:w-[72px]" : "lg:w-[264px]",
+          collapsed ? "lg:w-18" : "lg:w-66",
         )}
       >
         {/* ── Brand Header ── */}

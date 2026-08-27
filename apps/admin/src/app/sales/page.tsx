@@ -278,7 +278,7 @@ export default function SalesPage() {
                             {sale.saleNumber || sale.invoiceNumber || "—"}
                           </span>
                         </td>
-                        <td className="px-4 py-3.5 font-medium text-foreground max-w-[180px] truncate">
+                        <td className="px-4 py-3.5 font-medium text-foreground max-w-45 truncate">
                           {sale.customerName || sale.customer?.name || "Walk-in Customer"}
                         </td>
                         <td className="px-4 py-3.5">
@@ -353,7 +353,7 @@ export default function SalesPage() {
         <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
             <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-linear-to-br from-blue-500 to-indigo-600 text-white">
                 <FileText className="h-4 w-4" />
               </div>
               <div>

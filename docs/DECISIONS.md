@@ -246,6 +246,78 @@ in for the device path), and a real, valid PDF buffer for the A4 invoice.
 
 ---
 
+## D17 — Notifications: a domain event bus, dispatched after commit; WebSocket as an accelerator, never the source of truth
+
+**Decided**, building Phase A of the `notifications` module (see
+`apps/api/src/modules/README.md` and INVENTRA-SPEC.md §6.10/§7.10/§8.16). No
+prior decision covered realtime transport, an event bus, or notifications at
+all — this closes that gap rather than revising an earlier one.
+
+**The event bus was the actual prerequisite, not the notification table.**
+Four trigger families (stock, dues, sales, system) live in four different
+modules, and the spec forbids wiring them to call `NotificationsService`
+directly ("modules communicate only through events"). The harder constraint
+is transactional: `TenantDatabase.run()` opens the transaction a service runs
+in, so anything emitted from inside that service is still inside it — a
+notification written there would roll back with a failed sale, or worse,
+fire for one that never committed. `@nestjs/event-emitter` backs
+`DomainEvents.record()` (`apps/api/src/common/events/domain-events.ts`),
+which appends to the request's existing `AsyncLocalStorage` store rather than
+opening a second context of its own — that store already spans the whole
+request, from `RequestContextMiddleware` through the controller, so nothing
+needs to separately "enter" it. `DomainEventsInterceptor` drains and
+dispatches after the handler returns successfully, mirroring
+`AuditInterceptor`'s already-established fire-and-forget shape: a thrown
+`AppError` never reaches the drain, so a rolled-back write can never produce
+an event.
+
+**Transport is WebSocket (`@nestjs/websockets` + `@nestjs/platform-socket.io`,
+socket.io 4.8), explicitly an accelerator.** The spec permits "websocket or
+equivalent"; polling and SSE were both live options, and no dependency
+existed either way. WebSocket won because a stock movement should reach an
+open tab without a 60-second wait. It is deliberately NOT load-bearing: the
+admin panel fetches its list and unread count over plain REST whenever it
+opens, and the socket only invalidates that cache. A proxy with no upgrade
+path, a corporate network, or a token going stale mid-session degrades the
+feature to fetch-on-open plus a 60-second poll — not a broken feature. Auth
+is the handshake token verified with `JwtService.verifyAsync` against the
+same `JWT_ACCESS_SECRET` `JwtAuthGuard` uses; per D12 this stays a pure
+signature check, no database round trip. Recipients join a
+`tenant:<id>:user:<id>` room, so no room a token can construct crosses a
+tenant boundary. Single-node only: `ioredis` is a dependency of this API but
+is not instantiated anywhere, so horizontal scale needs the socket.io Redis
+adapter — noted, not built, and not needed until there is a second node.
+
+**Dedupe is a partial unique index, not application bookkeeping.**
+`uq_notifications_dedupe` on `(user_id, type, reference_type, reference_id)
+WHERE is_read = false AND reference_id IS NOT NULL` means a second unread
+crossing for the same condition becomes an `onConflictDoUpdate`, not a second
+row — cheap enough to run on `StockService.post()`'s hot path without a
+pre-check query. Recipients are per-user rows (matches the spec's `user_id`
+field), resolved by permission (`inventory:read`) and branch scope
+(`branchId IS NULL` reaches a tenant-wide user at every branch) at fan-out
+time, capped at 50 with a logged truncation rather than a silent one.
+
+**What Phase A does NOT cover, on purpose:** sale/order lifecycle and system
+messages (tenant suspended, plan limit, trial expiring) are not wired to any
+emitter yet — `low_stock` is the only one. `due_reminder` needs a scheduled
+sweep and this repo has no scheduler at all (`@nestjs/schedule` is unused,
+matching the roadmap's still-pending BullMQ workers) — that is Phase C, not
+built. There is no retention job, so the table grows unbounded until one
+exists. There is no `/notifications` page, no dismiss route, no broadcast
+route, and no per-user mute preferences. The self-scoped REST routes
+(`GET /notifications`, `.../unread-count`, `PATCH .../:id/read`,
+`POST .../read-all`) carry no `@RequirePermissions`, departing from module
+rule 5 — per spec `/notifications` is "authenticated" only, and every query
+filters on `RequestContext.requireUser().id`, which is a stronger control
+than a permission check when there is no cross-user read to authorise at
+all. `NOTIFICATION_TYPES` is a five-value superset of the spec's three
+(`low_stock`, `due_reminder`, `sale`, `order`, `system`) — collapsing sales
+and orders into `system` would leave the panel's type filter unable to tell
+"a cashier voided a sale" from "your trial is ending".
+
+---
+
 ## Still open
 
 | # | Question | Blocks |

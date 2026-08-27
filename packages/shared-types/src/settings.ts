@@ -87,7 +87,12 @@ export interface TenantSettings {
   inventory: {
     /** Reserve stock when a quotation is confirmed, not just when ordered. */
     reserveOnQuotationConfirm: boolean;
-    /** Fire a low-stock alert when quantity - reserved <= reorder_level. */
+    /**
+     * Fire a low-stock notification when a stock movement drops a variant's
+     * available quantity (on hand minus reserved) to or below its minStock.
+     * Matches the predicate in inventory.service.ts's lowStock() query —
+     * turning this off suppresses the notification, not the report.
+     */
     lowStockAlerts: boolean;
   };
 

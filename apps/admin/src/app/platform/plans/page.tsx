@@ -144,7 +144,7 @@ export default function PlatformPlansPage() {
               key={plan.id}
               className={`relative overflow-hidden flex flex-col justify-between transition-all duration-200 border ${
                 isFeatured
-                  ? "border-primary/50 shadow-md ring-1 ring-primary/20 bg-gradient-to-b from-primary/5 via-background to-background"
+                  ? "border-primary/50 shadow-md ring-1 ring-primary/20 bg-linear-to-b from-primary/5 via-background to-background"
                   : "border-border/60 shadow-xs hover:border-border"
               }`}
             >

@@ -286,3 +286,20 @@ export type LoyaltyType = (typeof LOYALTY_TYPES)[number];
 
 export const PRINT_FORMATS = asConst(["thermal_58", "thermal_80", "a4"]);
 export type PrintFormat = (typeof PRINT_FORMATS)[number];
+
+// -----------------------------------------------------------------------------
+// Notifications
+// -----------------------------------------------------------------------------
+
+/**
+ * INVENTRA-SPEC.md §7.10 defines three — LowStock, DueReminder, System. `sale`
+ * and `order` are a deliberate superset: collapsing the sales/order lifecycle
+ * into `system` would leave the panel's type filter unable to separate "a
+ * cashier voided a sale" from "your trial is ending", which is the filter's
+ * entire reason to exist.
+ */
+export const NOTIFICATION_TYPES = asConst(["low_stock", "due_reminder", "sale", "order", "system"]);
+export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
+
+export const NOTIFICATION_SEVERITIES = asConst(["info", "warning", "critical"]);
+export type NotificationSeverity = (typeof NOTIFICATION_SEVERITIES)[number];

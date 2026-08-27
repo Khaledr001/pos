@@ -137,22 +137,22 @@ export function Quotations() {
 
   return (
     <>
-      <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6 bg-[var(--pos-bg)]">
+      <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6 bg-(--pos-bg)">
         <div className="mx-auto max-w-5xl space-y-5">
           {/* ── Top Header Strip ── */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[var(--pos-border)] pb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-(--pos-border) pb-4">
             <div>
-              <h1 className="text-lg font-bold tracking-tight text-[var(--pos-text)] flex items-center gap-2">
-                <FileText className="size-5 text-[var(--pos-accent)]" />
+              <h1 className="text-lg font-bold tracking-tight text-(--pos-text) flex items-center gap-2">
+                <FileText className="size-5 text-(--pos-accent)" />
                 Quotations & Estimates
               </h1>
-              <p className="text-xs text-[var(--pos-text-3)] mt-0.5">
+              <p className="text-xs text-(--pos-text-3) mt-0.5">
                 Draft proposals and proforma quotes ready to convert to counter sales
               </p>
             </div>
 
             <div className="flex items-center gap-3">
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-[var(--pos-raised)] text-[var(--pos-text-2)] border border-[var(--pos-border)]">
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-(--pos-raised) text-(--pos-text-2) border border-(--pos-border)">
                 {quotations.length} {quotations.length === 1 ? "Quotation" : "Quotations"}
               </span>
               <button
@@ -168,19 +168,19 @@ export function Quotations() {
 
           {/* ── Search / Filter Bar ── */}
           <div className="relative">
-            <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[var(--pos-text-3)]" />
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-(--pos-text-3)" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search quotations by customer name, phone, company, or quote number..."
-              className="field num pl-10 h-10 text-xs w-full bg-[var(--pos-panel)] border-[var(--pos-border)]"
+              className="field num pl-10 h-10 text-xs w-full bg-(--pos-panel) border-(--pos-border)"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--pos-text-3)] hover:text-[var(--pos-text)]"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-(--pos-text-3) hover:text-(--pos-text)"
               >
                 <X className="size-3.5" />
               </button>
@@ -189,17 +189,17 @@ export function Quotations() {
 
           {/* ── Quotations List / Cards Grid ── */}
           {loading ? (
-            <div className="py-16 text-center text-[var(--pos-text-3)]">
-              <Loader2 className="size-8 animate-spin mx-auto mb-2 text-[var(--pos-accent)]" />
+            <div className="py-16 text-center text-(--pos-text-3)">
+              <Loader2 className="size-8 animate-spin mx-auto mb-2 text-(--pos-accent)" />
               <p className="text-xs font-medium">Loading saved quotations…</p>
             </div>
           ) : filtered.length === 0 ? (
-            <div className="rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-panel)] px-6 py-14 text-center shadow-xs">
-              <FileText className="mx-auto size-12 text-[var(--pos-text-3)]/50" />
-              <p className="mt-3 text-sm font-bold text-[var(--pos-text)]">
+            <div className="rounded-2xl border border-(--pos-border) bg-(--pos-panel) px-6 py-14 text-center shadow-xs">
+              <FileText className="mx-auto size-12 text-(--pos-text-3)/50" />
+              <p className="mt-3 text-sm font-bold text-(--pos-text)">
                 {searchQuery ? `No quotations matching "${searchQuery}"` : "No quotations on this terminal"}
               </p>
-              <p className="mt-1 text-xs text-[var(--pos-text-3)] max-w-sm mx-auto">
+              <p className="mt-1 text-xs text-(--pos-text-3) max-w-sm mx-auto">
                 {searchQuery
                   ? "Try searching with a different term or clear the filter."
                   : "Build a cart on the Sale counter and press F7 to save it as a customer quotation."}
@@ -215,43 +215,43 @@ export function Quotations() {
                 return (
                   <div
                     key={q.localId}
-                    className="flex flex-col justify-between rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-panel)] p-4.5 shadow-xs hover:border-[var(--pos-accent)]/50 transition-all"
+                    className="flex flex-col justify-between rounded-2xl border border-(--pos-border) bg-(--pos-panel) p-4.5 shadow-xs hover:border-(--pos-accent)/50 transition-all"
                   >
                     <div>
                       {/* Card Header: Customer & Amount */}
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
-                            <User className="size-3.5 text-[var(--pos-accent)] shrink-0" />
-                            <h2 className="font-bold text-sm text-[var(--pos-text)] truncate">
+                            <User className="size-3.5 text-(--pos-accent) shrink-0" />
+                            <h2 className="font-bold text-sm text-(--pos-text) truncate">
                               {customerName}
                             </h2>
                           </div>
                           {customer?.company && (
-                            <p className="text-[11px] text-[var(--pos-text-3)] truncate pl-5">
+                            <p className="text-[11px] text-(--pos-text-3) truncate pl-5">
                               {customer.company}
                             </p>
                           )}
                         </div>
 
                         <div className="text-right shrink-0">
-                          <div className="font-mono font-bold text-base text-[var(--pos-accent)]">
+                          <div className="font-mono font-bold text-base text-(--pos-accent)">
                             AED {parseFloat(q.total).toFixed(2)}
                           </div>
-                          <span className="text-[10px] font-semibold text-[var(--pos-text-3)] uppercase tracking-wider">
+                          <span className="text-[10px] font-semibold text-(--pos-text-3) uppercase tracking-wider">
                             {q.lines.length} {q.lines.length === 1 ? "item" : "items"}
                           </span>
                         </div>
                       </div>
 
                       {/* Meta Tags: Number, Date, Valid Until */}
-                      <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-[var(--pos-text-3)]">
-                        <span className="font-mono font-semibold px-2 py-0.5 rounded-md bg-[var(--pos-raised)] text-[var(--pos-text-2)] border border-[var(--pos-border)]">
+                      <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-(--pos-text-3)">
+                        <span className="font-mono font-semibold px-2 py-0.5 rounded-md bg-(--pos-raised) text-(--pos-text-2) border border-(--pos-border)">
                           {q.quotationNumber || `Draft · ${q.localId.slice(0, 8)}`}
                         </span>
 
                         <span className="flex items-center gap-1">
-                          <Clock className="size-3 text-[var(--pos-text-3)]" />
+                          <Clock className="size-3 text-(--pos-text-3)" />
                           {new Date(q.occurredAt).toLocaleDateString("en-GB", {
                             day: "2-digit",
                             month: "short",
@@ -272,11 +272,11 @@ export function Quotations() {
                     </div>
 
                     {/* Actions */}
-                    <div className="mt-4 flex items-center gap-2 border-t border-[var(--pos-border)]/60 pt-3">
+                    <div className="mt-4 flex items-center gap-2 border-t border-(--pos-border)/60 pt-3">
                       <button
                         type="button"
                         onClick={() => setSelectedQuotation(q)}
-                        className="btn btn-ghost text-xs h-9 px-3 text-[var(--pos-text-2)]"
+                        className="btn btn-ghost text-xs h-9 px-3 text-(--pos-text-2)"
                         title="View quotation line items"
                       >
                         <Eye className="size-3.5 mr-1" />
@@ -286,7 +286,7 @@ export function Quotations() {
                       <button
                         type="button"
                         onClick={() => printQuotationSlip(q)}
-                        className="btn btn-ghost text-xs h-9 px-3 text-[var(--pos-text-2)]"
+                        className="btn btn-ghost text-xs h-9 px-3 text-(--pos-text-2)"
                         title="Print quotation document"
                       >
                         <Printer className="size-3.5 mr-1" />
@@ -318,16 +318,16 @@ export function Quotations() {
       {/* ── Quotation Details Modal ── */}
       {selectedQuotation && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="w-full max-w-xl rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-panel)] shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+          <div className="w-full max-w-xl rounded-2xl border border-(--pos-border) bg-(--pos-panel) shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
             {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-[var(--pos-border)] p-4 bg-[var(--pos-raised)]/40">
+            <div className="flex items-center justify-between border-b border-(--pos-border) p-4 bg-(--pos-raised)/40">
               <div className="flex items-center gap-2.5">
-                <FileText className="size-5 text-[var(--pos-accent)]" />
+                <FileText className="size-5 text-(--pos-accent)" />
                 <div>
-                  <h3 className="font-bold text-sm text-[var(--pos-text)]">
+                  <h3 className="font-bold text-sm text-(--pos-text)">
                     Quotation #{selectedQuotation.quotationNumber || selectedQuotation.localId.slice(0, 8)}
                   </h3>
-                  <p className="text-[11px] text-[var(--pos-text-3)]">
+                  <p className="text-[11px] text-(--pos-text-3)">
                     {customers[selectedQuotation.customerId ?? ""]?.name ?? "Walk-in Customer"} ·{" "}
                     {new Date(selectedQuotation.occurredAt).toLocaleString("en-GB")}
                   </p>
@@ -346,24 +346,24 @@ export function Quotations() {
             <div className="overflow-y-auto p-4 flex-1">
               <table className="w-full text-left text-xs">
                 <thead>
-                  <tr className="border-b border-[var(--pos-border)] text-[var(--pos-text-3)] text-[10px] uppercase font-bold tracking-wider">
+                  <tr className="border-b border-(--pos-border) text-(--pos-text-3) text-[10px] uppercase font-bold tracking-wider">
                     <th className="pb-2">Product</th>
                     <th className="pb-2 text-right">Qty</th>
                     <th className="pb-2 text-right">Unit Price</th>
                     <th className="pb-2 text-right">Total</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[var(--pos-border)]/50">
+                <tbody className="divide-y divide-(--pos-border)/50">
                   {selectedQuotation.lines.map((line, idx) => (
                     <tr key={`${line.variantId}-${idx}`} className="py-2">
                       <td className="py-2.5 pr-2">
-                        <p className="font-semibold text-[var(--pos-text)]">{line.productName}</p>
-                        <p className="font-mono text-[10px] text-[var(--pos-text-3)]">{line.productSku}</p>
+                        <p className="font-semibold text-(--pos-text)">{line.productName}</p>
+                        <p className="font-mono text-[10px] text-(--pos-text-3)">{line.productSku}</p>
                       </td>
-                      <td className="py-2.5 text-right font-mono text-[var(--pos-text)]">
+                      <td className="py-2.5 text-right font-mono text-(--pos-text)">
                         {fmtQuantity(line.quantity)}
                       </td>
-                      <td className="py-2.5 text-right font-mono text-[var(--pos-text-2)]">
+                      <td className="py-2.5 text-right font-mono text-(--pos-text-2)">
                         AED {parseFloat(line.unitPrice).toFixed(2)}
                         {Number(line.discountPercent) > 0 && (
                           <span className="block text-[10px] text-signal-green">
@@ -371,7 +371,7 @@ export function Quotations() {
                           </span>
                         )}
                       </td>
-                      <td className="py-2.5 text-right font-mono font-bold text-[var(--pos-text)]">
+                      <td className="py-2.5 text-right font-mono font-bold text-(--pos-text)">
                         AED {parseFloat(line.total).toFixed(2)}
                       </td>
                     </tr>
@@ -380,8 +380,8 @@ export function Quotations() {
               </table>
 
               {/* Summary Totals */}
-              <div className="mt-4 border-t border-[var(--pos-border)] pt-3 space-y-1.5 text-xs">
-                <div className="flex justify-between text-[var(--pos-text-2)]">
+              <div className="mt-4 border-t border-(--pos-border) pt-3 space-y-1.5 text-xs">
+                <div className="flex justify-between text-(--pos-text-2)">
                   <span>Subtotal</span>
                   <span className="font-mono">AED {parseFloat(selectedQuotation.subtotal).toFixed(2)}</span>
                 </div>
@@ -391,13 +391,13 @@ export function Quotations() {
                     <span className="font-mono">-AED {parseFloat(selectedQuotation.discountAmount).toFixed(2)}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-[var(--pos-text-2)]">
+                <div className="flex justify-between text-(--pos-text-2)">
                   <span>VAT (5%)</span>
                   <span className="font-mono">AED {parseFloat(selectedQuotation.taxAmount).toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between font-bold text-sm text-[var(--pos-text)] border-t border-[var(--pos-border)]/60 pt-2">
+                <div className="flex justify-between font-bold text-sm text-(--pos-text) border-t border-(--pos-border)/60 pt-2">
                   <span>Total Amount</span>
-                  <span className="font-mono text-[var(--pos-accent)]">
+                  <span className="font-mono text-(--pos-accent)">
                     AED {parseFloat(selectedQuotation.total).toFixed(2)}
                   </span>
                 </div>
@@ -405,7 +405,7 @@ export function Quotations() {
             </div>
 
             {/* Modal Footer Actions */}
-            <div className="border-t border-[var(--pos-border)] p-4 flex items-center justify-between gap-3 bg-[var(--pos-raised)]/30">
+            <div className="border-t border-(--pos-border) p-4 flex items-center justify-between gap-3 bg-(--pos-raised)/30">
               <button
                 type="button"
                 onClick={() => setSelectedQuotation(null)}

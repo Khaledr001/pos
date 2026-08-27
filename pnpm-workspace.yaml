@@ -18,3 +18,6 @@ allowBuilds:
   # Downloads the Squirrel.Windows toolchain. electron-builder.yml targets
   # NSIS, so this is dead weight on every install.
   electron-winstaller: false
+
+minimumReleaseAgeExclude:
+  - '@nestjs/event-emitter@12.0.0'

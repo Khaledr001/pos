@@ -119,16 +119,16 @@ export function Accounts() {
   }
 
   return (
-    <div className="flex h-screen flex-col bg-[var(--pos-bg)] overflow-hidden">
+    <div className="flex h-screen flex-col bg-(--pos-bg) overflow-hidden">
       {/* ── Header ── */}
-      <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--pos-border)] bg-[var(--pos-panel)] px-6">
+      <header className="flex h-14 shrink-0 items-center justify-between border-b border-(--pos-border) bg-(--pos-panel) px-6">
         <div className="flex items-center gap-2.5">
-          <Landmark className="size-5 text-[var(--pos-accent)]" />
+          <Landmark className="size-5 text-(--pos-accent)" />
           <div>
-            <h1 className="text-sm font-bold tracking-tight text-[var(--pos-text)]">
+            <h1 className="text-sm font-bold tracking-tight text-(--pos-text)">
               Accounts & Collections
             </h1>
-            <p className="text-[11px] text-[var(--pos-text-3)]">
+            <p className="text-[11px] text-(--pos-text-3)">
               Receive customer payments against credit ledgers
             </p>
           </div>
@@ -145,24 +145,24 @@ export function Accounts() {
       {/* ── Main 2-Pane Content ── */}
       <div className="flex flex-1 overflow-hidden">
         {/* ── Left Pane: Customer List & Search ── */}
-        <div className="w-80 sm:w-96 flex flex-col border-r border-[var(--pos-border)] bg-[var(--pos-panel)] shrink-0">
+        <div className="w-80 sm:w-96 flex flex-col border-r border-(--pos-border) bg-(--pos-panel) shrink-0">
           {/* Search Box */}
-          <div className="p-3.5 border-b border-[var(--pos-border)]">
+          <div className="p-3.5 border-b border-(--pos-border)">
             <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--pos-text-3)]" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-(--pos-text-3)" />
               <input
                 autoFocus
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search account, company, phone..."
-                className="field num pl-9 text-xs w-full bg-[var(--pos-raised)] border-[var(--pos-border)]"
+                className="field num pl-9 text-xs w-full bg-(--pos-raised) border-(--pos-border)"
               />
               {query && (
                 <button
                   type="button"
                   onClick={() => setQuery("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--pos-text-3)] hover:text-[var(--pos-text)]"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-(--pos-text-3) hover:text-(--pos-text)"
                 >
                   <X className="size-3.5" />
                 </button>
@@ -173,12 +173,12 @@ export function Accounts() {
           {/* Customer Accounts List */}
           <ul className="flex-1 overflow-y-auto p-3 space-y-2">
             {loading ? (
-              <li className="text-center py-10 text-[var(--pos-text-3)] text-xs">
-                <Loader2 className="size-6 animate-spin mx-auto mb-2 text-[var(--pos-accent)]" />
+              <li className="text-center py-10 text-(--pos-text-3) text-xs">
+                <Loader2 className="size-6 animate-spin mx-auto mb-2 text-(--pos-accent)" />
                 Loading credit accounts…
               </li>
             ) : filtered.length === 0 ? (
-              <li className="text-center text-[var(--pos-text-3)] text-xs py-10">
+              <li className="text-center text-(--pos-text-3) text-xs py-10">
                 {query ? `No accounts found matching "${query}"` : "No credit accounts found"}
               </li>
             ) : (
@@ -195,17 +195,17 @@ export function Accounts() {
                       className={[
                         "w-full text-left p-3.5 rounded-xl border transition-all cursor-pointer select-none",
                         isSelected
-                          ? "bg-[var(--pos-raised)] border-[var(--pos-accent)] shadow-xs"
-                          : "bg-[var(--pos-panel)] border-[var(--pos-border)] hover:bg-[var(--pos-raised)]/60",
+                          ? "bg-(--pos-raised) border-(--pos-accent) shadow-xs"
+                          : "bg-(--pos-panel) border-(--pos-border) hover:bg-(--pos-raised)/60",
                       ].join(" ")}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
-                          <p className="font-bold text-xs text-[var(--pos-text)] truncate">
+                          <p className="font-bold text-xs text-(--pos-text) truncate">
                             {customer.name}
                           </p>
                           {customer.company && (
-                            <p className="text-[11px] text-[var(--pos-text-3)] truncate mt-0.5">
+                            <p className="text-[11px] text-(--pos-text-3) truncate mt-0.5">
                               {customer.company}
                             </p>
                           )}
@@ -218,8 +218,8 @@ export function Accounts() {
                         )}
                       </div>
 
-                      <div className="mt-2.5 flex items-center justify-between border-t border-[var(--pos-border)]/50 pt-2 text-xs">
-                        <span className="text-[11px] text-[var(--pos-text-3)]">
+                      <div className="mt-2.5 flex items-center justify-between border-t border-(--pos-border)/50 pt-2 text-xs">
+                        <span className="text-[11px] text-(--pos-text-3)">
                           Outstanding
                         </span>
                         <span
@@ -240,14 +240,14 @@ export function Accounts() {
         </div>
 
         {/* ── Right Pane: Selected Account Details & Actions ── */}
-        <div className="flex-1 bg-[var(--pos-bg)] p-6 md:p-8 flex flex-col overflow-y-auto">
+        <div className="flex-1 bg-(--pos-bg) p-6 md:p-8 flex flex-col overflow-y-auto">
           {selected ? (
             <div className="max-w-3xl space-y-6">
               {/* Account Header */}
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-[var(--pos-border)] pb-5">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-(--pos-border) pb-5">
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-xl font-bold text-[var(--pos-text)]">
+                    <h2 className="text-xl font-bold text-(--pos-text)">
                       {selected.name}
                     </h2>
                     {selected.creditOnHold ? (
@@ -263,7 +263,7 @@ export function Accounts() {
                     )}
                   </div>
 
-                  <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-[var(--pos-text-3)]">
+                  <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-(--pos-text-3)">
                     {selected.company && <span>{selected.company}</span>}
                     {selected.phone && (
                       <span className="flex items-center gap-1">
@@ -299,8 +299,8 @@ export function Accounts() {
                 return (
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     {/* Outstanding Balance */}
-                    <div className="rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-panel)] p-5 shadow-xs">
-                      <span className="text-[11px] font-bold tracking-wider text-[var(--pos-text-3)] uppercase">
+                    <div className="rounded-2xl border border-(--pos-border) bg-(--pos-panel) p-5 shadow-xs">
+                      <span className="text-[11px] font-bold tracking-wider text-(--pos-text-3) uppercase">
                         Outstanding Debt
                       </span>
                       <div
@@ -311,38 +311,38 @@ export function Accounts() {
                       >
                         {money(balance)}
                       </div>
-                      <p className="mt-1 text-[11px] text-[var(--pos-text-3)]">
+                      <p className="mt-1 text-[11px] text-(--pos-text-3)">
                         {isOverdue ? "Requires settlement" : "Account fully settled"}
                       </p>
                     </div>
 
                     {/* Credit Limit */}
-                    <div className="rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-panel)] p-5 shadow-xs">
-                      <span className="text-[11px] font-bold tracking-wider text-[var(--pos-text-3)] uppercase">
+                    <div className="rounded-2xl border border-(--pos-border) bg-(--pos-panel) p-5 shadow-xs">
+                      <span className="text-[11px] font-bold tracking-wider text-(--pos-text-3) uppercase">
                         Approved Limit
                       </span>
-                      <div className="mt-2 text-2xl font-bold font-mono text-[var(--pos-text)]">
+                      <div className="mt-2 text-2xl font-bold font-mono text-(--pos-text)">
                         {money(limit)}
                       </div>
-                      <p className="mt-1 text-[11px] text-[var(--pos-text-3)]">
+                      <p className="mt-1 text-[11px] text-(--pos-text-3)">
                         Maximum credit allowance
                       </p>
                     </div>
 
                     {/* Available Balance */}
-                    <div className="rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-panel)] p-5 shadow-xs">
-                      <span className="text-[11px] font-bold tracking-wider text-[var(--pos-text-3)] uppercase">
+                    <div className="rounded-2xl border border-(--pos-border) bg-(--pos-panel) p-5 shadow-xs">
+                      <span className="text-[11px] font-bold tracking-wider text-(--pos-text-3) uppercase">
                         Available Credit
                       </span>
                       <div
                         className={[
                           "mt-2 text-2xl font-bold font-mono",
-                          isOverLimit ? "text-signal-red" : "text-[var(--pos-accent)]",
+                          isOverLimit ? "text-signal-red" : "text-(--pos-accent)",
                         ].join(" ")}
                       >
                         {isOverLimit ? "AED 0.00" : money(available)}
                       </div>
-                      <p className="mt-1 text-[11px] text-[var(--pos-text-3)]">
+                      <p className="mt-1 text-[11px] text-(--pos-text-3)">
                         {isOverLimit ? "Exceeded approved limit" : "Available for new orders"}
                       </p>
                     </div>
@@ -351,22 +351,22 @@ export function Accounts() {
               })()}
 
               {/* Information Note */}
-              <div className="rounded-xl border border-[var(--pos-border)] bg-[var(--pos-panel)] p-4 text-xs text-[var(--pos-text-2)] space-y-1">
-                <p className="font-semibold text-[var(--pos-text)]">
+              <div className="rounded-xl border border-(--pos-border) bg-(--pos-panel) p-4 text-xs text-(--pos-text-2) space-y-1">
+                <p className="font-semibold text-(--pos-text)">
                   Collections Policy
                 </p>
-                <p className="text-[11px] text-[var(--pos-text-3)]">
+                <p className="text-[11px] text-(--pos-text-3)">
                   Payments collected in cash are attributed to the active till drawer session. Card and Bank Transfer collections record the transaction reference for bank reconciliation.
                 </p>
               </div>
             </div>
           ) : (
-            <div className="m-auto flex flex-col items-center justify-center text-[var(--pos-text-3)]">
-              <Landmark className="size-16 mb-4 text-[var(--pos-text-3)]/30" />
-              <p className="text-sm font-semibold text-[var(--pos-text)]">
+            <div className="m-auto flex flex-col items-center justify-center text-(--pos-text-3)">
+              <Landmark className="size-16 mb-4 text-(--pos-text-3)/30" />
+              <p className="text-sm font-semibold text-(--pos-text)">
                 Select an account from the left
               </p>
-              <p className="text-xs text-[var(--pos-text-3)] mt-1">
+              <p className="text-xs text-(--pos-text-3) mt-1">
                 View credit limits and collect customer payments
               </p>
             </div>
@@ -475,14 +475,14 @@ function ReceivePaymentDialog({
         {/* Left Form */}
         <div className="space-y-4">
           {/* Customer Summary Banner */}
-          <div className="rounded-xl border border-[var(--pos-border)] bg-[var(--pos-raised)] p-3 flex items-center justify-between text-xs">
+          <div className="rounded-xl border border-(--pos-border) bg-(--pos-raised) p-3 flex items-center justify-between text-xs">
             <div>
-              <p className="font-bold text-[var(--pos-text)]">{customer.name}</p>
-              <p className="text-[11px] text-[var(--pos-text-3)]">
+              <p className="font-bold text-(--pos-text)">{customer.name}</p>
+              <p className="text-[11px] text-(--pos-text-3)">
                 Outstanding: <span className="font-mono font-semibold text-signal-amber">{money(max)}</span>
               </p>
             </div>
-            <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-[var(--pos-panel)] text-[var(--pos-text-2)] border border-[var(--pos-border)]">
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-(--pos-panel) text-(--pos-text-2) border border-(--pos-border)">
               Settle Debt
             </span>
           </div>
@@ -503,8 +503,8 @@ function ReceivePaymentDialog({
                   className={[
                     "flex flex-col items-center gap-1.5 rounded-xl border p-2.5 text-xs font-semibold transition-all cursor-pointer",
                     method === m
-                      ? "border-[var(--pos-accent)] bg-[var(--pos-accent)]/10 text-[var(--pos-accent)] shadow-xs"
-                      : "border-[var(--pos-border)] bg-[var(--pos-raised)] text-[var(--pos-text-2)] hover:bg-[var(--pos-hover)]",
+                      ? "border-(--pos-accent) bg-(--pos-accent)/10 text-(--pos-accent) shadow-xs"
+                      : "border-(--pos-border) bg-(--pos-raised) text-(--pos-text-2) hover:bg-(--pos-hover)",
                   ].join(" ")}
                 >
                   <Icon className="size-4" />
@@ -522,14 +522,14 @@ function ReceivePaymentDialog({
                 <button
                   type="button"
                   onClick={() => setInput(fmtAmount(max))}
-                  className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[var(--pos-raised)] text-[var(--pos-accent)] hover:bg-[var(--pos-hover)] border border-[var(--pos-border)]"
+                  className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-(--pos-raised) text-(--pos-accent) hover:bg-(--pos-hover) border border-(--pos-border)"
                 >
                   Full ({fmtAmount(max)})
                 </button>
                 <button
                   type="button"
                   onClick={() => setInput(fmtAmount(max / 2n))}
-                  className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-[var(--pos-raised)] text-[var(--pos-text-2)] hover:bg-[var(--pos-hover)] border border-[var(--pos-border)]"
+                  className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-(--pos-raised) text-(--pos-text-2) hover:bg-(--pos-hover) border border-(--pos-border)"
                 >
                   50%
                 </button>
@@ -542,7 +542,7 @@ function ReceivePaymentDialog({
                 setInput(e.target.value);
                 setError(null);
               }}
-              className="field num mt-1.5 text-right text-xl font-bold bg-[var(--pos-raised)] border-[var(--pos-border)] text-[var(--pos-text)]"
+              className="field num mt-1.5 text-right text-xl font-bold bg-(--pos-raised) border-(--pos-border) text-(--pos-text)"
               placeholder={fmtAmount(max)}
             />
             {pending > max && (
@@ -562,7 +562,7 @@ function ReceivePaymentDialog({
                 type="text"
                 value={reference}
                 onChange={(e) => setReference(e.target.value)}
-                className="field mt-1 text-xs bg-[var(--pos-raised)] border-[var(--pos-border)] text-[var(--pos-text)]"
+                className="field mt-1 text-xs bg-(--pos-raised) border-(--pos-border) text-(--pos-text)"
                 placeholder={method === "card" ? "e.g. AUTH-88239" : "e.g. FT-2026-99120"}
               />
             </div>

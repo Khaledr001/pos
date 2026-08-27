@@ -1,10 +1,12 @@
 import { Module, type MiddlewareConsumer, type NestModule } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
+import { EventEmitterModule } from "@nestjs/event-emitter";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { LoggerModule } from "nestjs-pino";
 import { resolve } from "node:path";
 import { RequestContext } from "./common/context/request-context.js";
+import { DomainEventsInterceptor } from "./common/events/domain-events.interceptor.js";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter.js";
 import { JwtAuthGuard } from "./common/guards/jwt-auth.guard.js";
 import { PermissionsGuard } from "./common/guards/permissions.guard.js";
@@ -17,6 +19,7 @@ import { DatabaseModule } from "./database/database.module.js";
 import { AuthModule } from "./modules/auth/auth.module.js";
 import { BranchesModule } from "./modules/branches/branches.module.js";
 import { HealthModule } from "./modules/health/health.module.js";
+import { NotificationsModule } from "./modules/notifications/notifications.module.js";
 import { PlatformModule } from "./modules/platform/platform.module.js";
 import { TenantsModule } from "./modules/tenants/tenants.module.js";
 import { CashRegisterModule } from "./modules/cash-register/cash-register.module.js";
@@ -127,6 +130,10 @@ import { TransfersModule } from "./modules/transfers/transfers.module.js";
       ],
     }),
 
+    // Backs DomainEvents (common/events) — see docs/DECISIONS.md D17. A
+    // service records an event and never learns who, if anyone, is listening.
+    EventEmitterModule.forRoot(),
+
     DatabaseModule,
 
     // Feature modules. Add new ones here — see src/modules/README.md.
@@ -159,6 +166,7 @@ import { TransfersModule } from "./modules/transfers/transfers.module.js";
     SyncModule,
     DevicesModule,
     TransfersModule,
+    NotificationsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
@@ -170,9 +178,14 @@ import { TransfersModule } from "./modules/transfers/transfers.module.js";
      * so it has to sit INSIDE TransformInterceptor's envelope. Nest runs
      * interceptors outside-in on the way down and inside-out on the way back,
      * so the one listed second unwraps first on the response path.
+     *
+     * DomainEventsInterceptor doesn't touch the return value, so its position
+     * relative to the other two is not load-bearing the way theirs is — it
+     * just needs to run after the handler, which every APP_INTERCEPTOR does.
      */
     { provide: APP_INTERCEPTOR, useClass: TransformInterceptor },
     { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
+    { provide: APP_INTERCEPTOR, useClass: DomainEventsInterceptor },
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
   ],
 })

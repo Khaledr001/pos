@@ -183,7 +183,7 @@ export default function DayClosePage() {
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <Select value={branchId} onValueChange={setBranchId}>
-            <SelectTrigger className="w-[180px] h-9 text-xs">
+            <SelectTrigger className="w-45 h-9 text-xs">
               <SelectValue placeholder="Select Branch" />
             </SelectTrigger>
             <SelectContent>

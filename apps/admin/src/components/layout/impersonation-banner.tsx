@@ -13,7 +13,7 @@ export function ImpersonationBanner() {
   return (
     <aside
       aria-label="Support impersonation mode active"
-      className="sticky top-0 z-50 w-full min-h-[42px] bg-slate-950/95 border-b border-amber-500/30 px-3 sm:px-6 py-1.5 text-white shadow-md shadow-amber-950/30 backdrop-blur-md animate-fade-in-down"
+      className="sticky top-0 z-50 w-full min-h-10.5 bg-slate-950/95 border-b border-amber-500/30 px-3 sm:px-6 py-1.5 text-white shadow-md shadow-amber-950/30 backdrop-blur-md animate-fade-in-down"
     >
       <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 w-full">
         {/* Subtle Ambient Glow Effect */}
@@ -22,7 +22,7 @@ export function ImpersonationBanner() {
 
         {/* Left: Mode Badge & Tenant Info */}
         <div className="relative z-10 flex items-center gap-2.5 min-w-0">
-          <div className="relative flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400 to-amber-600 text-slate-950 font-bold shadow-xs">
+          <div className="relative flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-amber-400 to-amber-600 text-slate-950 font-bold shadow-xs">
             <ShieldAlert className="h-3.5 w-3.5" />
             <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-300 opacity-75"></span>
@@ -51,7 +51,7 @@ export function ImpersonationBanner() {
           <Button
             size="sm"
             onClick={exitImpersonation}
-            className="h-7 rounded-lg bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 text-slate-950 font-bold text-xs px-3 shadow-xs transition-all active:scale-95 border-0"
+            className="h-7 rounded-lg bg-linear-to-r from-amber-400 via-amber-300 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 text-slate-950 font-bold text-xs px-3 shadow-xs transition-all active:scale-95 border-0"
           >
             <LogOut className="mr-1.5 h-3 w-3 text-slate-950" />
             <span>Exit & Return to Super Admin</span>

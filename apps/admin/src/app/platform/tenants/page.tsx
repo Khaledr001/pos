@@ -410,7 +410,7 @@ export default function PlatformTenantsPage() {
                       </Badge>
                       {tenant.suspendedReason && (
                         <div
-                          className="text-[10px] text-destructive truncate max-w-[140px] mt-0.5"
+                          className="text-[10px] text-destructive truncate max-w-35 mt-0.5"
                           title={tenant.suspendedReason}
                         >
                           Reason: {tenant.suspendedReason}

@@ -174,7 +174,7 @@ export default function SettingsPage() {
           <Card>
             <CardHeader className="pb-4">
               <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-linear-to-br from-blue-500 to-indigo-600 text-white">
                   <ShieldCheck className="h-4 w-4" />
                 </div>
                 <div>
@@ -226,7 +226,7 @@ export default function SettingsPage() {
           <Card>
             <CardHeader className="pb-4">
               <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 text-white">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-linear-to-br from-amber-500 to-orange-600 text-white">
                   <Coins className="h-4 w-4" />
                 </div>
                 <div>
@@ -284,7 +284,7 @@ export default function SettingsPage() {
           <Card>
             <CardHeader className="pb-4">
               <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 text-white">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-linear-to-br from-violet-500 to-purple-600 text-white">
                   <Receipt className="h-4 w-4" />
                 </div>
                 <div>
@@ -352,7 +352,7 @@ export default function SettingsPage() {
           <Card>
             <CardHeader className="pb-4">
               <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-linear-to-br from-emerald-500 to-teal-600 text-white">
                   <Server className="h-4 w-4" />
                 </div>
                 <div>

@@ -70,17 +70,17 @@ export function CashRegister({
 
   return (
     <>
-      <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6 bg-[var(--pos-bg)]">
+      <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6 bg-(--pos-bg)">
         <div className="mx-auto max-w-3xl space-y-5">
           {/* ── Page Header ── */}
-          <div className="flex items-center justify-between border-b border-[var(--pos-border)] pb-4">
+          <div className="flex items-center justify-between border-b border-(--pos-border) pb-4">
             <div className="flex items-center gap-2.5">
-              <Wallet className="size-5 text-[var(--pos-accent)]" />
+              <Wallet className="size-5 text-(--pos-accent)" />
               <div>
-                <h1 className="text-base font-bold tracking-tight text-[var(--pos-text)]">
+                <h1 className="text-base font-bold tracking-tight text-(--pos-text)">
                   Cash Register Drawer
                 </h1>
-                <p className="text-xs text-[var(--pos-text-3)]">
+                <p className="text-xs text-(--pos-text-3)">
                   Shift float reconciliation, cash movements and drawer counts
                 </p>
               </div>
@@ -101,13 +101,13 @@ export function CashRegister({
 
           {/* ── Closed Drawer State ── */}
           {!session ? (
-            <div className="panel border border-[var(--pos-border)] rounded-2xl bg-[var(--pos-panel)] flex flex-col items-center gap-4 px-6 py-16 text-center shadow-xs">
-              <div className="size-16 rounded-2xl bg-[var(--pos-raised)] flex items-center justify-center text-[var(--pos-text-3)]">
+            <div className="panel border border-(--pos-border) rounded-2xl bg-(--pos-panel) flex flex-col items-center gap-4 px-6 py-16 text-center shadow-xs">
+              <div className="size-16 rounded-2xl bg-(--pos-raised) flex items-center justify-center text-(--pos-text-3)">
                 <Lock className="size-8" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-[var(--pos-text)]">The Cash Drawer is Closed</h2>
-                <p className="mt-1 text-xs text-[var(--pos-text-3)] max-w-sm mx-auto">
+                <h2 className="text-base font-bold text-(--pos-text)">The Cash Drawer is Closed</h2>
+                <p className="mt-1 text-xs text-(--pos-text-3) max-w-sm mx-auto">
                   Count the opening float in the cash drawer to start this shift and enable cash checkout.
                 </p>
               </div>
@@ -123,16 +123,16 @@ export function CashRegister({
           ) : (
             <>
               {/* ── Active Session Audit Card ── */}
-              <div className="panel border border-[var(--pos-border)] rounded-2xl bg-[var(--pos-panel)] p-5 shadow-xs space-y-5">
+              <div className="panel border border-(--pos-border) rounded-2xl bg-(--pos-panel) p-5 shadow-xs space-y-5">
                 {/* Header Status */}
-                <div className="flex items-center justify-between border-b border-[var(--pos-border)]/60 pb-3.5">
+                <div className="flex items-center justify-between border-b border-(--pos-border)/60 pb-3.5">
                   <div className="flex items-center gap-2">
-                    <Clock className="size-4 text-[var(--pos-accent)]" />
+                    <Clock className="size-4 text-(--pos-accent)" />
                     <div>
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--pos-text-3)] block">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-(--pos-text-3) block">
                         Drawer Session Active Since
                       </span>
-                      <p className="font-mono text-xs font-semibold text-[var(--pos-text)] mt-0.5">
+                      <p className="font-mono text-xs font-semibold text-(--pos-text) mt-0.5">
                         {new Date(session.openedAt).toLocaleString("en-GB", {
                           dateStyle: "medium",
                           timeStyle: "short",
@@ -150,41 +150,41 @@ export function CashRegister({
                 {/* Audit Grid Rows */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   {/* Opening Float */}
-                  <div className="rounded-xl border border-[var(--pos-border)] bg-[var(--pos-raised)] p-3.5">
-                    <span className="text-[11px] font-semibold text-[var(--pos-text-3)] block">
+                  <div className="rounded-xl border border-(--pos-border) bg-(--pos-raised) p-3.5">
+                    <span className="text-[11px] font-semibold text-(--pos-text-3) block">
                       Opening Float
                     </span>
-                    <span className="font-mono text-lg font-bold text-[var(--pos-text)] mt-1 block">
+                    <span className="font-mono text-lg font-bold text-(--pos-text) mt-1 block">
                       {amount(Money.toMinor(session.openingAmount))}
                     </span>
-                    <span className="text-[10px] text-[var(--pos-text-3)]">Counted at start of shift</span>
+                    <span className="text-[10px] text-(--pos-text-3)">Counted at start of shift</span>
                   </div>
 
                   {/* Cash Sales */}
-                  <div className="rounded-xl border border-[var(--pos-border)] bg-[var(--pos-raised)] p-3.5">
-                    <span className="text-[11px] font-semibold text-[var(--pos-text-3)] block">
+                  <div className="rounded-xl border border-(--pos-border) bg-(--pos-raised) p-3.5">
+                    <span className="text-[11px] font-semibold text-(--pos-text-3) block">
                       Cash Sales Revenue
                     </span>
                     <span className="font-mono text-lg font-bold text-signal-green mt-1 block">
                       +{amount(Money.toMinor(session.cashSales))}
                     </span>
-                    <span className="text-[10px] text-[var(--pos-text-3)]">From completed cash sales</span>
+                    <span className="text-[10px] text-(--pos-text-3)">From completed cash sales</span>
                   </div>
 
                   {/* Paid In */}
-                  <div className="rounded-xl border border-[var(--pos-border)] bg-[var(--pos-raised)] p-3.5">
-                    <span className="text-[11px] font-semibold text-[var(--pos-text-3)] block">
+                  <div className="rounded-xl border border-(--pos-border) bg-(--pos-raised) p-3.5">
+                    <span className="text-[11px] font-semibold text-(--pos-text-3) block">
                       Manual Cash In (Top-ups)
                     </span>
-                    <span className="font-mono text-lg font-bold text-[var(--pos-text)] mt-1 block">
+                    <span className="font-mono text-lg font-bold text-(--pos-text) mt-1 block">
                       +{amount(Money.toMinor(session.cashIn))}
                     </span>
-                    <span className="text-[10px] text-[var(--pos-text-3)]">Extra change / added float</span>
+                    <span className="text-[10px] text-(--pos-text-3)">Extra change / added float</span>
                   </div>
 
                   {/* Paid Out */}
-                  <div className="rounded-xl border border-[var(--pos-border)] bg-[var(--pos-raised)] p-3.5">
-                    <span className="text-[11px] font-semibold text-[var(--pos-text-3)] block">
+                  <div className="rounded-xl border border-(--pos-border) bg-(--pos-raised) p-3.5">
+                    <span className="text-[11px] font-semibold text-(--pos-text-3) block">
                       Manual Cash Out (Payouts)
                     </span>
                     <span
@@ -192,28 +192,28 @@ export function CashRegister({
                         "font-mono text-lg font-bold mt-1 block",
                         Money.isPositive(Money.toMinor(session.cashOut))
                           ? "text-signal-amber"
-                          : "text-[var(--pos-text)]",
+                          : "text-(--pos-text)",
                       ].join(" ")}
                     >
                       {Money.isPositive(Money.toMinor(session.cashOut))
                         ? `−${amount(Money.toMinor(session.cashOut))}`
                         : amount(0n)}
                     </span>
-                    <span className="text-[10px] text-[var(--pos-text-3)]">Petty cash / vendor drops</span>
+                    <span className="text-[10px] text-(--pos-text-3)">Petty cash / vendor drops</span>
                   </div>
                 </div>
 
                 {/* Expected Drawer Total */}
-                <div className="rounded-xl border border-[var(--pos-border)] bg-[var(--pos-raised)] p-4 flex items-baseline justify-between">
+                <div className="rounded-xl border border-(--pos-border) bg-(--pos-raised) p-4 flex items-baseline justify-between">
                   <div>
-                    <span className="text-xs font-bold uppercase tracking-wider text-[var(--pos-text-3)] block">
+                    <span className="text-xs font-bold uppercase tracking-wider text-(--pos-text-3) block">
                       Expected Cash in Drawer
                     </span>
-                    <span className="text-[11px] text-[var(--pos-text-3)]">
+                    <span className="text-[11px] text-(--pos-text-3)">
                       Float + Sales + Cash In − Cash Out
                     </span>
                   </div>
-                  <span className="font-mono text-2xl md:text-3xl font-bold text-[var(--pos-accent)]">
+                  <span className="font-mono text-2xl md:text-3xl font-bold text-(--pos-accent)">
                     {money(expected)}
                   </span>
                 </div>
@@ -389,7 +389,7 @@ function AmountDialog({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               inputMode="decimal"
-              className="field num text-right text-2xl font-bold bg-[var(--pos-raised)] border-[var(--pos-border)] text-[var(--pos-text)]"
+              className="field num text-right text-2xl font-bold bg-(--pos-raised) border-(--pos-border) text-(--pos-text)"
               placeholder="0.00"
             />
           </div>
@@ -403,10 +403,10 @@ function AmountDialog({
                 id="movement-reason"
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
-                className="field text-xs bg-[var(--pos-raised)] border-[var(--pos-border)] text-[var(--pos-text)]"
+                className="field text-xs bg-(--pos-raised) border-(--pos-border) text-(--pos-text)"
                 placeholder="e.g. Petty cash for packaging, bank drop, till top-up"
               />
-              <p className="mt-1 text-[11px] text-[var(--pos-text-3)]">
+              <p className="mt-1 text-[11px] text-(--pos-text-3)">
                 Recorded against your cashier name for audit trail logs.
               </p>
             </div>
@@ -503,29 +503,29 @@ function CloseDrawerDialog({
                 setRevealed(false);
               }}
               inputMode="decimal"
-              className="field num text-right text-2xl font-bold bg-[var(--pos-raised)] border-[var(--pos-border)] text-[var(--pos-text)]"
+              className="field num text-right text-2xl font-bold bg-(--pos-raised) border-(--pos-border) text-(--pos-text)"
               placeholder="0.00"
             />
           </div>
 
           {!revealed && (
-            <p className="text-[11px] text-[var(--pos-text-3)] bg-[var(--pos-raised)] p-2.5 rounded-lg">
+            <p className="text-[11px] text-(--pos-text-3) bg-(--pos-raised) p-2.5 rounded-lg">
               Target expected cash stays hidden until you submit your physical count to ensure an accurate, honest audit.
             </p>
           )}
 
           {revealed && variance !== null && (
-            <div className="space-y-2.5 rounded-xl border border-[var(--pos-border)] bg-[var(--pos-raised)] p-3.5 text-xs animate-line-in">
-              <div className="flex justify-between text-[var(--pos-text-2)]">
+            <div className="space-y-2.5 rounded-xl border border-(--pos-border) bg-(--pos-raised) p-3.5 text-xs animate-line-in">
+              <div className="flex justify-between text-(--pos-text-2)">
                 <span>Expected in Drawer</span>
                 <span className="font-mono font-semibold">{amount(expected)}</span>
               </div>
-              <div className="flex justify-between text-[var(--pos-text-2)]">
+              <div className="flex justify-between text-(--pos-text-2)">
                 <span>Counted Amount</span>
                 <span className="font-mono font-semibold">{amount(counted!)}</span>
               </div>
-              <div className="border-t border-[var(--pos-border)] flex items-baseline justify-between pt-2">
-                <span className="font-bold uppercase tracking-wider text-[var(--pos-text-3)]">
+              <div className="border-t border-(--pos-border) flex items-baseline justify-between pt-2">
+                <span className="font-bold uppercase tracking-wider text-(--pos-text-3)">
                   {short ? "Shortfall (Missing)" : over ? "Overage (Surplus)" : "Perfect Balance"}
                 </span>
                 <span
@@ -548,7 +548,7 @@ function CloseDrawerDialog({
                 id="variance-notes"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                className="field text-xs bg-[var(--pos-raised)] border-signal-red/50 text-[var(--pos-text)]"
+                className="field text-xs bg-(--pos-raised) border-signal-red/50 text-(--pos-text)"
                 placeholder="Reason for missing cash count..."
                 autoFocus
               />

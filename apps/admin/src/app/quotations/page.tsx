@@ -322,7 +322,7 @@ export default function QuotationsPage() {
                           {row.quotationNumber}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5 font-medium text-foreground max-w-[200px] truncate">
+                      <td className="px-4 py-3.5 font-medium text-foreground max-w-50 truncate">
                         {row.customerName ?? "—"}
                       </td>
                       <td className="px-4 py-3.5 text-muted-foreground whitespace-nowrap">
@@ -439,7 +439,7 @@ function QuotationDetailDialog({
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 text-white">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-linear-to-br from-violet-500 to-indigo-600 text-white">
               <FileText className="h-4 w-4" />
             </div>
             <div>
@@ -750,7 +750,7 @@ function CreateQuotationDialog({
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 text-white">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-linear-to-br from-violet-500 to-indigo-600 text-white">
               <FileText className="h-4 w-4" />
             </div>
             <div>

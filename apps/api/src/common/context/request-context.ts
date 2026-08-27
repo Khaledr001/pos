@@ -1,5 +1,6 @@
 import type { AuthenticatedUser } from "@devsfleet/shared-types";
 import { AsyncLocalStorage } from "node:async_hooks";
+import type { DomainEvent } from "../events/domain-events.js";
 
 /**
  * Per-request state, carried through the call stack without threading it
@@ -25,6 +26,16 @@ export interface RequestContextStore {
   /** Mirrored from the token so plan checks need no lookup. */
   trialEndsAt?: Date | null;
   startedAt: number;
+  /**
+   * Domain events recorded during this request, awaiting dispatch.
+   *
+   * Written by DomainEvents.record(), drained by DomainEventsInterceptor after
+   * the handler resolves — see common/events/domain-events.ts. Lives here
+   * rather than in a store of its own because this ALS already spans the full
+   * request (opened by the middleware, before the guards), so nothing needs to
+   * separately "enter" a second context for it to propagate correctly.
+   */
+  events?: DomainEvent[];
 }
 
 const storage = new AsyncLocalStorage<RequestContextStore>();

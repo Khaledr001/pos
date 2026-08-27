@@ -166,7 +166,7 @@ export default function WhatsAppPage() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
                       <Avatar className="h-8 w-8">
-                        <AvatarFallback className={cn("bg-gradient-to-br text-white text-[10px] font-bold", chat.gradient)}>
+                        <AvatarFallback className={cn("bg-linear-to-br text-white text-[10px] font-bold", chat.gradient)}>
                           {chat.initials}
                         </AvatarFallback>
                       </Avatar>
@@ -197,7 +197,7 @@ export default function WhatsAppPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Avatar className="h-10 w-10 ring-2 ring-primary/20">
-                  <AvatarFallback className={cn("bg-gradient-to-br text-white text-xs font-bold", activeChat.gradient)}>
+                  <AvatarFallback className={cn("bg-linear-to-br text-white text-xs font-bold", activeChat.gradient)}>
                     {activeChat.initials}
                   </AvatarFallback>
                 </Avatar>

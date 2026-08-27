@@ -158,7 +158,7 @@ export default function TransfersPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <Select value={statusFilter || "all"} onValueChange={(val) => setStatusFilter(val === "all" ? "" : val)}>
-            <SelectTrigger className="w-[150px] h-9 text-xs">
+            <SelectTrigger className="w-37.5 h-9 text-xs">
               <SelectValue placeholder="All statuses" />
             </SelectTrigger>
             <SelectContent>
@@ -376,7 +376,7 @@ function RequestTransferDialog({
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-linear-to-br from-blue-500 to-indigo-600 text-white">
               <Truck className="h-4 w-4" />
             </div>
             <div>
