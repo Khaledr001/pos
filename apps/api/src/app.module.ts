@@ -170,9 +170,17 @@ import { TransfersModule } from "./modules/transfers/transfers.module.js";
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    /**
+     * Throttling sits ahead of the authorisation guards, not behind them.
+     *
+     * Registered last, a request rejected by PermissionsGuard or PlatformGuard
+     * never reached the limiter, so probing `/admin/*` as an ordinary user cost
+     * the caller nothing. It stays after JwtAuthGuard so the limiter can key on
+     * an identified principal.
+     */
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
     { provide: APP_GUARD, useClass: PlatformGuard },
-    { provide: APP_GUARD, useClass: ThrottlerGuard },
     /**
      * Order matters: AuditInterceptor must see the handler's own return value,
      * so it has to sit INSIDE TransformInterceptor's envelope. Nest runs

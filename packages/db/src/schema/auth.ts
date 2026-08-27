@@ -186,12 +186,30 @@ export const auditLog = pgTable(
     reason: text(),
     ipAddress: varchar({ length: 45 }),
     requestId: varchar({ length: 64 }),
+    /**
+     * The platform operator who was impersonating `userId` when this happened.
+     * NULL for the overwhelming majority of rows — anything a customer did
+     * themselves.
+     *
+     * Without it, support work is indistinguishable from the customer's own
+     * actions: an impersonated session carries the tenant admin's identity, so
+     * every row it writes is signed with their name. This is the only thing
+     * that says otherwise, which is why it is a real column and not a key
+     * inside `changes` — "who actually did this" has to survive as something
+     * you can filter a compliance query on.
+     */
+    impersonatedBy: uuid().references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamps().createdAt,
   },
   (t) => [
     index("idx_audit_tenant_created").on(t.tenantId, t.createdAt),
     index("idx_audit_entity").on(t.entityType, t.entityId),
     index("idx_audit_user").on(t.userId, t.createdAt),
+    // Partial: almost every row is NULL here, so a full index would be mostly
+    // dead weight on the fastest-growing table in the system.
+    index("idx_audit_impersonated")
+      .on(t.impersonatedBy, t.createdAt)
+      .where(sql`impersonated_by is not null`),
   ],
 );
 

@@ -55,7 +55,8 @@ interface TenantItem {
   plan: {
     id: string;
     name: string;
-    monthlyPrice: number;
+    /** null on Enterprise — custom pricing, not free. */
+    monthlyPrice: number | null;
     maxBranches: number;
     maxUsers: number;
   };
@@ -122,6 +123,7 @@ export default function PlatformTenantsPage() {
   const [suspendLoading, setSuspendLoading] = useState(false);
 
   const [impersonateLoading, setImpersonateLoading] = useState(false);
+  const [impersonateReason, setImpersonateReason] = useState("");
 
   const fetchTenants = async () => {
     setLoading(true);
@@ -246,7 +248,7 @@ export default function PlatformTenantsPage() {
   const handleImpersonate = async (tenant: TenantItem) => {
     setImpersonateLoading(true);
     try {
-      await impersonateTenant(tenant.id);
+      await impersonateTenant(tenant.id, impersonateReason.trim());
     } catch (err) {
       alert(err instanceof Error ? err.message : "Impersonation failed");
       setImpersonateLoading(false);
@@ -395,7 +397,9 @@ export default function PlatformTenantsPage() {
                           {tenant.plan.name}
                         </span>
                         <span className="text-[11px] text-muted-foreground">
-                          ${tenant.plan.monthlyPrice}/mo
+                          {tenant.plan.monthlyPrice === null
+                            ? "Custom"
+                            : `$${tenant.plan.monthlyPrice}/mo`}
                         </span>
                       </div>
                     </td>
@@ -422,11 +426,11 @@ export default function PlatformTenantsPage() {
                     <td className="py-3.5 px-4 text-muted-foreground">
                       <div className="flex items-center gap-3">
                         <span title="Branches">
-                          <strong>{tenant.branchCount || 1}</strong> br
+                          <strong>{tenant.branchCount ?? 0}</strong> br
                         </span>
                         <span>·</span>
                         <span title="Users">
-                          <strong>{tenant.userCount || 1}</strong> users
+                          <strong>{tenant.userCount ?? 0}</strong> users
                         </span>
                       </div>
                     </td>
@@ -653,12 +657,17 @@ export default function PlatformTenantsPage() {
                   <Input
                     type="password"
                     required
-                    minLength={8}
+                    minLength={10}
+                    // Mirrors CreateTenantSchema. Kept in step deliberately:
+                    // a client rule looser than the server's turns a fixable
+                    // typo into an opaque 400 after the form is submitted.
+                    pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9]).{10,}"
+                    title="At least 10 characters, with a lowercase letter, an uppercase letter, and a digit"
                     value={provisionForm.password}
                     onChange={(e) =>
                       setProvisionForm((prev) => ({ ...prev, password: e.target.value }))
                     }
-                    placeholder="Min 8 characters"
+                    placeholder="Min 10 chars, mixed case + digit"
                     className="pl-9 h-9 text-xs"
                   />
                 </div>
@@ -871,12 +880,30 @@ export default function PlatformTenantsPage() {
             </DialogDescription>
           </DialogHeader>
 
+          <div className="space-y-1.5">
+            <label
+              htmlFor="impersonate-reason"
+              className="text-xs font-semibold text-foreground"
+            >
+              Reason <span className="text-destructive">*</span>
+            </label>
+            <textarea
+              id="impersonate-reason"
+              value={impersonateReason}
+              onChange={(e) => setImpersonateReason(e.target.value)}
+              rows={2}
+              minLength={3}
+              maxLength={500}
+              placeholder="e.g. Ticket #4821 — customer reports missing stock after import"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+            />
+          </div>
+
           <div className="rounded-xl bg-muted/40 p-3 text-xs text-muted-foreground space-y-1.5">
+            <p>• Everything you do is audit-logged against your operator ID, not theirs.</p>
             <p>
-              • An immutable audit row will be recorded with your operator ID.
-            </p>
-            <p>
-              • Your Super Admin session is backed up, and you can return to the platform console anytime via the top banner.
+              • The session expires on its own and cannot be renewed. Exit via the top
+              banner to return to the platform console.
             </p>
           </div>
 
@@ -890,7 +917,7 @@ export default function PlatformTenantsPage() {
             </Button>
             <Button
               onClick={() => impersonateTarget && handleImpersonate(impersonateTarget)}
-              disabled={impersonateLoading}
+              disabled={impersonateLoading || impersonateReason.trim().length < 3}
               className="bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs h-9"
             >
               {impersonateLoading ? "Authenticating…" : "Begin Impersonation"}

@@ -67,7 +67,9 @@ checks pass.
 
 ### Still to do in this phase
 
-- [ ] SuperAdmin platform console (suspend/activate, change plan, impersonate)
+- [x] SuperAdmin platform console (suspend/activate, change plan, impersonate)
+- [x] Impersonation accountability — signed `impersonatedBy` claim, no refresh
+      token, server-issued exit; see D18
 - [ ] Billing: checkout session + webhook handling
 - [ ] Users module with ABAC editing
 - [ ] ABAC enforcement at sale time (discount cap, sale ceiling, branch scope)

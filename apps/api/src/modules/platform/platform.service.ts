@@ -1,5 +1,7 @@
 import {
+  alias,
   and,
+  asc,
   count,
   desc,
   eq,
@@ -17,6 +19,7 @@ import {
   SYSTEM_ROLES,
   PLANS,
   resolvePlan,
+  resolveTenantSettings,
   trialStatus,
   type AuthSession,
   type Paginated,
@@ -34,6 +37,7 @@ import { RESERVED_SLUGS } from "../tenants/dto.js";
 import type {
   ChangePlanDto,
   CreateTenantDto,
+  ImpersonateDto,
   ListAuditLogsDto,
   ListTenantsDto,
   SuspendTenantDto,
@@ -88,7 +92,10 @@ export class PlatformService {
           tx
             .select({ planId: schema.tenants.planId, total: count() })
             .from(schema.tenants)
-            .where(isNull(schema.tenants.deletedAt))
+            // Active only. Without this the MRR below counted suspended paid
+            // tenants — a business suspended for non-payment was still being
+            // reported as revenue, which is precisely backwards.
+            .where(and(isNull(schema.tenants.deletedAt), eq(schema.tenants.isActive, true)))
             .groupBy(schema.tenants.planId),
           tx
             .select({
@@ -109,11 +116,20 @@ export class PlatformService {
        * Monthly recurring revenue, counted only from ACTIVE tenants on a paid
        * plan. Trials and suspended accounts contribute nothing — counting them
        * produces a number that feels good and forecasts wrongly.
+       *
+       * Enterprise is `monthlyPrice: null` (negotiated per contract), so it is
+       * excluded rather than counted as zero. This figure is therefore MRR
+       * from list-priced plans, which is what `mrrExcludesEnterprise` says
+       * out loud so a dashboard cannot imply otherwise.
        */
       const mrr = byPlan.reduce((sum, row) => {
         const plan = resolvePlan(row.planId);
         return sum + (plan.monthlyPrice ?? 0) * row.total;
       }, 0);
+
+      const enterpriseTenants = byPlan
+        .filter((row) => resolvePlan(row.planId).monthlyPrice === null)
+        .reduce((sum, row) => sum + row.total, 0);
 
       return {
         tenants: tenants?.v ?? 0,
@@ -127,6 +143,8 @@ export class PlatformService {
           tenants: row.total,
         })),
         estimatedMrr: mrr,
+        /** How many active tenants sit outside `estimatedMrr` on custom terms. */
+        mrrExcludesEnterprise: enterpriseTenants,
         recentTenants: recentTenants.map((t) => ({
           ...t,
           plan: resolvePlan(t.planId),
@@ -211,7 +229,10 @@ export class PlatformService {
   async getTenant(tenantId: string) {
     return this.db.runAsPlatformAdmin(async (tx) => {
       const tenant = await tx.query.tenants.findFirst({
-        where: (t, { eq: e }) => e(t.id, tenantId),
+        // `listTenants` filters soft-deleted tenants; this did not, so a
+        // deleted business stayed fully readable by id — including its
+        // complete staff directory.
+        where: (t, { and: a, eq: e, isNull: n }) => a(e(t.id, tenantId), n(t.deletedAt)),
       });
 
       if (!tenant) throw new AppError(ERROR_CODES.NOT_FOUND, "Business not found");
@@ -280,8 +301,27 @@ export class PlatformService {
       const activeUsersCount = usersList.filter((u) => u.isActive).length;
       const activeBranchesCount = branches.filter((b) => b.isActive).length;
 
+      /**
+       * Enumerated, not spread.
+       *
+       * `...tenant` shipped `paymentCustomerId` and `paymentSubscriptionId` —
+       * external payment-processor references with no business on a detail
+       * screen — and any column added to `tenants` later would have joined
+       * them silently.
+       */
       return {
-        ...tenant,
+        id: tenant.id,
+        name: tenant.name,
+        slug: tenant.slug,
+        planId: tenant.planId,
+        isActive: tenant.isActive,
+        trialEndsAt: tenant.trialEndsAt,
+        subscriptionEndsAt: tenant.subscriptionEndsAt,
+        suspendedAt: tenant.suspendedAt,
+        suspendedReason: tenant.suspendedReason,
+        settings: tenant.settings,
+        createdAt: tenant.createdAt,
+        updatedAt: tenant.updatedAt,
         plan,
         trial,
         branches,
@@ -491,7 +531,31 @@ export class PlatformService {
           : null;
       }
       if (dto.settings !== undefined) {
-        updateData.settings = { ...existing.settings, ...dto.settings };
+        /**
+         * Merged per section against the RESOLVED settings, exactly as the
+         * tenant's own settings route does.
+         *
+         * The previous one-level `{ ...existing.settings, ...dto.settings }`
+         * replaced whole sections: patching one field of `tax` discarded every
+         * other field in it. Sections have to be spread individually or a
+         * partial patch is a destructive overwrite.
+         */
+        const current = resolveTenantSettings(existing.settings);
+        const patch = dto.settings;
+        updateData.settings = {
+          ...current,
+          ...(patch.legalName !== undefined ? { legalName: patch.legalName } : {}),
+          ...(patch.trn !== undefined ? { trn: patch.trn } : {}),
+          ...(patch.phone !== undefined ? { phone: patch.phone } : {}),
+          ...(patch.email !== undefined ? { email: patch.email } : {}),
+          ...(patch.logoUrl !== undefined ? { logoUrl: patch.logoUrl } : {}),
+          ...(patch.addressLines !== undefined
+            ? { addressLines: patch.addressLines }
+            : {}),
+          tax: { ...current.tax, ...patch.tax },
+          sales: { ...current.sales, ...patch.sales },
+          printing: { ...current.printing, ...patch.printing },
+        };
       }
 
       const [updated] = await tx
@@ -610,8 +674,18 @@ export class PlatformService {
 
   /**
    * Impersonate a tenant for support.
+   *
+   * The session this mints is deliberately constrained: it carries the
+   * operator's id as `impersonatedBy` (so every audit row it writes records
+   * who was really at the keyboard) and it gets no refresh token (so it dies
+   * with its access token instead of becoming a standing cross-tenant
+   * credential). `POST /admin/impersonation/end` closes it early and returns
+   * the operator to their own session.
    */
-  async impersonate(tenantId: string): Promise<AuthSession & { impersonated: true }> {
+  async impersonate(
+    tenantId: string,
+    dto: ImpersonateDto,
+  ): Promise<AuthSession & { impersonated: true }> {
     const operator = RequestContext.requireUser();
 
     const target = await this.db.runAsPlatformAdmin(async (tx) => {
@@ -638,6 +712,10 @@ export class PlatformService {
             isNull(schema.users.deletedAt),
           ),
         )
+        // Deterministic: without an ordering, which administrator you become
+        // is whatever Postgres happens to return first, and can change between
+        // two calls on identical data. Support work has to be reproducible.
+        .orderBy(asc(schema.users.createdAt), asc(schema.users.id))
         .limit(1);
 
       const admin = rows[0]?.user;
@@ -653,19 +731,82 @@ export class PlatformService {
         tenantId,
         operator.id,
         "impersonate",
-        `Operator ${operator.id} impersonated admin ${admin.id}`,
+        `Operator ${operator.id} impersonated admin ${admin.id}: ${dto.reason}`,
       );
 
       return admin;
     });
 
     this.logger.warn(
-      { tenantId, operatorId: operator.id, targetUserId: target.id },
+      { tenantId, operatorId: operator.id, targetUserId: target.id, reason: dto.reason },
       "IMPERSONATION started",
     );
 
-    const session = await this.auth.issueSessionFor(target.id, tenantId);
+    const session = await this.auth.issueSessionFor(target.id, tenantId, {
+      impersonatedBy: operator.id,
+    });
     return { ...session, impersonated: true };
+  }
+
+  /**
+   * End an impersonation session and hand the operator their own back.
+   *
+   * Authenticated by the impersonation token itself: it is signed by this
+   * server and carries `impersonatedBy`, which is proof this server created
+   * the session for that operator. Nothing client-side is trusted, which
+   * matters because the operator's own token is not available here — they are
+   * holding the impersonated one.
+   *
+   * The operator is re-verified before a session is minted. Being an operator
+   * when the impersonation started does not entitle them to one now: if they
+   * were deactivated or demoted mid-session, they get nothing back and have to
+   * sign in again.
+   */
+  async endImpersonation(): Promise<AuthSession> {
+    const acting = RequestContext.requireUser();
+    const operatorId = acting.impersonatedBy;
+
+    if (!operatorId) {
+      throw new AppError(
+        ERROR_CODES.INSUFFICIENT_PERMISSIONS,
+        "This session is not an impersonation",
+      );
+    }
+
+    const operator = await this.db.runAsPlatformAdmin(async (tx) => {
+      const found = await tx.query.users.findFirst({
+        where: (u, { and: a, eq: e, isNull: n }) =>
+          a(e(u.id, operatorId), e(u.isActive, true), n(u.deletedAt)),
+      });
+
+      // Written whether or not the operator can be restored — the point is
+      // that the session ended, and how long it lasted.
+      if (acting.tenantId) {
+        await this.writeAudit(
+          tx,
+          acting.tenantId,
+          operatorId,
+          "impersonate_end",
+          `Operator ${operatorId} ended impersonation of user ${acting.id}`,
+        );
+      }
+
+      return found;
+    });
+
+    if (!operator?.isPlatformAdmin) {
+      throw new AppError(
+        ERROR_CODES.INSUFFICIENT_PERMISSIONS,
+        "Your operator account is no longer active. Sign in again.",
+      );
+    }
+
+    this.logger.warn(
+      { operatorId, targetUserId: acting.id, tenantId: acting.tenantId },
+      "IMPERSONATION ended",
+    );
+
+    return this.auth.issueSessionFor(operator.id, operator.tenantId);
   }
 
   /** List platform-wide audit log events. */
@@ -680,6 +821,10 @@ export class PlatformService {
       from ? gte(schema.auditLog.createdAt, new Date(from)) : undefined,
       to ? lte(schema.auditLog.createdAt, new Date(to)) : undefined,
     );
+
+    // `users` is already joined for the row's subject, so the operator needs
+    // its own alias to be joined a second time.
+    const operatorUser = alias(schema.users, "operator_user");
 
     return this.db.runAsPlatformAdmin(async (tx) => {
       const [rows, [totals]] = await Promise.all([
@@ -700,10 +845,15 @@ export class PlatformService {
             ipAddress: schema.auditLog.ipAddress,
             requestId: schema.auditLog.requestId,
             createdAt: schema.auditLog.createdAt,
+            // Who was REALLY at the keyboard. Null on anything the customer
+            // did themselves, which is almost everything.
+            impersonatedBy: schema.auditLog.impersonatedBy,
+            impersonatedByName: operatorUser.name,
           })
           .from(schema.auditLog)
           .leftJoin(schema.tenants, eq(schema.auditLog.tenantId, schema.tenants.id))
           .leftJoin(schema.users, eq(schema.auditLog.userId, schema.users.id))
+          .leftJoin(operatorUser, eq(schema.auditLog.impersonatedBy, operatorUser.id))
           .where(where)
           .orderBy(desc(schema.auditLog.createdAt))
           .limit(limit)
@@ -747,6 +897,37 @@ export class PlatformService {
     const memory = process.memoryUsage();
     const uptimeSeconds = process.uptime();
 
+    const system = {
+      uptimeSeconds: Math.floor(uptimeSeconds),
+      uptimeFormatted: formatUptime(uptimeSeconds),
+      nodeVersion: process.version,
+      environment: process.env.NODE_ENV ?? "development",
+      memoryUsage: {
+        rssMb: Math.round(memory.rss / (1024 * 1024)),
+        heapUsedMb: Math.round(memory.heapUsed / (1024 * 1024)),
+        heapTotalMb: Math.round(memory.heapTotal / (1024 * 1024)),
+      },
+    };
+
+    /**
+     * `degraded` used to be unreachable.
+     *
+     * The only branch that could set `dbOk = false` was a dead database — and
+     * the code then went straight on to run three more queries against it,
+     * which threw and turned the whole endpoint into a 500. The one condition
+     * this endpoint exists to report was the one condition it could not
+     * report. Bail out with what we know instead.
+     */
+    if (!dbOk) {
+      return {
+        status: "degraded" as const,
+        timestamp: new Date().toISOString(),
+        database: { connected: false, latencyMs: -1 },
+        system,
+        counts: { activeTenants: 0, activeUsers: 0, activeDevices: 0 },
+      };
+    }
+
     return this.db.runAsPlatformAdmin(async (tx) => {
       const [[tenantsCount], [usersCount], [devicesCount]] = await Promise.all([
         tx
@@ -766,23 +947,13 @@ export class PlatformService {
       ]);
 
       return {
-        status: dbOk ? "healthy" : "degraded",
+        status: "healthy" as const,
         timestamp: new Date().toISOString(),
         database: {
-          connected: dbOk,
+          connected: true,
           latencyMs: dbLatencyMs,
         },
-        system: {
-          uptimeSeconds: Math.floor(uptimeSeconds),
-          uptimeFormatted: formatUptime(uptimeSeconds),
-          nodeVersion: process.version,
-          environment: process.env.NODE_ENV ?? "development",
-          memoryUsage: {
-            rssMb: Math.round(memory.rss / (1024 * 1024)),
-            heapUsedMb: Math.round(memory.heapUsed / (1024 * 1024)),
-            heapTotalMb: Math.round(memory.heapTotal / (1024 * 1024)),
-          },
-        },
+        system,
         counts: {
           activeTenants: tenantsCount?.v ?? 0,
           activeUsers: usersCount?.v ?? 0,
@@ -809,6 +980,16 @@ export class PlatformService {
       reason,
       changes: { platformOperator: [null, operatorId] },
       requestId: RequestContext.requestId,
+      // `main.ts` configures `trust proxy` specifically so this is the caller's
+      // real address rather than the load balancer's. These are the most
+      // privileged actions in the system; they are exactly the ones worth
+      // being able to trace back to a source.
+      ...(RequestContext.get()?.ipAddress
+        ? { ipAddress: RequestContext.get()!.ipAddress }
+        : {}),
+      // Also on the dedicated column, so "everything this operator ever did"
+      // is one indexed query rather than a JSONB scan.
+      impersonatedBy: operatorId,
     });
   }
 }

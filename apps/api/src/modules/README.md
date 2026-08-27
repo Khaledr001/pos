@@ -19,7 +19,7 @@ Copying its shape is what keeps twenty modules looking like one codebase.
 
 | Module | Phase | Status | Responsibility |
 |---|---|---|---|
-| `platform` | 1 | ✅ done | SuperAdmin console, plans, impersonation |
+| `platform` | 1 | ✅ done | SuperAdmin console, plans, accountable impersonation (D18). Billing/subscription lifecycle is NOT built — `paymentCustomerId`/`paymentSubscriptionId` are unwritten, and `subscriptionEndsAt` gates nothing. |
 | `audit` | 1 | ✅ done | Read side of `audit_log` — `AuditInterceptor` is the only writer |
 | `health` | 1 | ✅ done | Liveness and readiness probes |
 | `auth` | 1 | ✅ done | JWT login, PIN login, refresh rotation |

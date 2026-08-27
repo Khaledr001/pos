@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RequestContext } from "../../common/context/request-context.js";
 import { PlanLimitService } from "../../common/guards/plan-limit.service.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
+import { CreateUserSchema, UpdateUserSchema } from "./dto.js";
 import { UsersService } from "./users.service.js";
 
 /**
@@ -32,6 +33,7 @@ describe("UsersService — PIN collisions", () => {
     pinHash: string | null;
   }>;
   let insertedValues: Record<string, unknown> | undefined;
+  let updatedValues: Record<string, unknown> | undefined;
 
   const withContext = <T>(fn: () => T): T =>
     RequestContext.run(
@@ -63,6 +65,7 @@ describe("UsersService — PIN collisions", () => {
   beforeEach(async () => {
     candidates = [];
     insertedValues = undefined;
+    updatedValues = undefined;
 
     const tx = {
       select: vi.fn(() => chain(candidates)),
@@ -74,7 +77,14 @@ describe("UsersService — PIN collisions", () => {
         });
         return c;
       }),
-      update: vi.fn(() => chain([{ id: "u1" }])),
+      update: vi.fn(() => {
+        const c = chain([{ id: "u1" }]);
+        c.set = vi.fn((v: Record<string, unknown>) => {
+          updatedValues = v;
+          return c;
+        });
+        return c;
+      }),
       query: {
         roles: { findFirst: vi.fn(async () => ({ id: "role-1", permissions: ["sale:create"] })) },
         users: { findFirst: vi.fn(async () => ({ branchId: BRANCH_A })) },
@@ -203,6 +213,66 @@ describe("UsersService — PIN collisions", () => {
       withContext(() => service.create(newUser(undefined, BRANCH_A) as never)),
     ).resolves.toBeTruthy();
     expect(insertedValues?.pinHash).toBeNull();
+  });
+
+  /**
+   * `isPlatformAdmin` bypasses the tenant filter entirely — cross-tenant reads,
+   * suspension, plan changes, impersonation. It must never be settable through
+   * the API by anyone, including a tenant's own `*`-holding admin.
+   *
+   * Two independent defences, tested separately because either alone would be
+   * enough today and neither should be allowed to quietly rot:
+   *
+   *   1. The Zod DTO does not declare the field, and Zod strips unknown keys.
+   *   2. The service enumerates columns explicitly — no `...dto` spread — so
+   *      the field could not reach the INSERT even if it survived validation.
+   *
+   * The flag was once granted by the seed script to every tenant's admin,
+   * which made each business an operator over the other two. It is set in
+   * exactly one place now (`seedPlatformOperator`), and nothing reachable over
+   * HTTP may add a second.
+   */
+  describe("isPlatformAdmin is not settable over the API", () => {
+    it("is stripped by CreateUserSchema before it reaches the service", () => {
+      const parsed = CreateUserSchema.parse({
+        name: "Sneaky",
+        email: "sneaky@example.com",
+        password: "ChangeMe123!",
+        roleId: "22222222-2222-4222-8222-222222222222",
+        isPlatformAdmin: true,
+      });
+
+      expect(parsed).not.toHaveProperty("isPlatformAdmin");
+    });
+
+    it("is stripped by UpdateUserSchema too", () => {
+      const parsed = UpdateUserSchema.parse({ name: "Sneaky", isPlatformAdmin: true });
+
+      expect(parsed).not.toHaveProperty("isPlatformAdmin");
+    });
+
+    it("never reaches the INSERT even if it survives validation", async () => {
+      await withContext(() =>
+        service.create({
+          ...newUser("1234", BRANCH_A),
+          // Deliberately past the DTO, simulating a future refactor that
+          // spreads an unvalidated body.
+          isPlatformAdmin: true,
+        } as never),
+      );
+
+      expect(insertedValues).toBeDefined();
+      expect(insertedValues).not.toHaveProperty("isPlatformAdmin");
+    });
+
+    it("never reaches the UPDATE either", async () => {
+      await withContext(() =>
+        service.update("u1", { name: "Renamed", isPlatformAdmin: true } as never),
+      );
+
+      expect(updatedValues).toBeDefined();
+      expect(updatedValues).not.toHaveProperty("isPlatformAdmin");
+    });
   });
 
   describe("setPin", () => {

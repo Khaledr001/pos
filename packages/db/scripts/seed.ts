@@ -18,7 +18,7 @@ import {
 import { searchKey, slugify } from "@devsfleet/shared-utils";
 import bcrypt from "bcryptjs";
 import { config } from "dotenv";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { resolve } from "node:path";
 import postgres from "postgres";
@@ -46,6 +46,22 @@ const db = drizzle(client, { schema, casing: "snake_case" });
  */
 const BCRYPT_ROUNDS = Number(process.env.BCRYPT_ROUNDS ?? 12);
 const DEFAULT_PASSWORD = process.env.SEED_ADMIN_PASSWORD ?? "ChangeMe123!";
+
+/**
+ * The one account that operates the platform itself.
+ *
+ * Deliberately separate from every tenant's own admin. `isPlatformAdmin`
+ * bypasses the tenant filter entirely — cross-tenant reads, suspension, plan
+ * changes, impersonation — so exactly one seeded user carries it, and it is
+ * not a user any customer signs in as.
+ *
+ * It still needs a `tenantId` because `users.tenantId` is NOT NULL, so it
+ * lives in tenant #1 (D1: "your own business is tenant #1"). That is a schema
+ * divergence from INVENTRA-SPEC §4.5, which says a SuperAdmin belongs to no
+ * tenant; changing the column to nullable is a separate piece of work.
+ */
+const PLATFORM_ADMIN_EMAIL = process.env.PLATFORM_ADMIN_EMAIL ?? "platform@devsfleet.com";
+const PLATFORM_ADMIN_PASSWORD = process.env.PLATFORM_ADMIN_PASSWORD ?? DEFAULT_PASSWORD;
 
 /**
  * A PIN PER ROLE — never one PIN shared by everybody.
@@ -711,10 +727,24 @@ async function seedTenant(
     });
 
     if (existingUser) {
-      if (u.role === "admin" && !existingUser.isPlatformAdmin) {
+      /**
+       * Demote on re-run, never promote.
+       *
+       * This block used to do the opposite — it set `isPlatformAdmin: true` on
+       * every tenant's `admin` user. With three tenants seeded, that made each
+       * business's own owner a platform operator over the other two: able to
+       * read their data, suspend them, change their plan and impersonate their
+       * staff. The flag is unreachable from every API write path, so seed data
+       * was the only way in, and this was it.
+       *
+       * Platform access now belongs to exactly one seeded account — see
+       * `seedPlatformOperator` — and re-running this script actively takes the
+       * flag back off a tenant admin that somehow acquired it.
+       */
+      if (existingUser.isPlatformAdmin) {
         await tx
           .update(schema.users)
-          .set({ isPlatformAdmin: true })
+          .set({ isPlatformAdmin: false })
           .where(
             and(
               eq(schema.users.tenantId, tenantId),
@@ -739,7 +769,9 @@ async function seedTenant(
           canApproveRefund: u.canRefund,
           canViewCost: u.canCost,
           allowedBranchIds: [],
-          isPlatformAdmin: u.role === "admin",
+          // Never a platform operator. A tenant's admin is powerful inside
+          // their own business and has no business seeing anyone else's.
+          isPlatformAdmin: false,
         })
         .returning();
       if (created) userMap.set(u.email, created.id);
@@ -1400,6 +1432,127 @@ async function seedTenant(
   }
 }
 
+/**
+ * The single platform operator, seeded into tenant #1 but distinct from its
+ * admin.
+ *
+ * Also the enforcement point for the invariant this script previously broke:
+ * after it runs, exactly one row in `users` has `isPlatformAdmin = true`. It
+ * demotes any other holder and revokes their refresh tokens, because a demoted
+ * user keeps a platform-carrying access token until it expires and a valid
+ * refresh token would let them mint more.
+ */
+async function seedPlatformOperator(tx: any, platformPasswordHash: string) {
+  console.log(`\n══════════════════════════════════════════════════════════════`);
+  console.log(`  Seeding Platform Operator`);
+  console.log(`══════════════════════════════════════════════════════════════`);
+
+  const homeTenant = await tx.query.tenants.findFirst({
+    where: (t: any, { eq: e }: any) => e(t.slug, TENANTS_CONFIG[0]!.slug),
+  });
+  if (!homeTenant) {
+    throw new Error(
+      `Cannot seed the platform operator: tenant "${TENANTS_CONFIG[0]!.slug}" was not created.`,
+    );
+  }
+
+  const adminRole = await tx.query.roles.findFirst({
+    where: (r: any, { and: a, eq: e }: any) =>
+      a(e(r.tenantId, homeTenant.id), e(r.name, "admin")),
+  });
+  if (!adminRole) {
+    throw new Error("Cannot seed the platform operator: the admin role is missing.");
+  }
+
+  const existing = await tx.query.users.findFirst({
+    where: (u: any, { and: a, eq: e, isNull }: any) =>
+      a(
+        e(u.tenantId, homeTenant.id),
+        e(u.email, PLATFORM_ADMIN_EMAIL),
+        isNull(u.deletedAt),
+      ),
+  });
+
+  let operatorId: string;
+  if (existing) {
+    await tx
+      .update(schema.users)
+      .set({ isPlatformAdmin: true, isActive: true })
+      .where(eq(schema.users.id, existing.id));
+    operatorId = existing.id;
+  } else {
+    const [created] = await tx
+      .insert(schema.users)
+      .values({
+        tenantId: homeTenant.id,
+        // Tenant-wide, like any owner-level account.
+        branchId: null,
+        roleId: adminRole.id,
+        name: "Platform Operator",
+        email: PLATFORM_ADMIN_EMAIL,
+        passwordHash: platformPasswordHash,
+        // No PIN: this account operates the platform console, it does not
+        // stand at a till. A PIN would make it a sign-in candidate at every
+        // branch of tenant #1 for no reason.
+        pinHash: null,
+        maxDiscountPercent: "100",
+        maxSaleAmount: null,
+        canApproveRefund: true,
+        canViewCost: true,
+        allowedBranchIds: [],
+        isPlatformAdmin: true,
+      })
+      .returning();
+    operatorId = created.id;
+  }
+  console.log(`✓ Platform operator: ${PLATFORM_ADMIN_EMAIL}`);
+
+  /**
+   * Enforce the invariant, and close the window on anyone demoted.
+   */
+  const strays = await tx
+    .select({ id: schema.users.id, email: schema.users.email })
+    .from(schema.users)
+    .where(
+      and(eq(schema.users.isPlatformAdmin, true), ne(schema.users.id, operatorId)),
+    );
+
+  if (strays.length > 0) {
+    await tx
+      .update(schema.users)
+      .set({ isPlatformAdmin: false })
+      .where(
+        and(eq(schema.users.isPlatformAdmin, true), ne(schema.users.id, operatorId)),
+      );
+
+    await tx
+      .update(schema.refreshTokens)
+      .set({ revokedAt: new Date() })
+      .where(
+        and(
+          inArray(
+            schema.refreshTokens.userId,
+            strays.map((s: { id: string }) => s.id),
+          ),
+          isNull(schema.refreshTokens.revokedAt),
+        ),
+      );
+
+    console.warn(
+      `⚠  Demoted ${strays.length} unexpected platform admin(s) and revoked their sessions:\n` +
+        strays.map((s: { email: string }) => `     - ${s.email}`).join("\n"),
+    );
+  }
+
+  if (PLATFORM_ADMIN_PASSWORD === DEFAULT_PASSWORD) {
+    console.warn(
+      `\n⚠  The platform operator is using the default seed password.\n` +
+        `   This account can read, suspend and impersonate EVERY tenant.\n` +
+        `   Set PLATFORM_ADMIN_PASSWORD before seeding anything that is not local.`,
+    );
+  }
+}
+
 async function main() {
   console.log("Starting full multi-tenant SaaS seeding...");
 
@@ -1426,6 +1579,10 @@ async function main() {
   }
 
   const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, BCRYPT_ROUNDS);
+  const platformPasswordHash =
+    PLATFORM_ADMIN_PASSWORD === DEFAULT_PASSWORD
+      ? passwordHash
+      : await bcrypt.hash(PLATFORM_ADMIN_PASSWORD, BCRYPT_ROUNDS);
   // Hashed per role. bcrypt salts every call, so these differ even where the
   // PINs would not — but the PINS guard above is what actually keeps them
   // distinct, since a hash comparison cannot tell you two PINs are equal.
@@ -1443,6 +1600,10 @@ async function main() {
       for (const tenantConfig of TENANTS_CONFIG) {
         await seedTenant(tx, tenantConfig, passwordHash, pinHashes);
       }
+
+      // Last: it demotes any stray platform admin, so it must run after every
+      // tenant's users exist.
+      await seedPlatformOperator(tx, platformPasswordHash);
     });
 
     console.log(`\n══════════════════════════════════════════════════════════════`);
@@ -1454,6 +1615,10 @@ async function main() {
         `  🏢 ${t.name.padEnd(42)} [${t.slug.padEnd(16)}] Login: ${t.adminEmail}`,
       );
     }
+    console.log(
+      `\n  👑 Platform operator (the ONLY cross-tenant account): ${PLATFORM_ADMIN_EMAIL}\n` +
+        `     Tenant admins above are scoped to their own business and cannot reach /platform.`,
+    );
     console.log(
       `\nPOS PINs are per ROLE, not shared — two people answering to one PIN at a\n` +
         `branch makes sign-in refuse (see PINS in this file):\n` +

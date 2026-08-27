@@ -64,6 +64,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, "jwt") {
       planId: payload.planId ?? "free",
       trialEndsAt: payload.trialEndsAt ?? null,
       ...(payload.deviceId ? { deviceId: payload.deviceId } : {}),
+      ...(payload.impersonatedBy ? { impersonatedBy: payload.impersonatedBy } : {}),
     };
   }
 }

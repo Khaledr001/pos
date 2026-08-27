@@ -610,10 +610,24 @@ export class AuthService {
       ...(stored.deviceId ? { deviceId: stored.deviceId } : {}),
     });
 
+    /**
+     * Rotation only ever runs on a session that HAS a refresh token, so this
+     * cannot fire — but `replacedByHash` is what detects a replayed token and
+     * kills the family, so leaving it unset would silently disable reuse
+     * detection rather than fail. Refuse instead of asserting the type away.
+     */
+    if (!tokens.refreshToken) {
+      throw new AppError(
+        ERROR_CODES.INTERNAL_ERROR,
+        "Refresh produced no replacement token",
+      );
+    }
+    const replacement = tokens.refreshToken;
+
     await this.db.runAs(stored.tenantId, async (tx) => {
       await tx
         .update(schema.refreshTokens)
-        .set({ revokedAt: new Date(), replacedByHash: hashToken(tokens.refreshToken) })
+        .set({ revokedAt: new Date(), replacedByHash: hashToken(replacement) })
         .where(eq(schema.refreshTokens.id, stored.id));
     });
 
@@ -638,8 +652,17 @@ export class AuthService {
    * Deliberately not exported through a controller. Anything reachable from
    * HTTP that mints a session without checking a credential is an
    * authentication bypass.
+   *
+   * `impersonatedBy` marks the session as a platform operator acting as this
+   * user. It stamps the operator's id into the token and suppresses the
+   * refresh token, so the session dies with the access token rather than
+   * becoming a standing credential — see `PlatformService.impersonate`.
    */
-  async issueSessionFor(userId: string, tenantId: string): Promise<AuthSession> {
+  async issueSessionFor(
+    userId: string,
+    tenantId: string,
+    options: { impersonatedBy?: string } = {},
+  ): Promise<AuthSession> {
     const found = await this.db.runAsPlatformAdmin(async (tx) => {
       const rows = await tx
         .select({
@@ -666,6 +689,9 @@ export class AuthService {
       role: found.role,
       tenant: found.tenant,
       isPos: false,
+      ...(options.impersonatedBy
+        ? { impersonatedBy: options.impersonatedBy, skipRefreshToken: true }
+        : {}),
     });
 
     return {
@@ -751,6 +777,14 @@ export class AuthService {
     isPos: boolean;
     deviceId?: string;
     branchIdOverride?: string;
+    /** Stamps the acting platform operator into the token. */
+    impersonatedBy?: string;
+    /**
+     * Mint an access token only. An impersonation session must not be
+     * renewable: a refresh token would let an operator hold a foreign tenant's
+     * session open indefinitely, long after the support ticket closed.
+     */
+    skipRefreshToken?: boolean;
   }): Promise<AuthTokens> {
     const { user, role, tenant, isPos, deviceId, branchIdOverride } = input;
 
@@ -780,6 +814,7 @@ export class AuthService {
       planId: tenant.planId,
       trialEndsAt: tenant.trialEndsAt ? tenant.trialEndsAt.toISOString() : null,
       ...(deviceId ? { deviceId } : {}),
+      ...(input.impersonatedBy ? { impersonatedBy: input.impersonatedBy } : {}),
     };
 
     const accessTtlMs = parseDuration(this.config.get("JWT_ACCESS_TTL", { infer: true }));
@@ -790,6 +825,13 @@ export class AuthService {
       // just `string`.
       expiresIn: Math.floor(accessTtlMs / 1000),
     });
+
+    // An impersonation session ends when its access token does. Minting no
+    // refresh token is what makes that true — there is nothing to rotate, and
+    // nothing left behind to revoke.
+    if (input.skipRefreshToken) {
+      return { accessToken, expiresIn: Math.floor(accessTtlMs / 1000) };
+    }
 
     // Opaque random string, not a JWT: a refresh token's only job is to be
     // looked up and revoked, and a JWT cannot be revoked without a lookup anyway.

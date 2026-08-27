@@ -24,11 +24,11 @@ export interface UserProfile {
   branchId: string | null;
   branchName: string | null;
   isPlatformAdmin?: boolean;
-}
-
-interface ImpersonationBackup {
-  tokens: AuthTokens & { expiresAt?: number };
-  user: UserProfile;
+  /**
+   * Set when a platform operator is signed in as this user. Comes from the
+   * server on the impersonate response, not from anything the client decides.
+   */
+  impersonatedBy?: string;
 }
 
 interface AuthContextType {
@@ -38,15 +38,30 @@ interface AuthContextType {
   isImpersonating: boolean;
   login: (email: string, pass: string, tenantSlug?: string) => Promise<void>;
   logout: () => void;
-  impersonateTenant: (tenantId: string) => Promise<void>;
-  exitImpersonation: () => void;
+  impersonateTenant: (tenantId: string, reason: string) => Promise<void>;
+  exitImpersonation: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const TOKEN_KEY = "devsfleet_auth_tokens";
 const USER_KEY = "devsfleet_auth_user";
-const SUPERADMIN_BACKUP_KEY = "devsfleet_superadmin_backup";
+
+/**
+ * There is deliberately no super-admin session backup in localStorage.
+ *
+ * Impersonation used to stash the operator's whole session — including a
+ * live, full-length refresh token — under `devsfleet_superadmin_backup`, then
+ * restore it on exit. That put a cross-tenant credential in browser storage
+ * for the entire time the operator was browsing tenant-controlled content, and
+ * `clearSession()` did not remove it, so a mid-session 401 stranded it there
+ * indefinitely on a shared machine.
+ *
+ * The server hands the operator's session back instead:
+ * `POST /admin/impersonation/end` authenticates with the impersonation token's
+ * own signed `impersonatedBy` claim and mints a fresh operator session. The
+ * client stores one session at a time and nothing it cannot afford to lose.
+ */
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [tokens, setTokens] = useState<AuthTokens | null>(null);
@@ -58,16 +73,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const storedTokens = localStorage.getItem(TOKEN_KEY);
       const storedUser = localStorage.getItem(USER_KEY);
-      const storedBackup = localStorage.getItem(SUPERADMIN_BACKUP_KEY);
       if (storedTokens && storedUser) {
+        const profile = JSON.parse(storedUser) as UserProfile;
         setTokens(JSON.parse(storedTokens));
-        setUser(JSON.parse(storedUser));
-        setIsImpersonating(Boolean(storedBackup));
+        setUser(profile);
+        // Derived from the profile the server returned, not from the mere
+        // presence of a sentinel key — which any non-empty string used to
+        // satisfy, showing the banner to anyone who set it in devtools.
+        setIsImpersonating(Boolean(profile.impersonatedBy));
       }
+      // Left over from the previous impersonation design. Removing it here
+      // means one page load clears the stale credential rather than leaving
+      // it until someone happens to log in again.
+      localStorage.removeItem("devsfleet_superadmin_backup");
     } catch {
       localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(USER_KEY);
-      localStorage.removeItem(SUPERADMIN_BACKUP_KEY);
     } finally {
       setIsLoading(false);
     }
@@ -158,102 +179,105 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem(USER_KEY, JSON.stringify(profile));
       }
       setIsImpersonating(false);
-      localStorage.removeItem(SUPERADMIN_BACKUP_KEY);
+      // Belt and braces against the retired impersonation backup: a fresh
+      // login should never inherit anything from a previous session.
+      localStorage.removeItem("devsfleet_superadmin_backup");
     } finally {
       setIsLoading(false);
     }
   };
 
-  const impersonateTenant = async (tenantId: string) => {
+  /** Shape returned by both the impersonate and end-impersonation routes. */
+  interface SessionResponse {
+    accessToken: string;
+    refreshToken?: string;
+    expiresIn: number;
+    user: {
+      id: string;
+      name: string;
+      email: string;
+      roleName: string;
+      permissions: string[];
+      tenantId: string;
+      tenantName: string;
+      branchId: string | null;
+      branchName: string | null;
+      isPlatformAdmin?: boolean;
+    };
+  }
+
+  /** Swap the stored session for a freshly issued one. */
+  const adoptSession = (res: SessionResponse, impersonatedBy?: string) => {
+    const tokenPair: AuthTokens = {
+      accessToken: res.accessToken,
+      ...(res.refreshToken ? { refreshToken: res.refreshToken } : {}),
+      expiresIn: res.expiresIn,
+    };
+    localStorage.setItem(
+      TOKEN_KEY,
+      JSON.stringify({
+        ...tokenPair,
+        expiresAt: Date.now() + (res.expiresIn ?? 900) * 1000,
+      }),
+    );
+    setTokens(tokenPair);
+
+    const profile: UserProfile = {
+      id: res.user.id,
+      name: res.user.name,
+      email: res.user.email,
+      roleName: res.user.roleName,
+      permissions: res.user.permissions || [],
+      tenantId: res.user.tenantId,
+      tenantName: res.user.tenantName,
+      branchId: res.user.branchId,
+      branchName: res.user.branchName,
+      isPlatformAdmin: res.user.isPlatformAdmin ?? false,
+      ...(impersonatedBy ? { impersonatedBy } : {}),
+    };
+    setUser(profile);
+    localStorage.setItem(USER_KEY, JSON.stringify(profile));
+    setIsImpersonating(Boolean(impersonatedBy));
+  };
+
+  const impersonateTenant = async (tenantId: string, reason: string) => {
     if (!tokens || !user) return;
     setIsLoading(true);
 
     try {
-      const storedTokens = localStorage.getItem(TOKEN_KEY);
-      const storedUser = localStorage.getItem(USER_KEY);
-      if (storedTokens && storedUser) {
-        // Save current super admin session
-        const backup: ImpersonationBackup = {
-          tokens: JSON.parse(storedTokens),
-          user: JSON.parse(storedUser),
-        };
-        localStorage.setItem(SUPERADMIN_BACKUP_KEY, JSON.stringify(backup));
-      }
-
-      const res = await api.post<{
-        accessToken: string;
-        refreshToken: string;
-        expiresIn: number;
-        user: {
-          id: string;
-          name: string;
-          email: string;
-          roleName: string;
-          permissions: string[];
-          tenantId: string;
-          tenantName: string;
-          branchId: string | null;
-          branchName: string | null;
-          isPlatformAdmin?: boolean;
-        };
-      }>(`/admin/tenants/${tenantId}/impersonate`, {});
-
-      const tokenPair = {
-        accessToken: res.accessToken,
-        refreshToken: res.refreshToken,
-        expiresIn: res.expiresIn,
-      };
-      const withExpiry = {
-        ...tokenPair,
-        expiresAt: Date.now() + (res.expiresIn ?? 900) * 1000,
-      };
-      localStorage.setItem(TOKEN_KEY, JSON.stringify(withExpiry));
-      setTokens(tokenPair);
-
-      const targetProfile: UserProfile = {
-        id: res.user.id,
-        name: res.user.name,
-        email: res.user.email,
-        roleName: res.user.roleName,
-        permissions: res.user.permissions || [],
-        tenantId: res.user.tenantId,
-        tenantName: res.user.tenantName,
-        branchId: res.user.branchId,
-        branchName: res.user.branchName,
-        isPlatformAdmin: false,
-      };
-      setUser(targetProfile);
-      localStorage.setItem(USER_KEY, JSON.stringify(targetProfile));
-      setIsImpersonating(true);
-
+      // Nothing is stashed before the call. The operator's own session is
+      // reissued by the server on exit, so there is nothing to back up and
+      // nothing to roll back if this fails.
+      const res = await api.post<SessionResponse>(
+        `/admin/tenants/${tenantId}/impersonate`,
+        { reason },
+      );
+      adoptSession(res, user.id);
       window.location.href = "/";
-    } catch (err) {
-      // Revert if failed
-      localStorage.removeItem(SUPERADMIN_BACKUP_KEY);
-      throw err;
     } finally {
       setIsLoading(false);
     }
   };
 
-  const exitImpersonation = () => {
+  const exitImpersonation = async () => {
+    setIsLoading(true);
     try {
-      const backupRaw = localStorage.getItem(SUPERADMIN_BACKUP_KEY);
-      if (backupRaw) {
-        const backup: ImpersonationBackup = JSON.parse(backupRaw);
-        localStorage.setItem(TOKEN_KEY, JSON.stringify(backup.tokens));
-        localStorage.setItem(USER_KEY, JSON.stringify(backup.user));
-        localStorage.removeItem(SUPERADMIN_BACKUP_KEY);
-        setTokens(backup.tokens);
-        setUser(backup.user);
-        setIsImpersonating(false);
-        window.location.href = "/platform/tenants";
-        return;
-      }
+      const res = await api.post<SessionResponse>("/admin/impersonation/end", {});
+      adoptSession(res);
+      window.location.href = "/platform/tenants";
     } catch (err) {
-      console.error("Error exiting impersonation:", err);
+      /**
+       * The impersonation token is the only thing that can end its own
+       * session, so if this fails there is nothing left to retry with —
+       * usually it expired, which is exactly what is supposed to happen to an
+       * unrefreshable session. Sign out rather than strand the operator in a
+       * tenant they can no longer leave.
+       */
+      console.error("Could not end impersonation cleanly:", err);
+      await logout();
+    } finally {
+      setIsLoading(false);
     }
-    logout();
   };
 
   const logout = async () => {
@@ -268,7 +292,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setTokens(null);
     setUser(null);
     setIsImpersonating(false);
-    localStorage.removeItem(SUPERADMIN_BACKUP_KEY);
     clearSession();
 
     if (typeof window !== "undefined") window.location.href = "/login";

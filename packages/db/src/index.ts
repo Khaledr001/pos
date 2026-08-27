@@ -38,3 +38,11 @@ export {
   sql,
   sum,
 } from "drizzle-orm";
+
+/**
+ * Self-join helper. Lives in `pg-core` rather than the root, but callers need
+ * it for the same reason as the operators above: joining one table twice (an
+ * audit row's subject user AND the operator who impersonated them) without
+ * taking a direct drizzle-orm dependency.
+ */
+export { alias } from "drizzle-orm/pg-core";

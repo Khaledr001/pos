@@ -72,8 +72,18 @@ export class AuditInterceptor implements NestInterceptor {
     const store = RequestContext.get();
     const user = store?.user;
 
-    // A platform operator acting across tenants has no tenant of their own, and
-    // `PlatformService` already writes its own row with the right tenant on it.
+    /**
+     * A platform operator acting across tenants has no tenant of their own, and
+     * `PlatformService` already writes its own row with the right tenant on it.
+     *
+     * This is also why `@Audited()` is a no-op on every route in
+     * `platform.controller.ts` — adding the decorator there writes nothing.
+     * Platform mutations must call `PlatformService.writeAudit` explicitly.
+     *
+     * Note this does NOT skip impersonated sessions: those carry the target
+     * tenant's id, so they land here and are stamped with `impersonatedBy`
+     * below.
+     */
     if (!user?.tenantId) return;
 
     try {
@@ -91,6 +101,10 @@ export class AuditInterceptor implements NestInterceptor {
           entityId: entityIdFrom(request.params, result),
           ...(store?.ipAddress ? { ipAddress: store.ipAddress } : {}),
           requestId: RequestContext.requestId,
+          // Signed into the token by the impersonate route, so this records
+          // who was really at the keyboard rather than whose name the session
+          // carries.
+          impersonatedBy: user.impersonatedBy ?? null,
         });
       });
     } catch (error) {

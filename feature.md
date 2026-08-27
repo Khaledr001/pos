@@ -366,6 +366,7 @@ Numbering follows your list. "Where" cites the strongest evidence.
 | 52 | Updates | 🔴 | `electron-updater` is a dependency; no update flow, no version check, no rollback. |
 | 53 | Backup & recovery | 🔴 | Nothing. |
 | 54 | Multi-branch | ✅ | Tenant → branch → terminal throughout, RLS-enforced, branch-scoped ABAC. |
+| 60 | Platform / SuperAdmin console | 🟡 | Stats, tenant directory + detail, provision, suspend/activate, change plan, audit trail, health, accountable impersonation — all ✅ and `@PlatformOnly()`-gated. Impersonation carries a signed `impersonatedBy` claim, mints no refresh token, and is ended by the server (D18). **Billing 🔴** — no checkout, no webhooks, `subscriptionEndsAt` gates nothing. `maxDevices` is defined on every plan and enforced nowhere. Platform access is all-or-nothing: no read-only operator role, so "view uptime" and "impersonate any tenant" are the same privilege. |
 | 56 | Performance | ❓ | Never measured. FTS5 + indices suggest the targets are reachable; no benchmark exists. |
 | 57 | Keyboard shortcuts | 🟡 | `Ctrl+1..8` navigation, `F1/F2/F4/F7/F8/Esc` on Sale, `F5/F6/F8` on drawer, PIN digits on login. **`F3` Discount, `F4` Refund and `Esc` Back are drawn on the key rail with no key bound** — they are click-only, which is worse than absent because the label promises a key that does nothing. |
 | 58 | Touchscreen mode | 🔴 | No category grid, no product tiles. Search + list only. |

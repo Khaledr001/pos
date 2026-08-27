@@ -11,18 +11,21 @@ import {
   Query,
 } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
+import { Throttle } from "@nestjs/throttler";
 import { PlatformOnly } from "../../common/decorators/index.js";
 import { zodPipe } from "../../common/pipes/zod-validation.pipe.js";
 import { PlatformService } from "./platform.service.js";
 import {
   ChangePlanSchema,
   CreateTenantSchema,
+  ImpersonateSchema,
   ListAuditLogsSchema,
   ListTenantsSchema,
   SuspendTenantSchema,
   UpdateTenantSchema,
   type ChangePlanDto,
   type CreateTenantDto,
+  type ImpersonateDto,
   type ListAuditLogsDto,
   type ListTenantsDto,
   type SuspendTenantDto,
@@ -35,6 +38,12 @@ import {
  * `@PlatformOnly()` sits on the CONTROLLER, not on each method — a new route
  * added here is protected by default rather than by remembering. There is no
  * tenant permission that reaches any of this.
+ *
+ * NOTE: `@Audited()` does NOT work on these routes. The interceptor skips any
+ * principal without a `tenantId`, which every platform operator is. Mutating
+ * methods must call `PlatformService.writeAudit` inside their own transaction
+ * instead — which is stronger anyway, since it commits atomically with the
+ * change it describes.
  */
 @ApiTags("platform")
 @PlatformOnly()
@@ -54,7 +63,13 @@ export class PlatformController {
     return this.platform.listTenants(query);
   }
 
+  /**
+   * Same work as public self-registration — a tenant, a user, and the seeded
+   * rows behind them — so it gets a comparable limit rather than the global
+   * 120/min a product listing gets.
+   */
   @Post("tenants")
+  @Throttle({ default: { limit: 20, ttl: 3_600_000 } })
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: "Provision a new business directly from platform console" })
   createTenant(@Body(zodPipe(CreateTenantSchema)) dto: CreateTenantDto) {
@@ -105,13 +120,22 @@ export class PlatformController {
     return this.platform.changePlan(id, dto);
   }
 
+  /**
+   * Tightly throttled: this is the most invasive operation the product has,
+   * and a legitimate operator needs it a handful of times a day, not a
+   * hundred times a minute.
+   */
   @Post("tenants/:id/impersonate")
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: "Sign in as this business's administrator for support (audit-logged)",
   })
-  impersonate(@Param("id", ParseUUIDPipe) id: string) {
-    return this.platform.impersonate(id);
+  impersonate(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body(zodPipe(ImpersonateSchema)) dto: ImpersonateDto,
+  ) {
+    return this.platform.impersonate(id, dto);
   }
 
   @Get("audit-logs")

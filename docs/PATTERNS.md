@@ -152,12 +152,20 @@ the caller to write the branch.
 ```ts
 this.db.run(async (tx) => { ... });                  // request-scoped tenant
 this.db.runAs(tenantId, async (tx) => { ... });      // jobs, webhooks
-this.db.runAsPlatformAdmin(async (tx) => { ... });   // provisioning only
+this.db.runAsPlatformAdmin(async (tx) => { ... });   // cross-tenant: see below
 ```
 
 Everything inside a callback is one transaction. Multi-table writes are already
 atomic — a sale, its items, the payment, and the inventory ledger rows go
 together or not at all.
+
+`runAsPlatformAdmin` **bypasses tenant isolation entirely**. It is not only
+for provisioning: `auth.service.ts` uses it on the login and refresh paths to
+resolve a tenant before there is a session to scope by, and the whole
+`platform` module runs on it. What matters is not which module you are in but
+that you cannot reach it from a tenant-facing route — the callers above are
+either pre-authentication or `@PlatformOnly()`. If you are adding a third
+kind of caller, that is a decision, not a detail.
 
 ### Adding a table
 

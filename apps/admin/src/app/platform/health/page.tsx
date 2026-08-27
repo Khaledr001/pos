@@ -16,7 +16,7 @@ import {
   Globe,
   Terminal,
 } from "lucide-react";
-import { api } from "@/lib/api-client";
+import { api, getApiOrigin } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -51,6 +51,14 @@ export default function PlatformHealthPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * Read on the client only. The base URL can be overridden at runtime from
+   * the settings page, so a value baked in at build time — or the literal
+   * "localhost:3001" that used to sit here — is wrong in every deployment
+   * that is not a developer's laptop.
+   */
+  const [apiBaseUrl, setApiBaseUrl] = useState("—");
+  useEffect(() => setApiBaseUrl(getApiOrigin()), []);
 
   const fetchHealth = async () => {
     setError(null);
@@ -135,14 +143,21 @@ export default function PlatformHealthPage() {
           <CardContent>
             <div className="flex items-baseline gap-2">
               <span className="text-3xl font-black text-foreground">
-                {health?.database.latencyMs}
+                {health ? health.database.latencyMs : "—"}
               </span>
               <span className="text-xs text-muted-foreground font-mono">ms latency</span>
             </div>
-            <div className="mt-2 flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              <span>Connection Pool Healthy</span>
-            </div>
+            {health?.database.connected ? (
+              <div className="mt-2 flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                <span>Connection Pool Healthy</span>
+              </div>
+            ) : (
+              <div className="mt-2 flex items-center gap-1.5 text-xs text-destructive font-medium">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                <span>Database Unreachable</span>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -242,9 +257,7 @@ export default function PlatformHealthPage() {
             </div>
             <div className="flex items-center justify-between p-2.5 rounded-xl bg-muted/30">
               <span className="text-muted-foreground">API Port & Path</span>
-              <span className="font-mono text-foreground">
-                localhost:3001/api/v1
-              </span>
+              <span className="font-mono text-foreground">{apiBaseUrl}</span>
             </div>
           </CardContent>
         </Card>
@@ -278,12 +291,7 @@ export default function PlatformHealthPage() {
                 {health?.counts.activeDevices} devices
               </span>
             </div>
-            <div className="flex items-center justify-between p-2.5 rounded-xl bg-muted/30">
-              <span className="text-muted-foreground">Postgres RLS Policy Enforcement</span>
-              <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                ACTIVE & VERIFIED
-              </span>
-            </div>
+
           </CardContent>
         </Card>
       </div>

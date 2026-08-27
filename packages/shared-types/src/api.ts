@@ -98,6 +98,17 @@ export interface JwtPayload {
   trialEndsAt: string | null;
   /** Present only on tokens minted for a POS terminal. */
   deviceId?: string;
+  /**
+   * The platform operator acting as this user, on a session minted by
+   * `POST /admin/tenants/:id/impersonate`. Absent on every ordinary login.
+   *
+   * Without this an impersonated session is byte-for-byte indistinguishable
+   * from the tenant admin's own, so every audit row written during support
+   * work is attributed to the customer. It is signed into the token
+   * deliberately: the client cannot set it, and the end-impersonation route
+   * trusts nothing else.
+   */
+  impersonatedBy?: string;
   iat: number;
   exp: number;
 }
@@ -136,6 +147,8 @@ export interface AuthenticatedUser {
   planId: string;
   trialEndsAt: string | null;
   deviceId?: string;
+  /** Set when a platform operator is acting as this user. See JwtPayload. */
+  impersonatedBy?: string;
 }
 
 /**
@@ -183,7 +196,12 @@ export interface PinLoginRequest {
 
 export interface AuthTokens {
   accessToken: string;
-  refreshToken: string;
+  /**
+   * Absent on an impersonation session, which is deliberately not renewable —
+   * it expires with its access token instead of becoming a standing
+   * cross-tenant credential. Every other session has one.
+   */
+  refreshToken?: string;
   /** Seconds until accessToken expires. */
   expiresIn: number;
 }

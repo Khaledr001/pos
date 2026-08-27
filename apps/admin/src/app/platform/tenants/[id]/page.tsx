@@ -39,7 +39,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { PLAN_IDS, type PlanId } from "@devsfleet/shared-types";
+import { PLAN_IDS, UNLIMITED, type PlanId } from "@devsfleet/shared-types";
 
 interface TenantDetail {
   id: string;
@@ -49,7 +49,8 @@ interface TenantDetail {
   plan: {
     id: string;
     name: string;
-    monthlyPrice: number;
+    /** null on Enterprise — custom pricing, not free. */
+    monthlyPrice: number | null;
     maxBranches: number;
     maxUsers: number;
     maxDevices: number;
@@ -115,6 +116,58 @@ interface TenantDetail {
   }>;
 }
 
+/** `-1` is the sentinel for "no cap" — never a number to show a human. */
+const formatLimit = (max: number) => (max === UNLIMITED ? "Unlimited" : max.toLocaleString());
+
+/** Enterprise has `monthlyPrice: null` — custom pricing, not "$null". */
+const formatPrice = (price: number | null) =>
+  price === null ? "custom pricing" : `$${price}/mo`;
+
+/**
+ * One resource's usage against its plan cap.
+ *
+ * `UNLIMITED` is `-1`, which the four hand-rolled copies of this markup each
+ * divided by: `3 / -1 * 100` is `-300`, `Math.min` keeps it, and
+ * `width: "-300%"` is invalid CSS the browser discards — leaving the inner
+ * block element to fill its parent. Every meter rendered FULL for Enterprise,
+ * the one plan with no limits, and the label beside it read "3 / -1".
+ */
+function QuotaMeter({
+  label,
+  usage,
+  barClassName,
+}: {
+  label: string;
+  usage: { current: number; max: number };
+  barClassName: string;
+}) {
+  const unlimited = usage.max === UNLIMITED;
+  const pct = unlimited ? 0 : Math.min(100, Math.max(0, (usage.current / usage.max) * 100));
+
+  return (
+    <div>
+      <div className="flex justify-between mb-1">
+        <span className="font-medium text-foreground">{label}</span>
+        <span className="text-muted-foreground font-mono">
+          {usage.current.toLocaleString()} / {unlimited ? "∞" : usage.max.toLocaleString()}
+        </span>
+      </div>
+      {unlimited ? (
+        <p className="text-[11px] text-muted-foreground/70">
+          Unlimited on this plan
+        </p>
+      ) : (
+        <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all ${barClassName}`}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function TenantDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -139,6 +192,7 @@ export default function TenantDetailPage() {
   // Impersonate modal
   const [impersonateOpen, setImpersonateOpen] = useState(false);
   const [impersonateLoading, setImpersonateLoading] = useState(false);
+  const [impersonateReason, setImpersonateReason] = useState("");
 
   const fetchTenant = async () => {
     setLoading(true);
@@ -198,7 +252,7 @@ export default function TenantDetailPage() {
   const handleImpersonate = async () => {
     setImpersonateLoading(true);
     try {
-      await impersonateTenant(tenantId);
+      await impersonateTenant(tenantId, impersonateReason.trim());
     } catch (err) {
       alert(err instanceof Error ? err.message : "Impersonation failed");
       setImpersonateLoading(false);
@@ -263,7 +317,7 @@ export default function TenantDetailPage() {
             </div>
             <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
               <span>
-                Plan: <strong className="text-foreground">{tenant.plan.name}</strong> (${tenant.plan.monthlyPrice}/mo)
+                Plan: <strong className="text-foreground">{tenant.plan.name}</strong> ({formatPrice(tenant.plan.monthlyPrice)})
               </span>
               <span>•</span>
               <span>
@@ -328,7 +382,7 @@ export default function TenantDetailPage() {
               {tenant.counts.branches}
             </div>
             <div className="text-[11px] text-muted-foreground mt-0.5">
-              Limit: {tenant.plan.maxBranches}
+              Limit: {formatLimit(tenant.plan.maxBranches)}
             </div>
           </CardContent>
         </Card>
@@ -340,7 +394,7 @@ export default function TenantDetailPage() {
               {tenant.counts.users}
             </div>
             <div className="text-[11px] text-muted-foreground mt-0.5">
-              Limit: {tenant.plan.maxUsers}
+              Limit: {formatLimit(tenant.plan.maxUsers)}
             </div>
           </CardContent>
         </Card>
@@ -352,7 +406,7 @@ export default function TenantDetailPage() {
               {tenant.counts.devices}
             </div>
             <div className="text-[11px] text-muted-foreground mt-0.5">
-              Limit: {tenant.plan.maxDevices}
+              Limit: {formatLimit(tenant.plan.maxDevices)}
             </div>
           </CardContent>
         </Card>
@@ -364,7 +418,7 @@ export default function TenantDetailPage() {
               {tenant.counts.products}
             </div>
             <div className="text-[11px] text-muted-foreground mt-0.5">
-              Limit: {tenant.plan.maxProducts.toLocaleString()}
+              Limit: {formatLimit(tenant.plan.maxProducts)}
             </div>
           </CardContent>
         </Card>
@@ -440,89 +494,26 @@ export default function TenantDetailPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 text-xs">
-              {/* Branches meter */}
-              <div>
-                <div className="flex justify-between mb-1">
-                  <span className="font-medium text-foreground">Physical Branches</span>
-                  <span className="text-muted-foreground font-mono">
-                    {tenant.usage.branches.current} / {tenant.usage.branches.max}
-                  </span>
-                </div>
-                <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
-                  <div
-                    className="h-full bg-primary rounded-full transition-all"
-                    style={{
-                      width: `${Math.min(
-                        100,
-                        (tenant.usage.branches.current / tenant.usage.branches.max) * 100,
-                      )}%`,
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Users meter */}
-              <div>
-                <div className="flex justify-between mb-1">
-                  <span className="font-medium text-foreground">Authorized Staff Users</span>
-                  <span className="text-muted-foreground font-mono">
-                    {tenant.usage.users.current} / {tenant.usage.users.max}
-                  </span>
-                </div>
-                <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
-                  <div
-                    className="h-full bg-indigo-500 rounded-full transition-all"
-                    style={{
-                      width: `${Math.min(
-                        100,
-                        (tenant.usage.users.current / tenant.usage.users.max) * 100,
-                      )}%`,
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Devices meter */}
-              <div>
-                <div className="flex justify-between mb-1">
-                  <span className="font-medium text-foreground">Active POS Hardware Devices</span>
-                  <span className="text-muted-foreground font-mono">
-                    {tenant.usage.devices.current} / {tenant.usage.devices.max}
-                  </span>
-                </div>
-                <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
-                  <div
-                    className="h-full bg-violet-500 rounded-full transition-all"
-                    style={{
-                      width: `${Math.min(
-                        100,
-                        (tenant.usage.devices.current / tenant.usage.devices.max) * 100,
-                      )}%`,
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Products meter */}
-              <div>
-                <div className="flex justify-between mb-1">
-                  <span className="font-medium text-foreground">Catalogue SKUs</span>
-                  <span className="text-muted-foreground font-mono">
-                    {tenant.usage.products.current} / {tenant.usage.products.max.toLocaleString()}
-                  </span>
-                </div>
-                <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
-                  <div
-                    className="h-full bg-emerald-500 rounded-full transition-all"
-                    style={{
-                      width: `${Math.min(
-                        100,
-                        (tenant.usage.products.current / tenant.usage.products.max) * 100,
-                      )}%`,
-                    }}
-                  />
-                </div>
-              </div>
+              <QuotaMeter
+                label="Physical Branches"
+                usage={tenant.usage.branches}
+                barClassName="bg-primary"
+              />
+              <QuotaMeter
+                label="Authorized Staff Users"
+                usage={tenant.usage.users}
+                barClassName="bg-indigo-500"
+              />
+              <QuotaMeter
+                label="Active POS Hardware Devices"
+                usage={tenant.usage.devices}
+                barClassName="bg-violet-500"
+              />
+              <QuotaMeter
+                label="Catalogue SKUs"
+                usage={tenant.usage.products}
+                barClassName="bg-emerald-500"
+              />
             </CardContent>
           </Card>
 
@@ -777,13 +768,44 @@ export default function TenantDetailPage() {
       <Dialog open={impersonateOpen} onOpenChange={setImpersonateOpen}>
         <DialogContent className="max-w-md p-6 rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-amber-600">
-              Impersonate Administrator
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 mb-2">
+              <ShieldAlert className="h-6 w-6" />
+            </div>
+            <DialogTitle className="text-lg font-bold text-center text-foreground">
+              Support Impersonation Mode
             </DialogTitle>
-            <DialogDescription className="text-xs">
-              Log into {tenant.name} to view store records as their tenant admin.
+            <DialogDescription className="text-xs text-center">
+              You are about to sign into <strong>{tenant.name}</strong> as their tenant
+              administrator for support troubleshooting.
             </DialogDescription>
           </DialogHeader>
+
+          <div className="space-y-1.5">
+            <label
+              htmlFor="impersonate-reason-detail"
+              className="text-xs font-semibold text-foreground"
+            >
+              Reason <span className="text-destructive">*</span>
+            </label>
+            <textarea
+              id="impersonate-reason-detail"
+              value={impersonateReason}
+              onChange={(e) => setImpersonateReason(e.target.value)}
+              rows={2}
+              minLength={3}
+              maxLength={500}
+              placeholder="e.g. Ticket #4821 — customer reports missing stock after import"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+            />
+          </div>
+
+          <div className="rounded-xl bg-muted/40 p-3 text-xs text-muted-foreground space-y-1.5">
+            <p>• Everything you do is audit-logged against your operator ID, not theirs.</p>
+            <p>
+              • The session expires on its own and cannot be renewed. Exit via the top
+              banner to return to the platform console.
+            </p>
+          </div>
 
           <DialogFooter className="gap-2 pt-2">
             <Button
@@ -795,7 +817,7 @@ export default function TenantDetailPage() {
             </Button>
             <Button
               onClick={handleImpersonate}
-              disabled={impersonateLoading}
+              disabled={impersonateLoading || impersonateReason.trim().length < 3}
               className="bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs h-9"
             >
               {impersonateLoading ? "Authenticating…" : "Begin Impersonation"}
