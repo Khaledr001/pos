@@ -24,10 +24,13 @@ import { useAuth } from "./auth-context";
 export function RequireAuth({
   children,
   permission,
+  platformOnly,
 }: {
   children: ReactNode;
   /** Also require this permission. Omit for "any signed-in user". */
   permission?: Permission;
+  /** Require platform super admin privileges. */
+  platformOnly?: boolean;
 }) {
   const { user, isLoading } = useAuth();
   const router = useRouter();
@@ -42,6 +45,15 @@ export function RequireAuth({
 
   if (isLoading) return <PageMessage title="Loading…" />;
   if (!user) return <PageMessage title="Redirecting to sign in…" />;
+
+  if (platformOnly && !user.isPlatformAdmin) {
+    return (
+      <PageMessage
+        title="Platform Super Admin Access Required"
+        detail="This section is restricted to DevsFleet platform operators."
+      />
+    );
+  }
 
   if (permission && !hasPermission(user.permissions as Permission[], permission)) {
     return (

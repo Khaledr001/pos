@@ -42,12 +42,13 @@ if (!isLocal && process.env.FORCE_RESET !== "1") {
 const client = postgres(url, { max: 1, onnotice: () => {} });
 
 try {
-  console.log("→ dropping schema public");
+  console.log("→ dropping schema public and drizzle");
   // Recreating the schema also drops every policy, trigger and function that
   // lived in it. Extensions and roles survive: they are created by the Docker
   // init script, which only runs against an empty data directory.
   await client.unsafe(`
     DROP SCHEMA public CASCADE;
+    DROP SCHEMA IF EXISTS drizzle CASCADE;
     CREATE SCHEMA public;
     GRANT USAGE ON SCHEMA public TO devsfleet_app;
     ALTER DEFAULT PRIVILEGES IN SCHEMA public

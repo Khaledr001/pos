@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query,
 } from "@nestjs/common";
@@ -15,11 +16,17 @@ import { zodPipe } from "../../common/pipes/zod-validation.pipe.js";
 import { PlatformService } from "./platform.service.js";
 import {
   ChangePlanSchema,
+  CreateTenantSchema,
+  ListAuditLogsSchema,
   ListTenantsSchema,
   SuspendTenantSchema,
+  UpdateTenantSchema,
   type ChangePlanDto,
+  type CreateTenantDto,
+  type ListAuditLogsDto,
   type ListTenantsDto,
   type SuspendTenantDto,
+  type UpdateTenantDto,
 } from "./dto.js";
 
 /**
@@ -36,7 +43,7 @@ export class PlatformController {
   constructor(private readonly platform: PlatformService) {}
 
   @Get("stats")
-  @ApiOperation({ summary: "Platform-wide statistics" })
+  @ApiOperation({ summary: "Platform-wide statistics and MRR" })
   stats() {
     return this.platform.stats();
   }
@@ -45,6 +52,30 @@ export class PlatformController {
   @ApiOperation({ summary: "Every business on the platform" })
   listTenants(@Query(zodPipe(ListTenantsSchema)) query: ListTenantsDto) {
     return this.platform.listTenants(query);
+  }
+
+  @Post("tenants")
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: "Provision a new business directly from platform console" })
+  createTenant(@Body(zodPipe(CreateTenantSchema)) dto: CreateTenantDto) {
+    return this.platform.createTenant(dto);
+  }
+
+  @Get("tenants/:id")
+  @ApiOperation({
+    summary: "Detailed single-tenant metrics, branches, users, and audit log",
+  })
+  getTenant(@Param("id", ParseUUIDPipe) id: string) {
+    return this.platform.getTenant(id);
+  }
+
+  @Patch("tenants/:id")
+  @ApiOperation({ summary: "Update business configuration from platform console" })
+  updateTenant(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body(zodPipe(UpdateTenantSchema)) dto: UpdateTenantDto,
+  ) {
+    return this.platform.updateTenant(id, dto);
   }
 
   @Post("tenants/:id/suspend")
@@ -81,5 +112,17 @@ export class PlatformController {
   })
   impersonate(@Param("id", ParseUUIDPipe) id: string) {
     return this.platform.impersonate(id);
+  }
+
+  @Get("audit-logs")
+  @ApiOperation({ summary: "Platform operator audit trail across all tenants" })
+  listAuditLogs(@Query(zodPipe(ListAuditLogsSchema)) query: ListAuditLogsDto) {
+    return this.platform.listAuditLogs(query);
+  }
+
+  @Get("system-health")
+  @ApiOperation({ summary: "Infrastructure health, database latency, and system memory" })
+  systemHealth() {
+    return this.platform.systemHealth();
   }
 }

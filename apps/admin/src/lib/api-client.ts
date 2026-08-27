@@ -244,6 +244,11 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
     });
   }
 
+  if (payload.meta && Array.isArray(payload.data)) {
+    (payload.data as any).meta = payload.meta;
+    (payload.data as any).items = payload.data;
+  }
+
   return payload.data;
 }
 

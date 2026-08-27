@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { RequireAuth } from "@/lib/require-auth";
 import { Sidebar } from "./sidebar";
 import { Header } from "./header";
+import { ImpersonationBanner } from "./impersonation-banner";
 import { cn } from "@/lib/utils";
 
 /**
@@ -59,29 +60,41 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   const permission = permissionFor(pathname);
+  const isPlatformRoute = pathname.startsWith("/platform");
 
   return (
-    <div className="flex min-h-screen w-full bg-background overflow-x-hidden">
-      {/* Responsive Sidebar */}
-      <Sidebar
-        collapsed={collapsed}
-        onToggle={() => setCollapsed(!collapsed)}
-        mobileOpen={mobileOpen}
-        onMobileClose={() => setMobileOpen(false)}
-      />
+    <div className="flex min-h-screen w-full flex-col bg-background">
+      {/* Impersonation Banner spanning 100% full viewport width across sidebar and content */}
+      <ImpersonationBanner />
 
-      {/* Main Content Area */}
-      <div
-        className={cn(
-          "flex flex-1 flex-col min-w-0 w-full transition-all duration-300 ease-in-out",
-          collapsed ? "lg:pl-[72px]" : "lg:pl-[264px]",
-          "pl-0",
-        )}
-      >
-        <Header onOpenMobileMenu={() => setMobileOpen(true)} />
-        <main className="flex-1 p-3 sm:p-4 md:p-6 min-w-0 max-w-full overflow-x-auto">
-          <RequireAuth {...(permission ? { permission } : {})}>{children}</RequireAuth>
-        </main>
+      <div className="flex flex-1 w-full">
+        {/* Responsive Sidebar */}
+        <Sidebar
+          collapsed={collapsed}
+          onToggle={() => setCollapsed(!collapsed)}
+          mobileOpen={mobileOpen}
+          onMobileClose={() => setMobileOpen(false)}
+        />
+
+        {/* Main Content Area */}
+        <div
+          className={cn(
+            "flex flex-1 flex-col min-w-0 w-full transition-all duration-300 ease-in-out",
+            collapsed ? "lg:pl-[72px]" : "lg:pl-[264px]",
+            "pl-0",
+          )}
+        >
+          <Header onOpenMobileMenu={() => setMobileOpen(true)} />
+
+          <main className="flex-1 p-3 sm:p-4 md:p-6 min-w-0 max-w-full">
+            <RequireAuth
+              platformOnly={isPlatformRoute}
+              {...(permission ? { permission } : {})}
+            >
+              {children}
+            </RequireAuth>
+          </main>
+        </div>
       </div>
     </div>
   );

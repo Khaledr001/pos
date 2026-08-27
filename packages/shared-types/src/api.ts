@@ -209,6 +209,7 @@ export interface AuthSession extends AuthTokens {
      * is re-checked server-side regardless — see rule 9 in CLAUDE.md.
      */
     maxDiscountPercent: string;
+    isPlatformAdmin?: boolean;
   };
 }
 

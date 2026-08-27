@@ -29,6 +29,10 @@ import {
   ChevronDown,
   CircleDot,
   X,
+  Crown,
+  Building2,
+  Layers,
+  Activity,
 } from "lucide-react";
 import { hasPermission, type Permission } from "@devsfleet/shared-types";
 import { useAuth } from "@/lib/auth-context";
@@ -77,10 +81,22 @@ type NavItem = {
 
 type NavSection = {
   label: string;
+  platformOnly?: boolean;
   items: NavItem[];
 };
 
 const NAV_SECTIONS: NavSection[] = [
+  {
+    label: "Platform Admin",
+    platformOnly: true,
+    items: [
+      { label: "Platform Overview", href: "/platform", icon: Crown },
+      { label: "Tenants Directory", href: "/platform/tenants", icon: Building2 },
+      { label: "Subscription Plans", href: "/platform/plans", icon: Layers },
+      { label: "Platform Audit Log", href: "/platform/audit-logs", icon: ScrollText },
+      { label: "System Diagnostics", href: "/platform/health", icon: Activity },
+    ],
+  },
   {
     label: "Main",
     items: [
@@ -189,7 +205,7 @@ export function Sidebar({
 }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user, logout, isImpersonating } = useAuth();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [brandHovered, setBrandHovered] = useState(false);
 
@@ -212,29 +228,33 @@ export function Sidebar({
 
   const permissions = (user?.permissions ?? []) as Permission[];
 
-  // Filter items by user permissions
-  const visibleSections = NAV_SECTIONS.map((section) => ({
-    ...section,
-    items: section.items
-      .map((item) => {
-        // If parent has specific permission and user lacks it, hide
-        if (item.permission && !hasPermission(permissions, item.permission)) {
-          return null;
-        }
+  // Filter items by user permissions and platform operator status
+  const visibleSections = NAV_SECTIONS.filter(
+    (section) => !section.platformOnly || user?.isPlatformAdmin,
+  )
+    .map((section) => ({
+      ...section,
+      items: section.items
+        .map((item) => {
+          // If parent has specific permission and user lacks it, hide
+          if (item.permission && !hasPermission(permissions, item.permission)) {
+            return null;
+          }
 
-        // If item has children, filter children by permission
-        if (item.children) {
-          const visibleChildren = item.children.filter(
-            (c) => !c.permission || hasPermission(permissions, c.permission),
-          );
-          if (visibleChildren.length === 0) return null;
-          return { ...item, children: visibleChildren };
-        }
+          // If item has children, filter children by permission
+          if (item.children) {
+            const visibleChildren = item.children.filter(
+              (c) => !c.permission || hasPermission(permissions, c.permission),
+            );
+            if (visibleChildren.length === 0) return null;
+            return { ...item, children: visibleChildren };
+          }
 
-        return item;
-      })
-      .filter(Boolean) as NavItem[],
-  })).filter((s) => s.items.length > 0);
+          return item;
+        })
+        .filter(Boolean) as NavItem[],
+    }))
+    .filter((s) => s.items.length > 0);
 
   // ── Render an expandable item with children ────────────────────────────────
   const renderExpandableItem = (item: NavItem) => {
@@ -441,7 +461,8 @@ export function Sidebar({
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 lg:z-40 flex flex-col border-r border-sidebar-border bg-sidebar transition-all duration-300 ease-in-out",
+          "fixed bottom-0 left-0 z-50 lg:z-40 flex flex-col border-r border-sidebar-border bg-sidebar transition-all duration-300 ease-in-out",
+          isImpersonating ? "top-[42px]" : "top-0",
           // Mobile: slide-out drawer
           mobileOpen
             ? "translate-x-0 w-[280px] max-w-[85vw] shadow-2xl"

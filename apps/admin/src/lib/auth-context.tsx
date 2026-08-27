@@ -23,37 +23,51 @@ export interface UserProfile {
   tenantName: string;
   branchId: string | null;
   branchName: string | null;
+  isPlatformAdmin?: boolean;
+}
+
+interface ImpersonationBackup {
+  tokens: AuthTokens & { expiresAt?: number };
+  user: UserProfile;
 }
 
 interface AuthContextType {
   user: UserProfile | null;
   tokens: AuthTokens | null;
   isLoading: boolean;
+  isImpersonating: boolean;
   login: (email: string, pass: string, tenantSlug?: string) => Promise<void>;
   logout: () => void;
+  impersonateTenant: (tenantId: string) => Promise<void>;
+  exitImpersonation: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const TOKEN_KEY = "devsfleet_auth_tokens";
 const USER_KEY = "devsfleet_auth_user";
+const SUPERADMIN_BACKUP_KEY = "devsfleet_superadmin_backup";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [tokens, setTokens] = useState<AuthTokens | null>(null);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isImpersonating, setIsImpersonating] = useState(false);
 
   useEffect(() => {
     try {
       const storedTokens = localStorage.getItem(TOKEN_KEY);
       const storedUser = localStorage.getItem(USER_KEY);
+      const storedBackup = localStorage.getItem(SUPERADMIN_BACKUP_KEY);
       if (storedTokens && storedUser) {
         setTokens(JSON.parse(storedTokens));
         setUser(JSON.parse(storedUser));
+        setIsImpersonating(Boolean(storedBackup));
       }
     } catch {
       localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(USER_KEY);
+      localStorage.removeItem(SUPERADMIN_BACKUP_KEY);
     } finally {
       setIsLoading(false);
     }
@@ -61,14 +75,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   /**
    * Wire up the session callbacks once on mount.
-   *
-   * 1. sessionExpired: Clears React state when token refresh fails before navigation.
-   * 2. tokensUpdated: Keeps React state in sync when background/reactive refresh succeeds.
    */
   useEffect(() => {
     setSessionExpiredCallback(() => {
       setUser(null);
       setTokens(null);
+      setIsImpersonating(false);
     });
     setTokensUpdatedCallback((newTokens) => {
       setTokens(newTokens);
@@ -77,10 +89,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   /**
    * Proactive token refresh timer.
-   *
-   * Rather than waiting for a request to fail with a 401, we proactively refresh
-   * the access token ~2 minutes before it expires. This ensures active users never
-   * experience auth hiccups, lag, or dropped queries.
    */
   useEffect(() => {
     if (!tokens?.refreshToken || !user) return;
@@ -93,19 +101,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (remainingMs <= PROACTIVE_REFRESH_LEAD) {
         const fresh = await refreshAccessToken();
         if (!fresh && remainingMs <= 0) {
-          // Access token is expired and refresh token is invalid/revoked
           logout();
         }
       }
     };
 
-    // Run check on mount / token change
     checkAndRefreshToken();
-
-    // Check periodically every 30 seconds
     const interval = setInterval(checkAndRefreshToken, 30_000);
 
-    // Also check when tab becomes active after backgrounding
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         checkAndRefreshToken();
@@ -149,13 +152,108 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           tenantName: res.user.tenantName,
           branchId: res.user.branchId,
           branchName: res.user.branchName,
+          isPlatformAdmin: res.user.isPlatformAdmin,
         };
         setUser(profile);
         localStorage.setItem(USER_KEY, JSON.stringify(profile));
       }
+      setIsImpersonating(false);
+      localStorage.removeItem(SUPERADMIN_BACKUP_KEY);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const impersonateTenant = async (tenantId: string) => {
+    if (!tokens || !user) return;
+    setIsLoading(true);
+
+    try {
+      const storedTokens = localStorage.getItem(TOKEN_KEY);
+      const storedUser = localStorage.getItem(USER_KEY);
+      if (storedTokens && storedUser) {
+        // Save current super admin session
+        const backup: ImpersonationBackup = {
+          tokens: JSON.parse(storedTokens),
+          user: JSON.parse(storedUser),
+        };
+        localStorage.setItem(SUPERADMIN_BACKUP_KEY, JSON.stringify(backup));
+      }
+
+      const res = await api.post<{
+        accessToken: string;
+        refreshToken: string;
+        expiresIn: number;
+        user: {
+          id: string;
+          name: string;
+          email: string;
+          roleName: string;
+          permissions: string[];
+          tenantId: string;
+          tenantName: string;
+          branchId: string | null;
+          branchName: string | null;
+          isPlatformAdmin?: boolean;
+        };
+      }>(`/admin/tenants/${tenantId}/impersonate`, {});
+
+      const tokenPair = {
+        accessToken: res.accessToken,
+        refreshToken: res.refreshToken,
+        expiresIn: res.expiresIn,
+      };
+      const withExpiry = {
+        ...tokenPair,
+        expiresAt: Date.now() + (res.expiresIn ?? 900) * 1000,
+      };
+      localStorage.setItem(TOKEN_KEY, JSON.stringify(withExpiry));
+      setTokens(tokenPair);
+
+      const targetProfile: UserProfile = {
+        id: res.user.id,
+        name: res.user.name,
+        email: res.user.email,
+        roleName: res.user.roleName,
+        permissions: res.user.permissions || [],
+        tenantId: res.user.tenantId,
+        tenantName: res.user.tenantName,
+        branchId: res.user.branchId,
+        branchName: res.user.branchName,
+        isPlatformAdmin: false,
+      };
+      setUser(targetProfile);
+      localStorage.setItem(USER_KEY, JSON.stringify(targetProfile));
+      setIsImpersonating(true);
+
+      window.location.href = "/";
+    } catch (err) {
+      // Revert if failed
+      localStorage.removeItem(SUPERADMIN_BACKUP_KEY);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const exitImpersonation = () => {
+    try {
+      const backupRaw = localStorage.getItem(SUPERADMIN_BACKUP_KEY);
+      if (backupRaw) {
+        const backup: ImpersonationBackup = JSON.parse(backupRaw);
+        localStorage.setItem(TOKEN_KEY, JSON.stringify(backup.tokens));
+        localStorage.setItem(USER_KEY, JSON.stringify(backup.user));
+        localStorage.removeItem(SUPERADMIN_BACKUP_KEY);
+        setTokens(backup.tokens);
+        setUser(backup.user);
+        setIsImpersonating(false);
+        window.location.href = "/platform/tenants";
+        return;
+      }
+    } catch (err) {
+      console.error("Error exiting impersonation:", err);
+    }
+    logout();
   };
 
   const logout = async () => {
@@ -164,29 +262,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         await api.post("/auth/logout", { refreshToken: currentTokens.refreshToken });
       } catch (err) {
-        // Revoking server-side is best effort; the local session goes either
-        // way. Leaving it behind because the network blinked would be the
-        // worse of the two failures.
         console.warn("Could not notify backend of logout:", err);
       }
     }
     setTokens(null);
     setUser(null);
+    setIsImpersonating(false);
+    localStorage.removeItem(SUPERADMIN_BACKUP_KEY);
     clearSession();
 
-    /**
-     * A full navigation, not `router.push`.
-     *
-     * Signing out has to discard the React tree as well as the tokens: a
-     * client-side transition keeps every page's cached state in memory, so the
-     * next person at the same machine can still read the previous user's
-     * customer list out of a component that never unmounted.
-     */
     if (typeof window !== "undefined") window.location.href = "/login";
   };
 
   return (
-    <AuthContext.Provider value={{ user, tokens, isLoading, login, logout }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        tokens,
+        isLoading,
+        isImpersonating,
+        login,
+        logout,
+        impersonateTenant,
+        exitImpersonation,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

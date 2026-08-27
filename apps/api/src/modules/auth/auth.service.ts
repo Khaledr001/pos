@@ -236,6 +236,7 @@ export class AuthService {
         branchName: found.branch?.name ?? null,
         locale: found.user.locale,
         maxDiscountPercent: found.user.maxDiscountPercent,
+        isPlatformAdmin: found.user.isPlatformAdmin,
       },
     };
   }
@@ -272,7 +273,10 @@ export class AuthService {
       tx.query.tenants.findFirst({ where: (t, { eq: e }) => e(t.id, device.tenantId) }),
     );
     if (!tenantRow) {
-      throw new AppError(ERROR_CODES.TENANT_INACTIVE, "This business is no longer active");
+      throw new AppError(
+        ERROR_CODES.TENANT_INACTIVE,
+        "This business is no longer active",
+      );
     }
     if (!tenantRow.isActive) {
       throw new AppError(ERROR_CODES.TENANT_SUSPENDED, "This business is suspended");
@@ -468,7 +472,8 @@ export class AuthService {
     const matches: PinHolder[] = [];
     for (const candidate of candidates) {
       if (!candidate.user.pinHash) continue;
-      if (candidate.user.branchId !== null && candidate.user.branchId !== branchId) continue;
+      if (candidate.user.branchId !== null && candidate.user.branchId !== branchId)
+        continue;
       if (!(await bcrypt.compare(pin, candidate.user.pinHash))) continue;
       matches.push(candidate);
     }
@@ -677,6 +682,7 @@ export class AuthService {
         branchName: found.branch?.name ?? null,
         locale: found.user.locale,
         maxDiscountPercent: found.user.maxDiscountPercent,
+        isPlatformAdmin: found.user.isPlatformAdmin,
       },
     };
   }
@@ -845,4 +851,3 @@ function parseDuration(value: string): number {
   const multipliers = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 } as const;
   return amount * multipliers[match[2] as keyof typeof multipliers];
 }
-
