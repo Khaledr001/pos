@@ -15,10 +15,31 @@ type Transaction = Parameters<Parameters<TenantDatabase["run"]>[0]>[0];
  * entry. A reporting table that drifts from its source is worse than no report,
  * because somebody will act on it.
  *
- * Margin uses `sale_items.costPrice` — the landed cost SNAPSHOTTED at the
- * moment of sale. Joining live inventory cost instead would rewrite last
- * quarter's margin every time a supplier changed their price.
+ * Margin uses `sale_items.costPrice` — the purchase price SNAPSHOTTED at the
+ * moment of sale, from the tenant's price list. Joining live inventory cost
+ * instead would rewrite last quarter's margin every time a supplier changed
+ * their price.
+ *
+ * COST IS PER BASE UNIT; QUANTITY IS NOT.
+ *
+ * `sale_items.quantity` is in the unit the line was SOLD in — one box, not a
+ * thousand pieces — while `costPrice` is per base unit. Every cost and
+ * units-sold expression below therefore multiplies by
+ * `unitConversionFactor`, which the sale snapshots for exactly this reason.
+ * Omitting it reported a box of 1,000 screws as costing one screw, turning a
+ * 33% margin into 99.9%.
  */
+/**
+ * A sale line's quantity converted to base units.
+ *
+ * One box of 1,000 is 1,000 pieces here. Defined once so no report can
+ * accidentally add boxes to loose pieces of the same product.
+ */
+const BASE_QUANTITY = sql`(${schema.saleItems.quantity} * ${schema.saleItems.unitConversionFactor})`;
+
+/** What a sale line's goods cost: base units × per-base-unit cost. */
+const LINE_COST = sql`(${BASE_QUANTITY} * coalesce(${schema.saleItems.costPrice}, 0))`;
+
 @Injectable()
 export class ReportsService {
   constructor(private readonly db: TenantDatabase) {}
@@ -90,9 +111,9 @@ export class ReportsService {
     return this.db.run(async (tx) => {
       const orderBy =
         query.by === "quantity"
-          ? sql`sum(${schema.saleItems.quantity}) DESC`
+          ? sql`sum(${BASE_QUANTITY}) DESC`
           : query.by === "margin"
-            ? sql`sum(${schema.saleItems.lineSubtotal} - (${schema.saleItems.quantity} * coalesce(${schema.saleItems.costPrice}, 0))) DESC`
+            ? sql`sum(${schema.saleItems.lineSubtotal} - ${LINE_COST}) DESC`
             : sql`sum(${schema.saleItems.lineSubtotal}) DESC`;
 
       const rows = await tx
@@ -100,10 +121,10 @@ export class ReportsService {
           variantId: schema.saleItems.variantId,
           sku: schema.saleItems.productSku,
           productName: schema.saleItems.productName,
-          quantity: sql<string>`sum(${schema.saleItems.quantity})::text`,
+          quantity: sql<string>`round(sum(${BASE_QUANTITY}), 4)::text`,
           revenue: sql<string>`sum(${schema.saleItems.lineSubtotal})::text`,
-          cost: sql<string>`round(sum(${schema.saleItems.quantity} * coalesce(${schema.saleItems.costPrice}, 0)), 4)::text`,
-          margin: sql<string>`round(sum(${schema.saleItems.lineSubtotal} - (${schema.saleItems.quantity} * coalesce(${schema.saleItems.costPrice}, 0))), 4)::text`,
+          cost: sql<string>`round(sum(${LINE_COST}), 4)::text`,
+          margin: sql<string>`round(sum(${schema.saleItems.lineSubtotal} - ${LINE_COST}), 4)::text`,
           saleCount: sql<number>`count(DISTINCT ${schema.saleItems.saleId})::int`,
         })
         .from(schema.saleItems)
@@ -196,8 +217,16 @@ export class ReportsService {
       const [trading] = await tx
         .select({
           revenue: sql<string>`coalesce(sum(${schema.saleItems.lineSubtotal}), 0)::text`,
-          cost: sql<string>`round(coalesce(sum(${schema.saleItems.quantity} * coalesce(${schema.saleItems.costPrice}, 0)), 0), 4)::text`,
-          unitsSold: sql<string>`coalesce(sum(${schema.saleItems.quantity}), 0)::text`,
+          cost: sql<string>`round(coalesce(sum(${LINE_COST}), 0), 4)::text`,
+          /**
+           * Base units, so one product's boxes and loose pieces add up.
+           * Across products this is still a mixed bag — pieces plus litres
+           * plus metres — and always was; it is a volume indicator, not a
+           * quantity anyone should reconcile against.
+           */
+          // Rounded because numeric(12,4) x numeric(12,4) widens to scale 8,
+          // which would render "36.00000000" where every other figure is 4dp.
+          unitsSold: sql<string>`round(coalesce(sum(${BASE_QUANTITY}), 0), 4)::text`,
           // Output tax on what was sold. A return's items carry negative
           // quantities and a negative taxAmount already, so summing across
           // the window nets a refunded sale's tax back out on its own.

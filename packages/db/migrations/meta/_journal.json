@@ -71,6 +71,20 @@
       "when": 1787850967793,
       "tag": "0009_mean_shocker",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787907920328,
+      "tag": "0010_elite_exiles",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1787908271113,
+      "tag": "0011_youthful_fixer",
+      "breakpoints": true
     }
   ]
 }

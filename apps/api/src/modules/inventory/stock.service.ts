@@ -49,6 +49,21 @@ export interface StockMovementInput {
   notes?: string;
   /** Unit cost at the time of movement. Feeds the weighted-average cost. */
   unitCost?: string;
+  /**
+   * What this movement cost IN TOTAL, when the caller knows it exactly.
+   *
+   * Preferred over `unitCost` wherever a per-unit figure had to be derived by
+   * division. Money carries four decimals, so a box of 1,000 screws costing
+   * AED 1.55 gives a per-piece cost of 0.00155 that stores as 0.0016 — and
+   * multiplying that back by 1,000 values the box at 1.60. The error is
+   * per-unit and scales with the pack, so it lands at 3% on cheap goods
+   * bought in bulk, which is exactly what a hardware business buys.
+   *
+   * Given the total, the weighted average is computed from it directly and
+   * that rounding never happens. `unitCost` is still recorded on the ledger
+   * row either way, because a movement should say what a unit cost.
+   */
+  totalCost?: string;
   deviceId?: string;
   /**
    * Skip the low-stock crossing check for this movement.
@@ -369,6 +384,7 @@ export class StockService {
     referenceId: string;
     notes?: string;
     unitCost?: string;
+    totalCost?: string;
     deviceId?: string;
     suppressEvents?: boolean;
   }): Promise<string> {
@@ -403,7 +419,32 @@ export class StockService {
      * quantity smaller than what is arriving, and produce an average far above
      * anything ever paid.
      */
-    const arriving = signedQuantity > 0n && input.unitCost ? input.unitCost : null;
+    const inbound = signedQuantity > 0n;
+    const arriving = inbound && input.unitCost ? input.unitCost : null;
+
+    /**
+     * What the arriving stock cost in total.
+     *
+     * `totalCost` when the caller knows it exactly — a goods receipt does,
+     * and its per-unit figure is a division it had to round. Otherwise
+     * reconstructed as `delta x unitCost`, which is what this always did.
+     */
+    const arrivingValue = inbound
+      ? input.totalCost
+        ? sql`${input.totalCost}::numeric`
+        : arriving
+          ? sql`${delta}::numeric * ${arriving}::numeric`
+          : null
+      : null;
+
+    // The seed for a (variant, branch) with no prior row: the average IS this
+    // delivery's cost. Derived from the total when there is one, so the first
+    // receipt is as exact as every later one.
+    const seedAverage = input.totalCost
+      ? sql`round(${input.totalCost}::numeric / NULLIF(${delta}::numeric, 0), 4)`
+      : arriving
+        ? sql`${arriving}::numeric`
+        : null;
 
     // Upsert so the first movement for a (variant, branch) does not need a
     // separate "create the inventory row" step that every caller could forget.
@@ -414,21 +455,22 @@ export class StockService {
         variantId,
         branchId,
         quantity: delta,
-        ...(input.unitCost ? { averageCost: input.unitCost } : {}),
+        ...(seedAverage ? { averageCost: seedAverage } : {}),
       })
       .onConflictDoUpdate({
         target: [schema.inventory.variantId, schema.inventory.branchId],
         set: {
           quantity: sql`${schema.inventory.quantity} + ${delta}::numeric`,
-          ...(arriving
+          ...(arrivingValue
             ? {
                 averageCost: sql`
                   CASE
-                    WHEN ${schema.inventory.averageCost} IS NULL THEN ${arriving}::numeric
+                    WHEN ${schema.inventory.averageCost} IS NULL
+                      THEN round(${arrivingValue} / NULLIF(${delta}::numeric, 0), 4)
                     ELSE round(
                       (
                         GREATEST(${schema.inventory.quantity}, 0) * ${schema.inventory.averageCost}
-                        + ${delta}::numeric * ${arriving}::numeric
+                        + ${arrivingValue}
                       ) / NULLIF(GREATEST(${schema.inventory.quantity}, 0) + ${delta}::numeric, 0),
                       4
                     )

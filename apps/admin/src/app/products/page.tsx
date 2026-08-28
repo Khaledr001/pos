@@ -101,7 +101,10 @@ interface VariantUnit {
   barcode: string | null;
   /** Flat price for the pack. null = base price x conversionFactor. */
   priceOverride: string | null;
+  /** Offered in the POS unit picker. */
   isSellable: boolean;
+  /** Offered when raising a purchase order or receiving goods. */
+  isPurchasable: boolean;
 }
 
 interface Category {
@@ -1031,12 +1034,16 @@ function PackagingsDialog({
     }
   }
 
-  async function toggleSellable(row: VariantUnit) {
+  /**
+   * Sellable and purchasable are independent: a supplier's outer carton is
+   * bought and never sold, a loose piece sold and never bought.
+   */
+  async function toggleFlag(row: VariantUnit, flag: "isSellable" | "isPurchasable") {
     setError(null);
     try {
       await api.patch(
         `/products/variant-units/${row.id}`,
-        { isSellable: !row.isSellable },
+        { [flag]: !row[flag] },
         { accessToken },
       );
       await fetchPackagings(variantId);
@@ -1119,7 +1126,8 @@ function PackagingsDialog({
                     <th className="px-3 py-2 font-medium">Unit</th>
                     <th className="px-3 py-2 text-right font-medium">= base units</th>
                     <th className="px-3 py-2 text-right font-medium">Price</th>
-                    <th className="px-3 py-2 text-center font-medium">Sellable</th>
+                    <th className="px-3 py-2 text-center font-medium">Sell</th>
+                    <th className="px-3 py-2 text-center font-medium">Buy</th>
                     <th className="px-3 py-2" />
                   </tr>
                 </thead>
@@ -1134,11 +1142,24 @@ function PackagingsDialog({
                       <td className="px-3 py-2 text-center">
                         <button
                           type="button"
-                          onClick={() => void toggleSellable(row)}
+                          onClick={() => void toggleFlag(row, "isSellable")}
+                          aria-label={`Toggle whether ${row.unitName} can be sold`}
                           className="cursor-pointer"
                         >
                           <Badge variant={row.isSellable ? "success" : "secondary"}>
                             {row.isSellable ? "Yes" : "No"}
+                          </Badge>
+                        </button>
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        <button
+                          type="button"
+                          onClick={() => void toggleFlag(row, "isPurchasable")}
+                          aria-label={`Toggle whether ${row.unitName} can be bought`}
+                          className="cursor-pointer"
+                        >
+                          <Badge variant={row.isPurchasable ? "success" : "secondary"}>
+                            {row.isPurchasable ? "Yes" : "No"}
                           </Badge>
                         </button>
                       </td>

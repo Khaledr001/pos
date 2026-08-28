@@ -3,6 +3,7 @@ import { relations, sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -375,11 +376,23 @@ export const variantUnits = pgTable(
     priceOverride: money(),
     /** Offer this packaging in the POS unit picker. */
     isSellable: boolean().notNull().default(true),
+    /**
+     * Offer this packaging when raising a purchase order or receiving goods.
+     *
+     * Independent of `isSellable`, because the two rarely coincide: a
+     * supplier's outer carton is bought and never sold, a loose piece is sold
+     * and never bought. Retiring a packaging from the till must also not stop
+     * you receiving stock that is already on its way.
+     */
+    isPurchasable: boolean().notNull().default(true),
     ...timestamps(),
   },
   (t) => [
     uniqueIndex("uq_variant_units").on(t.variantId, t.unitId),
     index("idx_variant_units_variant").on(t.variantId),
+    // The source of every conversion downstream. Zero would divide by zero
+    // when converting a base quantity back into packs.
+    check("ck_variant_units_factor_positive", sql`conversion_factor > 0`),
   ],
 );
 

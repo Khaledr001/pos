@@ -19,10 +19,17 @@ interface PurchaseOrderItem {
   variantId: string;
   productName: string;
   productSku: string;
+  /** In the ORDERED unit. Two boxes is "2". */
   quantity: string;
+  /** BASE units — never subtract this from `quantity`. */
   receivedQuantity: string;
+  /** Still outstanding, in the ordered unit. Computed by the API. */
+  remaining: string;
+  /** The packaging the line was ordered in. Null = the base unit. */
+  unitId: string | null;
   unitPrice: string;
-  unitAbbr: string;
+  /** Null when the line is in the product's own base unit. */
+  unitAbbr: string | null;
 }
 
 interface PurchaseOrderDetails {
@@ -228,7 +235,7 @@ function ReceivingForm({ order, onComplete }: { order: PurchaseOrderDetails, onC
 
     if (line) {
       const matched = line;
-      const remaining = Number(matched.quantity) - Number(matched.receivedQuantity);
+      const remaining = Number(matched.remaining);
       const current = scanned[matched.id] || 0;
 
       if (current >= remaining) {
@@ -247,7 +254,7 @@ function ReceivingForm({ order, onComplete }: { order: PurchaseOrderDetails, onC
 
   function setQuantity(lineId: string, q: number) {
     const line = order.items.find(i => i.id === lineId)!;
-    const remaining = Number(line.quantity) - Number(line.receivedQuantity);
+    const remaining = Number(line.remaining);
     const validQ = Math.max(0, Math.min(q, remaining));
     
     setScanned(prev => {
@@ -264,8 +271,13 @@ function ReceivingForm({ order, onComplete }: { order: PurchaseOrderDetails, onC
       return {
         purchaseOrderItemId: line.id,
         variantId: line.variantId,
+        // Counted in the ORDERED unit — that is what the remaining figure and
+        // every scan here are measured in.
         quantity: qty,
-        unitPrice: Number(line.unitPrice), // fallback to PO price
+        // Stated explicitly so the server never has to infer which unit this
+        // quantity is in. Omitted for a base-unit line, matching the contract.
+        ...(line.unitId ? { unitId: line.unitId } : {}),
+        unitPrice: Number(line.unitPrice), // fallback to PO price, per ordered unit
       };
     });
 
@@ -289,7 +301,7 @@ function ReceivingForm({ order, onComplete }: { order: PurchaseOrderDetails, onC
     }
   }
 
-  const hasItemsToReceive = order.items.some(i => Number(i.quantity) > Number(i.receivedQuantity));
+  const hasItemsToReceive = order.items.some(i => Number(i.remaining) > 0);
   const totalScanned = Object.values(scanned).reduce((sum, q) => sum + q, 0);
 
   return (
@@ -339,10 +351,12 @@ function ReceivingForm({ order, onComplete }: { order: PurchaseOrderDetails, onC
           <tbody className="divide-y divide-steel-700/50">
             {order.items.map(item => {
               const expected = Number(item.quantity);
-              const prevReceived = Number(item.receivedQuantity);
-              const remaining = expected - prevReceived;
+              const remaining = Number(item.remaining);
+              // Shown in the ORDERED unit so it lines up with `expected`;
+              // the stored figure is base units.
+              const prevReceived = expected - remaining;
               const currentlyScanned = scanned[item.id] || 0;
-              const isFullyReceived = prevReceived >= expected;
+              const isFullyReceived = remaining <= 0;
               
               return (
                 <tr key={item.id} className={isFullyReceived ? "opacity-50" : ""}>

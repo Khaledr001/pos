@@ -3,10 +3,26 @@ import { z } from "zod";
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a YYYY-MM-DD date");
 
+/**
+ * Quantities are stored at 4 decimals, so anything finer is silently truncated
+ * on the way in. Refusing it is better than a receipt that never closes its
+ * order because 0.00005 of a unit went missing.
+ */
+const quantity4dp = <T extends z.ZodType<number, unknown>>(schema: T) =>
+  schema.refine((v) => Math.abs(v * 10_000 - Math.round(v * 10_000)) < 1e-6, {
+    message: "At most 4 decimal places",
+  });
+
 const PurchaseLineSchema = z.object({
   variantId: z.string().uuid(),
-  quantity: z.coerce.number().positive(),
-  /** What the supplier charges. Not the selling price. */
+  /**
+   * In the ORDERED unit — two boxes is `2`. Never base units: the conversion
+   * happens server-side so the PO a supplier receives still says "2 boxes".
+   */
+  quantity: quantity4dp(z.coerce.number().positive()),
+  /** A packaging from that variant's `variant_units`. Omit to order the base unit. */
+  unitId: z.string().uuid().optional(),
+  /** What the supplier charges FOR ONE OF `unitId` — per box, not per piece. */
   unitPrice: z.coerce.number().min(0),
   discountPercent: z.coerce.number().min(0).max(100).optional(),
   taxPercent: z.coerce.number().min(0).max(100).optional(),
@@ -52,21 +68,38 @@ const ReceiptLineSchema = z
     supplierSku: z.string().trim().min(1).max(100).optional(),
     /** The supplier's own barcode for this item — checked when variantId is omitted. */
     supplierBarcode: z.string().trim().min(1).max(64).optional(),
-    quantity: z.coerce.number().positive(),
     /**
-     * Required, one per SELLABLE unit, when the product tracks serial numbers.
-     * The count must equal quantity - damagedQuantity exactly — a serialised
-     * product with no identity for one of its units is not something a
-     * warranty claim can ever be answered for.
+     * In the RECEIVED unit — one box is `1`. May differ from the unit the
+     * order was raised in: order two boxes, take delivery of one box today
+     * and 300 loose pieces on Thursday.
      */
-    serials: z.array(z.string().trim().min(1)).optional(),
+    quantity: quantity4dp(z.coerce.number().positive()),
+    /** A packaging from that variant's `variant_units`. Omit to receive base units. */
+    unitId: z.string().uuid().optional(),
+    /**
+     * Required, one per SELLABLE BASE unit, when the product tracks serial
+     * numbers. The count must equal the base-unit quantity minus damaged
+     * exactly — a serialised product with no identity for one of its units is
+     * not something a warranty claim can ever be answered for.
+     *
+     * Capped: receiving two boxes of a thousand serialised items is a 2,000
+     * element payload, and anything larger is a mistake rather than a delivery.
+     */
+    serials: z.array(z.string().trim().min(1)).max(5000).optional(),
     /**
      * Required on a direct receipt; on a PO receipt it defaults to the ordered
-     * price. Supplied when the invoice differs from the quote, which is common.
+     * price, rescaled if the units differ. Supplied when the invoice differs
+     * from the quote, which is common. Per RECEIVED unit — per box, not per
+     * piece.
      */
     unitPrice: z.coerce.number().min(0).optional(),
-    /** Arrived broken. Recorded, but never added to sellable stock. */
-    damagedQuantity: z.coerce.number().min(0).default(0),
+    /**
+     * Arrived broken, in BASE UNITS — not in the received unit like `quantity`.
+     *
+     * One broken screw out of a box of a thousand is `1`. In boxes it would be
+     * 0.001, and the obvious input — typing `1` — would write off the lot.
+     */
+    damagedQuantity: quantity4dp(z.coerce.number().min(0)).default(0),
     batchNumber: z.string().trim().max(50).optional(),
     expiryDate: isoDate.optional(),
     notes: z.string().trim().max(500).optional(),

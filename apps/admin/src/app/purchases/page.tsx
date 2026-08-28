@@ -41,6 +41,16 @@ interface Branch { id: string; name: string; code: string; }
 interface Supplier { id: string; name: string; company?: string | null; }
 interface VariantResult { id: string; sku: string; productName: string; variantName: string | null; }
 
+/** A packaging a variant can be bought in — "Box" holding 1000 pieces. */
+interface Packaging {
+  id: string;
+  unitId: string;
+  unitName: string;
+  unitAbbr: string;
+  conversionFactor: string;
+  isPurchasable: boolean;
+}
+
 type POStatus = "draft" | "sent" | "partial" | "received" | "cancelled";
 
 interface PurchaseOrder {
@@ -58,8 +68,17 @@ interface POLine {
   variantId: string;
   productName: string;
   productSku: string;
+  /** In the ORDERED unit. Two boxes is "2". */
   quantity: string;
+  /** In BASE units — see the schema comment. Do not subtract from `quantity`. */
   receivedQuantity: string;
+  unitId: string | null;
+  unitConversionFactor: string;
+  unitAbbr: string | null;
+  /** Outstanding, expressed in the ordered unit. Computed by the API. */
+  remaining: string;
+  /** The same, in base units. */
+  remainingBase: string;
   unitPrice: string;
 }
 
@@ -302,7 +321,19 @@ function CreateOrderDialog({
   const [shippingAmount, setShippingAmount] = useState("0");
   const [expectedDate, setExpectedDate] = useState("");
   const [notes, setNotes] = useState("");
-  const [items, setItems] = useState<Array<{ variantId: string; sku: string; productName: string; quantity: string; unitPrice: string }>>([]);
+  const [items, setItems] = useState<
+    Array<{
+      key: string;
+      variantId: string;
+      sku: string;
+      productName: string;
+      quantity: string;
+      unitPrice: string;
+      /** "" = the product's base unit. */
+      unitId: string;
+      packagings: Packaging[];
+    }>
+  >([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [results, setResults] = useState<VariantResult[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -335,11 +366,43 @@ function CreateOrderDialog({
     return () => clearTimeout(handle);
   }, [searchQuery, tokens]);
 
-  const addItem = (variant: VariantResult) => {
-    if (items.some((i) => i.variantId === variant.id)) return;
-    setItems((prev) => [...prev, { variantId: variant.id, sku: variant.sku, productName: variant.productName, quantity: "1", unitPrice: "0" }]);
+  /**
+   * Deliberately NOT deduped by variant: ordering ten boxes and five loose
+   * pieces of the same screw is one order with two lines, and refusing the
+   * second made that unexpressable.
+   */
+  const addItem = async (variant: VariantResult) => {
+    const key = `${variant.id}:${Date.now()}`;
+    setItems((prev) => [
+      ...prev,
+      {
+        key,
+        variantId: variant.id,
+        sku: variant.sku,
+        productName: variant.productName,
+        quantity: "1",
+        unitPrice: "0",
+        unitId: "",
+        packagings: [],
+      },
+    ]);
     setSearchQuery("");
     setResults([]);
+
+    try {
+      const packagings = await api.get<Packaging[]>(
+        `/products/variants/${variant.id}/units`,
+        { accessToken: tokens?.accessToken },
+      );
+      setItems((prev) =>
+        prev.map((i) =>
+          i.key === key ? { ...i, packagings: packagings.filter((p) => p.isPurchasable) } : i,
+        ),
+      );
+    } catch {
+      // A variant with no packagings is the common case, and a failed lookup
+      // should not block ordering it in its base unit.
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -354,7 +417,13 @@ function CreateOrderDialog({
         {
           branchId: branchId || undefined,
           supplierId,
-          lines: items.map((i) => ({ variantId: i.variantId, quantity: Number(i.quantity), unitPrice: Number(i.unitPrice) })),
+          lines: items.map((i) => ({
+            variantId: i.variantId,
+            quantity: Number(i.quantity),
+            unitPrice: Number(i.unitPrice),
+            // Omitted = the product's base unit, matching the API contract.
+            ...(i.unitId ? { unitId: i.unitId } : {}),
+          })),
           shippingAmount: Number(shippingAmount) || 0,
           expectedDate: expectedDate || undefined,
           notes: notes || undefined,
@@ -452,27 +521,56 @@ function CreateOrderDialog({
 
           {items.length > 0 && (
             <div className="rounded-xl border border-border divide-y divide-border">
-              {items.map((item, idx) => (
-                <div key={item.variantId} className="flex items-center gap-2 px-3 py-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-foreground truncate">{item.productName}</p>
-                    <p className="text-[10px] font-mono text-muted-foreground">{item.sku}</p>
+              {items.map((item, idx) => {
+                const pack = item.packagings.find((p) => p.unitId === item.unitId);
+                return (
+                  <div key={item.key} className="flex items-center gap-2 px-3 py-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-foreground truncate">{item.productName}</p>
+                      <p className="text-[10px] font-mono text-muted-foreground">
+                        {item.sku}
+                        {/* What the order actually puts on the shelf, so nobody
+                            has to multiply 2 x 1000 in their head. */}
+                        {pack && Number(item.quantity) > 0 && (
+                          <span className="ml-1.5 text-muted-foreground/80">
+                            = {(Number(item.quantity) * Number(pack.conversionFactor)).toLocaleString()} base units
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <Input
+                      type="number" min="0.0001" step="0.0001" value={item.quantity}
+                      onChange={(e) => { const v = e.target.value; setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, quantity: v } : it))); }}
+                      className="w-20 font-mono" placeholder="Qty"
+                      aria-label={`Quantity for ${item.productName}`}
+                    />
+                    <select
+                      value={item.unitId}
+                      onChange={(e) => { const v = e.target.value; setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, unitId: v } : it))); }}
+                      disabled={item.packagings.length === 0}
+                      aria-label={`Unit for ${item.productName}`}
+                      className="h-9 w-24 rounded-lg border border-border bg-background px-2 text-xs disabled:opacity-50"
+                    >
+                      <option value="">Base unit</option>
+                      {item.packagings.map((p) => (
+                        <option key={p.unitId} value={p.unitId}>
+                          {p.unitAbbr} ×{Number(p.conversionFactor).toLocaleString()}
+                        </option>
+                      ))}
+                    </select>
+                    <Input
+                      type="number" min="0" step="0.01" value={item.unitPrice}
+                      onChange={(e) => { const v = e.target.value; setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, unitPrice: v } : it))); }}
+                      className="w-24 font-mono"
+                      placeholder={pack ? `Per ${pack.unitAbbr}` : "Cost"}
+                      aria-label={`Cost per ${pack ? pack.unitAbbr : "unit"} for ${item.productName}`}
+                    />
+                    <button type="button" onClick={() => setItems((prev) => prev.filter((_, i) => i !== idx))} className="text-muted-foreground hover:text-destructive cursor-pointer" aria-label={`Remove ${item.productName}`}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   </div>
-                  <Input
-                    type="number" min="0.0001" step="0.0001" value={item.quantity}
-                    onChange={(e) => { const v = e.target.value; setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, quantity: v } : it))); }}
-                    className="w-20 font-mono" placeholder="Qty"
-                  />
-                  <Input
-                    type="number" min="0" step="0.01" value={item.unitPrice}
-                    onChange={(e) => { const v = e.target.value; setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, unitPrice: v } : it))); }}
-                    className="w-24 font-mono" placeholder="Cost"
-                  />
-                  <button type="button" onClick={() => setItems((prev) => prev.filter((_, i) => i !== idx))} className="text-muted-foreground hover:text-destructive cursor-pointer">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
@@ -493,7 +591,16 @@ function CreateOrderDialog({
 
 interface ReceiptResult {
   grnNumber: string;
-  items: Array<{ productName: string; sku: string; quantity: string; landedUnitCost: string }>;
+  items: Array<{
+    productName: string;
+    sku: string;
+    /** In the received unit. */
+    quantity: string;
+    unitAbbr: string | null;
+    unitConversionFactor: string;
+    /** Per BASE unit — per piece, not per box. */
+    landedUnitCost: string;
+  }>;
 }
 
 function ReceiveDialog({
@@ -508,7 +615,21 @@ function ReceiveDialog({
   const { tokens } = useAuth();
   const [order, setOrder] = useState<PODetail | null>(null);
   const [loading, setLoading] = useState(false);
-  const [lines, setLines] = useState<Array<{ purchaseOrderItemId: string; variantId: string; productName: string; sku: string; remaining: string; quantity: string; damagedQuantity: string }>>([]);
+  const [lines, setLines] = useState<
+    Array<{
+      purchaseOrderItemId: string;
+      variantId: string;
+      productName: string;
+      sku: string;
+      /** Outstanding, in the ORDERED unit — what the input is measured in. */
+      remaining: string;
+      quantity: string;
+      /** Always BASE units, whatever unit the line is received in. */
+      damagedQuantity: string;
+      unitAbbr: string | null;
+      conversionFactor: string;
+    }>
+  >([]);
   const [shippingAmount, setShippingAmount] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -529,19 +650,21 @@ function ReceiveDialog({
         setOrder(data);
         setLines(
           data.items
-            .filter((item) => Number(item.quantity) - Number(item.receivedQuantity) > 0)
-            .map((item) => {
-              const remaining = String(Number(item.quantity) - Number(item.receivedQuantity));
-              return {
-                purchaseOrderItemId: item.id,
-                variantId: item.variantId,
-                productName: item.productName,
-                sku: item.productSku,
-                remaining,
-                quantity: remaining,
-                damagedQuantity: "0",
-              };
-            }),
+            .filter((item) => Number(item.remaining) > 0)
+            .map((item) => ({
+              purchaseOrderItemId: item.id,
+              variantId: item.variantId,
+              productName: item.productName,
+              sku: item.productSku,
+              // Straight from the API: `receivedQuantity` is in base units
+              // while `quantity` is in the ordered unit, so subtracting one
+              // from the other here would be wrong by the pack size.
+              remaining: item.remaining,
+              quantity: item.remaining,
+              damagedQuantity: "0",
+              unitAbbr: item.unitAbbr,
+              conversionFactor: item.unitConversionFactor,
+            })),
         );
         setShippingAmount("");
         setInvoiceNumber("");
@@ -615,10 +738,19 @@ function ReceiveDialog({
                 <div key={`${item.sku}-${item.quantity}`} className="flex items-center justify-between px-3 py-2 text-xs">
                   <div className="min-w-0">
                     <p className="font-medium text-foreground truncate">{item.productName}</p>
-                    <p className="text-[10px] font-mono text-muted-foreground">{item.sku} · {item.quantity} received</p>
+                    <p className="text-[10px] font-mono text-muted-foreground">
+                      {item.sku} · {item.quantity} {item.unitAbbr ?? ""} received
+                      {Number(item.unitConversionFactor) !== 1 && (
+                        <span className="ml-1.5 text-muted-foreground/80">
+                          ({(Number(item.quantity) * Number(item.unitConversionFactor)).toLocaleString()} base units)
+                        </span>
+                      )}
+                    </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[10px] text-muted-foreground">Landed unit cost</p>
+                    {/* Per BASE unit — per piece, not per box. Saying so
+                        matters most on exactly the lines where they differ. */}
+                    <p className="text-[10px] text-muted-foreground">Landed cost per base unit</p>
                     <p className="font-mono font-semibold text-foreground">AED {money(item.landedUnitCost)}</p>
                   </div>
                 </div>
@@ -637,30 +769,56 @@ function ReceiveDialog({
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="rounded-xl border border-border divide-y divide-border">
-              {lines.map((line, idx) => (
-                <div key={line.purchaseOrderItemId} className="flex items-center gap-2 px-3 py-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-foreground truncate">{line.productName}</p>
-                    <p className="text-[10px] font-mono text-muted-foreground">{line.sku} · {line.remaining} remaining</p>
+              {lines.map((line, idx) => {
+                const packed = Number(line.conversionFactor) !== 1;
+                return (
+                  <div key={line.purchaseOrderItemId} className="flex items-center gap-2 px-3 py-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-foreground truncate">{line.productName}</p>
+                      <p className="text-[10px] font-mono text-muted-foreground">
+                        {line.sku} · {line.remaining} {line.unitAbbr ?? ""} remaining
+                        {packed && Number(line.quantity) > 0 && (
+                          <span className="ml-1.5 text-muted-foreground/80">
+                            → {(Number(line.quantity) * Number(line.conversionFactor)).toLocaleString()} base units
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <div>
+                      <label
+                        htmlFor={`recv-${line.purchaseOrderItemId}`}
+                        className="block text-[10px] text-muted-foreground"
+                      >
+                        {/* Naming the unit is the whole point: "2" means two
+                            boxes here and two pieces on the next line. */}
+                        Receiving{line.unitAbbr ? ` (${line.unitAbbr})` : ""}
+                      </label>
+                      <Input
+                        id={`recv-${line.purchaseOrderItemId}`}
+                        type="number" min="0" step="0.0001" value={line.quantity}
+                        onChange={(e) => { const v = e.target.value; setLines((prev) => prev.map((l, i) => (i === idx ? { ...l, quantity: v } : l))); }}
+                        className="w-20 font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor={`dmg-${line.purchaseOrderItemId}`}
+                        className="block text-[10px] text-muted-foreground"
+                      >
+                        {/* Always base units — one broken screw is 1, even on
+                            a line received by the box. */}
+                        Damaged (pieces)
+                      </label>
+                      <Input
+                        id={`dmg-${line.purchaseOrderItemId}`}
+                        type="number" min="0" step="0.0001" value={line.damagedQuantity}
+                        onChange={(e) => { const v = e.target.value; setLines((prev) => prev.map((l, i) => (i === idx ? { ...l, damagedQuantity: v } : l))); }}
+                        className="w-20 font-mono"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-[10px] text-muted-foreground">Receiving</label>
-                    <Input
-                      type="number" min="0" step="0.0001" value={line.quantity}
-                      onChange={(e) => { const v = e.target.value; setLines((prev) => prev.map((l, i) => (i === idx ? { ...l, quantity: v } : l))); }}
-                      className="w-20 font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] text-muted-foreground">Damaged</label>
-                    <Input
-                      type="number" min="0" step="0.0001" value={line.damagedQuantity}
-                      onChange={(e) => { const v = e.target.value; setLines((prev) => prev.map((l, i) => (i === idx ? { ...l, damagedQuantity: v } : l))); }}
-                      className="w-20 font-mono"
-                    />
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">

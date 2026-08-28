@@ -1,6 +1,7 @@
 import type { Currency, PurchaseOrderStatus, TaxMode } from "@devsfleet/shared-types";
 import { relations, sql } from "drizzle-orm";
 import {
+  check,
   date,
   index,
   integer,
@@ -132,11 +133,23 @@ export const purchaseOrderItems = pgTable(
     variantName: varchar({ length: 255 }).notNull().default("Default"),
     productSku: varchar({ length: 64 }).notNull(),
 
+    /** Packaging ordered. NULL = the product's base unit. */
     unitId: uuid().references(() => units.id, { onDelete: "set null" }),
+    /** Base units per ordered unit, snapshotted. Box of 1000 -> 1000. */
     unitConversionFactor: quantity().notNull().default("1"),
 
+    /** In the ORDERED unit. Two boxes is `2`, not 2000. */
     quantity: quantity().notNull(),
-    /** Running total across every receipt against this line. */
+    /**
+     * Running total across every receipt against this line, in BASE UNITS —
+     * NOT in the ordered unit like `quantity` above.
+     *
+     * It has to be canonical: an order for 2 boxes can legitimately be filled
+     * by one box plus 300 loose pieces, and those two receipts have different
+     * conversion factors. Completion is therefore
+     * `receivedQuantity >= quantity * unitConversionFactor`, and anything
+     * displaying "remaining" must divide back down by the factor.
+     */
     receivedQuantity: quantity().notNull().default("0"),
     unitPrice: money().notNull(),
     discountPercent: percent().notNull().default("0"),
@@ -149,7 +162,13 @@ export const purchaseOrderItems = pgTable(
     notes: text(),
     ...timestamps(),
   },
-  (t) => [index("idx_po_items_po").on(t.purchaseOrderId, t.sortOrder)],
+  (t) => [
+    index("idx_po_items_po").on(t.purchaseOrderId, t.sortOrder),
+    // A zero factor makes `receivedQuantity >= quantity * factor` trivially
+    // true and divides by zero on the way back out. The DTO's `.positive()`
+    // admits 0.00005, which stores as 0.0000.
+    check("ck_po_items_factor_positive", sql`unit_conversion_factor > 0`),
+  ],
 );
 
 export const goodsReceipts = pgTable(
@@ -199,14 +218,36 @@ export const goodsReceiptItems = pgTable(
       .notNull()
       .references(() => productVariants.id, { onDelete: "restrict" }),
 
+    /** Packaging received. NULL = the product's base unit. */
+    unitId: uuid().references(() => units.id, { onDelete: "set null" }),
+    /**
+     * Base units per received unit, snapshotted.
+     *
+     * Separate from the PO line's factor on purpose: order two boxes, take
+     * delivery of one box and 300 loose, and the two receipts genuinely
+     * arrived in different units.
+     */
+    unitConversionFactor: quantity().notNull().default("1"),
+
+    /** In the RECEIVED unit. One box is `1`, not 1000. */
     quantity: quantity().notNull(),
     /**
-     * Unit price including this line's share of shipping and duty.
-     * This is what feeds `inventory.averageCost` — using the invoice price
-     * alone systematically understates cost and overstates margin.
+     * Cost per BASE UNIT, including this line's share of shipping and duty —
+     * not per received unit. Per piece, never per box.
+     *
+     * Informational: `inventory.averageCost` is fed the line's exact total
+     * instead (see StockMovementInput.totalCost), because rounding a per-piece
+     * cost to 4dp and then multiplying it by 1,000 pieces reintroduces the
+     * rounding a thousandfold.
      */
     landedUnitCost: money(),
-    /** Received but unsellable. Recorded, not added to sellable stock. */
+    /**
+     * Received but unsellable, in BASE UNITS — not in the received unit like
+     * `quantity` above.
+     *
+     * One broken screw out of a box is `1`. Expressing it in boxes would make
+     * the obvious input — typing `1` — write off the entire thousand.
+     */
     damagedQuantity: quantity().notNull().default("0"),
     batchNumber: varchar({ length: 50 }),
     expiryDate: date({ mode: "string" }),
@@ -216,6 +257,7 @@ export const goodsReceiptItems = pgTable(
   (t) => [
     index("idx_grn_items_grn").on(t.goodsReceiptId),
     index("idx_grn_items_variant").on(t.variantId, t.createdAt),
+    check("ck_grn_items_factor_positive", sql`unit_conversion_factor > 0`),
   ],
 );
 

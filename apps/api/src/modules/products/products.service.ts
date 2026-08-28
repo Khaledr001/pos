@@ -469,6 +469,7 @@ export class ProductsService {
           barcode: schema.variantUnits.barcode,
           priceOverride: schema.variantUnits.priceOverride,
           isSellable: schema.variantUnits.isSellable,
+          isPurchasable: schema.variantUnits.isPurchasable,
         })
         .from(schema.variantUnits)
         .innerJoin(schema.units, eq(schema.variantUnits.unitId, schema.units.id))
@@ -515,6 +516,7 @@ export class ProductsService {
             ? { priceOverride: String(dto.priceOverride) }
             : {}),
           isSellable: dto.isSellable,
+          isPurchasable: dto.isPurchasable,
         })
         .returning();
 
@@ -543,6 +545,7 @@ export class ProductsService {
             ? { priceOverride: dto.priceOverride === null ? null : String(dto.priceOverride) }
             : {}),
           ...(dto.isSellable !== undefined ? { isSellable: dto.isSellable } : {}),
+          ...(dto.isPurchasable !== undefined ? { isPurchasable: dto.isPurchasable } : {}),
         })
         .where(eq(schema.variantUnits.id, id))
         .returning();

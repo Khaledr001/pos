@@ -120,7 +120,13 @@ export const CreateVariantUnitSchema = z.object({
   barcode: z.string().trim().max(64).optional(),
   /** Flat price for the pack. Omit to use base price x conversionFactor. */
   priceOverride: z.coerce.number().positive().optional(),
+  /** Offer it in the POS unit picker. */
   isSellable: z.boolean().default(true),
+  /**
+   * Offer it when raising a purchase order or receiving goods. Independent of
+   * `isSellable`: a supplier's outer carton is bought and never sold.
+   */
+  isPurchasable: z.boolean().default(true),
 });
 export type CreateVariantUnitDto = z.infer<typeof CreateVariantUnitSchema>;
 

@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte, inArray, lte, schema, sql } from "@devsfleet/db";
+import { and, asc, count, desc, eq, gte, inArray, lte, schema, sql } from "@devsfleet/db";
 import { resolveTenantSettings } from "@devsfleet/shared-types";
 import {
   AppError,
@@ -55,11 +55,27 @@ export class PurchasesService {
       });
       if (!supplier) throw new AppError(ERROR_CODES.NOT_FOUND, "That supplier does not exist");
 
-      const variants = await this.loadVariants(
-        tx,
-        dto.lines.map((line) => line.variantId),
-      );
+      const variantIds = dto.lines.map((line) => line.variantId);
+      const variants = await this.loadVariants(tx, variantIds);
+      const packagings = await this.loadPackagings(tx, variantIds);
       const settings = await this.settings(tx);
+
+      /**
+       * Resolved once, up front, so the insert below never has to ask again.
+       * Quantity and price both stay in the ORDERED unit — pack count times
+       * pack price is the invoice line, and `calculateDocument` is
+       * dimensionally agnostic. Nothing converts to base units on an order;
+       * nothing has moved yet.
+       */
+      const resolved = dto.lines.map((line) => {
+        const variant = variants.get(line.variantId)!;
+        return this.resolveFactor(
+          packagings,
+          line.variantId,
+          line.unitId,
+          variant.productName,
+        );
+      });
 
       const totals = calculateDocument({
         lines: dto.lines.map((line) => ({
@@ -117,7 +133,9 @@ export class PurchasesService {
             productName: variant.productName,
             variantName: variant.variantName ?? "Default",
             productSku: variant.sku,
-            unitId: variant.unitId,
+            // The packaging ordered, falling back to the product's base unit.
+            unitId: resolved[index]!.unitId ?? variant.unitId,
+            unitConversionFactor: resolved[index]!.conversionFactor,
             quantity: String(line.quantity),
             unitPrice: String(line.unitPrice),
             discountPercent: String(line.discountPercent ?? 0),
@@ -254,7 +272,39 @@ export class PurchasesService {
       // A line names its variant directly, or via a code that belongs to
       // THIS supplier alone (Stage 5.4) — resolved once, up front, so
       // everything below can keep treating variantId as always present.
-      const resolvedLines = await this.resolveLineVariants(tx, supplierId, dto.lines);
+      const namedLines = await this.resolveLineVariants(tx, supplierId, dto.lines);
+
+      /**
+       * ...and the same for the packaging, so nothing below asks
+       * `variant_units` again. Every line now carries the factor that turns
+       * its quantity into base units.
+       */
+      const variantsForLines = await this.loadVariants(
+        tx,
+        namedLines.map((line) => line.variantId),
+      );
+      const packagings = await this.loadPackagings(
+        tx,
+        namedLines.map((line) => line.variantId),
+      );
+      const resolvedLines = namedLines.map((line) => {
+        const label = variantsForLines.get(line.variantId)?.productName ?? line.variantId;
+        const { unitId, conversionFactor } = this.resolveFactor(
+          packagings,
+          line.variantId,
+          line.unitId,
+          label,
+        );
+        return { ...line, unitId, conversionFactor };
+      });
+
+      // Whole base units, unless the unit itself permits fractions. A pack
+      // makes fractional base quantities newly reachable — half a box of
+      // three is one and a half pieces — and nothing checked before.
+      const fractionalByVariant = await this.loadAllowsFractions(
+        tx,
+        namedLines.map((line) => line.variantId),
+      );
 
       // Whether each line's product tracks serial numbers — needed on a
       // direct receipt too, where there is no purchase-order line to ask.
@@ -275,12 +325,25 @@ export class PurchasesService {
           ? orderItemsById.get(line.purchaseOrderItemId)
           : undefined;
 
+        /**
+         * The ordered price is per ORDERED unit; this line is priced per
+         * RECEIVED unit, and the two can differ. Ordering by the box and
+         * taking delivery of loose pieces would otherwise bill one box's
+         * price for one piece — a thousandfold overcharge on the supplier's
+         * account. Rescale through base units; a no-op when both factors are 1.
+         */
+        const orderedPrice = ordered
+          ? Money.divideByQuantity(
+              Money.multiplyByQuantity(
+                Money.toMinor(ordered.unitPrice),
+                line.conversionFactor,
+              ),
+              ordered.unitConversionFactor,
+            )
+          : null;
+
         const unitPrice =
-          line.unitPrice !== undefined
-            ? Money.toMinor(String(line.unitPrice))
-            : ordered
-              ? Money.toMinor(ordered.unitPrice)
-              : null;
+          line.unitPrice !== undefined ? Money.toMinor(String(line.unitPrice)) : orderedPrice;
 
         if (unitPrice === null) {
           throw new AppError(
@@ -343,31 +406,96 @@ export class PurchasesService {
 
       for (const [index, line] of resolvedLines.entries()) {
         const { value, tax } = lineValues[index]!;
-        const damaged = Money.toMinor(String(line.damagedQuantity));
-        const sellable = Money.subtract(
-          Money.toMinor(String(line.quantity)),
-          damaged,
-        );
 
-        if (Money.isNegative(sellable)) {
+        /**
+         * Quantities, in base units.
+         *
+         * `receivedBase` is GROSS — the supplier delivered them and is billed
+         * for them. `sellableBase` is net of damage, and only that reaches the
+         * shelf. `damagedQuantity` already arrives in base units (a broken
+         * screw is 1, not 0.001 of a box), so it is not scaled.
+         */
+        const receivedBase = Money.multiplyByQuantity(
+          Money.toMinor(String(line.quantity)),
+          line.conversionFactor,
+        );
+        const damagedBase = Money.toMinor(String(line.damagedQuantity));
+        const sellableBase = Money.subtract(receivedBase, damagedBase);
+
+        if (Money.isNegative(sellableBase)) {
           throw new AppError(
             ERROR_CODES.VALIDATION_FAILED,
             "More units were marked damaged than arrived",
+            {
+              received: Money.toDecimalString(receivedBase, 4),
+              damaged: Money.toDecimalString(damagedBase, 4),
+            },
           );
         }
 
+        if (!fractionalByVariant.get(line.variantId)) {
+          for (const [label, amount] of [
+            ["received", receivedBase],
+            ["damaged", damagedBase],
+          ] as const) {
+            if (amount % 10_000n !== 0n) {
+              throw new AppError(
+                ERROR_CODES.VALIDATION_FAILED,
+                `This product is counted in whole units, but the ${label} quantity works out to ` +
+                  `${Money.toDecimalString(amount, 4)}.`,
+              );
+            }
+          }
+        }
+
         /**
-         * Landed cost, per unit: what the supplier charged plus this line's
-         * share of getting it here. Using the invoice price alone systematically
-         * understates cost and overstates margin on everything imported.
+         * What this line cost in total: the supplier's charge plus its share
+         * of getting it here. Never divided — see the per-unit figure below.
          *
-         * VAT is deliberately excluded — it is recoverable, so it is not part of
-         * what the stock cost the business.
+         * VAT is deliberately excluded — it is recoverable, so it is not part
+         * of what the stock cost the business.
+         */
+        const lineTotal = Money.add(value, freight[index] ?? 0n);
+
+        /**
+         * Only the sellable portion is capitalised into stock. A damaged unit's
+         * share of the cost is billed by the supplier and written off, which is
+         * the behaviour this has always had.
+         */
+        const sellableTotalCost = Money.isPositive(receivedBase)
+          ? Money.divideByQuantity(
+              Money.multiplyByQuantity(lineTotal, Money.toDecimalString(sellableBase, 4)),
+              Money.toDecimalString(receivedBase, 4),
+            )
+          : 0n;
+
+        /**
+         * Landed cost PER BASE UNIT — per piece, never per box. Recorded on
+         * the receipt row and the stock ledger; the weighted average is fed
+         * the exact total above instead, so this rounding never compounds.
          */
         const landedUnitCost = Money.divideByQuantity(
-          Money.add(value, freight[index] ?? 0n),
-          line.quantity,
+          lineTotal,
+          Money.toDecimalString(receivedBase, 4),
         );
+
+        /**
+         * A per-base cost that rounds to nothing.
+         *
+         * Money holds four decimals, so a bag of 10,000 washers costing AED
+         * 0.45 works out to 0.000045 a piece and stores as zero. Left alone,
+         * `averageCost` becomes 0.0000 and that variant's stock is worth
+         * nothing for good — silently, and unrecoverably without a manual
+         * correction. Refuse the receipt instead.
+         */
+        if (Money.isPositive(lineTotal) && landedUnitCost === 0n) {
+          throw new AppError(
+            ERROR_CODES.VALIDATION_FAILED,
+            `A cost of ${Money.toDecimalString(lineTotal, 4)} across ` +
+              `${Money.toDecimalString(receivedBase, 4)} units is less than 0.0001 each, which ` +
+              `cannot be recorded. Receive a smaller pack, or split the line.`,
+          );
+        }
 
         await tx.insert(schema.goodsReceiptItems).values({
           tenantId,
@@ -376,6 +504,10 @@ export class PurchasesService {
             ? { purchaseOrderItemId: line.purchaseOrderItemId }
             : {}),
           variantId: line.variantId,
+          ...(line.unitId ? { unitId: line.unitId } : {}),
+          unitConversionFactor: line.conversionFactor,
+          // As entered, in the received unit. `landedUnitCost` beside it is
+          // per BASE unit — see the column comments.
           quantity: String(line.quantity),
           landedUnitCost: Money.toDecimalString(landedUnitCost, 4),
           damagedQuantity: String(line.damagedQuantity),
@@ -386,24 +518,41 @@ export class PurchasesService {
 
         // Damaged units are recorded on the receipt but never enter stock:
         // they are not sellable, and counting them makes a shelf look full.
-        if (Money.isPositive(sellable)) {
+        if (Money.isPositive(sellableBase)) {
           await this.stock.addStock({
             tx,
             variantId: line.variantId,
             branchId,
-            quantity: Money.toDecimalString(sellable, 4),
+            // Base units — a box of 1,000 puts 1,000 pieces on the shelf.
+            quantity: Money.toDecimalString(sellableBase, 4),
             referenceType: "purchase_receipt",
             referenceId: receipt.id,
             unitCost: Money.toDecimalString(landedUnitCost, 4),
+            // The exact figure, so the weighted average never inherits the
+            // rounding that per-unit cost above had to take.
+            totalCost: Money.toDecimalString(sellableTotalCost, 4),
           });
 
           if (trackSerialByVariant.get(line.variantId)) {
-            // A serialised product is sold and received one whole unit at a
-            // time — "2.5 phones" has no identity to assign the half to.
-            const sellableUnits = Money.toDecimalString(sellable, 0);
+            /**
+             * A serialised product is received one whole unit at a time —
+             * "2.5 phones" has no identity to assign the half to.
+             *
+             * Asserted, not rounded: `toDecimalString(x, 0)` rounds half-up,
+             * so 2.4 sellable used to render "2" and pass with two serials.
+             */
+            if (sellableBase % 10_000n !== 0n) {
+              throw new AppError(
+                ERROR_CODES.VALIDATION_FAILED,
+                `This product tracks serial numbers, so it cannot arrive in fractions — ` +
+                  `${Money.toDecimalString(sellableBase, 4)} units were sellable.`,
+              );
+            }
+
+            const sellableUnits = sellableBase / 10_000n;
             const serials = line.serials ?? [];
 
-            if (serials.length !== Number(sellableUnits)) {
+            if (BigInt(serials.length) !== sellableUnits) {
               throw new AppError(
                 ERROR_CODES.VALIDATION_FAILED,
                 `This product tracks serial numbers — ${sellableUnits} arrived sellable, so exactly that ` +
@@ -428,7 +577,13 @@ export class PurchasesService {
           await tx
             .update(schema.purchaseOrderItems)
             .set({
-              receivedQuantity: sql`${schema.purchaseOrderItems.receivedQuantity} + ${String(line.quantity)}::numeric`,
+              /**
+               * GROSS and in BASE units. Gross because the supplier delivered
+               * them — damage is a claim, not an undelivery. Base because a
+               * box today and loose pieces on Thursday have to add up against
+               * one order line.
+               */
+              receivedQuantity: sql`${schema.purchaseOrderItems.receivedQuantity} + ${Money.toDecimalString(receivedBase, 4)}::numeric`,
             })
             .where(eq(schema.purchaseOrderItems.id, line.purchaseOrderItemId));
         }
@@ -458,9 +613,18 @@ export class PurchasesService {
    * one left outstanding.
    */
   private async refreshOrderStatus(tx: Transaction, orderId: string): Promise<void> {
+    /**
+     * `receivedQuantity` is base units; `quantity` is ordered units. Compare
+     * them in base.
+     *
+     * The epsilon is what stops an order hanging open forever: 100 pieces
+     * received as 33.3333 trays of 3 comes back as 99.9999, a ten-thousandth
+     * short, with no quantity a clerk could type to close the gap. Below any
+     * real materiality, and far below one of anything countable.
+     */
     const [progress] = await tx
       .select({
-        outstanding: sql<number>`count(*) FILTER (WHERE received_quantity < quantity)::int`,
+        outstanding: sql<number>`count(*) FILTER (WHERE received_quantity < quantity * unit_conversion_factor - 0.0001)::int`,
         received: sql<number>`count(*) FILTER (WHERE received_quantity > 0)::int`,
       })
       .from(schema.purchaseOrderItems)
@@ -491,9 +655,51 @@ export class PurchasesService {
       if (!order) throw new AppError(ERROR_CODES.NOT_FOUND, `Purchase order ${id} not found`);
       assertBranchInScope(order.branchId);
 
-      const items = await tx.query.purchaseOrderItems.findMany({
-        where: (t, { eq: e }) => e(t.purchaseOrderId, id),
-        orderBy: (t, { asc: a }) => a(t.sortOrder),
+      /**
+       * `unitAbbr` is joined, not derived: both receiving screens print it
+       * beside a quantity, and a quantity whose unit is unlabelled is exactly
+       * the ambiguity packs introduce. It rendered blank before this join
+       * existed, which was harmless only while every line was base units.
+       *
+       * `remainingBase` / `remaining` save every caller from re-deriving the
+       * base-vs-ordered-unit arithmetic — the mistake would be silent and
+       * would show "nothing left to receive" on a part-filled order.
+       */
+      const rawItems = await tx
+        .select({
+          item: schema.purchaseOrderItems,
+          unitAbbr: schema.units.abbreviation,
+        })
+        .from(schema.purchaseOrderItems)
+        .leftJoin(schema.units, eq(schema.purchaseOrderItems.unitId, schema.units.id))
+        .where(eq(schema.purchaseOrderItems.purchaseOrderId, id))
+        .orderBy(asc(schema.purchaseOrderItems.sortOrder));
+
+      const items = rawItems.map(({ item, unitAbbr }) => {
+        const factor = Money.toMinor(item.unitConversionFactor);
+        const orderedBase = Money.multiplyByQuantity(
+          Money.toMinor(item.quantity),
+          item.unitConversionFactor,
+        );
+        const remainingBase = Money.subtract(
+          orderedBase,
+          Money.toMinor(item.receivedQuantity),
+        );
+        const clamped = Money.isNegative(remainingBase) ? 0n : remainingBase;
+
+        return {
+          ...item,
+          unitAbbr,
+          /** Still outstanding, in base units. */
+          remainingBase: Money.toDecimalString(clamped, 4),
+          /** The same, expressed in the unit the line was ordered in. */
+          remaining: Money.toDecimalString(
+            factor === 0n
+              ? clamped
+              : Money.divideByQuantity(clamped, item.unitConversionFactor),
+            4,
+          ),
+        };
       });
 
       const supplier = await tx.query.suppliers.findFirst({
@@ -532,7 +738,12 @@ export class PurchasesService {
           variantId: schema.goodsReceiptItems.variantId,
           sku: schema.productVariants.sku,
           productName: schema.products.name,
+          /** In the RECEIVED unit; `landedUnitCost` beside it is per BASE unit. */
           quantity: schema.goodsReceiptItems.quantity,
+          unitId: schema.goodsReceiptItems.unitId,
+          unitConversionFactor: schema.goodsReceiptItems.unitConversionFactor,
+          unitAbbr: schema.units.abbreviation,
+          /** Base units. */
           damagedQuantity: schema.goodsReceiptItems.damagedQuantity,
           landedUnitCost: schema.goodsReceiptItems.landedUnitCost,
           batchNumber: schema.goodsReceiptItems.batchNumber,
@@ -547,6 +758,8 @@ export class PurchasesService {
           schema.products,
           eq(schema.productVariants.productId, schema.products.id),
         )
+        // Left: a base-unit line has no packaging row and so no abbreviation.
+        .leftJoin(schema.units, eq(schema.goodsReceiptItems.unitId, schema.units.id))
         .where(eq(schema.goodsReceiptItems.goodsReceiptId, id));
 
       return { ...receipt, items };
@@ -676,6 +889,32 @@ export class PurchasesService {
     );
   }
 
+  /**
+   * Whether each variant's BASE unit tolerates decimals.
+   *
+   * Read here for the first time anywhere in the codebase. It matters on the
+   * buy side specifically: receiving in packs is what makes a fractional base
+   * quantity reachable at all.
+   */
+  private async loadAllowsFractions(
+    tx: Transaction,
+    variantIds: string[],
+  ): Promise<Map<string, boolean>> {
+    if (variantIds.length === 0) return new Map();
+
+    const rows = await tx
+      .select({
+        id: schema.productVariants.id,
+        allowsFractions: schema.units.allowsFractions,
+      })
+      .from(schema.productVariants)
+      .innerJoin(schema.products, eq(schema.productVariants.productId, schema.products.id))
+      .innerJoin(schema.units, eq(schema.products.unitId, schema.units.id))
+      .where(inArray(schema.productVariants.id, [...new Set(variantIds)]));
+
+    return new Map(rows.map((row) => [row.id, row.allowsFractions]));
+  }
+
   private async loadTrackSerial(
     tx: Transaction,
     variantIds: string[],
@@ -709,6 +948,67 @@ export class PurchasesService {
       }
     }
     return byId;
+  }
+
+  /**
+   * Every packaging offered by the variants on this document, keyed
+   * `variantId:unitId` — one query, not one per line.
+   */
+  private async loadPackagings(tx: Transaction, variantIds: string[]) {
+    if (variantIds.length === 0) return new Map<string, { conversionFactor: string; isPurchasable: boolean }>();
+
+    const rows = await tx
+      .select({
+        variantId: schema.variantUnits.variantId,
+        unitId: schema.variantUnits.unitId,
+        conversionFactor: schema.variantUnits.conversionFactor,
+        isPurchasable: schema.variantUnits.isPurchasable,
+      })
+      .from(schema.variantUnits)
+      .where(inArray(schema.variantUnits.variantId, [...new Set(variantIds)]));
+
+    return new Map(
+      rows.map((row) => [
+        `${row.variantId}:${row.unitId}`,
+        { conversionFactor: row.conversionFactor, isPurchasable: row.isPurchasable },
+      ]),
+    );
+  }
+
+  /**
+   * How many base units one of `unitId` contains, for this variant.
+   *
+   * Omitting the unit means the base unit, factor 1 — the overwhelmingly
+   * common case and the behaviour every existing caller had.
+   *
+   * Deliberately does NOT consult `isSellable`. A supplier's outer carton is
+   * bought and never sold, and a packaging retired from the till must still be
+   * receivable while stock is in transit — see `variant_units.isPurchasable`.
+   */
+  private resolveFactor(
+    packagings: Map<string, { conversionFactor: string; isPurchasable: boolean }>,
+    variantId: string,
+    unitId: string | undefined,
+    variantLabel: string,
+  ): { unitId: string | null; conversionFactor: string } {
+    if (!unitId) return { unitId: null, conversionFactor: "1" };
+
+    const packaging = packagings.get(`${variantId}:${unitId}`);
+    if (!packaging) {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_FAILED,
+        `${variantLabel} has no packaging for that unit.`,
+        { variantId, unitId },
+      );
+    }
+    if (!packaging.isPurchasable) {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_FAILED,
+        `${variantLabel} is not bought in that unit.`,
+        { variantId, unitId },
+      );
+    }
+    return { unitId, conversionFactor: packaging.conversionFactor };
   }
 
   private async settings(tx: Transaction) {
