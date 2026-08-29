@@ -37,7 +37,6 @@ command -v pnpm >/dev/null || die "pnpm is not on PATH (corepack enable && corep
 command -v pm2  >/dev/null || die "pm2 is not installed (npm i -g pm2)"
 
 [ -f apps/api/.env ] || die "apps/api/.env is missing. Copy deploy/api.env.example to apps/api/.env and fill it in."
-[ -f deploy/.env   ] || die "deploy/.env is missing. Copy deploy/.env.prod.example to deploy/.env and fill it in."
 
 # The API refuses to boot on a bad value anyway, but failing here costs seconds
 # instead of a restart loop that nginx answers with 502.
@@ -64,16 +63,23 @@ export NEXT_PUBLIC_API_URL="${NEXT_PUBLIC_API_URL:-https://api.devsfleet.com/api
 echo "    NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL  (compiled into the admin bundle)"
 
 # -----------------------------------------------------------------------------
-say "Data services"
-docker compose -f deploy/docker-compose.data.yml --env-file deploy/.env up -d
-# Wait for Postgres rather than racing the migration against a cold container.
-for i in $(seq 1 30); do
-  if docker exec devsfleet-postgres pg_isready -U devsfleet_migrator -d devsfleet >/dev/null 2>&1; then
-    echo "    postgres ready"; break
+if [ -f deploy/docker-compose.data.yml ] && [ -f deploy/.env ] && command -v docker >/dev/null 2>&1; then
+  say "Data services (Docker)"
+  docker compose -f deploy/docker-compose.data.yml --env-file deploy/.env up -d
+  # Wait for Postgres rather than racing the migration against a cold container.
+  for i in $(seq 1 30); do
+    if docker exec devsfleet-postgres pg_isready -U devsfleet_migrator -d devsfleet >/dev/null 2>&1; then
+      echo "    postgres ready"; break
+    fi
+    [ "$i" = 30 ] && die "postgres did not become ready in 60s (docker logs devsfleet-postgres)"
+    sleep 2
+  done
+else
+  say "Data services (Native System Services)"
+  if command -v pg_isready >/dev/null 2>&1; then
+    pg_isready -q && echo "    native postgres ready" || true
   fi
-  [ "$i" = 30 ] && die "postgres did not become ready in 60s (docker logs devsfleet-postgres)"
-  sleep 2
-done
+fi
 
 # -----------------------------------------------------------------------------
 if [ "$PULL" = 1 ]; then
@@ -118,18 +124,24 @@ if [ "$MIGRATE" = 1 ]; then
   say "Migrations"
   # The migrator credential is passed for this command only. It is deliberately
   # NOT in apps/api/.env: the API must never hold a BYPASSRLS credential.
-  MIGRATOR_URL="$(grep -E '^DATABASE_URL_MIGRATOR=' deploy/.env apps/api/.env 2>/dev/null | head -1 | cut -d= -f2-)"
+  MIGRATOR_URL="$(grep -E '^DATABASE_URL_MIGRATOR=' deploy/.env apps/api/.env 2>/dev/null | head -1 | cut -d= -f2- || true)"
   if [ -z "$MIGRATOR_URL" ]; then
-    # Derive it from the app URL by swapping role and password.
-    APP_URL="$(grep -E '^DATABASE_URL=' apps/api/.env | head -1 | cut -d= -f2-)"
-    MIG_PW="$(grep -E '^MIGRATOR_DB_PASSWORD=' deploy/.env | head -1 | cut -d= -f2-)"
-    [ -n "$MIG_PW" ] || die "MIGRATOR_DB_PASSWORD is not set in deploy/.env"
-    MIGRATOR_URL="$(node -e '
-      const u = new URL(process.argv[1]);
-      u.username = "devsfleet_migrator";
-      u.password = encodeURIComponent(process.argv[2]);
-      console.log(u.toString());
-    ' "$APP_URL" "$MIG_PW")"
+    APP_URL="$(grep -E '^DATABASE_URL=' apps/api/.env 2>/dev/null | head -1 | cut -d= -f2- || true)"
+    MIG_PW="$(grep -E '^MIGRATOR_DB_PASSWORD=' deploy/.env apps/api/.env 2>/dev/null | head -1 | cut -d= -f2- || true)"
+    if [ -n "$MIG_PW" ] && [ -n "$APP_URL" ]; then
+      MIGRATOR_URL="$(node -e '
+        try {
+          const u = new URL(process.argv[1]);
+          u.username = "devsfleet_migrator";
+          u.password = encodeURIComponent(process.argv[2]);
+          console.log(u.toString());
+        } catch {
+          console.log(process.argv[1]);
+        }
+      ' "$APP_URL" "$MIG_PW")"
+    else
+      MIGRATOR_URL="$APP_URL"
+    fi
   fi
   DATABASE_URL_MIGRATOR="$MIGRATOR_URL" pnpm db:migrate
 fi
