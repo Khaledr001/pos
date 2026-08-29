@@ -50,10 +50,20 @@ node -e '
   );
   const need = ["DATABASE_URL","REDIS_URL","JWT_ACCESS_SECRET","JWT_REFRESH_SECRET","S3_ACCESS_KEY","S3_SECRET_KEY","S3_PUBLIC_URL"];
   const missing = need.filter((k) => !env[k]);
-  if (missing.length) { console.error("apps/api/.env is missing: " + missing.join(", ")); process.exit(1); }
+  if (missing.length) { console.error("apps/api/.env is missing required keys: " + missing.join(", ")); process.exit(1); }
   if (env.JWT_ACCESS_SECRET === env.JWT_REFRESH_SECRET) { console.error("JWT_ACCESS_SECRET and JWT_REFRESH_SECRET must differ."); process.exit(1); }
+  if (env.JWT_ACCESS_SECRET.length < 32 || env.JWT_REFRESH_SECRET.length < 32) { console.error("JWT_ACCESS_SECRET and JWT_REFRESH_SECRET must be at least 32 characters long."); process.exit(1); }
   if (/devsfleet_migrator/.test(env.DATABASE_URL)) { console.error("DATABASE_URL points at the MIGRATOR role, which bypasses RLS. Use devsfleet_app."); process.exit(1); }
-  if (env.DATABASE_URL.includes("CHANGE_ME") || env.S3_ACCESS_KEY === "") { console.error("apps/api/.env still holds placeholder values."); process.exit(1); }
+  
+  const placeholders = [];
+  if (env.DATABASE_URL.includes("CHANGE_ME")) placeholders.push("DATABASE_URL");
+  if (env.REDIS_URL.includes("CHANGE_ME")) placeholders.push("REDIS_URL");
+  if (env.JWT_ACCESS_SECRET.includes("change-me")) placeholders.push("JWT_ACCESS_SECRET");
+  if (env.JWT_REFRESH_SECRET.includes("change-me")) placeholders.push("JWT_REFRESH_SECRET");
+  if (placeholders.length > 0) {
+    console.error("apps/api/.env still holds placeholder values for: " + placeholders.join(", "));
+    process.exit(1);
+  }
 ' || die "apps/api/.env did not pass preflight"
 
 # NEXT_PUBLIC_* is inlined into the client bundle at BUILD time and cannot be
