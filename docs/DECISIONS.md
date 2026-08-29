@@ -381,14 +381,56 @@ the defect — so they cannot be revoked selectively.
 
 ---
 
+## D19 — DeepSeek as the LLM provider; the AI module itself remains unbuilt
+
+**Decided**, resolving open question #4 below. DeepSeek was chosen — no other
+provider was evaluated against it; the ask was specifically to wire DeepSeek
+up, not to run a bake-off. Nothing else here changes because of that: this
+records a choice made, not a comparison performed.
+
+`LLM_PROVIDER` in `apps/api/src/config/env.ts` now includes `"deepseek"`
+alongside the pre-existing `openai`/`gemini`/`anthropic` placeholders and
+defaults to it. Only DeepSeek has a client behind it —
+`apps/api/src/modules/ai/llm.service.ts` — a thin typed `fetch` wrapper, not a
+vendored SDK, because DeepSeek's API is deliberately OpenAI-compatible (same
+`/chat/completions` shape, same `tools` function-calling schema): pulling in a
+client library to change one base URL and reshape a JSON response would be
+exactly the dependency D13/D16 already argue against elsewhere. Selecting one
+of the other three provider names throws `LLM_NOT_CONFIGURED` rather than
+silently doing nothing — the enum stays a record of intended future work, not
+a set of working options.
+
+**This is a client, not the AI module.** There is still no `whatsapp` module,
+no webhook, no conversation state, no tool implementations behind
+`AI_ACTION_TYPES`, and nothing in the API calls `LlmService` yet. Building
+those (Stage 8 in `feature.md`) is unblocked by this decision but is separate,
+larger work.
+
+Cost tracking is real but not yet persisted: `LlmService.chat()` returns
+`promptTokens`/`completionTokens`/`cacheHitTokens`/`cacheMissTokens`/
+`estimatedCostUsd`/`latencyMs` on every call, in the shape `ai_actions`
+already has columns for (`model`, `promptTokens`, `completionTokens`,
+`estimatedCost`, `latencyMs`) — but nothing writes to that table today, because
+`ai_actions.conversationId` is a NOT NULL foreign key into
+`whatsapp_conversations`, and no conversation exists without the WhatsApp
+module. `estimatedCostUsd` is deliberately plain floating point, not `Money`:
+`Money` is scaled to 4dp for tenant-facing documents (D5), and a single chat
+completion routinely costs a few thousandths of a cent — at 4dp every call
+would show as `0.0000`. This is an operator-facing spend estimate, not a
+ledger entry a customer will ever see, so D5's precision requirement doesn't
+apply to it.
+
+---
+
 ## Still open
 
 | # | Question | Blocks |
 |---|---|---|
 | 1 | The real product price list | Final products/pricing schema, the importer |
 | 2 | Barcode scanner model — USB HID assumed | POS scanner integration (Phase 3) |
-| 4 | LLM provider — OpenAI assumed, Gemini/Anthropic wired in env | AI module (Phase 4) |
 
 Thermal printer models (formerly #3) resolved as D16 — connection method
 (USB, raw device file) decided and built; the exact printer model remains
-unconfirmed but no longer blocks anything.
+unconfirmed but no longer blocks anything. LLM provider (formerly #4) resolved
+as D19 — DeepSeek chosen and a working client built; the AI/WhatsApp module
+itself (Stage 8) remains open work.

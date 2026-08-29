@@ -1,7 +1,7 @@
 import { and, asc, count, desc, eq, ilike, isNull, or, schema, sql } from "@devsfleet/db";
 import type { AttributeDefinition } from "@devsfleet/db";
 import type { Paginated } from "@devsfleet/shared-types";
-import { AppError, ERROR_CODES, searchKey, normalizeBarcode } from "@devsfleet/shared-utils";
+import { AppError, ERROR_CODES, searchKey, normalizeBarcode, variantSearchKey } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
 import { createHash } from "node:crypto";
 import { RequestContext } from "../../common/context/request-context.js";
@@ -316,7 +316,12 @@ export class ProductsService {
             variantName: v.variantName,
             sku: variantSku,
             barcode: v.barcode ? normalizeBarcode(v.barcode) : null,
-            searchKey: searchKey(dto.name, v.variantName, variantSku),
+            searchKey: variantSearchKey({
+              productName: dto.name,
+              nameTranslations: dto.nameTranslations,
+              variantName: v.variantName,
+              sku: variantSku,
+            }),
             attributes: v.attributes,
             minStock: String(v.minStock),
             reorderQuantity: String(v.reorderQuantity),
@@ -383,6 +388,12 @@ export class ProductsService {
         .update(schema.products)
         .set({
           ...(dto.name !== undefined ? { name: dto.name } : {}),
+          // Accepted by the DTO and dropped here until now, so a product could
+          // never be retranslated after creation — which matters more since
+          // translations became part of what a variant is findable by.
+          ...(dto.nameTranslations !== undefined
+            ? { nameTranslations: dto.nameTranslations }
+            : {}),
           ...(dto.description !== undefined ? { description: dto.description } : {}),
           ...(dto.categoryId !== undefined ? { categoryId: dto.categoryId } : {}),
           ...(dto.brandId !== undefined ? { brandId: dto.brandId } : {}),
@@ -395,14 +406,42 @@ export class ProductsService {
 
       if (!updated) throw new AppError(ERROR_CODES.PRODUCT_NOT_FOUND, `Product ${id} not found`);
 
-      // Renaming the product changes what the POS matches on, so every
-      // variant's search key has to be rebuilt.
-      if (dto.name !== undefined) {
-        await tx.execute(sql`
-          UPDATE product_variants
-          SET search_key = lower(${updated.name} || ' ' || variant_name || ' ' || sku)
-          WHERE product_id = ${id}
-        `);
+      /**
+       * Renaming the product, or retranslating it, changes what the POS and
+       * the bot match on — so every variant's key has to be rebuilt.
+       *
+       * Rebuilt in JS through `variantSearchKey`, not in SQL. The previous
+       * `SET search_key = lower(name || ' ' || variant_name || ' ' || sku)`
+       * lowercased and stopped there, skipping `normalizeMeasurement` — so a
+       * renamed product kept `3/4"` where a freshly created one stored
+       * `3/4in`, and the two stopped matching the same query. One row's key
+       * must not depend on which code path last touched it.
+       */
+      if (dto.name !== undefined || dto.nameTranslations !== undefined) {
+        const variants = await tx
+          .select({
+            id: schema.productVariants.id,
+            variantName: schema.productVariants.variantName,
+            sku: schema.productVariants.sku,
+          })
+          .from(schema.productVariants)
+          .where(eq(schema.productVariants.productId, id));
+
+        const translations = dto.nameTranslations ?? existing.nameTranslations;
+
+        for (const variant of variants) {
+          await tx
+            .update(schema.productVariants)
+            .set({
+              searchKey: variantSearchKey({
+                productName: updated.name,
+                nameTranslations: translations,
+                variantName: variant.variantName,
+                sku: variant.sku,
+              }),
+            })
+            .where(eq(schema.productVariants.id, variant.id));
+        }
       }
     });
 
@@ -812,15 +851,27 @@ export class ProductsService {
   }
 
   /**
-   * POS search. Returns sellable variants with resolved price and stock.
+   * POS search. Returns sellable variants with resolved price and stock,
+   * best match first.
    *
    * Trigram similarity on `search_key` rather than full-text, because a cashier
    * types fragments and misspellings under time pressure — "elbo", "3/4 elbow",
    * "PVC ELB" all have to land on the right row.
+   *
+   * ORDERING IS THE POINT, and until recently there was none.
+   *
+   * The predicate is a substring match, which on a plumbing catalogue matches
+   * "elbow" against hundreds of rows. Postgres then returned an arbitrary
+   * `limit` of them and the caller displayed the first. A cashier scrolls and
+   * recovers; the WhatsApp bot states a price for whichever row came back
+   * first, with total confidence. So results are ranked by trigram
+   * `similarity()` — a real distance, not the order the heap happened to
+   * yield — with an exact SKU or barcode pinned to the top where it belongs.
    */
   async searchVariants(query: SearchVariantsDto): Promise<unknown[]> {
     const canViewCost = RequestContext.get()?.user?.abac.canViewCost ?? false;
     const needle = searchKey(query.q);
+    const tokens = needle.split(" ").filter(Boolean);
 
     return this.db.run(async (tx) => {
       const exact = query.q.trim()
@@ -851,6 +902,29 @@ export class ProductsService {
                   AND i.branch_id = ${query.branchId}
               ), '0')`
             : sql<string>`'0'`,
+          /**
+           * How good this match is, 0..1 — selected, not just ordered by, so a
+           * caller that must decide whether to act on a match can see it. The
+           * WhatsApp bot has to ask instead of guess when nothing stands out,
+           * and that needs a number it can threshold.
+           *
+           * `word_similarity`, not `similarity`. Plain `similarity` compares
+           * the needle against the WHOLE key, so "elbow" against
+           * "pvc 90 high pressure elbow fitting 3/4in" scores 0.14 — a number
+           * that is meaningless as a threshold, because it drops as the
+           * product name gets longer rather than as the match gets worse.
+           * `word_similarity` asks whether the needle matches some WORD of the
+           * key and returns 1.0 for that same match, which is a scale a caller
+           * can reason about.
+           */
+          matchScore: exact
+            ? sql<number>`1::real`
+            : needle
+              ? sql<number>`greatest(
+                  word_similarity(${needle}, ${schema.productVariants.searchKey}),
+                  CASE WHEN lower(${schema.productVariants.sku}) = lower(${query.q}) THEN 1 ELSE 0 END
+                )::real`
+              : sql<number>`0::real`,
         })
         .from(schema.productVariants)
         .innerJoin(schema.products, eq(schema.productVariants.productId, schema.products.id))
@@ -861,17 +935,66 @@ export class ProductsService {
             isNull(schema.productVariants.deletedAt),
             eq(schema.productVariants.isActive, true),
             eq(schema.products.isActive, true),
+            /**
+             * EVERY word has to appear, not the phrase as one substring.
+             *
+             * The key stores "…elbow fitting 3/4in…", so matching the whole
+             * needle contiguously meant "3/4 inch elbow" — the single most
+             * natural way to ask for that part — found nothing, while "3/4
+             * inch" alone worked. Requiring each token independently is both
+             * what a search box is expected to do and what makes the phrase
+             * findable regardless of the order the words were typed in.
+             *
+             * Callers pass search TERMS, not sentences: "do you have a 3/4
+             * inch elbow" would require "do" and "have" to appear too. The
+             * WhatsApp bot extracts the product term before calling.
+             */
             exact
               ? eq(schema.productVariants.id, exact.id)
-              : needle
+              : tokens.length > 0
                 ? or(
-                    ilike(schema.productVariants.searchKey, `%${needle}%`),
+                    and(
+                      ...tokens.map((token) =>
+                        ilike(schema.productVariants.searchKey, `%${token}%`),
+                      ),
+                    ),
                     ilike(schema.productVariants.sku, `%${query.q}%`),
                   )
                 : undefined,
           ),
         )
-        .limit(query.limit);
+        /**
+         * Word match first, then whole-key similarity as the tiebreak.
+         *
+         * Every elbow in the catalogue scores 1.0 on "elbow", so
+         * `word_similarity` alone cannot order them. `similarity` breaks the
+         * tie toward the key the needle accounts for most of — the shorter,
+         * more specific product — and SKU last so the order is stable across
+         * calls rather than left to the heap.
+         */
+        .orderBy(
+          exact
+            ? sql`1`
+            : needle
+              ? sql`greatest(
+                    word_similarity(${needle}, ${schema.productVariants.searchKey}),
+                    CASE WHEN lower(${schema.productVariants.sku}) = lower(${query.q}) THEN 1 ELSE 0 END
+                  ) DESC,
+                  similarity(${schema.productVariants.searchKey}, ${needle}) DESC,
+                  ${schema.productVariants.sku} ASC`
+              : sql`${schema.productVariants.sku} ASC`,
+        )
+        /**
+         * Over-fetch, because the unpriced filter below runs in JS.
+         *
+         * Pricing resolution is a precedence chain across three tables with
+         * effective dates and quantity breaks — it does not reduce to a join.
+         * So the cut has to happen after it, and taking exactly `limit` rows
+         * here meant a search for 25 could display 3. Fetching a multiple and
+         * slicing after keeps the limit honest; the ORDER BY above guarantees
+         * the ones we keep are the best matches, not an arbitrary subset.
+         */
+        .limit(Math.min(query.limit * 4, 200));
 
       const priced = await this.prices.resolveMany(tx, {
         variantIds: rows.map((r) => r.id),
@@ -883,6 +1006,7 @@ export class ProductsService {
       // A variant nobody has priced is not sellable, so it is not offered.
       return rows
         .filter((r) => priceBy.has(r.id))
+        .slice(0, query.limit)
         .map((r) => {
           const price = priceBy.get(r.id)!;
           return {

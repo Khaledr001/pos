@@ -49,7 +49,7 @@ Copying its shape is what keeps twenty modules looking like one codebase.
 | `expenses` | 3 | ✅ done | Out-of-pocket spending, cash vs non-cash |
 | `payments` | 3 | ⬜ todo | Split tender, credit settlement, refunds |
 | `whatsapp` | 4 | ⬜ todo | Meta Cloud API webhook, send/receive, templates |
-| `ai` | 4 | ⬜ todo | LLM tools, intent extraction, escalation |
+| `ai` | 4 | 🟡 partial | `LlmService` — a DeepSeek chat-completion client with tool-calling and cost tracking (D19). No controller, no tool implementations, no conversation state; nothing calls it yet. |
 | `quotations` | 5 | ✅ done | Quote at snapshotted prices, convert to a sale |
 | `orders` | 5 | ✅ done | Create, confirm (reserves stock), cancel (releases it), partial fulfilment — each a real sale linked back via `sales.orderId` |
 | `reports` | 6 | ✅ done | Sales, top products, stock health, financial |

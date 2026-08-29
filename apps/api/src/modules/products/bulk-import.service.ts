@@ -14,7 +14,7 @@
  *   - Uses TenantDatabase (tenant resolved from JWT)
  */
 import { eq, schema, sql, type Transaction } from "@devsfleet/db";
-import { Money, normalizeBarcode, searchKey, slugify } from "@devsfleet/shared-utils";
+import { Money, normalizeBarcode, slugify, variantSearchKey } from "@devsfleet/shared-utils";
 import { Injectable, Logger } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import ExcelJS from "exceljs";
@@ -486,7 +486,7 @@ export class BulkImportService {
                   productId: product.id,
                   sku,
                   barcode: row.barcode,
-                  searchKey: searchKey(row.name, sku),
+                  searchKey: variantSearchKey({ productName: row.name, sku }),
                   minStock: String(row.minStock),
                 })
                 .returning({ id: schema.productVariants.id });

@@ -34,6 +34,7 @@
     "studio": "drizzle-kit studio",
     "seed": "tsx scripts/seed.ts",
     "reset": "tsx scripts/reset.ts",
+    "normalize-phones": "tsx scripts/normalize-phones.ts",
     "test": "vitest run --passWithNoTests",
     "clean": "rm -rf dist .turbo *.tsbuildinfo"
   },

@@ -15,7 +15,7 @@ import {
   DEFAULT_TENANT_SETTINGS,
   SYSTEM_ROLES,
 } from "@devsfleet/shared-types";
-import { searchKey, slugify } from "@devsfleet/shared-utils";
+import { normalizePhone, slugify, variantSearchKey } from "@devsfleet/shared-utils";
 import bcrypt from "bcryptjs";
 import { config } from "dotenv";
 import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
@@ -891,9 +891,22 @@ async function seedTenant(
   // 9. Customers
   const customersMap = new Map<string, any>();
   for (const cust of config.customers) {
+    /**
+     * Normalised the same way `CreateCustomerSchema` normalises every write.
+     *
+     * The config above holds numbers as a person would type them
+     * ("+971 50 123 4567"), and the stored column is E.164. Looking up by the
+     * raw form found nothing on a re-run, so the seed tried to INSERT a
+     * customer that already existed and hit `uq_customers_tenant_whatsapp` —
+     * the seed's idempotency and the phone backfill have to agree on one
+     * spelling.
+     */
+    const custPhone = normalizePhone(cust.phone);
+    const custWhatsapp = normalizePhone(cust.whatsappPhone);
+
     const existingCust = await tx.query.customers.findFirst({
       where: (t: any, { and, eq: e, isNull }: any) =>
-        and(e(t.tenantId, tenantId), e(t.phone, cust.phone), isNull(t.deletedAt)),
+        and(e(t.tenantId, tenantId), e(t.phone, custPhone), isNull(t.deletedAt)),
     });
 
     if (existingCust) {
@@ -906,8 +919,8 @@ async function seedTenant(
           branchId: mainBranch.id,
           name: cust.name,
           company: cust.company,
-          phone: cust.phone,
-          whatsappPhone: cust.whatsappPhone,
+          phone: custPhone,
+          whatsappPhone: custWhatsapp,
           email: cust.email,
           trn: cust.trn,
           type: cust.type,
@@ -957,14 +970,14 @@ async function seedTenant(
           variantName: v.name,
           sku: v.sku,
           barcode: v.barcode,
-          searchKey: searchKey(p.name, v.name, v.sku),
+          searchKey: variantSearchKey({ productName: p.name, variantName: v.name, sku: v.sku }),
           minStock: "20",
           reorderQuantity: "100",
           sortOrder: idx,
         })
         .onConflictDoUpdate({
           target: [schema.productVariants.tenantId, schema.productVariants.sku],
-          set: { searchKey: searchKey(p.name, v.name, v.sku) },
+          set: { searchKey: variantSearchKey({ productName: p.name, variantName: v.name, sku: v.sku }) },
         })
         .returning();
 

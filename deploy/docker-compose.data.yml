@@ -1,0 +1,209 @@
+# =============================================================================
+# Data services — Postgres, Redis, MinIO.
+#
+#   cd deploy && docker compose -f docker-compose.data.yml --env-file .env up -d
+#
+# The API and admin panel do NOT live here; they run on the host under PM2.
+# This file exists because those three services are the ones worth isolating:
+# the Postgres role split below is the entire basis of tenant isolation, and
+# reproducing it by hand on a shared host is how a `devsfleet_app` accidentally
+# ends up with BYPASSRLS.
+#
+# EVERY PORT IS BOUND TO 127.0.0.1 ON PURPOSE.
+#
+# `- "5433:5432"` would publish to 0.0.0.0, and Docker writes its own iptables
+# rules ahead of ufw — a firewall that says "5433 DENY" would still let the
+# world reach this database. The explicit loopback bind is what actually closes
+# it. PM2 runs on the host, so loopback is all it needs.
+#
+# Host ports are shifted (5433, 6380) to sit beside the existing PostgreSQL and
+# Redis already serving the ISP system on 5432 and 6379.
+# =============================================================================
+
+name: devsfleet
+
+x-restart: &restart
+  restart: unless-stopped
+
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "5"
+
+services:
+  # ---------------------------------------------------------------------------
+  # Postgres 18.
+  #
+  # The init scripts in ../docker/postgres/init run ONCE, against an empty data
+  # directory, and create the two roles:
+  #   devsfleet_migrator  owns the schema, BYPASSES RLS. Migrations only.
+  #   devsfleet_app       what the API connects as. RLS is ENFORCED.
+  # Editing them later has no effect without destroying the volume.
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:18-alpine
+    container_name: devsfleet-postgres
+    <<: [*restart, *logging]
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5433}:5432"
+    environment:
+      POSTGRES_USER: devsfleet_migrator
+      POSTGRES_PASSWORD: ${MIGRATOR_DB_PASSWORD:?set MIGRATOR_DB_PASSWORD}
+      POSTGRES_DB: devsfleet
+      # Read by 00-app-role.sh to create devsfleet_app.
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?set APP_DB_PASSWORD}
+      NODE_ENV: production
+      POSTGRES_INITDB_ARGS: "--locale-provider=icu --icu-locale=en-US --encoding=UTF8"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U devsfleet_migrator -d devsfleet"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [devsfleet]
+    command:
+      - postgres
+      - "-c"
+      - "max_connections=200"
+      - "-c"
+      - "shared_buffers=256MB"
+
+  redis:
+    image: redis:8-alpine
+    container_name: devsfleet-redis
+    <<: [*restart, *logging]
+    ports:
+      - "127.0.0.1:${REDIS_HOST_PORT:-6380}:6379"
+    command:
+      [
+        "redis-server",
+        "--appendonly",
+        "yes",
+        "--requirepass",
+        "${REDIS_PASSWORD:?set REDIS_PASSWORD}",
+      ]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      # Authenticated: with requirepass set, a bare PING answers NOAUTH and the
+      # container would report healthy while refusing every real connection.
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "--no-auth-warning", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [devsfleet]
+
+  minio:
+    image: minio/minio:latest
+    container_name: devsfleet-minio
+    <<: [*restart, *logging]
+    ports:
+      - "127.0.0.1:${MINIO_HOST_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?set S3_SECRET_KEY}
+    volumes:
+      - minio_data:/data
+    command: ["server", "/data", "--console-address", ":9001"]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [devsfleet]
+
+  # ---------------------------------------------------------------------------
+  # One-shot: create the bucket and grant anonymous read to product images ONLY.
+  #
+  # Runs on every `up` and is idempotent. Profile-free on purpose — a fresh
+  # volume with no bucket means every image upload fails at the counter.
+  #
+  # The policy is deliberately NOT `mc anonymous set download <bucket>`, which
+  # opens the whole bucket. The API writes two kinds of object:
+  #
+  #   <tenantId>/products/<productId>/<checksum>.<ext>   images, not sensitive
+  #   <tenantId>/quotations/QUO-2026-0001.pdf            customer documents
+  #
+  # Quotation numbers are SEQUENTIAL. An open bucket lets anyone who learns one
+  # tenant id walk every quotation this business has ever issued — customer
+  # names, line prices, the lot. The resource wildcard below is what keeps that
+  # closed even for someone who reaches MinIO directly.
+  # ---------------------------------------------------------------------------
+  minio-init:
+    image: minio/mc:latest
+    container_name: devsfleet-minio-init
+    <<: *logging
+    restart: "no"
+    depends_on:
+      minio: { condition: service_healthy }
+    environment:
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?set S3_SECRET_KEY}
+      S3_BUCKET: ${S3_BUCKET:-devsfleet}
+    networks: [devsfleet]
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        mc alias set local http://minio:9000 "$$S3_ACCESS_KEY" "$$S3_SECRET_KEY"
+        mc mb --ignore-existing "local/$$S3_BUCKET"
+        cat > /tmp/policy.json <<JSON
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {"AWS": ["*"]},
+              "Action": ["s3:GetObject"],
+              "Resource": ["arn:aws:s3:::$$S3_BUCKET/*/products/*"]
+            }
+          ]
+        }
+        JSON
+        mc anonymous set-json /tmp/policy.json "local/$$S3_BUCKET"
+        echo "bucket $$S3_BUCKET ready; anonymous read limited to */products/*"
+
+  # ---------------------------------------------------------------------------
+  # Nightly pg_dump, 14 days retained.
+  # Restoring is rehearsed in docs/DEPLOYMENT.md — an untested backup is a
+  # guess, and this one is the only copy of every sale ever rung up.
+  # ---------------------------------------------------------------------------
+  backup:
+    image: postgres:18-alpine
+    container_name: devsfleet-backup
+    <<: [*restart, *logging]
+    environment:
+      PGPASSWORD: ${MIGRATOR_DB_PASSWORD:?set MIGRATOR_DB_PASSWORD}
+    volumes:
+      - ./backups:/backups
+    networks: [devsfleet]
+    depends_on:
+      postgres: { condition: service_healthy }
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        while true; do
+          STAMP=$$(date +%Y%m%d-%H%M%S)
+          pg_dump -h postgres -U devsfleet_migrator -d devsfleet -Fc \
+            -f /backups/devsfleet-$$STAMP.dump \
+            && echo "backup ok: devsfleet-$$STAMP.dump" \
+            || echo "BACKUP FAILED at $$STAMP"
+          find /backups -name '*.dump' -mtime +14 -delete
+          sleep 86400
+        done
+
+networks:
+  devsfleet:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:

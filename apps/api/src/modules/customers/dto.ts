@@ -1,11 +1,39 @@
 import { CUSTOMER_TYPES, DEFAULT_PAGE_SIZE, LOCALES, MAX_PAGE_SIZE, PAYMENT_METHODS } from "@devsfleet/shared-types";
+import { normalizePhone } from "@devsfleet/shared-utils";
 import { z } from "zod";
+
+/**
+ * A phone number, stored E.164.
+ *
+ * Normalised HERE, at the validation boundary, rather than in the service —
+ * because the service is not the only door. An offline terminal's customer
+ * push re-parses this same schema (`sync.service.ts` → `CreateCustomerSchema`
+ * → `CustomersService.create`), so normalising at the boundary is what makes
+ * every write path agree.
+ *
+ * It has to agree. `whatsappPhone` is the key the WhatsApp bot matches an
+ * inbound sender against, under a unique index — and until this existed,
+ * `+971501234567`, `971501234567` and `0501234567` were three distinct stored
+ * values that all satisfied it. The bot would have failed to recognise most
+ * existing customers, and the failure looks exactly like "this person is not
+ * a customer".
+ *
+ * Input with no digits at all ("walk-in", "N/A") is treated as absent rather
+ * than rejected. Nothing is lost — a phone field with no digits carries no
+ * phone number — and rejecting it would wedge the outbox of a terminal that
+ * has been taking that shortcut in the field for months.
+ */
+const phoneField = z
+  .string()
+  .trim()
+  .max(20)
+  .transform((value) => normalizePhone(value) ?? undefined);
 
 export const CreateCustomerSchema = z.object({
   branchId: z.string().uuid().nullable().optional(),
   name: z.string().trim().min(1, "Give the customer a name").max(255),
   company: z.string().trim().max(255).optional(),
-  phone: z.string().trim().max(20).optional(),
+  phone: phoneField.optional(),
   email: z.string().trim().toLowerCase().email().max(255).optional(),
   trn: z.string().trim().max(20).optional(),
   address: z.string().trim().max(1000).optional(),
@@ -15,7 +43,7 @@ export const CreateCustomerSchema = z.object({
   creditLimit: z.coerce.number().min(0).default(0),
   paymentTermDays: z.coerce.number().int().min(0).max(365).default(0),
   /** E.164. What the WhatsApp bot matches an inbound message against. */
-  whatsappPhone: z.string().trim().max(20).optional(),
+  whatsappPhone: phoneField.optional(),
   notes: z.string().trim().max(1000).optional(),
   /** Minted on the terminal when created offline. */
   localId: z.string().uuid().optional(),

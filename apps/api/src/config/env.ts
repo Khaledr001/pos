@@ -82,12 +82,19 @@ export const envSchema = z.object({
 
   // ---------------------------------------------------------------------------
   // AI (Phase 4)
+  //
+  // Only "deepseek" has a client behind it (LlmService). The other three
+  // names are the record of an intended future, not working options —
+  // selecting one throws LLM_NOT_CONFIGURED rather than silently doing
+  // nothing. See docs/DECISIONS.md D19.
   // ---------------------------------------------------------------------------
-  LLM_PROVIDER: z.enum(["openai", "gemini", "anthropic"]).default("openai"),
-  LLM_MODEL: z.string().default("gpt-4o"),
+  LLM_PROVIDER: z.enum(["openai", "gemini", "anthropic", "deepseek"]).default("deepseek"),
+  /** Blank = the provider's own recommended default (LlmService resolves it). */
+  LLM_MODEL: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
+  DEEPSEEK_API_KEY: z.string().optional(),
   LLM_MAX_TOKENS: z.coerce.number().int().default(1024),
   LLM_TIMEOUT_MS: z.coerce.number().int().default(20000),
 });

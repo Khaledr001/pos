@@ -20,6 +20,8 @@ import { AuthModule } from "./modules/auth/auth.module.js";
 import { BranchesModule } from "./modules/branches/branches.module.js";
 import { HealthModule } from "./modules/health/health.module.js";
 import { NotificationsModule } from "./modules/notifications/notifications.module.js";
+import { AiModule } from "./modules/ai/ai.module.js";
+import { WhatsappModule } from "./modules/whatsapp/whatsapp.module.js";
 import { PlatformModule } from "./modules/platform/platform.module.js";
 import { TenantsModule } from "./modules/tenants/tenants.module.js";
 import { CashRegisterModule } from "./modules/cash-register/cash-register.module.js";
@@ -167,6 +169,8 @@ import { TransfersModule } from "./modules/transfers/transfers.module.js";
     DevicesModule,
     TransfersModule,
     NotificationsModule,
+    AiModule,
+    WhatsappModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

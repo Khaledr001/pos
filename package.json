@@ -20,6 +20,7 @@
     "db:seed": "pnpm --filter @devsfleet/db seed",
     "db:studio": "pnpm --filter @devsfleet/db studio",
     "db:reset": "pnpm --filter @devsfleet/db reset",
+    "db:normalize-phones": "pnpm --filter @devsfleet/db normalize-phones",
     "infra:up": "docker compose up -d",
     "infra:down": "docker compose down",
     "infra:logs": "docker compose logs -f",

@@ -56,6 +56,35 @@ export function searchKey(...parts: Array<string | null | undefined>): string {
 }
 
 /**
+ * The search key stored on a variant — the one definition of what a variant
+ * is findable by.
+ *
+ * Every translated product name goes in. `products.nameTranslations` holds
+ * `{ ar: "…", ur: "…" }` and was, until this existed, written and never read:
+ * the key was built from English alone, so a message in Arabic, Urdu, Hindi
+ * or Bengali matched nothing at all — three of the five locales this product
+ * claims to support. `searchKey`'s `\p{L}` class is already Unicode-aware, so
+ * the plumbing was always there; nothing was putting the text in.
+ *
+ * Used by every writer — create, rename, bulk import, seed — because a key
+ * built one way on create and another way on rename is a row that quietly
+ * stops matching what it used to.
+ */
+export function variantSearchKey(input: {
+  productName: string;
+  nameTranslations?: Record<string, string> | null | undefined;
+  variantName?: string | null | undefined;
+  sku: string;
+}): string {
+  return searchKey(
+    input.productName,
+    ...Object.values(input.nameTranslations ?? {}),
+    input.variantName,
+    input.sku,
+  );
+}
+
+/**
  * Barcode normalisation. Scanners emit leading zeros inconsistently and some
  * append a carriage return. UPC-A is EAN-13 with a leading zero, so both forms
  * must resolve to the same product.

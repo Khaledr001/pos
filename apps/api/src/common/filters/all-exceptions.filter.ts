@@ -235,6 +235,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
         return HttpStatus.CONFLICT;
       case ERROR_CODES.VALIDATION_FAILED:
         return HttpStatus.BAD_REQUEST;
+      case ERROR_CODES.LLM_NOT_CONFIGURED:
+        // 503: a dependency isn't set up, not a malformed request.
+        return HttpStatus.SERVICE_UNAVAILABLE;
+      case ERROR_CODES.LLM_REQUEST_FAILED:
+        // 502: we were configured correctly; the upstream provider failed.
+        return HttpStatus.BAD_GATEWAY;
       default:
         // Business rules — insufficient stock, credit limit, floor price.
         // 422: the request was well-formed but the business said no.

@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import path from "node:path";
 
 const config: NextConfig = {
   reactStrictMode: true,
@@ -40,13 +41,25 @@ const config: NextConfig = {
   async headers() {
     const dev = process.env.NODE_ENV === "development";
     const api = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+    const apiOrigin = new URL(api).origin;
+    /**
+     * The notification gateway's origin, stated explicitly.
+     *
+     * socket.io opens `wss://api.../socket.io/`, and browsers have not agreed
+     * on whether an `https:` source in connect-src also covers `wss:` to the
+     * same host. Listing it costs one token and removes the question; leaving
+     * it to be inferred risks a panel where notifications silently never
+     * arrive in production and work perfectly in development, because `ws:`
+     * is only added to the dev policy below.
+     */
+    const wsOrigin = apiOrigin.replace(/^http/, "ws");
     const csp = [
       "default-src 'self'",
       `script-src 'self'${dev ? " 'unsafe-eval' 'unsafe-inline'" : ""}`,
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: blob: http://localhost:9000 https://*.devsfleet.com",
-      `connect-src 'self' ${new URL(api).origin}${dev ? " ws: http://localhost:*" : ""}`,
+      `connect-src 'self' ${apiOrigin} ${wsOrigin}${dev ? " ws: http://localhost:*" : ""}`,
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
@@ -73,6 +86,33 @@ const config: NextConfig = {
   // Emits a self-contained server bundle — the deployment target is a
   // self-hosted VPS, not a platform that installs dependencies for you.
   output: "standalone",
+
+  /**
+   * Trace from the workspace root, not from apps/admin.
+   *
+   * Left unset, Next infers the root from the nearest lockfile and silently
+   * guesses wrong in a monorepo, emitting a bundle whose dependency paths do
+   * not resolve. `experimental.externalDir` above does NOT do this — it only
+   * permits imports from outside the app directory.
+   */
+  outputFileTracingRoot: path.join(import.meta.dirname, "../.."),
+
+  /**
+   * Force @swc/helpers in whole. The tracer alone ships 3 of its 438 files.
+   *
+   * It copies `cjs/` and package.json, then stops, because the only thing that
+   * reaches the ESM half is `next/dist/server/require-hook.js` resolving it
+   * dynamically at runtime — a static trace cannot see that. The bundle builds
+   * and looks complete, and then the server dies on its first boot with
+   * `Cannot find module '@swc/helpers/esm/_interop_require_default.js'`.
+   *
+   * Keyed by "/**" so it applies to every route rather than one entry point.
+   * Verify after changing anything here by actually STARTING the standalone
+   * output — a successful `next build` says nothing about whether it runs.
+   */
+  outputFileTracingIncludes: {
+    "/**": ["../../node_modules/.pnpm/@swc+helpers@*/node_modules/@swc/helpers/**"],
+  },
 };
 
 export default config;

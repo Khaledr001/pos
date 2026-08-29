@@ -16,6 +16,15 @@ async function bootstrap(): Promise<void> {
     // Buffer boot-time logs until pino is wired, so nothing is lost or
     // printed in a second format.
     bufferLogs: true,
+    /**
+     * Keep the untouched request bytes on `req.rawBody`.
+     *
+     * Meta signs the exact body it sent, so `X-Hub-Signature-256` can only be
+     * checked against those bytes — re-serialising the parsed JSON produces a
+     * different string (key order, whitespace, unicode escaping) and every
+     * signature fails. The WhatsApp webhook is the only reader.
+     */
+    rawBody: true,
   });
 
   app.useLogger(app.get(PinoLogger));

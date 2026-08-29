@@ -20,7 +20,7 @@ import {
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
-import { money, primaryId, timestamps } from "./_shared.js";
+import { activeFlag, money, primaryId, timestamps } from "./_shared.js";
 import { users } from "./auth.js";
 import { customers } from "./partners.js";
 import { branches, tenantScope } from "./tenants.js";
@@ -33,6 +33,65 @@ import { branches, tenantScope } from "./tenants.js";
  * work so a webhook is never lost to an LLM timeout, and Meta gets its 200
  * inside the retry window regardless of how slow the model is.
  */
+
+/**
+ * One business's WhatsApp number and the credentials to speak as it.
+ *
+ * A row per tenant, not a set of env vars. `WHATSAPP_PHONE_NUMBER_ID` and its
+ * access token are single global values, which models exactly one WhatsApp
+ * number for the whole platform — fine for one shop, wrong for a SaaS where
+ * each business has its own number and its own Meta app.
+ *
+ * `phoneNumberId` is globally unique, NOT unique-per-tenant: it is the only
+ * thing an inbound webhook carries that identifies whose message this is, so
+ * the mapping back to a tenant has to be unambiguous across the whole
+ * platform. That lookup runs before any tenant context exists, which is why
+ * the webhook reads this table through `runAsPlatformAdmin` — the same
+ * pre-authentication pattern `auth.service.ts` uses to resolve a tenant at
+ * login.
+ *
+ * SECRETS ARE STORED IN PLAINTEXT, and that is a known, deliberate gap.
+ * `accessToken` and `appSecret` cannot be hashed the way a refresh token is —
+ * both have to be replayed to Meta and to the signature check. Doing this
+ * properly means envelope encryption with a key that does not live in the
+ * database, which is its own piece of work. Until then these columns are as
+ * sensitive as the database itself.
+ */
+export const whatsappAccounts = pgTable(
+  "whatsapp_accounts",
+  {
+    id: primaryId(),
+    ...tenantScope(),
+
+    /** Meta's id for the business number. The webhook's only clue to the tenant. */
+    phoneNumberId: varchar({ length: 64 }).notNull(),
+    /** The number in E.164, for display — never used for routing. */
+    displayPhoneNumber: varchar({ length: 20 }),
+    businessAccountId: varchar({ length: 64 }),
+
+    /** Meta Cloud API bearer token. Plaintext — see the table comment. */
+    accessToken: text().notNull(),
+    /** Echoed back on Meta's GET verification handshake. */
+    verifyToken: varchar({ length: 128 }).notNull(),
+    /** Validates `X-Hub-Signature-256` on every inbound POST. */
+    appSecret: varchar({ length: 128 }).notNull(),
+
+    /** Which branch a conversation on this number acts against by default. */
+    defaultBranchId: uuid().references(() => branches.id, { onDelete: "set null" }),
+
+    ...activeFlag(),
+    ...timestamps(),
+  },
+  (t) => [
+    /**
+     * Global, not per-tenant. Two tenants claiming one Meta number would make
+     * an inbound message unroutable — and silently routing it to whichever row
+     * came back first would deliver one business's customer to another.
+     */
+    uniqueIndex("uq_wa_accounts_phone_number_id").on(t.phoneNumberId),
+    index("idx_wa_accounts_tenant").on(t.tenantId),
+  ],
+);
 
 export const whatsappConversations = pgTable(
   "whatsapp_conversations",
@@ -200,6 +259,8 @@ export const aiActionsRelations = relations(aiActions, ({ one }) => ({
   }),
 }));
 
+export type WhatsappAccount = typeof whatsappAccounts.$inferSelect;
+export type NewWhatsappAccount = typeof whatsappAccounts.$inferInsert;
 export type WhatsappConversation = typeof whatsappConversations.$inferSelect;
 export type NewWhatsappConversation = typeof whatsappConversations.$inferInsert;
 export type WhatsappMessage = typeof whatsappMessages.$inferSelect;

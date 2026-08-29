@@ -117,6 +117,12 @@ export const ERROR_CODES = {
   SYNC_CHECKPOINT_STALE: "SYNC_CHECKPOINT_STALE",
   SYNC_PAYLOAD_INVALID: "SYNC_PAYLOAD_INVALID",
 
+  // ai / llm
+  /** The selected provider has no client, or its API key is unset. */
+  LLM_NOT_CONFIGURED: "LLM_NOT_CONFIGURED",
+  /** The provider was reachable and configured but the call itself failed. */
+  LLM_REQUEST_FAILED: "LLM_REQUEST_FAILED",
+
   // generic
   VALIDATION_FAILED: "VALIDATION_FAILED",
   NOT_FOUND: "NOT_FOUND",

@@ -504,7 +504,11 @@ send/receive; templates and the 24-hour window; conversation state; phone →
 customer matching. Only then the LLM tool functions. Replace the mocked admin
 page with the real thread view.
 
-> Blocked on **open decision #4** — the LLM provider.
+> Provider decided — DeepSeek (D19) — and `LlmService` exists
+> (`apps/api/src/modules/ai/llm.service.ts`, chat completions + tool calling +
+> per-call cost estimate). Everything else in this stage — the webhook,
+> conversation state, the 24-hour window, the tool implementations, the real
+> admin thread view — is still not built.
 
 ### Stage 9 — Commercial features
 
@@ -588,8 +592,10 @@ From `docs/DECISIONS.md`. Resolve before the dependent stage, not during it.
 |---|---|---|
 | 1 | The real product price list | Stage 5 — final pricing schema and the importer |
 | 2 | Barcode scanner model (USB HID assumed) | Stage 4 — scanner integration |
-| 3 | Thermal printer models (58 mm / 80 mm) | Stage 4 — receipt rendering |
-| 4 | LLM provider | Stage 8 — AI module |
+
+Resolved: #3, thermal printer connection method, as D16 (exact model still
+unconfirmed but no longer blocking). #4, LLM provider, as D19 — DeepSeek,
+client built; the AI/WhatsApp module around it (Stage 8) is still open work.
 
 ~~New decision needed~~ — resolved, confirmed with the user, written into
 `docs/DECISIONS.md` as **D15**:
