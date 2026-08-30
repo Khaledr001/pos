@@ -69,7 +69,7 @@ node -e '
 # NEXT_PUBLIC_* is inlined into the client bundle at BUILD time and cannot be
 # changed by restarting anything. Read it from the API's own env so there is
 # one source of truth for the API's public URL.
-export NEXT_PUBLIC_API_URL="${NEXT_PUBLIC_API_URL:-https://api.devsfleet.com/api/v1}"
+export NEXT_PUBLIC_API_URL="${NEXT_PUBLIC_API_URL:-https://pos-api.devsfleet.com/api/v1}"
 echo "    NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL  (compiled into the admin bundle)"
 
 # -----------------------------------------------------------------------------
