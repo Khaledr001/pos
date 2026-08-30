@@ -107,10 +107,17 @@ export interface PosPurchaseOrderItem {
   variantId: string;
   productName: string;
   productSku: string;
+  /** In the ORDERED unit. Two boxes is "2". */
   quantity: string;
+  /** BASE units — never subtract this from `quantity`. */
   receivedQuantity: string;
+  /** Still outstanding, in the ordered unit. Computed by the API. */
+  remaining: string;
+  /** The packaging the line was ordered in. Null = the base unit. */
+  unitId: string | null;
   unitPrice: string;
-  unitAbbr: string;
+  /** Null when the line is in the product's own base unit. */
+  unitAbbr: string | null;
 }
 
 export interface PosPurchaseOrderDetails {

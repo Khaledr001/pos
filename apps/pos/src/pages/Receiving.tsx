@@ -1,44 +1,19 @@
 import { useEffect, useState, useRef } from "react";
-import { hasBridge, posData } from "../lib/pos-data.js";
+import {
+  hasBridge,
+  posData,
+  type PosPurchaseOrder,
+  type PosPurchaseOrderDetails,
+  type PosPurchaseOrderItem,
+} from "../lib/pos-data.js";
 import { formatDistanceToNow } from "date-fns";
 import { ClipboardCheck, ScanBarcode, ChevronLeft, PackageCheck, AlertCircle } from "lucide-react";
 import { useAuth } from "../store/auth.js";
 import { quantity as fmtQuantity } from "../lib/money.js";
 
-interface PurchaseOrder {
-  id: string;
-  poNumber: string;
-  status: "draft" | "sent" | "partial" | "received" | "cancelled";
-  supplierName: string;
-  expectedDate: string | null;
-  createdAt: string;
-}
-
-interface PurchaseOrderItem {
-  id: string;
-  variantId: string;
-  productName: string;
-  productSku: string;
-  /** In the ORDERED unit. Two boxes is "2". */
-  quantity: string;
-  /** BASE units — never subtract this from `quantity`. */
-  receivedQuantity: string;
-  /** Still outstanding, in the ordered unit. Computed by the API. */
-  remaining: string;
-  /** The packaging the line was ordered in. Null = the base unit. */
-  unitId: string | null;
-  unitPrice: string;
-  /** Null when the line is in the product's own base unit. */
-  unitAbbr: string | null;
-}
-
-interface PurchaseOrderDetails {
-  id: string;
-  poNumber: string;
-  supplierId: string;
-  branchId: string;
-  items: PurchaseOrderItem[];
-}
+type PurchaseOrder = PosPurchaseOrder;
+type PurchaseOrderItem = PosPurchaseOrderItem;
+type PurchaseOrderDetails = PosPurchaseOrderDetails;
 
 /**
  * NOTE ON THE RESPONSE SHAPE, because getting it wrong here was silent.
