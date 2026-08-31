@@ -10,6 +10,7 @@ CREATE TABLE "branches" (
 	"is_active" boolean DEFAULT true NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL,
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
@@ -28,6 +29,7 @@ CREATE TABLE "tenants" (
 	"is_active" boolean DEFAULT true NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL,
 	"deleted_at" timestamp with time zone,
 	CONSTRAINT "tenants_slug_unique" UNIQUE("slug")
 );
@@ -44,6 +46,7 @@ CREATE TABLE "audit_log" (
 	"reason" text,
 	"ip_address" varchar(45),
 	"request_id" varchar(64),
+	"impersonated_by" uuid,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
@@ -60,6 +63,7 @@ CREATE TABLE "refresh_tokens" (
 	"replaced_by_hash" varchar(128),
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL,
 	CONSTRAINT "refresh_tokens_tokenHash_unique" UNIQUE("token_hash")
 );
 --> statement-breakpoint
@@ -71,7 +75,8 @@ CREATE TABLE "roles" (
 	"permissions" jsonb DEFAULT '[]'::jsonb NOT NULL,
 	"is_system" boolean DEFAULT false NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "users" (
@@ -97,7 +102,23 @@ CREATE TABLE "users" (
 	"is_active" boolean DEFAULT true NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL,
 	"deleted_at" timestamp with time zone
+);
+--> statement-breakpoint
+CREATE TABLE "attribute_definitions" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"tenant_id" uuid NOT NULL,
+	"category_id" uuid NOT NULL,
+	"name" varchar(100) NOT NULL,
+	"label" varchar(255) NOT NULL,
+	"type" varchar(20) NOT NULL,
+	"unit" varchar(20),
+	"allowed_values" jsonb,
+	"sort_order" integer DEFAULT 0 NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "brands" (
@@ -109,6 +130,7 @@ CREATE TABLE "brands" (
 	"is_active" boolean DEFAULT true NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL,
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
@@ -126,6 +148,7 @@ CREATE TABLE "categories" (
 	"is_active" boolean DEFAULT true NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL,
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
@@ -145,7 +168,8 @@ CREATE TABLE "product_images" (
 	"sort_order" integer DEFAULT 0 NOT NULL,
 	"is_primary" boolean DEFAULT false NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "product_variants" (
@@ -165,6 +189,7 @@ CREATE TABLE "product_variants" (
 	"is_active" boolean DEFAULT true NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL,
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
@@ -190,6 +215,7 @@ CREATE TABLE "products" (
 	"is_active" boolean DEFAULT true NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL,
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
@@ -203,7 +229,8 @@ CREATE TABLE "serial_numbers" (
 	"sale_item_id" uuid,
 	"expiry_date" varchar(10),
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "units" (
@@ -213,7 +240,19 @@ CREATE TABLE "units" (
 	"abbreviation" varchar(10) NOT NULL,
 	"allows_fractions" boolean DEFAULT false NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "variant_attribute_values" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"tenant_id" uuid NOT NULL,
+	"variant_id" uuid NOT NULL,
+	"attribute_definition_id" uuid NOT NULL,
+	"value" text NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "variant_barcodes" (
@@ -224,7 +263,8 @@ CREATE TABLE "variant_barcodes" (
 	"unit_id" uuid,
 	"label" varchar(100),
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "variant_units" (
@@ -236,8 +276,11 @@ CREATE TABLE "variant_units" (
 	"barcode" varchar(64),
 	"price_override" numeric(12, 4),
 	"is_sellable" boolean DEFAULT true NOT NULL,
+	"is_purchasable" boolean DEFAULT true NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL,
+	CONSTRAINT "ck_variant_units_factor_positive" CHECK (conversion_factor > 0)
 );
 --> statement-breakpoint
 CREATE TABLE "customer_prices" (
@@ -251,7 +294,8 @@ CREATE TABLE "customer_prices" (
 	"effective_to" date,
 	"created_by" uuid,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "price_history" (
@@ -259,6 +303,7 @@ CREATE TABLE "price_history" (
 	"tenant_id" uuid NOT NULL,
 	"variant_id" uuid NOT NULL,
 	"price_list_id" uuid NOT NULL,
+	"min_quantity" numeric(12, 4) DEFAULT '1' NOT NULL,
 	"old_purchase_price" numeric(12, 4),
 	"new_purchase_price" numeric(12, 4),
 	"old_selling_price" numeric(12, 4),
@@ -280,7 +325,8 @@ CREATE TABLE "price_lists" (
 	"is_default" boolean DEFAULT false NOT NULL,
 	"is_active" boolean DEFAULT true NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "product_prices" (
@@ -291,10 +337,12 @@ CREATE TABLE "product_prices" (
 	"purchase_price" numeric(12, 4),
 	"selling_price" numeric(12, 4) NOT NULL,
 	"min_selling_price" numeric(12, 4),
+	"min_quantity" numeric(12, 4) DEFAULT '1' NOT NULL,
 	"effective_from" date DEFAULT now() NOT NULL,
 	"effective_to" date,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "customers" (
@@ -314,11 +362,17 @@ CREATE TABLE "customers" (
 	"credit_balance" numeric(12, 4) DEFAULT '0' NOT NULL,
 	"payment_term_days" integer DEFAULT 0 NOT NULL,
 	"credit_on_hold" boolean DEFAULT false NOT NULL,
+	"loyalty_points" integer DEFAULT 0 NOT NULL,
 	"whatsapp_phone" varchar(20),
 	"notes" text,
 	"is_active" boolean DEFAULT true NOT NULL,
+	"local_id" uuid,
+	"device_id" uuid,
+	"synced_at" timestamp with time zone,
+	"sync_status" varchar(20) DEFAULT 'pending' NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL,
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
@@ -338,6 +392,7 @@ CREATE TABLE "suppliers" (
 	"is_active" boolean DEFAULT true NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL,
 	"deleted_at" timestamp with time zone
 );
 --> statement-breakpoint
@@ -354,7 +409,8 @@ CREATE TABLE "inventory" (
 	"bin_location" varchar(50),
 	"last_counted_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "inventory_transactions" (
@@ -384,7 +440,8 @@ CREATE TABLE "stock_count_items" (
 	"variance" numeric(12, 4),
 	"notes" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "stock_counts" (
@@ -399,7 +456,8 @@ CREATE TABLE "stock_counts" (
 	"approved_at" timestamp with time zone,
 	"notes" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "stock_transfer_items" (
@@ -412,7 +470,8 @@ CREATE TABLE "stock_transfer_items" (
 	"received_quantity" numeric(12, 4),
 	"notes" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "stock_transfers" (
@@ -431,7 +490,8 @@ CREATE TABLE "stock_transfers" (
 	"received_at" timestamp with time zone,
 	"notes" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "order_items" (
@@ -456,7 +516,8 @@ CREATE TABLE "order_items" (
 	"notes" text,
 	"fulfilled_quantity" numeric(12, 4) DEFAULT '0' NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "orders" (
@@ -483,8 +544,13 @@ CREATE TABLE "orders" (
 	"notes" text,
 	"created_by" uuid,
 	"conversation_id" uuid,
+	"local_id" uuid,
+	"device_id" uuid,
+	"synced_at" timestamp with time zone,
+	"sync_status" varchar(20) DEFAULT 'pending' NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "quotation_items" (
@@ -508,7 +574,8 @@ CREATE TABLE "quotation_items" (
 	"sort_order" integer DEFAULT 0 NOT NULL,
 	"notes" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "quotations" (
@@ -535,8 +602,13 @@ CREATE TABLE "quotations" (
 	"sent_at" timestamp with time zone,
 	"created_by" uuid,
 	"conversation_id" uuid,
+	"local_id" uuid,
+	"device_id" uuid,
+	"synced_at" timestamp with time zone,
+	"sync_status" varchar(20) DEFAULT 'pending' NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "sale_items" (
@@ -562,8 +634,10 @@ CREATE TABLE "sale_items" (
 	"cost_price" numeric(12, 4),
 	"floor_price_overridden_by" uuid,
 	"returned_quantity" numeric(12, 4) DEFAULT '0' NOT NULL,
+	"return_disposition" varchar(10),
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "sales" (
@@ -591,13 +665,15 @@ CREATE TABLE "sales" (
 	"void_reason" text,
 	"notes" text,
 	"created_by" uuid,
-	"client_id" uuid,
+	"local_id" uuid,
 	"device_id" uuid,
 	"synced_at" timestamp with time zone,
+	"sync_status" varchar(20) DEFAULT 'pending' NOT NULL,
 	"occurred_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"created_offline" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "cash_movements" (
@@ -610,9 +686,10 @@ CREATE TABLE "cash_movements" (
 	"reference_type" varchar(30),
 	"reference_id" uuid,
 	"created_by" uuid,
-	"client_id" uuid,
+	"local_id" uuid,
 	"device_id" uuid,
 	"synced_at" timestamp with time zone,
+	"sync_status" varchar(20) DEFAULT 'pending' NOT NULL,
 	"occurred_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -632,11 +709,13 @@ CREATE TABLE "cash_sessions" (
 	"closed_at" timestamp with time zone,
 	"closed_by" uuid,
 	"notes" text,
-	"client_id" uuid,
+	"local_id" uuid,
 	"device_id" uuid,
 	"synced_at" timestamp with time zone,
+	"sync_status" varchar(20) DEFAULT 'pending' NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "payments" (
@@ -656,12 +735,152 @@ CREATE TABLE "payments" (
 	"clearing_date" timestamp with time zone,
 	"notes" text,
 	"created_by" uuid,
-	"client_id" uuid,
+	"local_id" uuid,
 	"device_id" uuid,
 	"synced_at" timestamp with time zone,
+	"sync_status" varchar(20) DEFAULT 'pending' NOT NULL,
 	"occurred_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "daily_closings" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"tenant_id" uuid NOT NULL,
+	"branch_id" uuid NOT NULL,
+	"closing_date" date NOT NULL,
+	"status" varchar(20) DEFAULT 'open' NOT NULL,
+	"opening_float" numeric(12, 4) DEFAULT '0' NOT NULL,
+	"total_sales" numeric(12, 4),
+	"total_returns" numeric(12, 4),
+	"total_expenses" numeric(12, 4),
+	"cash_total" numeric(12, 4),
+	"card_total" numeric(12, 4),
+	"bank_total" numeric(12, 4),
+	"credit_total" numeric(12, 4),
+	"sale_count" integer,
+	"expected_cash" numeric(12, 4),
+	"counted_cash" numeric(12, 4),
+	"cash_variance" numeric(12, 4),
+	"notes" text,
+	"opened_by" uuid NOT NULL,
+	"opened_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"closed_by" uuid,
+	"closed_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "expenses" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"tenant_id" uuid NOT NULL,
+	"branch_id" uuid NOT NULL,
+	"title" varchar(200) NOT NULL,
+	"amount" numeric(12, 4) NOT NULL,
+	"category" varchar(80),
+	"expense_date" date NOT NULL,
+	"payment_method" varchar(20) DEFAULT 'cash' NOT NULL,
+	"notes" text,
+	"user_id" uuid NOT NULL,
+	"daily_closing_id" uuid,
+	"deleted_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "held_carts" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"tenant_id" uuid NOT NULL,
+	"branch_id" uuid NOT NULL,
+	"label" varchar(80),
+	"cart_data" jsonb NOT NULL,
+	"line_count" integer DEFAULT 0 NOT NULL,
+	"total" numeric(12, 4) DEFAULT '0' NOT NULL,
+	"customer_id" uuid,
+	"user_id" uuid NOT NULL,
+	"local_id" uuid,
+	"device_id" uuid,
+	"synced_at" timestamp with time zone,
+	"sync_status" varchar(20) DEFAULT 'pending' NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "customer_payments" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"tenant_id" uuid NOT NULL,
+	"branch_id" uuid NOT NULL,
+	"customer_id" uuid NOT NULL,
+	"amount" numeric(12, 4) NOT NULL,
+	"method" varchar(20) NOT NULL,
+	"cash_session_id" uuid,
+	"reference_number" varchar(80),
+	"notes" text,
+	"created_by" uuid,
+	"local_id" uuid,
+	"device_id" uuid,
+	"synced_at" timestamp with time zone,
+	"sync_status" varchar(20) DEFAULT 'pending' NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "loyalty_transactions" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"tenant_id" uuid NOT NULL,
+	"customer_id" uuid NOT NULL,
+	"points" integer NOT NULL,
+	"type" varchar(20) NOT NULL,
+	"reference_type" varchar(40),
+	"reference_id" uuid,
+	"notes" text,
+	"created_by" uuid,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "formula_components" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"tenant_id" uuid NOT NULL,
+	"formula_id" uuid NOT NULL,
+	"component_name" varchar(80) NOT NULL,
+	"quantity_ml" numeric(12, 4) NOT NULL,
+	"sort_order" integer DEFAULT 0 NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "paint_formulas" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"tenant_id" uuid NOT NULL,
+	"color_code" varchar(40) NOT NULL,
+	"color_name" varchar(120) NOT NULL,
+	"base_variant_id" uuid NOT NULL,
+	"size_ml" integer NOT NULL,
+	"notes" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "paint_orders" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"tenant_id" uuid NOT NULL,
+	"branch_id" uuid NOT NULL,
+	"formula_id" uuid,
+	"sale_id" uuid,
+	"custom_notes" text,
+	"user_id" uuid NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "goods_receipt_items" (
@@ -670,6 +889,8 @@ CREATE TABLE "goods_receipt_items" (
 	"goods_receipt_id" uuid NOT NULL,
 	"purchase_order_item_id" uuid,
 	"variant_id" uuid NOT NULL,
+	"unit_id" uuid,
+	"unit_conversion_factor" numeric(12, 4) DEFAULT '1' NOT NULL,
 	"quantity" numeric(12, 4) NOT NULL,
 	"landed_unit_cost" numeric(12, 4),
 	"damaged_quantity" numeric(12, 4) DEFAULT '0' NOT NULL,
@@ -677,7 +898,9 @@ CREATE TABLE "goods_receipt_items" (
 	"expiry_date" date,
 	"notes" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL,
+	CONSTRAINT "ck_grn_items_factor_positive" CHECK (unit_conversion_factor > 0)
 );
 --> statement-breakpoint
 CREATE TABLE "goods_receipts" (
@@ -693,7 +916,23 @@ CREATE TABLE "goods_receipts" (
 	"received_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"notes" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "product_supplier_links" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"tenant_id" uuid NOT NULL,
+	"supplier_id" uuid NOT NULL,
+	"variant_id" uuid NOT NULL,
+	"supplier_sku" varchar(100),
+	"supplier_barcode" varchar(64),
+	"lead_time_days" integer,
+	"last_cost" numeric(12, 4),
+	"notes" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "purchase_order_items" (
@@ -717,7 +956,9 @@ CREATE TABLE "purchase_order_items" (
 	"sort_order" integer DEFAULT 0 NOT NULL,
 	"notes" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL,
+	CONSTRAINT "ck_po_items_factor_positive" CHECK (unit_conversion_factor > 0)
 );
 --> statement-breakpoint
 CREATE TABLE "purchase_orders" (
@@ -742,7 +983,8 @@ CREATE TABLE "purchase_orders" (
 	"created_by" uuid,
 	"approved_by" uuid,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "ai_actions" (
@@ -763,6 +1005,22 @@ CREATE TABLE "ai_actions" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "whatsapp_accounts" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"tenant_id" uuid NOT NULL,
+	"phone_number_id" varchar(64) NOT NULL,
+	"display_phone_number" varchar(20),
+	"business_account_id" varchar(64),
+	"access_token" text NOT NULL,
+	"verify_token" varchar(128) NOT NULL,
+	"app_secret" varchar(128) NOT NULL,
+	"default_branch_id" uuid,
+	"is_active" boolean DEFAULT true NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE "whatsapp_conversations" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
@@ -779,7 +1037,8 @@ CREATE TABLE "whatsapp_conversations" (
 	"last_message_at" timestamp with time zone,
 	"window_expires_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "whatsapp_messages" (
@@ -820,7 +1079,8 @@ CREATE TABLE "devices" (
 	"hardware_config" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"is_active" boolean DEFAULT true NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "document_sequences" (
@@ -829,7 +1089,8 @@ CREATE TABLE "document_sequences" (
 	"key" varchar(64) NOT NULL,
 	"current_value" bigint DEFAULT 0 NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "sync_events" (
@@ -839,7 +1100,7 @@ CREATE TABLE "sync_events" (
 	"direction" varchar(10) NOT NULL,
 	"entity_type" varchar(30) NOT NULL,
 	"entity_id" uuid,
-	"client_id" uuid,
+	"local_id" uuid,
 	"sequence" bigint,
 	"payload" jsonb NOT NULL,
 	"status" varchar(20) DEFAULT 'pending' NOT NULL,
@@ -851,16 +1112,37 @@ CREATE TABLE "sync_events" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "notifications" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"tenant_id" uuid NOT NULL,
+	"user_id" uuid NOT NULL,
+	"branch_id" uuid,
+	"type" varchar(30) NOT NULL,
+	"severity" varchar(10) DEFAULT 'info' NOT NULL,
+	"title" varchar(200) NOT NULL,
+	"message" text NOT NULL,
+	"reference_type" varchar(40),
+	"reference_id" uuid,
+	"is_read" boolean DEFAULT false NOT NULL,
+	"read_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL
+);
+--> statement-breakpoint
 ALTER TABLE "branches" ADD CONSTRAINT "branches_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "audit_log" ADD CONSTRAINT "audit_log_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "audit_log" ADD CONSTRAINT "audit_log_branch_id_branches_id_fk" FOREIGN KEY ("branch_id") REFERENCES "public"."branches"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "audit_log" ADD CONSTRAINT "audit_log_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "audit_log" ADD CONSTRAINT "audit_log_impersonated_by_users_id_fk" FOREIGN KEY ("impersonated_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "refresh_tokens" ADD CONSTRAINT "refresh_tokens_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "refresh_tokens" ADD CONSTRAINT "refresh_tokens_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "roles" ADD CONSTRAINT "roles_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "users" ADD CONSTRAINT "users_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "users" ADD CONSTRAINT "users_branch_id_branches_id_fk" FOREIGN KEY ("branch_id") REFERENCES "public"."branches"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "users" ADD CONSTRAINT "users_role_id_roles_id_fk" FOREIGN KEY ("role_id") REFERENCES "public"."roles"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "attribute_definitions" ADD CONSTRAINT "attribute_definitions_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "attribute_definitions" ADD CONSTRAINT "attribute_definitions_category_id_categories_id_fk" FOREIGN KEY ("category_id") REFERENCES "public"."categories"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "brands" ADD CONSTRAINT "brands_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "categories" ADD CONSTRAINT "categories_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "categories" ADD CONSTRAINT "categories_parent_id_categories_id_fk" FOREIGN KEY ("parent_id") REFERENCES "public"."categories"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
@@ -876,6 +1158,9 @@ ALTER TABLE "products" ADD CONSTRAINT "products_unit_id_units_id_fk" FOREIGN KEY
 ALTER TABLE "serial_numbers" ADD CONSTRAINT "serial_numbers_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "serial_numbers" ADD CONSTRAINT "serial_numbers_variant_id_product_variants_id_fk" FOREIGN KEY ("variant_id") REFERENCES "public"."product_variants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "units" ADD CONSTRAINT "units_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "variant_attribute_values" ADD CONSTRAINT "variant_attribute_values_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "variant_attribute_values" ADD CONSTRAINT "variant_attribute_values_variant_id_product_variants_id_fk" FOREIGN KEY ("variant_id") REFERENCES "public"."product_variants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "variant_attribute_values" ADD CONSTRAINT "variant_attribute_values_attribute_definition_id_attribute_definitions_id_fk" FOREIGN KEY ("attribute_definition_id") REFERENCES "public"."attribute_definitions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "variant_barcodes" ADD CONSTRAINT "variant_barcodes_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "variant_barcodes" ADD CONSTRAINT "variant_barcodes_variant_id_product_variants_id_fk" FOREIGN KEY ("variant_id") REFERENCES "public"."product_variants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "variant_barcodes" ADD CONSTRAINT "variant_barcodes_unit_id_units_id_fk" FOREIGN KEY ("unit_id") REFERENCES "public"."units"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
@@ -962,15 +1247,47 @@ ALTER TABLE "payments" ADD CONSTRAINT "payments_tenant_id_tenants_id_fk" FOREIGN
 ALTER TABLE "payments" ADD CONSTRAINT "payments_branch_id_branches_id_fk" FOREIGN KEY ("branch_id") REFERENCES "public"."branches"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "payments" ADD CONSTRAINT "payments_customer_id_customers_id_fk" FOREIGN KEY ("customer_id") REFERENCES "public"."customers"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "payments" ADD CONSTRAINT "payments_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "daily_closings" ADD CONSTRAINT "daily_closings_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "daily_closings" ADD CONSTRAINT "daily_closings_branch_id_branches_id_fk" FOREIGN KEY ("branch_id") REFERENCES "public"."branches"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "daily_closings" ADD CONSTRAINT "daily_closings_opened_by_users_id_fk" FOREIGN KEY ("opened_by") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "daily_closings" ADD CONSTRAINT "daily_closings_closed_by_users_id_fk" FOREIGN KEY ("closed_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "expenses" ADD CONSTRAINT "expenses_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "expenses" ADD CONSTRAINT "expenses_branch_id_branches_id_fk" FOREIGN KEY ("branch_id") REFERENCES "public"."branches"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "expenses" ADD CONSTRAINT "expenses_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "expenses" ADD CONSTRAINT "expenses_daily_closing_id_daily_closings_id_fk" FOREIGN KEY ("daily_closing_id") REFERENCES "public"."daily_closings"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "held_carts" ADD CONSTRAINT "held_carts_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "held_carts" ADD CONSTRAINT "held_carts_branch_id_branches_id_fk" FOREIGN KEY ("branch_id") REFERENCES "public"."branches"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "held_carts" ADD CONSTRAINT "held_carts_customer_id_customers_id_fk" FOREIGN KEY ("customer_id") REFERENCES "public"."customers"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "held_carts" ADD CONSTRAINT "held_carts_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "customer_payments" ADD CONSTRAINT "customer_payments_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "customer_payments" ADD CONSTRAINT "customer_payments_branch_id_branches_id_fk" FOREIGN KEY ("branch_id") REFERENCES "public"."branches"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "customer_payments" ADD CONSTRAINT "customer_payments_customer_id_customers_id_fk" FOREIGN KEY ("customer_id") REFERENCES "public"."customers"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "customer_payments" ADD CONSTRAINT "customer_payments_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "loyalty_transactions" ADD CONSTRAINT "loyalty_transactions_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "loyalty_transactions" ADD CONSTRAINT "loyalty_transactions_customer_id_customers_id_fk" FOREIGN KEY ("customer_id") REFERENCES "public"."customers"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "loyalty_transactions" ADD CONSTRAINT "loyalty_transactions_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "formula_components" ADD CONSTRAINT "formula_components_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "formula_components" ADD CONSTRAINT "formula_components_formula_id_paint_formulas_id_fk" FOREIGN KEY ("formula_id") REFERENCES "public"."paint_formulas"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "paint_formulas" ADD CONSTRAINT "paint_formulas_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "paint_formulas" ADD CONSTRAINT "paint_formulas_base_variant_id_product_variants_id_fk" FOREIGN KEY ("base_variant_id") REFERENCES "public"."product_variants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "paint_orders" ADD CONSTRAINT "paint_orders_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "paint_orders" ADD CONSTRAINT "paint_orders_branch_id_branches_id_fk" FOREIGN KEY ("branch_id") REFERENCES "public"."branches"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "paint_orders" ADD CONSTRAINT "paint_orders_formula_id_paint_formulas_id_fk" FOREIGN KEY ("formula_id") REFERENCES "public"."paint_formulas"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "paint_orders" ADD CONSTRAINT "paint_orders_sale_id_sales_id_fk" FOREIGN KEY ("sale_id") REFERENCES "public"."sales"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "paint_orders" ADD CONSTRAINT "paint_orders_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "goods_receipt_items" ADD CONSTRAINT "goods_receipt_items_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "goods_receipt_items" ADD CONSTRAINT "goods_receipt_items_goods_receipt_id_goods_receipts_id_fk" FOREIGN KEY ("goods_receipt_id") REFERENCES "public"."goods_receipts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "goods_receipt_items" ADD CONSTRAINT "goods_receipt_items_purchase_order_item_id_purchase_order_items_id_fk" FOREIGN KEY ("purchase_order_item_id") REFERENCES "public"."purchase_order_items"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "goods_receipt_items" ADD CONSTRAINT "goods_receipt_items_variant_id_product_variants_id_fk" FOREIGN KEY ("variant_id") REFERENCES "public"."product_variants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "goods_receipt_items" ADD CONSTRAINT "goods_receipt_items_unit_id_units_id_fk" FOREIGN KEY ("unit_id") REFERENCES "public"."units"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "goods_receipts" ADD CONSTRAINT "goods_receipts_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "goods_receipts" ADD CONSTRAINT "goods_receipts_branch_id_branches_id_fk" FOREIGN KEY ("branch_id") REFERENCES "public"."branches"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "goods_receipts" ADD CONSTRAINT "goods_receipts_purchase_order_id_purchase_orders_id_fk" FOREIGN KEY ("purchase_order_id") REFERENCES "public"."purchase_orders"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "goods_receipts" ADD CONSTRAINT "goods_receipts_supplier_id_suppliers_id_fk" FOREIGN KEY ("supplier_id") REFERENCES "public"."suppliers"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "goods_receipts" ADD CONSTRAINT "goods_receipts_received_by_users_id_fk" FOREIGN KEY ("received_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "product_supplier_links" ADD CONSTRAINT "product_supplier_links_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "product_supplier_links" ADD CONSTRAINT "product_supplier_links_supplier_id_suppliers_id_fk" FOREIGN KEY ("supplier_id") REFERENCES "public"."suppliers"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "product_supplier_links" ADD CONSTRAINT "product_supplier_links_variant_id_product_variants_id_fk" FOREIGN KEY ("variant_id") REFERENCES "public"."product_variants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "purchase_order_items" ADD CONSTRAINT "purchase_order_items_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "purchase_order_items" ADD CONSTRAINT "purchase_order_items_purchase_order_id_purchase_orders_id_fk" FOREIGN KEY ("purchase_order_id") REFERENCES "public"."purchase_orders"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "purchase_order_items" ADD CONSTRAINT "purchase_order_items_variant_id_product_variants_id_fk" FOREIGN KEY ("variant_id") REFERENCES "public"."product_variants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
@@ -983,6 +1300,8 @@ ALTER TABLE "purchase_orders" ADD CONSTRAINT "purchase_orders_approved_by_users_
 ALTER TABLE "ai_actions" ADD CONSTRAINT "ai_actions_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "ai_actions" ADD CONSTRAINT "ai_actions_conversation_id_whatsapp_conversations_id_fk" FOREIGN KEY ("conversation_id") REFERENCES "public"."whatsapp_conversations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "ai_actions" ADD CONSTRAINT "ai_actions_message_id_whatsapp_messages_id_fk" FOREIGN KEY ("message_id") REFERENCES "public"."whatsapp_messages"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "whatsapp_accounts" ADD CONSTRAINT "whatsapp_accounts_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "whatsapp_accounts" ADD CONSTRAINT "whatsapp_accounts_default_branch_id_branches_id_fk" FOREIGN KEY ("default_branch_id") REFERENCES "public"."branches"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "whatsapp_conversations" ADD CONSTRAINT "whatsapp_conversations_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "whatsapp_conversations" ADD CONSTRAINT "whatsapp_conversations_customer_id_customers_id_fk" FOREIGN KEY ("customer_id") REFERENCES "public"."customers"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "whatsapp_conversations" ADD CONSTRAINT "whatsapp_conversations_branch_id_branches_id_fk" FOREIGN KEY ("branch_id") REFERENCES "public"."branches"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
@@ -995,6 +1314,9 @@ ALTER TABLE "devices" ADD CONSTRAINT "devices_branch_id_branches_id_fk" FOREIGN 
 ALTER TABLE "document_sequences" ADD CONSTRAINT "document_sequences_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sync_events" ADD CONSTRAINT "sync_events_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sync_events" ADD CONSTRAINT "sync_events_device_id_devices_id_fk" FOREIGN KEY ("device_id") REFERENCES "public"."devices"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "notifications" ADD CONSTRAINT "notifications_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "notifications" ADD CONSTRAINT "notifications_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "notifications" ADD CONSTRAINT "notifications_branch_id_branches_id_fk" FOREIGN KEY ("branch_id") REFERENCES "public"."branches"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "idx_branches_tenant" ON "branches" USING btree ("tenant_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "uq_branches_tenant_code" ON "branches" USING btree ("tenant_id","code");--> statement-breakpoint
 CREATE INDEX "idx_tenants_slug" ON "tenants" USING btree ("slug");--> statement-breakpoint
@@ -1002,12 +1324,15 @@ CREATE INDEX "idx_tenants_plan" ON "tenants" USING btree ("plan_id");--> stateme
 CREATE INDEX "idx_audit_tenant_created" ON "audit_log" USING btree ("tenant_id","created_at");--> statement-breakpoint
 CREATE INDEX "idx_audit_entity" ON "audit_log" USING btree ("entity_type","entity_id");--> statement-breakpoint
 CREATE INDEX "idx_audit_user" ON "audit_log" USING btree ("user_id","created_at");--> statement-breakpoint
+CREATE INDEX "idx_audit_impersonated" ON "audit_log" USING btree ("impersonated_by","created_at") WHERE impersonated_by is not null;--> statement-breakpoint
 CREATE INDEX "idx_refresh_user" ON "refresh_tokens" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "idx_refresh_expires" ON "refresh_tokens" USING btree ("expires_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "uq_roles_tenant_name" ON "roles" USING btree ("tenant_id","name");--> statement-breakpoint
 CREATE UNIQUE INDEX "uq_users_tenant_email" ON "users" USING btree ("tenant_id","email") WHERE deleted_at IS NULL;--> statement-breakpoint
 CREATE INDEX "idx_users_tenant_branch" ON "users" USING btree ("tenant_id","branch_id");--> statement-breakpoint
 CREATE INDEX "idx_users_role" ON "users" USING btree ("role_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "uq_attribute_definitions_category_name" ON "attribute_definitions" USING btree ("category_id","name");--> statement-breakpoint
+CREATE INDEX "idx_attribute_definitions_tenant" ON "attribute_definitions" USING btree ("tenant_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "uq_brands_tenant_slug" ON "brands" USING btree ("tenant_id","slug");--> statement-breakpoint
 CREATE UNIQUE INDEX "uq_categories_tenant_slug" ON "categories" USING btree ("tenant_id","slug");--> statement-breakpoint
 CREATE INDEX "idx_categories_parent" ON "categories" USING btree ("parent_id");--> statement-breakpoint
@@ -1028,6 +1353,8 @@ CREATE INDEX "idx_products_updated" ON "products" USING btree ("tenant_id","upda
 CREATE UNIQUE INDEX "uq_serials_tenant_serial" ON "serial_numbers" USING btree ("tenant_id","serial");--> statement-breakpoint
 CREATE INDEX "idx_serials_variant_status" ON "serial_numbers" USING btree ("variant_id","status");--> statement-breakpoint
 CREATE UNIQUE INDEX "uq_units_tenant_abbr" ON "units" USING btree ("tenant_id","abbreviation");--> statement-breakpoint
+CREATE UNIQUE INDEX "uq_variant_attribute_values_variant_def" ON "variant_attribute_values" USING btree ("variant_id","attribute_definition_id");--> statement-breakpoint
+CREATE INDEX "idx_variant_attribute_values_lookup" ON "variant_attribute_values" USING btree ("attribute_definition_id","value");--> statement-breakpoint
 CREATE UNIQUE INDEX "uq_variant_barcodes_tenant_code" ON "variant_barcodes" USING btree ("tenant_id","barcode");--> statement-breakpoint
 CREATE INDEX "idx_variant_barcodes_variant" ON "variant_barcodes" USING btree ("variant_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "uq_variant_units" ON "variant_units" USING btree ("variant_id","unit_id");--> statement-breakpoint
@@ -1038,11 +1365,12 @@ CREATE INDEX "idx_price_history_variant" ON "price_history" USING btree ("varian
 CREATE INDEX "idx_price_history_tenant_created" ON "price_history" USING btree ("tenant_id","created_at");--> statement-breakpoint
 CREATE INDEX "idx_price_lists_tenant" ON "price_lists" USING btree ("tenant_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "uq_price_lists_default" ON "price_lists" USING btree ("tenant_id") WHERE is_default = true;--> statement-breakpoint
-CREATE UNIQUE INDEX "uq_product_prices_effective" ON "product_prices" USING btree ("variant_id","price_list_id","effective_from");--> statement-breakpoint
-CREATE INDEX "idx_product_prices_current" ON "product_prices" USING btree ("variant_id","price_list_id") WHERE effective_to IS NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "uq_product_prices_effective" ON "product_prices" USING btree ("variant_id","price_list_id","min_quantity","effective_from");--> statement-breakpoint
+CREATE INDEX "idx_product_prices_current" ON "product_prices" USING btree ("variant_id","price_list_id","min_quantity") WHERE effective_to IS NULL;--> statement-breakpoint
 CREATE INDEX "idx_product_prices_list" ON "product_prices" USING btree ("price_list_id");--> statement-breakpoint
 CREATE INDEX "idx_customers_tenant_phone" ON "customers" USING btree ("tenant_id","phone");--> statement-breakpoint
 CREATE UNIQUE INDEX "uq_customers_tenant_whatsapp" ON "customers" USING btree ("tenant_id","whatsapp_phone") WHERE whatsapp_phone IS NOT NULL AND deleted_at IS NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "uq_customers_client" ON "customers" USING btree ("local_id") WHERE local_id IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "idx_customers_tenant_name" ON "customers" USING btree ("tenant_id","name");--> statement-breakpoint
 CREATE INDEX "idx_customers_updated" ON "customers" USING btree ("tenant_id","updated_at");--> statement-breakpoint
 CREATE INDEX "idx_customers_credit" ON "customers" USING btree ("tenant_id","credit_balance") WHERE credit_balance > 0;--> statement-breakpoint
@@ -1081,29 +1409,51 @@ CREATE INDEX "idx_sales_customer" ON "sales" USING btree ("customer_id","occurre
 CREATE INDEX "idx_sales_tenant_occurred" ON "sales" USING btree ("tenant_id","occurred_at");--> statement-breakpoint
 CREATE INDEX "idx_sales_cash_session" ON "sales" USING btree ("cash_session_id");--> statement-breakpoint
 CREATE INDEX "idx_sales_device" ON "sales" USING btree ("device_id","occurred_at");--> statement-breakpoint
-CREATE UNIQUE INDEX "uq_sales_client_id" ON "sales" USING btree ("client_id") WHERE client_id IS NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "uq_sales_client" ON "sales" USING btree ("local_id") WHERE local_id IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "idx_cash_movements_session" ON "cash_movements" USING btree ("cash_session_id","occurred_at");--> statement-breakpoint
-CREATE UNIQUE INDEX "uq_cash_movements_client_id" ON "cash_movements" USING btree ("client_id") WHERE client_id IS NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "uq_cash_movements_client_id" ON "cash_movements" USING btree ("local_id") WHERE local_id IS NOT NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX "uq_cash_sessions_number" ON "cash_sessions" USING btree ("tenant_id","session_number");--> statement-breakpoint
 CREATE INDEX "idx_cash_sessions_branch_status" ON "cash_sessions" USING btree ("branch_id","status");--> statement-breakpoint
 CREATE INDEX "idx_cash_sessions_user" ON "cash_sessions" USING btree ("user_id","opened_at");--> statement-breakpoint
-CREATE UNIQUE INDEX "uq_cash_sessions_client_id" ON "cash_sessions" USING btree ("client_id") WHERE client_id IS NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "uq_cash_sessions_client_id" ON "cash_sessions" USING btree ("local_id") WHERE local_id IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "idx_payments_sale" ON "payments" USING btree ("sale_id");--> statement-breakpoint
 CREATE INDEX "idx_payments_customer" ON "payments" USING btree ("customer_id","occurred_at");--> statement-breakpoint
 CREATE INDEX "idx_payments_branch_occurred" ON "payments" USING btree ("branch_id","occurred_at");--> statement-breakpoint
 CREATE INDEX "idx_payments_cash_session" ON "payments" USING btree ("cash_session_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "uq_payments_client_id" ON "payments" USING btree ("client_id") WHERE client_id IS NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "uq_payments_client_id" ON "payments" USING btree ("local_id") WHERE local_id IS NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "uq_daily_closings_day" ON "daily_closings" USING btree ("tenant_id","branch_id","closing_date");--> statement-breakpoint
+CREATE INDEX "idx_daily_closings_date" ON "daily_closings" USING btree ("tenant_id","closing_date");--> statement-breakpoint
+CREATE INDEX "idx_expenses_date" ON "expenses" USING btree ("tenant_id","branch_id","expense_date");--> statement-breakpoint
+CREATE INDEX "idx_expenses_category" ON "expenses" USING btree ("tenant_id","category");--> statement-breakpoint
+CREATE INDEX "idx_expenses_closing" ON "expenses" USING btree ("daily_closing_id");--> statement-breakpoint
+CREATE INDEX "idx_held_carts_user" ON "held_carts" USING btree ("tenant_id","branch_id","user_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "uq_held_carts_client_id" ON "held_carts" USING btree ("local_id") WHERE local_id IS NOT NULL;--> statement-breakpoint
+CREATE INDEX "idx_customer_payments_customer" ON "customer_payments" USING btree ("customer_id","created_at");--> statement-breakpoint
+CREATE INDEX "idx_customer_payments_session" ON "customer_payments" USING btree ("cash_session_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "uq_customer_payments_local_id" ON "customer_payments" USING btree ("local_id") WHERE local_id IS NOT NULL;--> statement-breakpoint
+CREATE INDEX "idx_loyalty_customer" ON "loyalty_transactions" USING btree ("customer_id","created_at");--> statement-breakpoint
+CREATE INDEX "idx_loyalty_reference" ON "loyalty_transactions" USING btree ("reference_type","reference_id");--> statement-breakpoint
+CREATE INDEX "idx_formula_components_formula" ON "formula_components" USING btree ("formula_id","sort_order");--> statement-breakpoint
+CREATE UNIQUE INDEX "uq_paint_formulas_code_size" ON "paint_formulas" USING btree ("tenant_id","color_code","size_ml");--> statement-breakpoint
+CREATE INDEX "idx_paint_formulas_search" ON "paint_formulas" USING btree ("tenant_id","color_name");--> statement-breakpoint
+CREATE INDEX "idx_paint_orders_branch" ON "paint_orders" USING btree ("branch_id","created_at");--> statement-breakpoint
 CREATE INDEX "idx_grn_items_grn" ON "goods_receipt_items" USING btree ("goods_receipt_id");--> statement-breakpoint
 CREATE INDEX "idx_grn_items_variant" ON "goods_receipt_items" USING btree ("variant_id","created_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "uq_goods_receipts_number" ON "goods_receipts" USING btree ("tenant_id","grn_number");--> statement-breakpoint
 CREATE INDEX "idx_grn_po" ON "goods_receipts" USING btree ("purchase_order_id");--> statement-breakpoint
 CREATE INDEX "idx_grn_branch_received" ON "goods_receipts" USING btree ("branch_id","received_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "uq_product_supplier_links_supplier_variant" ON "product_supplier_links" USING btree ("supplier_id","variant_id");--> statement-breakpoint
+CREATE INDEX "idx_product_supplier_links_barcode" ON "product_supplier_links" USING btree ("supplier_id","supplier_barcode") WHERE supplier_barcode IS NOT NULL;--> statement-breakpoint
+CREATE INDEX "idx_product_supplier_links_sku" ON "product_supplier_links" USING btree ("supplier_id","supplier_sku") WHERE supplier_sku IS NOT NULL;--> statement-breakpoint
+CREATE INDEX "idx_product_supplier_links_variant" ON "product_supplier_links" USING btree ("variant_id");--> statement-breakpoint
 CREATE INDEX "idx_po_items_po" ON "purchase_order_items" USING btree ("purchase_order_id","sort_order");--> statement-breakpoint
 CREATE UNIQUE INDEX "uq_purchase_orders_number" ON "purchase_orders" USING btree ("tenant_id","po_number");--> statement-breakpoint
 CREATE INDEX "idx_po_supplier" ON "purchase_orders" USING btree ("supplier_id","created_at");--> statement-breakpoint
 CREATE INDEX "idx_po_branch_status" ON "purchase_orders" USING btree ("branch_id","status");--> statement-breakpoint
 CREATE INDEX "idx_ai_actions_conversation" ON "ai_actions" USING btree ("conversation_id","created_at");--> statement-breakpoint
 CREATE INDEX "idx_ai_actions_tenant_type" ON "ai_actions" USING btree ("tenant_id","action_type","created_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "uq_wa_accounts_phone_number_id" ON "whatsapp_accounts" USING btree ("phone_number_id");--> statement-breakpoint
+CREATE INDEX "idx_wa_accounts_tenant" ON "whatsapp_accounts" USING btree ("tenant_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "uq_wa_conversations_tenant_phone" ON "whatsapp_conversations" USING btree ("tenant_id","phone_number");--> statement-breakpoint
 CREATE INDEX "idx_wa_conversations_status" ON "whatsapp_conversations" USING btree ("tenant_id","status","last_message_at");--> statement-breakpoint
 CREATE INDEX "idx_wa_conversations_customer" ON "whatsapp_conversations" USING btree ("customer_id");--> statement-breakpoint
@@ -1113,6 +1463,8 @@ CREATE UNIQUE INDEX "uq_devices_tenant_name" ON "devices" USING btree ("tenant_i
 CREATE UNIQUE INDEX "uq_devices_hardware" ON "devices" USING btree ("hardware_id");--> statement-breakpoint
 CREATE INDEX "idx_devices_branch" ON "devices" USING btree ("branch_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "uq_document_sequences" ON "document_sequences" USING btree ("tenant_id","key");--> statement-breakpoint
-CREATE UNIQUE INDEX "uq_sync_events_client" ON "sync_events" USING btree ("device_id","client_id","entity_type") WHERE client_id IS NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "uq_sync_events_client" ON "sync_events" USING btree ("device_id","local_id","entity_type") WHERE local_id IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "idx_sync_events_device_created" ON "sync_events" USING btree ("device_id","created_at");--> statement-breakpoint
-CREATE INDEX "idx_sync_events_status" ON "sync_events" USING btree ("tenant_id","status","created_at");
+CREATE INDEX "idx_sync_events_status" ON "sync_events" USING btree ("tenant_id","status","created_at");--> statement-breakpoint
+CREATE INDEX "idx_notifications_user_unread" ON "notifications" USING btree ("user_id","is_read","created_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "uq_notifications_dedupe" ON "notifications" USING btree ("user_id","type","reference_type","reference_id") WHERE is_read = false and reference_id is not null;

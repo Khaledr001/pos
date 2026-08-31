@@ -1,3 +1,0 @@
-ALTER TABLE "audit_log" ADD COLUMN "impersonated_by" uuid;--> statement-breakpoint
-ALTER TABLE "audit_log" ADD CONSTRAINT "audit_log_impersonated_by_users_id_fk" FOREIGN KEY ("impersonated_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX "idx_audit_impersonated" ON "audit_log" USING btree ("impersonated_by","created_at") WHERE impersonated_by is not null;
