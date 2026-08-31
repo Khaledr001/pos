@@ -55,11 +55,11 @@ const config: NextConfig = {
     const wsOrigin = apiOrigin.replace(/^http/, "ws");
     const csp = [
       "default-src 'self'",
-      `script-src 'self'${dev ? " 'unsafe-eval' 'unsafe-inline'" : ""}`,
+      `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ""} https://static.cloudflareinsights.com`,
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: blob: http://localhost:9000 https://*.devsfleet.com",
-      `connect-src 'self' ${apiOrigin} ${wsOrigin}${dev ? " ws: http://localhost:*" : ""}`,
+      `connect-src 'self' ${apiOrigin} ${wsOrigin}${dev ? " ws: http://localhost:*" : ""} https://cloudflareinsights.com`,
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
