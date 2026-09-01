@@ -26,6 +26,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 let mainWindow: BrowserWindow | null = null;
 
 function createWindow(): void {
+  const iconPath = join(__dirname, "../public/icon/DevsFleet-Fav.png");
+
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -34,6 +36,7 @@ function createWindow(): void {
     show: false,
     backgroundColor: "#0b0d10",
     title: "DevsFleet POS",
+    icon: iconPath,
     webPreferences: {
       preload: join(__dirname, "preload.js"),
       // Non-negotiable on a terminal that handles money.

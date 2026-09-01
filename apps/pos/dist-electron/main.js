@@ -4457,6 +4457,7 @@ function hardwareId() {
 const __dirname$1 = node_path.dirname(node_url.fileURLToPath(typeof document === "undefined" ? require("url").pathToFileURL(__filename).href : _documentCurrentScript && _documentCurrentScript.tagName.toUpperCase() === "SCRIPT" && _documentCurrentScript.src || new URL("main.js", document.baseURI).href));
 let mainWindow = null;
 function createWindow() {
+  const iconPath = node_path.join(__dirname$1, "../public/icon/DevsFleet-Fav.png");
   mainWindow = new electron.BrowserWindow({
     width: 1440,
     height: 900,
@@ -4465,6 +4466,7 @@ function createWindow() {
     show: false,
     backgroundColor: "#0b0d10",
     title: "DevsFleet POS",
+    icon: iconPath,
     webPreferences: {
       preload: node_path.join(__dirname$1, "preload.js"),
       // Non-negotiable on a terminal that handles money.

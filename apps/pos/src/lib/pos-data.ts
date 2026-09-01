@@ -446,8 +446,11 @@ const electronAdapter: PosDataAdapter = {
   createCustomer: (input) => window.devsfleet.customers.createCustomer(input),
   checkStockInOtherBranches: async (sku) => {
     try {
-      const res = await apiClient.get<{ data: Array<{ branchName: string; available: string }> }>(`/inventory?q=${encodeURIComponent(sku)}`);
-      return res.data || [];
+      const res = await apiClient.get<any>(`/inventory?q=${encodeURIComponent(sku)}`);
+      if (Array.isArray(res)) return res;
+      if (res && Array.isArray(res.data)) return res.data;
+      if (res && Array.isArray(res.items)) return res.items;
+      return [];
     } catch {
       return [];
     }
@@ -893,8 +896,13 @@ export async function adminLoginForRegistration(email: string, password: string)
 }
 
 export async function fetchBranchesForRegistration() {
-  const res = await apiClient.get<{ data: Array<{ id: string; name: string }> }>("/branches");
-  return res.data;
+  const res = await apiClient.get<any>("/branches");
+  if (Array.isArray(res)) return res;
+  if (res && typeof res === "object") {
+    if (Array.isArray(res.items)) return res.items;
+    if (Array.isArray(res.data)) return res.data;
+  }
+  return [];
 }
 
 export async function registerDeviceOnServer(branchId: string, name: string) {
@@ -1243,8 +1251,11 @@ const apiAdapter: PosDataAdapter = {
 
   async checkStockInOtherBranches(sku) {
     try {
-      const res = await apiClient.get<{ data: Array<{ branchName: string; available: string }> }>(`/inventory?q=${encodeURIComponent(sku)}`);
-      return res.data || [];
+      const res = await apiClient.get<any>(`/inventory?q=${encodeURIComponent(sku)}`);
+      if (Array.isArray(res)) return res;
+      if (res && Array.isArray(res.data)) return res.data;
+      if (res && Array.isArray(res.items)) return res.items;
+      return [];
     } catch {
       return [];
     }

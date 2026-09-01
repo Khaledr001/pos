@@ -1,6 +1,9 @@
 {
   "name": "@devsfleet/pos",
   "version": "0.1.0",
+  "description": "DevsFleet POS Desktop Application",
+  "author": "DevsFleet <support@devsfleet.com>",
+  "homepage": "https://devsfleet.com",
   "private": true,
   "main": "dist-electron/main.js",
   "scripts": {

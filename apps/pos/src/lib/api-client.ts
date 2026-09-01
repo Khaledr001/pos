@@ -109,8 +109,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (!res.ok) {
     let message = `API error ${res.status}`;
     try {
-      const body = (await res.json()) as { message?: string };
-      if (body.message) message = body.message;
+      const body = (await res.json()) as { error?: { message?: string }; message?: string };
+      if (body.error?.message) message = body.error.message;
+      else if (body.message) message = body.message;
     } catch {
       // Body not JSON — keep the status message.
     }
@@ -120,7 +121,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   // 204 No Content — nothing to parse.
   if (res.status === 204) return undefined as unknown as T;
 
-  return res.json() as Promise<T>;
+  const json = (await res.json()) as { success?: boolean; data?: T } | T;
+  if (json && typeof json === "object" && "data" in json && (json as { success?: boolean }).success === true) {
+    return (json as { data: T }).data;
+  }
+  return json as T;
 }
 
 // Convenience helpers that mirror the shape the POS pages expect.

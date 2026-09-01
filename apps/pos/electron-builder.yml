@@ -1,5 +1,7 @@
 appId: com.devsfleet.pos
 productName: DevsFleet POS
+executableName: devsfleet-pos
+artifactName: "devsfleet-pos-${version}-${arch}.${ext}"
 copyright: Copyright © DevsFleet
 
 directories:
@@ -9,6 +11,7 @@ directories:
 files:
   - dist/**/*
   - dist-electron/**/*
+  - public/**/*
   - package.json
 
 # better-sqlite3 is a native binding: it must be unpacked from the asar
@@ -17,12 +20,11 @@ asarUnpack:
   - "**/node_modules/better-sqlite3/**/*"
 
 win:
+  icon: "public/icon/DevsFleet-Fav.png"
+  artifactName: "devsfleet-pos-setup-${version}.${ext}"
   target:
     - target: nsis
       arch: [x64]
-  # Signing matters here: an unsigned POS installer trips SmartScreen on every
-  # terminal, and a shop's IT will simply refuse to install it.
-  # certificateFile / certificatePassword come from CI secrets.
 
 nsis:
   oneClick: false
@@ -32,6 +34,9 @@ nsis:
   shortcutName: DevsFleet POS
 
 linux:
+  icon: "public/icon/DevsFleet-Fav.png"
+  executableName: devsfleet-pos
+  maintainer: "DevsFleet <support@devsfleet.com>"
   target:
     - target: AppImage
       arch: [x64]
@@ -39,7 +44,12 @@ linux:
       arch: [x64]
   category: Office
 
+deb:
+  packageName: devsfleet-pos
+
 mac:
+  icon: "public/icon/DevsFleet-Fav.png"
+  artifactName: "devsfleet-pos-${version}-${arch}.${ext}"
   target:
     - target: dmg
       arch: [x64, arm64]
