@@ -16,8 +16,7 @@ export interface BulkImportRowError {
 
 export interface BulkImportResult {
   created: number;
-  updated: number;
-  unchanged: number;
+  /** A row whose SKU already exists is skipped, not updated — see `errors`. */
   rejected: number;
   /** Categories and brands that were auto-created (or would be, in dry-run). */
   autoCreated: {

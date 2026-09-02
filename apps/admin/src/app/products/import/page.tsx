@@ -39,7 +39,7 @@ export default function BulkImportPage() {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{
-    created: number; updated: number; unchanged: number; rejected: number;
+    created: number; rejected: number;
     autoCreated: { categories: string[]; brands: string[] };
     errors: { row: number; reason: string }[];
     dryRun: boolean;
@@ -265,23 +265,21 @@ export default function BulkImportPage() {
                     {result.dryRun ? "⚡ Dry Run Preview" : "✅ Import Complete"}
                   </p>
                   
-                  {result.dryRun && result.created + result.updated > 0 && (
+                  {result.dryRun && result.created > 0 && (
                     <Button
                       onClick={() => runImport(false)}
                       disabled={running}
                       className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
                     >
                       {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
-                      {running ? "Importing…" : `Confirm & Import ${result.created + result.updated} products`}
+                      {running ? "Importing…" : `Confirm & Import ${result.created} products`}
                     </Button>
                   )}
                 </div>
 
-                <div className="grid grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   {[
                     { label: "Created", value: result.created, color: "text-emerald-600 dark:text-emerald-400" },
-                    { label: "Updated", value: result.updated, color: "text-blue-600 dark:text-blue-400" },
-                    { label: "Unchanged", value: result.unchanged, color: "text-muted-foreground" },
                     { label: "Rejected", value: result.rejected, color: "text-destructive" },
                   ].map((stat) => (
                     <div key={stat.label} className="text-center rounded-lg bg-background p-4 border shadow-sm">

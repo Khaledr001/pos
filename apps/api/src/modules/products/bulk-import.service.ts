@@ -13,8 +13,8 @@
  *   - Returns structured result instead of printing to console
  *   - Uses TenantDatabase (tenant resolved from JWT)
  */
-import { eq, schema, sql, type Transaction } from "@devsfleet/db";
-import { Money, normalizeBarcode, slugify, variantSearchKey } from "@devsfleet/shared-utils";
+import { schema, sql, type Transaction } from "@devsfleet/db";
+import { normalizeBarcode, slugify, variantSearchKey } from "@devsfleet/shared-utils";
 import { Injectable, Logger } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import ExcelJS from "exceljs";
@@ -283,7 +283,7 @@ export class BulkImportService {
       });
     }
 
-    const tally = { created: 0, updated: 0, unchanged: 0, rejected: errors.length };
+    const tally = { created: 0, rejected: errors.length };
     const autoCreated = { categories: [] as string[], brands: [] as string[] };
     const batchId = randomUUID();
 
@@ -355,175 +355,109 @@ export class BulkImportService {
             ? lookups.brandsByName.get(row.brandName.trim().toLowerCase()) ?? null
             : null;
 
-          // ── Check if product exists by SKU ──────────────────────────
-          let existingVariant: { id: string; barcode: string | null } | undefined;
+          // ── Reject a SKU that already exists rather than overwrite it ─
           if (row.sku) {
-            existingVariant = await tx.query.productVariants.findFirst({
+            const existingVariant = await tx.query.productVariants.findFirst({
               where: (t, { and: a, eq: e, isNull: n }) => a(e(t.sku, row.sku!), n(t.deletedAt)),
-              columns: { id: true, barcode: true },
-            }) ?? undefined;
+              columns: { id: true },
+            });
+            if (existingVariant) {
+              tally.rejected += 1;
+              errors.push({
+                row: row.rowNumber,
+                reason: `${row.name} (SKU ${row.sku}) already exists — skipped`,
+              });
+              continue;
+            }
           }
 
-          if (existingVariant) {
-            // ── UPDATE path ──────────────────────────────────────────
-            const currentPrice = await tx.query.productPrices.findFirst({
-              where: (t, { and: a, eq: e, isNull: n }) =>
-                a(e(t.variantId, existingVariant!.id), e(t.priceListId, lookups.defaultPriceListId), n(t.effectiveTo)),
-              columns: { id: true, sellingPrice: true, purchasePrice: true, effectiveFrom: true },
-            });
+          // ── CREATE path ──────────────────────────────────────────────
+          tally.created += 1;
 
-            const priceChanged = !currentPrice
-              || Money.toMinor(currentPrice.sellingPrice) !== Money.toMinor(String(row.sellingPrice))
-              || Money.toMinor(currentPrice.purchasePrice ?? "0") !== Money.toMinor(String(row.purchasePrice));
-            const barcodeChanged = (existingVariant.barcode ?? null) !== (row.barcode ?? null);
+          if (!options.dryRun) {
+            // Auto-generate SKU if not provided
+            let sku = row.sku;
+            if (!sku) {
+              const category = categoryId && categoryId !== "dry-run-placeholder"
+                ? await tx.query.categories.findFirst({
+                    where: (t, { eq: e }) => e(t.id, categoryId),
+                    columns: { skuPrefix: true },
+                  })
+                : null;
 
-            if (!priceChanged && !barcodeChanged) {
-              tally.unchanged += 1;
+              const prefix = category?.skuPrefix ?? "SKU";
+              const [seqRow] = await tx.execute<{ next_document_number: number }>(
+                sql`SELECT next_document_number(${tenantId}::uuid, ${`sku:${prefix}`})`,
+              );
+              const sequence = Number(
+                (seqRow as { next_document_number?: number })?.next_document_number ?? 1,
+              );
+              sku = `${prefix}-${String(sequence).padStart(6, "0")}`;
+            }
+
+            const [product] = await tx
+              .insert(schema.products)
+              .values({
+                tenantId,
+                sku,
+                name: row.name,
+                description: row.description,
+                categoryId: categoryId && categoryId !== "dry-run-placeholder" ? categoryId : null,
+                brandId: brandId && brandId !== "dry-run-placeholder" ? brandId : null,
+                unitId,
+              })
+              .returning({ id: schema.products.id });
+            if (!product) {
+              tally.created -= 1;
+              tally.rejected += 1;
+              errors.push({ row: row.rowNumber, reason: `Could not create product "${row.name}"` });
               continue;
             }
 
-            tally.updated += 1;
-
-            if (!options.dryRun) {
-              if (barcodeChanged) {
-                await tx
-                  .update(schema.productVariants)
-                  .set({ barcode: row.barcode })
-                  .where(eq(schema.productVariants.id, existingVariant.id));
-              }
-
-              if (priceChanged) {
-                const today = new Date().toISOString().slice(0, 10);
-
-                await tx.insert(schema.priceHistory).values({
-                  tenantId,
-                  variantId: existingVariant.id,
-                  priceListId: lookups.defaultPriceListId,
-                  oldSellingPrice: currentPrice?.sellingPrice ?? null,
-                  newSellingPrice: String(row.sellingPrice),
-                  oldPurchasePrice: currentPrice?.purchasePrice ?? null,
-                  newPurchasePrice: String(row.purchasePrice),
-                  ...(row.wholesalePrice !== null ? { newMinSellingPrice: String(row.wholesalePrice) } : {}),
-                  importBatchId: batchId,
-                });
-
-                if (currentPrice && currentPrice.effectiveFrom === today) {
-                  await tx
-                    .update(schema.productPrices)
-                    .set({
-                      sellingPrice: String(row.sellingPrice),
-                      purchasePrice: String(row.purchasePrice),
-                      ...(row.wholesalePrice !== null ? { minSellingPrice: String(row.wholesalePrice) } : {}),
-                    })
-                    .where(eq(schema.productPrices.id, currentPrice.id));
-                } else {
-                  if (currentPrice) {
-                    await tx
-                      .update(schema.productPrices)
-                      .set({ effectiveTo: sql`(${today}::date - interval '1 day')::date` })
-                      .where(eq(schema.productPrices.id, currentPrice.id));
-                  }
-                  await tx.insert(schema.productPrices).values({
-                    tenantId,
-                    variantId: existingVariant.id,
-                    priceListId: lookups.defaultPriceListId,
-                    sellingPrice: String(row.sellingPrice),
-                    purchasePrice: String(row.purchasePrice),
-                    ...(row.wholesalePrice !== null ? { minSellingPrice: String(row.wholesalePrice) } : {}),
-                    effectiveFrom: today,
-                  });
-                }
-              }
-            }
-          } else {
-            // ── CREATE path ──────────────────────────────────────────
-            tally.created += 1;
-
-            if (!options.dryRun) {
-              // Auto-generate SKU if not provided
-              let sku = row.sku;
-              if (!sku) {
-                const category = categoryId && categoryId !== "dry-run-placeholder"
-                  ? await tx.query.categories.findFirst({
-                      where: (t, { eq: e }) => e(t.id, categoryId),
-                      columns: { skuPrefix: true },
-                    })
-                  : null;
-
-                const prefix = category?.skuPrefix ?? "SKU";
-                const [seqRow] = await tx.execute<{ next_document_number: number }>(
-                  sql`SELECT next_document_number(${tenantId}::uuid, ${`sku:${prefix}`})`,
-                );
-                const sequence = Number(
-                  (seqRow as { next_document_number?: number })?.next_document_number ?? 1,
-                );
-                sku = `${prefix}-${String(sequence).padStart(6, "0")}`;
-              }
-
-              const [product] = await tx
-                .insert(schema.products)
-                .values({
-                  tenantId,
-                  sku,
-                  name: row.name,
-                  description: row.description,
-                  categoryId: categoryId && categoryId !== "dry-run-placeholder" ? categoryId : null,
-                  brandId: brandId && brandId !== "dry-run-placeholder" ? brandId : null,
-                  unitId,
-                })
-                .returning({ id: schema.products.id });
-              if (!product) {
-                tally.created -= 1;
-                tally.rejected += 1;
-                errors.push({ row: row.rowNumber, reason: `Could not create product "${row.name}"` });
-                continue;
-              }
-
-              const [variant] = await tx
-                .insert(schema.productVariants)
-                .values({
-                  tenantId,
-                  productId: product.id,
-                  sku,
-                  barcode: row.barcode,
-                  searchKey: variantSearchKey({ productName: row.name, sku }),
-                  minStock: String(row.minStock),
-                })
-                .returning({ id: schema.productVariants.id });
-              if (!variant) continue;
-
-              await tx.insert(schema.productPrices).values({
+            const [variant] = await tx
+              .insert(schema.productVariants)
+              .values({
                 tenantId,
-                variantId: variant.id,
-                priceListId: lookups.defaultPriceListId,
-                sellingPrice: String(row.sellingPrice),
-                purchasePrice: String(row.purchasePrice),
-                ...(row.wholesalePrice !== null ? { minSellingPrice: String(row.wholesalePrice) } : {}),
-              });
+                productId: product.id,
+                sku,
+                barcode: row.barcode,
+                searchKey: variantSearchKey({ productName: row.name, sku }),
+                minStock: String(row.minStock),
+              })
+              .returning({ id: schema.productVariants.id });
+            if (!variant) continue;
 
-              await tx.insert(schema.priceHistory).values({
-                tenantId,
-                variantId: variant.id,
-                priceListId: lookups.defaultPriceListId,
-                newSellingPrice: String(row.sellingPrice),
-                newPurchasePrice: String(row.purchasePrice),
-                ...(row.wholesalePrice !== null ? { newMinSellingPrice: String(row.wholesalePrice) } : {}),
-                importBatchId: batchId,
-              });
+            await tx.insert(schema.productPrices).values({
+              tenantId,
+              variantId: variant.id,
+              priceListId: lookups.defaultPriceListId,
+              sellingPrice: String(row.sellingPrice),
+              purchasePrice: String(row.purchasePrice),
+              ...(row.wholesalePrice !== null ? { minSellingPrice: String(row.wholesalePrice) } : {}),
+            });
 
-              // Opening stock
-              if (row.currentStock > 0 && options.branchId) {
-                await this.stock.addStock({
-                  tx,
-                  variantId: variant.id,
-                  branchId: options.branchId,
-                  quantity: String(row.currentStock),
-                  referenceType: "opening_stock",
-                  referenceId: product.id,
-                  notes: "Opening stock from bulk import",
-                  unitCost: String(row.purchasePrice),
-                });
-              }
+            await tx.insert(schema.priceHistory).values({
+              tenantId,
+              variantId: variant.id,
+              priceListId: lookups.defaultPriceListId,
+              newSellingPrice: String(row.sellingPrice),
+              newPurchasePrice: String(row.purchasePrice),
+              ...(row.wholesalePrice !== null ? { newMinSellingPrice: String(row.wholesalePrice) } : {}),
+              importBatchId: batchId,
+            });
+
+            // Opening stock
+            if (row.currentStock > 0 && options.branchId) {
+              await this.stock.addStock({
+                tx,
+                variantId: variant.id,
+                branchId: options.branchId,
+                quantity: String(row.currentStock),
+                referenceType: "opening_stock",
+                referenceId: product.id,
+                notes: "Opening stock from bulk import",
+                unitCost: String(row.purchasePrice),
+              });
             }
           }
         }
@@ -532,8 +466,7 @@ export class BulkImportService {
 
     this.logger.log(
       `Bulk import ${options.dryRun ? "(dry run)" : "COMMITTED"}: ` +
-        `${tally.created} created, ${tally.updated} updated, ` +
-        `${tally.unchanged} unchanged, ${tally.rejected} rejected`,
+        `${tally.created} created, ${tally.rejected} rejected`,
     );
 
     return {
