@@ -2,9 +2,10 @@ import { Money } from "@devsfleet/shared-utils";
 import { AlertTriangle, CreditCard, Minus, Plus, Trash2, UserPlus, X } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { Select } from "./Select.js";
-import { amount, money, TAX } from "../lib/money.js";
+import { amount, money, quantity as fmtQuantity, TAX } from "../lib/money.js";
 import { posData, type PosVariantUnit } from "../lib/pos-data.js";
 import {
+  maxQuantityInLineUnit,
   scaledFloor,
   useCart,
   useCartTotals,
@@ -227,7 +228,10 @@ function LineRow({
   useEffect(() => setQuantityText(line.quantity), [line.quantity]);
 
   const stock = Number(line.product.stock);
-  const maxReached = Number.isFinite(stock) && stock > 0 && Number(line.quantity) >= stock;
+  // In line.unit (e.g. Roll), not raw base-unit stock — see maxQuantityInLineUnit.
+  const maxInLineUnit = maxQuantityInLineUnit(line);
+  const maxReached = Number.isFinite(stock) && stock > 0 && Number(line.quantity) >= maxInLineUnit;
+  const lineUnitAbbr = line.unit?.unitAbbr ?? line.product.unitAbbr;
 
   function commitQuantity() {
     const parsed = Number(quantityText);
@@ -292,7 +296,11 @@ function LineRow({
                     ? "text-(--pos-text-3)/30 cursor-not-allowed"
                     : "text-(--pos-text-3) hover:text-(--pos-text)"
                 }`}
-                title={maxReached ? `Max available stock (${stock}) reached` : "Add one"}
+                title={
+                  maxReached
+                    ? `Max available stock (${fmtQuantity(maxInLineUnit)} ${lineUnitAbbr}) reached`
+                    : "Add one"
+                }
               >
                 <Plus className="size-2.5" />
               </button>

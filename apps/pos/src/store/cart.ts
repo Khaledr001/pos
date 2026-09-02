@@ -95,6 +95,23 @@ function sameAmount(a: string, b: string): boolean {
   return Money.toMinor(a) === Money.toMinor(b);
 }
 
+/**
+ * `product.stock` is always in the BASE unit. When a line is sold in a
+ * packaging (`line.unit` — e.g. Roll, conversionFactor "100"), a quantity
+ * typed in THAT unit has to be scaled down from stock before it means
+ * anything as a ceiling — otherwise a cashier keying up to the raw stock
+ * NUMBER is keying up to that many rolls, not that many metres, and can
+ * oversell by a factor of the conversion (250m in stock read as "250" sellable
+ * rolls instead of 2.5).
+ */
+export function maxQuantityInLineUnit(line: CartLine): number {
+  const stock = Number(line.product.stock);
+  if (!Number.isFinite(stock) || stock <= 0) return 0;
+  const factor = line.unit ? Number(line.unit.conversionFactor) : 1;
+  if (!Number.isFinite(factor) || factor <= 0) return stock;
+  return stock / factor;
+}
+
 export function pickTierPrice(product: PosProduct, quantity: string): string {
   const tiers = product.priceTiers;
   if (!tiers || tiers.length === 0) return product.sellingPrice;
@@ -143,7 +160,9 @@ export const useCart = create<CartState>((set, get) => ({
 
     if (existing) {
       const currentQty = Number(existing.quantity);
-      const nextQty = Math.min(stock, currentQty + requestedQty);
+      // existing.quantity is denominated in existing.unit, not necessarily
+      // the base unit `stock` is — see maxQuantityInLineUnit.
+      const nextQty = Math.min(maxQuantityInLineUnit(existing), currentQty + requestedQty);
       if (nextQty <= currentQty) return; // Cannot exceed available stock
       get().setQuantity(existing.key, String(Number(nextQty.toFixed(4))));
       return;
@@ -180,8 +199,9 @@ export const useCart = create<CartState>((set, get) => ({
       lines: state.lines.map((line) => {
         if (line.key !== key) return line;
         const stock = Number(line.product.stock);
-        // Clamp quantity strictly to available remaining stock if stock figure is finite
-        const safeQty = Number.isFinite(stock) && stock > 0 ? Math.min(parsed, stock) : parsed;
+        // Clamp quantity strictly to available remaining stock (converted into
+        // line.unit — see maxQuantityInLineUnit) if stock figure is finite
+        const safeQty = Number.isFinite(stock) && stock > 0 ? Math.min(parsed, maxQuantityInLineUnit(line)) : parsed;
         const qtyStr = String(Number(safeQty.toFixed(4)));
 
         const onLadder = sameAmount(line.unitPrice, scaledTierPrice(line, line.quantity));
@@ -198,7 +218,7 @@ export const useCart = create<CartState>((set, get) => ({
     const stock = Number(line.product.stock);
     let next = current + delta;
     if (delta > 0 && Number.isFinite(stock) && stock > 0) {
-      next = Math.min(next, stock);
+      next = Math.min(next, maxQuantityInLineUnit(line));
     }
     if (next <= 0) {
       get().removeLine(key);
