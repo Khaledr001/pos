@@ -113,6 +113,102 @@ interface Category {
   children?: Category[];
 }
 
+// ── Create a new unit of measure inline ─────────────────────────────────────
+
+function NewUnitDialog({
+  accessToken,
+  onCreated,
+}: {
+  accessToken?: string;
+  onCreated: (unit: Unit) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [abbreviation, setAbbreviation] = useState("");
+  const [allowsFractions, setAllowsFractions] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitting(true);
+    setError(null);
+    try {
+      const unit = await api.post<Unit>(
+        "/units",
+        { name, abbreviation, allowsFractions },
+        { accessToken },
+      );
+      onCreated(unit);
+      setOpen(false);
+      setName("");
+      setAbbreviation("");
+      setAllowsFractions(false);
+    } catch (err: any) {
+      setError(err?.message || "Failed to create the unit.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => { setError(null); setOpen(true); }}
+        className="text-[11px] font-medium text-primary hover:underline cursor-pointer"
+      >
+        + New unit
+      </button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>New Unit of Measure</DialogTitle>
+            <DialogDescription>e.g. Box, Roll, Kilogram — for selling or buying in a different packaging.</DialogDescription>
+          </DialogHeader>
+
+          {error && (
+            <div className="flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+              <AlertCircle className="h-4 w-4 shrink-0" /><span>{error}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-foreground mb-1.5">Name *</label>
+              <Input required maxLength={50} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Roll" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-foreground mb-1.5">Abbreviation *</label>
+              <Input
+                required
+                maxLength={10}
+                value={abbreviation}
+                onChange={(e) => setAbbreviation(e.target.value)}
+                placeholder="e.g. roll"
+                className="font-mono"
+              />
+            </div>
+            <label className="flex items-center gap-2 text-xs text-foreground">
+              <input
+                type="checkbox"
+                checked={allowsFractions}
+                onChange={(e) => setAllowsFractions(e.target.checked)}
+                className="h-3.5 w-3.5"
+              />
+              Allows fractional quantities (e.g. 5.5 metres)
+            </label>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={submitting}>{submitting ? "Creating…" : "Create unit"}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 // ── Flatten category tree for a <select> ────────────────────────────────────
 
 function flattenCategories(cats: Category[], depth = 0): { id: string; label: string }[] {
@@ -499,7 +595,13 @@ export default function ProductsPage() {
                   <Input value={fSku} onChange={e => setFSku(e.target.value)} placeholder="e.g. EL-CBL-3CX25" className="font-mono" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-foreground mb-1.5">Unit of Measure *</label>
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <label className="block text-xs font-medium text-foreground">Unit of Measure *</label>
+                    <NewUnitDialog
+                      accessToken={tokens?.accessToken}
+                      onCreated={(u) => { setUnits((prev) => [...prev, u]); setFUnitId(u.id); }}
+                    />
+                  </div>
                   <Select value={fUnitId} onValueChange={setFUnitId}>
                     <SelectTrigger className="h-9 text-xs">
                       <SelectValue placeholder="— Select Unit —" />
@@ -593,6 +695,7 @@ export default function ProductsPage() {
         units={units}
         accessToken={tokens?.accessToken}
         onClose={() => setPackagingProduct(null)}
+        onUnitCreated={(u) => setUnits((prev) => [...prev, u])}
       />
 
       <EditProductDialog
@@ -946,11 +1049,13 @@ function PackagingsDialog({
   units,
   accessToken,
   onClose,
+  onUnitCreated,
 }: {
   product: Product | null;
   units: Unit[];
   accessToken?: string;
   onClose: () => void;
+  onUnitCreated: (unit: Unit) => void;
 }) {
   const [variants, setVariants] = useState<ProductVariant[]>([]);
   const [variantId, setVariantId] = useState("");
@@ -1188,7 +1293,13 @@ function PackagingsDialog({
             </p>
             <div className="grid gap-3 sm:grid-cols-3">
               <div>
-                <label className="block text-xs font-medium text-foreground mb-1.5">Unit *</label>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <label className="block text-xs font-medium text-foreground">Unit *</label>
+                  <NewUnitDialog
+                    accessToken={accessToken}
+                    onCreated={(u) => { onUnitCreated(u); setNewUnitId(u.id); }}
+                  />
+                </div>
                 <Select value={newUnitId} onValueChange={setNewUnitId}>
                   <SelectTrigger className="h-9 text-xs">
                     <SelectValue placeholder="— Select Unit —" />
