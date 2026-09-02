@@ -31,7 +31,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
     const requestId = RequestContext.requestId;
 
-    const { status, code, message, details } = this.normalise(exception);
+    const { status, code, message, details, logContext } = this.normalise(exception);
 
     if (status >= 500) {
       this.logger.error(
@@ -39,7 +39,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
         `${code}: ${message}`,
       );
     } else {
-      this.logger.warn({ requestId, code }, message);
+      // logContext (e.g. the real Postgres constraint name) is server-side
+      // only — never spread into the response body below.
+      this.logger.warn({ requestId, code, ...logContext }, message);
     }
 
     const body: ApiError = {
@@ -57,6 +59,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
     code: string;
     message: string;
     details?: Record<string, string[]>;
+    /** Server-log-only context (e.g. the real Postgres constraint name). */
+    logContext?: Record<string, unknown>;
   } {
     // Business failures carrying a stable code.
     if (exception instanceof AppError) {
@@ -124,7 +128,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
   private normalisePostgres(
     pgCode: string,
     exception: PostgresLikeError,
-  ): { status: number; code: string; message: string } {
+  ): { status: number; code: string; message: string; logContext?: Record<string, unknown> } {
     // postgres.js exposes the server's field as `constraint_name`; other
     // drivers use `constraint`. Accept either so swapping the driver later
     // does not silently degrade every 409 into a 500.
@@ -136,6 +140,11 @@ export class AllExceptionsFilter implements ExceptionFilter {
           status: HttpStatus.CONFLICT,
           code: this.codeForConstraint(constraint),
           message: this.messageForConstraint(constraint),
+          // The client never sees this — see AllExceptionsFilter.catch — but
+          // without it, a conflict that falls through to the generic message
+          // is unfindable in the logs: nothing else names which constraint
+          // fired.
+          logContext: { constraint, detail: exception.detail },
         };
       case "23503": // foreign_key_violation
         return {
@@ -184,6 +193,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (constraint.includes("sku")) return ERROR_CODES.SKU_ALREADY_EXISTS;
     if (constraint.includes("barcode")) return ERROR_CODES.BARCODE_ALREADY_EXISTS;
     if (constraint.includes("checksum")) return ERROR_CODES.DUPLICATE_IMAGE;
+    if (constraint.includes("slug")) return ERROR_CODES.DUPLICATE_SLUG;
     return ERROR_CODES.CONFLICT;
   }
 
@@ -197,6 +207,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
       return "This serial number is already registered";
     if (constraint.includes("paint_formulas"))
       return "A formula with this colour code and can size already exists";
+    // Two different names can still collide (e.g. "PVC & Fittings" vs
+    // "PVC/Fittings" slugify to the same value) — check the more specific
+    // table name before falling back to the generic slug message.
+    if (constraint.includes("categories")) return "A category with this name already exists";
+    if (constraint.includes("brands")) return "A brand with this name already exists";
+    if (constraint.includes("slug")) return "A record with this name already exists";
     return "A record with these values already exists";
   }
 

@@ -220,21 +220,42 @@ function findDuplicateSkus(rows: ParsedRow[]): Map<string, number[]> {
   return duplicates;
 }
 
+/** Every barcode that appears more than once, with the row numbers. */
+function findDuplicateBarcodes(rows: ParsedRow[]): Map<string, number[]> {
+  const byBarcode = new Map<string, number[]>();
+  for (const row of rows) {
+    if (!row.barcode) continue;
+    const existing = byBarcode.get(row.barcode);
+    if (existing) existing.push(row.rowNumber);
+    else byBarcode.set(row.barcode, [row.rowNumber]);
+  }
+
+  const duplicates = new Map<string, number[]>();
+  for (const [barcode, rowNumbers] of byBarcode) {
+    if (rowNumbers.length > 1) duplicates.set(barcode, rowNumbers);
+  }
+  return duplicates;
+}
+
 // ── Lookups ─────────────────────────────────────────────────────────────────
 
 interface Lookups {
   categoriesByName: Map<string, string>;
+  /** Catches two different names that slugify to the same slug — see `uq_categories_tenant_slug`. */
+  categoriesBySlug: Map<string, string>;
   unitsByName: Map<string, string>;
   unitsByAbbr: Map<string, string>;
   brandsByName: Map<string, string>;
+  /** Catches two different names that slugify to the same slug — see `uq_brands_tenant_slug`. */
+  brandsBySlug: Map<string, string>;
   defaultPriceListId: string;
 }
 
 async function loadLookups(tx: Transaction): Promise<Lookups> {
   const [categories, units, brands, defaultList] = await Promise.all([
-    tx.select({ id: schema.categories.id, name: schema.categories.name }).from(schema.categories),
+    tx.select({ id: schema.categories.id, name: schema.categories.name, slug: schema.categories.slug }).from(schema.categories),
     tx.select({ id: schema.units.id, name: schema.units.name, abbreviation: schema.units.abbreviation }).from(schema.units),
-    tx.select({ id: schema.brands.id, name: schema.brands.name }).from(schema.brands),
+    tx.select({ id: schema.brands.id, name: schema.brands.name, slug: schema.brands.slug }).from(schema.brands),
     tx.query.priceLists.findFirst({
       where: (t, { and: a, eq: e }) => a(e(t.isDefault, true), e(t.isActive, true)),
       columns: { id: true },
@@ -247,9 +268,11 @@ async function loadLookups(tx: Transaction): Promise<Lookups> {
 
   return {
     categoriesByName: new Map(categories.map((c) => [c.name.trim().toLowerCase(), c.id])),
+    categoriesBySlug: new Map(categories.map((c) => [c.slug, c.id])),
     unitsByName: new Map(units.map((u) => [u.name.trim().toLowerCase(), u.id])),
     unitsByAbbr: new Map(units.map((u) => [u.abbreviation.trim().toLowerCase(), u.id])),
     brandsByName: new Map(brands.map((b) => [b.name.trim().toLowerCase(), b.id])),
+    brandsBySlug: new Map(brands.map((b) => [b.slug, b.id])),
     defaultPriceListId: defaultList.id,
   };
 }
@@ -272,14 +295,24 @@ export class BulkImportService {
 
     const errors: BulkImportRowError[] = [...rejected];
 
-    // Flag duplicate SKUs
-    const duplicates = findDuplicateSkus(rows);
-    const duplicateSkus = new Set(duplicates.keys());
-    const importable = rows.filter((r) => !r.sku || !duplicateSkus.has(r.sku));
-    for (const [sku, rowNumbers] of duplicates) {
+    // Flag duplicate SKUs and barcodes within the file itself
+    const duplicateSkuRows = findDuplicateSkus(rows);
+    const duplicateSkus = new Set(duplicateSkuRows.keys());
+    const duplicateBarcodeRows = findDuplicateBarcodes(rows);
+    const duplicateBarcodes = new Set(duplicateBarcodeRows.keys());
+    const importable = rows.filter(
+      (r) => (!r.sku || !duplicateSkus.has(r.sku)) && (!r.barcode || !duplicateBarcodes.has(r.barcode)),
+    );
+    for (const [sku, rowNumbers] of duplicateSkuRows) {
       errors.push({
         row: rowNumbers[0]!,
         reason: `SKU "${sku}" appears on rows ${rowNumbers.join(", ")} — fix the file`,
+      });
+    }
+    for (const [barcode, rowNumbers] of duplicateBarcodeRows) {
+      errors.push({
+        row: rowNumbers[0]!,
+        reason: `Barcode "${barcode}" appears on rows ${rowNumbers.join(", ")} — fix the file`,
       });
     }
 
@@ -299,20 +332,34 @@ export class BulkImportService {
           if (row.categoryName) {
             const key = row.categoryName.trim().toLowerCase();
             if (!lookups.categoriesByName.has(key)) {
-              if (!options.dryRun) {
-                const slug = slugify(row.categoryName);
+              const slug = slugify(row.categoryName);
+              const bySlug = lookups.categoriesBySlug.get(slug);
+              if (bySlug) {
+                // A different spelling of a name already taken by this slug
+                // (e.g. "PVC & Fittings" / "PVC/Fittings") — reuse it instead
+                // of attempting an INSERT that uq_categories_tenant_slug
+                // would reject with a generic conflict.
+                lookups.categoriesByName.set(key, bySlug);
+              } else if (!options.dryRun) {
                 const [created] = await tx
                   .insert(schema.categories)
                   .values({ tenantId, name: row.categoryName.trim(), slug, path: slug, depth: 0 })
                   .returning({ id: schema.categories.id });
-                if (created) lookups.categoriesByName.set(key, created.id);
+                if (created) {
+                  lookups.categoriesByName.set(key, created.id);
+                  lookups.categoriesBySlug.set(slug, created.id);
+                }
+                if (!autoCreated.categories.includes(row.categoryName.trim())) {
+                  autoCreated.categories.push(row.categoryName.trim());
+                }
               } else {
                 // In dry-run, use a placeholder so later rows with the same
                 // category don't register as "needs creation" twice.
                 lookups.categoriesByName.set(key, "dry-run-placeholder");
-              }
-              if (!autoCreated.categories.includes(row.categoryName.trim())) {
-                autoCreated.categories.push(row.categoryName.trim());
+                lookups.categoriesBySlug.set(slug, "dry-run-placeholder");
+                if (!autoCreated.categories.includes(row.categoryName.trim())) {
+                  autoCreated.categories.push(row.categoryName.trim());
+                }
               }
             }
           }
@@ -320,18 +367,28 @@ export class BulkImportService {
           if (row.brandName) {
             const key = row.brandName.trim().toLowerCase();
             if (!lookups.brandsByName.has(key)) {
-              if (!options.dryRun) {
-                const slug = slugify(row.brandName);
+              const slug = slugify(row.brandName);
+              const bySlug = lookups.brandsBySlug.get(slug);
+              if (bySlug) {
+                lookups.brandsByName.set(key, bySlug);
+              } else if (!options.dryRun) {
                 const [created] = await tx
                   .insert(schema.brands)
                   .values({ tenantId, name: row.brandName.trim(), slug })
                   .returning({ id: schema.brands.id });
-                if (created) lookups.brandsByName.set(key, created.id);
+                if (created) {
+                  lookups.brandsByName.set(key, created.id);
+                  lookups.brandsBySlug.set(slug, created.id);
+                }
+                if (!autoCreated.brands.includes(row.brandName.trim())) {
+                  autoCreated.brands.push(row.brandName.trim());
+                }
               } else {
                 lookups.brandsByName.set(key, "dry-run-placeholder");
-              }
-              if (!autoCreated.brands.includes(row.brandName.trim())) {
-                autoCreated.brands.push(row.brandName.trim());
+                lookups.brandsBySlug.set(slug, "dry-run-placeholder");
+                if (!autoCreated.brands.includes(row.brandName.trim())) {
+                  autoCreated.brands.push(row.brandName.trim());
+                }
               }
             }
           }
@@ -356,9 +413,14 @@ export class BulkImportService {
             : null;
 
           // ── Reject a SKU that already exists rather than overwrite it ─
+          //
+          // Not scoped to deletedAt IS NULL: uq_products_tenant_sku and
+          // uq_variants_tenant_sku are NOT partial indexes, so a soft-deleted
+          // product still holds its SKU in Postgres. Checking only active
+          // rows here would pass this guard and then fail as a raw 23505.
           if (row.sku) {
             const existingVariant = await tx.query.productVariants.findFirst({
-              where: (t, { and: a, eq: e, isNull: n }) => a(e(t.sku, row.sku!), n(t.deletedAt)),
+              where: (t, { eq: e }) => e(t.sku, row.sku!),
               columns: { id: true },
             });
             if (existingVariant) {
@@ -366,6 +428,24 @@ export class BulkImportService {
               errors.push({
                 row: row.rowNumber,
                 reason: `${row.name} (SKU ${row.sku}) already exists — skipped`,
+              });
+              continue;
+            }
+          }
+
+          // ── Reject a barcode already assigned to another active variant ─
+          // uq_variants_tenant_barcode IS partial (active rows only), so this
+          // matches the real constraint exactly.
+          if (row.barcode) {
+            const existingBarcode = await tx.query.productVariants.findFirst({
+              where: (t, { and: a, eq: e, isNull: n }) => a(e(t.barcode, row.barcode!), n(t.deletedAt)),
+              columns: { id: true },
+            });
+            if (existingBarcode) {
+              tally.rejected += 1;
+              errors.push({
+                row: row.rowNumber,
+                reason: `${row.name}: barcode "${row.barcode}" is already assigned to another product — skipped`,
               });
               continue;
             }
