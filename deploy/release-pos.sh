@@ -52,7 +52,7 @@ die() { printf '\n\033[1;31mSTOPPED: %s\033[0m\n' "$*" >&2; exit 1; }
 # Configuration — override any of these as env vars if your setup differs.
 # Same defaults as .github/workflows/pos-release.yml and deploy/deploy.sh.
 # -----------------------------------------------------------------------------
-VITE_API_URL="${VITE_API_URL:-https://api.devsfleet.com/api/v1}"
+VITE_API_URL="${VITE_API_URL:-https://pos-api.devsfleet.com/api/v1}"
 RELEASE_DIR="${RELEASE_DIR:-/var/www/devsfleet-pos-releases}"
 FEED_URL="${FEED_URL:-https://pos.devsfleet.com/pos-dl}"
 

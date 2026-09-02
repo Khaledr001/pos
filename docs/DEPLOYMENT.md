@@ -26,7 +26,11 @@ docker, all bound to 127.0.0.1:
 
 The POS terminals are Electron desktop apps. The API and admin panel run on
 this VPS; the terminal app itself is **installed on the tills**, not deployed
-here, and points at `https://api.devsfleet.com`.
+here, and points at `https://pos-api.devsfleet.com` — the actual API
+hostname in production. (`api.devsfleet.com` appears elsewhere in older docs
+and example files; it was never wired up. `deploy.sh`'s
+`NEXT_PUBLIC_API_URL` default already used the correct `pos-api` host — only
+the POS-specific release tooling had drifted from it.)
 
 What *is* served from this VPS is the installer feed the tills download from
 and auto-update against, at `https://pos.devsfleet.com/pos-dl/`. This is
@@ -311,7 +315,7 @@ The webhook is **not** at the root. The API's global prefix applies to it, so
 the URL to give Meta is:
 
 ```
-https://api.devsfleet.com/api/v1/whatsapp/webhook
+https://pos-api.devsfleet.com/api/v1/whatsapp/webhook
 ```
 
 Per-tenant numbers live in the `whatsapp_accounts` table, not in `.env`; each
@@ -342,7 +346,7 @@ bundle is missing its static assets. `next build` does not copy them; re-run
 `./deploy/deploy.sh`, which does.
 
 **Notifications never arrive, everything else works.** Check the browser
-console for a CSP violation on `wss://api.devsfleet.com`, then confirm nginx is
+console for a CSP violation on `wss://pos-api.devsfleet.com`, then confirm nginx is
 proxying `/socket.io/` with the `Upgrade` headers. socket.io serves from
 `/socket.io/` regardless of the gateway's `/notifications` namespace — the
 namespace is not a URL path.

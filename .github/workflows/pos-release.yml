@@ -65,7 +65,9 @@ jobs:
       # empty string and the pairing screen fails on every till.
       - name: Build POS and its workspace dependencies
         env:
-          VITE_API_URL: https://api.devsfleet.com/api/v1
+          # pos-api, not api — deploy.sh's NEXT_PUBLIC_API_URL default for the
+          # admin panel already got this right; this file didn't match it.
+          VITE_API_URL: https://pos-api.devsfleet.com/api/v1
         run: pnpm --filter=@devsfleet/pos... build
 
       # --publish never: electron-builder's "generic" provider is read-only
