@@ -13,8 +13,9 @@ role accidentally ends up with `BYPASSRLS`.
 Internet :443
 └── nginx (host, already serving isp.devsfleet.com)
      ├── pos.devsfleet.com ──→ 127.0.0.1:3000   admin panel   PM2
-     │    ├── /releases      (admin panel page — downloads, human-facing)
-     │    └── /pos-dl/   ──→ /var/www/devsfleet-pos-releases/  (static files)
+     │    ├── /releases   (human-facing download page)
+     │    └── /pos-dl/*   (machine-facing feed — both are Next.js routes,
+     │                     reading /var/www/devsfleet-pos-releases/ directly)
      ├── api.devsfleet.com ──→ 127.0.0.1:3001   API           PM2
      └── cdn.devsfleet.com ──→ 127.0.0.1:9000   MinIO         docker
                                  (only /*/products/* is exposed)
@@ -28,22 +29,30 @@ this VPS; the terminal app itself is **installed on the tills**, not deployed
 here, and points at `https://api.devsfleet.com`.
 
 What *is* served from this VPS is the installer feed the tills download from
-and auto-update against, at `https://pos.devsfleet.com/pos-dl/` — a plain
-static directory nginx serves directly (see the `location /pos-dl/` block in
-`deploy/nginx/devsfleet-pos.conf`), populated by
-`.github/workflows/pos-release.yml` on every `pos-v*` tag push. The admin
-panel's **Releases** page (`/releases`, under Administration in the sidebar,
-gated on `device:manage`) fetches `latest.yml`/`latest-linux.yml` from that
-same directory client-side and renders download buttons from it — that page
-is the one place a human is meant to go for an installer; `/pos-dl/` is the
-machine-facing feed both that page and every till's auto-updater read from.
+and auto-update against, at `https://pos.devsfleet.com/pos-dl/`. This is
+**not** a raw nginx static-file location — it's a Next.js route handler
+(`apps/admin/src/app/pos-dl/[...path]/route.ts`) inside the admin app,
+reached through the exact same unmodified `location /` proxy every other
+admin page already uses. It reads straight from
+`/var/www/devsfleet-pos-releases/` on disk, no nginx config involved.
+Deliberate, after nginx changes on this box turned out riskier than expected
+(a pre-existing, unrelated broken `options-ssl-nginx.conf` reference meant
+*any* nginx reload — not just this one — was one config test away from taking
+the whole box down): publishing or reinstalling a POS release should never
+require touching nginx again, on this VPS or the next one.
 
-One-time setup on the VPS:
+The admin panel's **Releases** page (`/releases`, under Administration in the
+sidebar, gated on `device:manage`) fetches `latest.yml`/`latest-linux.yml`
+from that same route client-side and renders download buttons from it — that
+page is the one place a human is meant to go for an installer; `/pos-dl/` is
+what it and every till's auto-updater read from underneath.
+
+One-time setup on the VPS — no nginx step, just the directory the admin app
+reads from and the deploy user's write access to it:
 
 ```bash
 sudo mkdir -p /var/www/devsfleet-pos-releases
 sudo chown "$(whoami)" /var/www/devsfleet-pos-releases   # the SSH deploy user needs to write here
-sudo nginx -t && sudo systemctl reload nginx
 ```
 
 Cutting a release, from a dev machine:
@@ -59,6 +68,12 @@ build in CI yet — the config in `apps/pos/electron-builder.yml` supports it,
 but nobody has asked for a Mac till) and `scp`s them, plus the
 `latest.yml`/`latest-linux.yml` manifests `electron-updater` (and the admin
 panel's Releases page) read, into `/var/www/devsfleet-pos-releases/`.
+
+Prefer to build by hand instead of via a tag push? `deploy/release-pos.sh`
+does the same build + package + publish, run directly on the VPS — see its
+header comment for flags. It can only produce whatever the machine it runs on
+builds natively (Linux, on this VPS), same limitation as everywhere else in
+this doc.
 
 **Not yet set up: code signing.** Windows installers trigger a SmartScreen
 warning and macOS builds are blocked by Gatekeeper until a certificate is
