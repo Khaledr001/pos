@@ -34,6 +34,8 @@ jobs:
           # manifest for the target it just built, so there's no cross-glob.
           - os: windows-latest
             artifacts: "apps/pos/release/*.exe,apps/pos/release/*.exe.blockmap,apps/pos/release/latest.yml"
+          - os: macos-latest
+            artifacts: "apps/pos/release/*.dmg,apps/pos/release/*.dmg.blockmap,apps/pos/release/latest-mac.yml"
           - os: ubuntu-latest
             artifacts: "apps/pos/release/*.AppImage,apps/pos/release/*.deb,apps/pos/release/latest-linux.yml"
     runs-on: ${{ matrix.os }}

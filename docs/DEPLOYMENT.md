@@ -67,11 +67,15 @@ git tag pos-v1.3.0
 git push origin pos-v1.3.0
 ```
 
-That workflow builds Windows and Linux installers on native runners (no macOS
-build in CI yet — the config in `apps/pos/electron-builder.yml` supports it,
-but nobody has asked for a Mac till) and `scp`s them, plus the
-`latest.yml`/`latest-linux.yml` manifests `electron-updater` (and the admin
-panel's Releases page) read, into `/var/www/devsfleet-pos-releases/`.
+That workflow builds Windows, macOS, and Linux installers on native runners
+(each OS only ever produces its own platform's artifacts — no
+cross-compilation, see the workflow's own comments) and `scp`s them, plus the
+`latest.yml`/`latest-mac.yml`/`latest-linux.yml` manifests `electron-updater`
+(and the admin panel's Releases page) read, into
+`/var/www/devsfleet-pos-releases/`. The macOS job builds both Intel and
+Apple Silicon `.dmg`s, but the Releases page currently only links whichever
+one `latest-mac.yml`'s `path` names — the other still lands on the server,
+same as the Linux `.deb` (see that page's source comment).
 
 Prefer to build by hand instead of via a tag push? `deploy/release-pos.sh`
 does the same build + package + publish, run directly on the VPS — see its

@@ -1,26 +1,30 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { AlertCircle, CheckCircle2, Download, Loader2, Monitor, Terminal as TerminalIcon } from "lucide-react";
+import { AlertCircle, CheckCircle2, Download, Laptop, Loader2, Monitor, Terminal as TerminalIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 /**
- * Where the till installers actually live: a plain static directory nginx
- * serves directly, same-origin with this page (see the `location /pos-dl/`
- * block in deploy/nginx/devsfleet-pos.conf). electron-updater on every till
- * reads the same latest*.yml files this page parses, so what's offered here
- * is always exactly what the tills would auto-update to next.
+ * Where the till installers actually live: served by this app itself, at
+ * apps/admin/src/app/pos-dl/[...path]/route.ts — not a separate nginx
+ * location, deliberately (see that file's header comment for why). Same
+ * origin as this page, and electron-updater on every till reads the same
+ * latest*.yml files this page parses, so what's offered here is always
+ * exactly what the tills would auto-update to next.
  */
 const FEED_BASE = "/pos-dl";
 
 interface PlatformRelease {
-  platform: "Windows" | "Linux";
+  platform: "Windows" | "macOS" | "Linux";
   icon: typeof Monitor;
   manifest: string;
   version: string;
   fileName: string;
+  /** A second install format for the same platform, if one exists — e.g.
+   *  Linux's .deb alongside its primary, auto-updatable .AppImage. */
+  secondary?: { label: string; fileName: string };
 }
 
 interface FetchState {
@@ -51,6 +55,7 @@ export default function ReleasesPage() {
   useEffect(() => {
     const platforms: Array<{ platform: PlatformRelease["platform"]; icon: PlatformRelease["icon"]; manifest: string }> = [
       { platform: "Windows", icon: Monitor, manifest: "latest.yml" },
+      { platform: "macOS", icon: Laptop, manifest: "latest-mac.yml" },
       { platform: "Linux", icon: TerminalIcon, manifest: "latest-linux.yml" },
     ];
 
@@ -64,7 +69,23 @@ export default function ReleasesPage() {
         const version = extractYamlField(text, "version");
         const fileName = extractYamlField(text, "path");
         if (!version || !fileName) throw new Error(`${p.platform}: manifest is missing version or path`);
-        return { platform: p.platform, icon: p.icon, manifest: p.manifest, version, fileName } satisfies PlatformRelease;
+
+        const release: PlatformRelease = { platform: p.platform, icon: p.icon, manifest: p.manifest, version, fileName };
+
+        // Linux ships two install formats, but only the AppImage is what
+        // electron-updater actually knows how to auto-update, so it's the
+        // only one latest-linux.yml's `path` ever names. The .deb still gets
+        // published alongside it (see deploy/release-pos.sh / pos-release.yml)
+        // under electron-builder's standard Debian-arch naming — checked with
+        // HEAD rather than assumed, so a missing .deb just quietly omits the
+        // button instead of offering a dead link.
+        if (p.platform === "Linux") {
+          const debName = `devsfleet-pos-${version}-amd64.deb`;
+          const debCheck = await fetch(`${FEED_BASE}/${debName}`, { method: "HEAD", cache: "no-store" });
+          if (debCheck.ok) release.secondary = { label: ".deb package", fileName: debName };
+        }
+
+        return release;
       }),
     ).then((results) => {
       if (cancelled) return;
@@ -108,7 +129,7 @@ export default function ReleasesPage() {
           </p>
         </Card>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 max-w-2xl">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 max-w-4xl">
           {state.releases.map((r) => (
             <Card key={r.platform} className="p-5 flex flex-col gap-4">
               <div className="flex items-center gap-3">
@@ -122,12 +143,22 @@ export default function ReleasesPage() {
                   </Badge>
                 </div>
               </div>
-              <Button asChild className="w-full justify-center">
-                <a href={`${FEED_BASE}/${r.fileName}`}>
-                  <Download className="h-4 w-4" />
-                  Download for {r.platform}
-                </a>
-              </Button>
+              <div className="flex flex-col gap-2">
+                <Button asChild className="w-full justify-center">
+                  <a href={`${FEED_BASE}/${r.fileName}`}>
+                    <Download className="h-4 w-4" />
+                    Download for {r.platform}
+                  </a>
+                </Button>
+                {r.secondary && (
+                  <Button asChild variant="outline" size="sm" className="w-full justify-center">
+                    <a href={`${FEED_BASE}/${r.secondary.fileName}`}>
+                      <Download className="h-3.5 w-3.5" />
+                      {r.secondary.label}
+                    </a>
+                  </Button>
+                )}
+              </div>
             </Card>
           ))}
         </div>
