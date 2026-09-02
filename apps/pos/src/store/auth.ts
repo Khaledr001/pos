@@ -50,6 +50,8 @@ interface AuthState {
   signIn: (cashier: Cashier) => void;
   signOut: () => void;
   bindTerminal: (terminal: TerminalBinding) => void;
+  /** Undoes `bindTerminal`. Also signs out the cashier — a terminal bound to no tenant has nowhere for that session to belong. */
+  unbindTerminal: () => void;
   can: (permission: Permission) => boolean;
   /** The signed-in cashier's discount ceiling. "0" when unknown. */
   discountCeiling: () => string;
@@ -118,6 +120,14 @@ export const useAuth = create<AuthState>((set, get) => ({
   bindTerminal(terminal) {
     set({ terminal });
     persist({ cashier: get().cashier, terminal, signedInAt: get().signedInAt });
+  },
+
+  unbindTerminal() {
+    set({ terminal: null, cashier: null, signedInAt: null });
+    persist({ cashier: null, terminal: null, signedInAt: null });
+    // Same reasoning as signOut(): no sign-out path should leave a working
+    // refresh token behind for whoever pairs this till next.
+    clearApiTokens();
   },
 
   /**

@@ -3,6 +3,7 @@ import { hostname, networkInterfaces, platform } from "node:os";
 import type { IpcMain } from "electron";
 import { app } from "electron";
 import * as repo from "../db/repositories.js";
+import { resetDatabase } from "../db/sqlite.js";
 import { verifyPinLocally } from "../db/local-auth.js";
 import { ApiError, authorizedRequest, branchId as terminalBranchId, loginWithPin, verifyOverride } from "../sync/api-client.js";
 import { syncNow } from "../sync/index.js";
@@ -254,6 +255,23 @@ export function registerDataHandlers(ipcMain: IpcMain): void {
       return { deviceId: device.trim() };
     },
   );
+
+  /**
+   * Undo device:activate. Refused while anything in the outbox has not
+   * reached the server: unpairing wipes the whole local database, including
+   * OUTBOX rows, and an unsynced sale is a day's takings with nowhere else to
+   * go once this runs.
+   */
+  ipcMain.handle("device:unpair", () => {
+    const { pending, failed } = repo.outboxCounts();
+    if (pending + failed > 0) {
+      throw new Error(
+        `${pending + failed} sale(s) have not synced to the server yet. ` +
+          "Sync — or resolve the Sync Attention Queue — before unpairing this terminal.",
+      );
+    }
+    resetDatabase();
+  });
 
   /**
    * The outbox items a human has to look at: a permanent rejection, or a push

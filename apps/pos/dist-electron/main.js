@@ -219,9 +219,12 @@ function seedInitialCatalog(database) {
     console.warn("Could not seed initial catalog into SQLite:", err);
   }
 }
+function dbFilePath() {
+  return node_path.join(electron.app.getPath("userData"), process.env.POS_DB_FILE ?? "devsfleet-pos.sqlite");
+}
 function openDatabase() {
   if (db) return db;
-  const file = node_path.join(electron.app.getPath("userData"), process.env.POS_DB_FILE ?? "devsfleet-pos.sqlite");
+  const file = dbFilePath();
   db = new Database(file);
   db.pragma("journal_mode = WAL");
   db.pragma("synchronous = FULL");
@@ -240,6 +243,15 @@ function closeDatabase() {
   db.pragma("wal_checkpoint(TRUNCATE)");
   db.close();
   db = null;
+}
+function resetDatabase() {
+  closeDatabase();
+  const file = dbFilePath();
+  for (const suffix of ["", "-wal", "-shm"]) {
+    const candidate = `${file}${suffix}`;
+    if (node_fs.existsSync(candidate)) node_fs.unlinkSync(candidate);
+  }
+  openDatabase();
 }
 const MIGRATIONS = [
   {
@@ -4438,6 +4450,15 @@ function registerDataHandlers(ipcMain) {
       return { deviceId: device.trim() };
     }
   );
+  ipcMain.handle("device:unpair", () => {
+    const { pending, failed } = outboxCounts();
+    if (pending + failed > 0) {
+      throw new Error(
+        `${pending + failed} sale(s) have not synced to the server yet. Sync — or resolve the Sync Attention Queue — before unpairing this terminal.`
+      );
+    }
+    resetDatabase();
+  });
   ipcMain.handle("outbox:attention-items", () => outboxAttentionItems());
   ipcMain.handle("outbox:retry", (_event, localId) => {
     retryOutboxItem(String(localId ?? ""));

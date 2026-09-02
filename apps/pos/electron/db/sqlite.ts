@@ -1,5 +1,6 @@
 import Database from "better-sqlite3";
 import { app } from "electron";
+import { existsSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 
 /**
@@ -236,10 +237,14 @@ function seedInitialCatalog(database: Database.Database): void {
   }
 }
 
+function dbFilePath(): string {
+  return join(app.getPath("userData"), process.env.POS_DB_FILE ?? "devsfleet-pos.sqlite");
+}
+
 export function openDatabase(): Database.Database {
   if (db) return db;
 
-  const file = join(app.getPath("userData"), process.env.POS_DB_FILE ?? "devsfleet-pos.sqlite");
+  const file = dbFilePath();
   db = new Database(file);
 
   /**
@@ -275,6 +280,27 @@ export function closeDatabase(): void {
   db.pragma("wal_checkpoint(TRUNCATE)");
   db.close();
   db = null;
+}
+
+/**
+ * Wipe every locally held row — MIRROR and OUTBOX alike — and reopen a fresh,
+ * empty database.
+ *
+ * Only ever call this once the caller has confirmed the outbox holds nothing
+ * pending or failed (see the `device:unpair` IPC handler). This function does
+ * not check: the header comment above exists precisely because outbox rows
+ * are a day's takings, and a second guard here would just be a second place
+ * for that check to be forgotten. The one place it happens is the one place
+ * that decides whether it's safe to call this at all.
+ */
+export function resetDatabase(): void {
+  closeDatabase();
+  const file = dbFilePath();
+  for (const suffix of ["", "-wal", "-shm"]) {
+    const candidate = `${file}${suffix}`;
+    if (existsSync(candidate)) unlinkSync(candidate);
+  }
+  openDatabase();
 }
 
 // -----------------------------------------------------------------------------

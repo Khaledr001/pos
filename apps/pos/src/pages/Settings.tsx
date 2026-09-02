@@ -13,6 +13,7 @@ import {
   Search,
   Store,
   Sun,
+  Unplug,
   Zap,
 } from "lucide-react";
 import React, { useEffect, useState } from "react";
@@ -40,7 +41,10 @@ import { useAuth } from "../store/auth.js";
  * - Display theme & shift sign-out
  */
 export function Settings() {
-  const { cashier, terminal, signOut } = useAuth();
+  const { cashier, terminal, signOut, unbindTerminal, can } = useAuth();
+
+  const [unpairing, setUnpairing] = useState(false);
+  const [unpairError, setUnpairError] = useState<string | null>(null);
 
   const [device, setDevice] = useState<{
     deviceId: string | null;
@@ -94,6 +98,29 @@ export function Settings() {
   function handleSignOut() {
     clearPosApiSession();
     signOut();
+  }
+
+  async function handleUnpair() {
+    setUnpairError(null);
+    const business = terminal?.tenantName ?? "its current business";
+    const confirmed = confirm(
+      `Unpair this terminal from ${business}?\n\n` +
+        "This wipes every product, price, customer and staff PIN cached on this " +
+        "till and cannot be undone. Only do this once every sale here has synced " +
+        "— unpairing is refused otherwise, but check the Sync & Connectivity " +
+        "panel above first.",
+    );
+    if (!confirmed) return;
+
+    setUnpairing(true);
+    try {
+      await window.devsfleet.device.unpair();
+      unbindTerminal();
+    } catch (error) {
+      setUnpairError(error instanceof Error ? error.message : "Failed to unpair this terminal.");
+    } finally {
+      setUnpairing(false);
+    }
   }
 
   function refreshAttention() {
@@ -460,6 +487,42 @@ export function Settings() {
                   </p>
                 </div>
               </Section>
+
+              {/* Terminal / tenant unpair — hidden entirely for a cashier who does not hold device:manage */}
+              {can("device:manage") && (
+                <Section title="Danger Zone" icon={Unplug} tone="amber">
+                  <p className="text-xs text-(--pos-text-2)">
+                    Disconnect this till from <strong>{terminal?.tenantName ?? "its current business"}</strong>{" "}
+                    entirely — for re-registering it to a different business or branch. This wipes every
+                    product, price, customer and staff PIN cached locally on this device.
+                  </p>
+
+                  {unpairError && (
+                    <div className="rounded-lg bg-signal-red/10 border border-signal-red/30 p-2.5 text-xs text-signal-red font-medium">
+                      {unpairError}
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    className="btn btn-danger w-full justify-center"
+                    disabled={!hasBridge() || unpairing}
+                    onClick={() => void handleUnpair()}
+                  >
+                    {unpairing ? (
+                      <Loader2 className="size-4 mr-1.5 animate-spin" />
+                    ) : (
+                      <Unplug className="size-4 mr-1.5" />
+                    )}
+                    {unpairing ? "Unpairing…" : "Unpair This Terminal"}
+                  </button>
+                  {!hasBridge() && (
+                    <p className="text-[11px] text-(--pos-text-3) italic">
+                      Only available in the Electron desktop application.
+                    </p>
+                  )}
+                </Section>
+              )}
             </div>
 
             {/* ── RIGHT COLUMN ── */}

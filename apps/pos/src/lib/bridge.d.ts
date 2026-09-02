@@ -158,6 +158,11 @@ export interface DevsfleetBridge {
       version: string;
     }>;
     activate(activationCode: string, apiUrl: string): Promise<{ deviceId: string }>;
+    /**
+     * Undo `activate` and wipe the local database. Rejects if anything in the
+     * outbox has not synced yet.
+     */
+    unpair(): Promise<void>;
   };
 
   outbox: {

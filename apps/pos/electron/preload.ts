@@ -254,6 +254,11 @@ const api = {
     /** Bind this installation to a device row using a one-time activation code. */
     activate: (activationCode: string, apiUrl: string): Promise<{ deviceId: string }> =>
       ipcRenderer.invoke("device:activate", activationCode, apiUrl),
+    /**
+     * Undo `activate` and wipe the local database. Rejects if anything in the
+     * outbox has not synced yet — see the `device:unpair` IPC handler.
+     */
+    unpair: (): Promise<void> => ipcRenderer.invoke("device:unpair"),
   },
 
   outbox: {

@@ -135,7 +135,12 @@ const api = {
     /** Hardware fingerprint + registration state, shown on the settings screen. */
     info: () => electron.ipcRenderer.invoke("device:info"),
     /** Bind this installation to a device row using a one-time activation code. */
-    activate: (activationCode, apiUrl) => electron.ipcRenderer.invoke("device:activate", activationCode, apiUrl)
+    activate: (activationCode, apiUrl) => electron.ipcRenderer.invoke("device:activate", activationCode, apiUrl),
+    /**
+     * Undo `activate` and wipe the local database. Rejects if anything in the
+     * outbox has not synced yet — see the `device:unpair` IPC handler.
+     */
+    unpair: () => electron.ipcRenderer.invoke("device:unpair")
   },
   outbox: {
     /** Rejected pushes and applied-with-warning ones — see Settings. */
