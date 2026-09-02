@@ -57,6 +57,10 @@ mac:
 
 # Terminals sit behind a shop's router with no one watching them. Auto-update
 # from the self-hosted VPS keeps them current without a site visit.
+#
+# /pos-dl, not /releases: the latter is the admin panel's own page
+# (apps/admin/src/app/releases/page.tsx) — see the nginx config's comment on
+# the /pos-dl/ location for why they can't share a path.
 publish:
   provider: generic
-  url: https://pos.devsfleet.com/releases
+  url: https://pos.devsfleet.com/pos-dl

@@ -13,6 +13,8 @@ role accidentally ends up with `BYPASSRLS`.
 Internet :443
 └── nginx (host, already serving isp.devsfleet.com)
      ├── pos.devsfleet.com ──→ 127.0.0.1:3000   admin panel   PM2
+     │    ├── /releases      (admin panel page — downloads, human-facing)
+     │    └── /pos-dl/   ──→ /var/www/devsfleet-pos-releases/  (static files)
      ├── api.devsfleet.com ──→ 127.0.0.1:3001   API           PM2
      └── cdn.devsfleet.com ──→ 127.0.0.1:9000   MinIO         docker
                                  (only /*/products/* is exposed)
@@ -21,8 +23,47 @@ docker, all bound to 127.0.0.1:
      postgres 5433 · redis 6380 · minio 9000/9001 · nightly backup
 ```
 
-The POS terminals are Electron desktop apps. They are **not** deployed here —
-they are installed on the tills and point at `https://api.devsfleet.com`.
+The POS terminals are Electron desktop apps. The API and admin panel run on
+this VPS; the terminal app itself is **installed on the tills**, not deployed
+here, and points at `https://api.devsfleet.com`.
+
+What *is* served from this VPS is the installer feed the tills download from
+and auto-update against, at `https://pos.devsfleet.com/pos-dl/` — a plain
+static directory nginx serves directly (see the `location /pos-dl/` block in
+`deploy/nginx/devsfleet-pos.conf`), populated by
+`.github/workflows/pos-release.yml` on every `pos-v*` tag push. The admin
+panel's **Releases** page (`/releases`, under Administration in the sidebar,
+gated on `device:manage`) fetches `latest.yml`/`latest-linux.yml` from that
+same directory client-side and renders download buttons from it — that page
+is the one place a human is meant to go for an installer; `/pos-dl/` is the
+machine-facing feed both that page and every till's auto-updater read from.
+
+One-time setup on the VPS:
+
+```bash
+sudo mkdir -p /var/www/devsfleet-pos-releases
+sudo chown "$(whoami)" /var/www/devsfleet-pos-releases   # the SSH deploy user needs to write here
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+Cutting a release, from a dev machine:
+
+```bash
+# bump the version electron-updater compares against first
+git tag pos-v1.3.0
+git push origin pos-v1.3.0
+```
+
+That workflow builds Windows and Linux installers on native runners (no macOS
+build in CI yet — the config in `apps/pos/electron-builder.yml` supports it,
+but nobody has asked for a Mac till) and `scp`s them, plus the
+`latest.yml`/`latest-linux.yml` manifests `electron-updater` (and the admin
+panel's Releases page) read, into `/var/www/devsfleet-pos-releases/`.
+
+**Not yet set up: code signing.** Windows installers trigger a SmartScreen
+warning and macOS builds are blocked by Gatekeeper until a certificate is
+added — see the comment above the "Package the installer" step in the
+workflow.
 
 ---
 

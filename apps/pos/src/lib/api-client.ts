@@ -1,9 +1,16 @@
 /**
- * Minimal fetch client for the POS browser/dev mode.
+ * Minimal fetch client for the POS browser/dev mode — AND for terminal
+ * pairing (RegisterTerminal.tsx / adminLoginForRegistration,
+ * fetchBranchesForRegistration, registerDeviceOnServer) even inside the
+ * packaged Electron app.
  *
- * Used ONLY when the Electron bridge is absent and VITE_API_URL is set.
- * The Electron app talks to the local SQLite mirror via IPC — this module
- * is never imported in that path.
+ * Everything else the Electron app does talks to the local SQLite mirror via
+ * IPC instead. Pairing is the one exception, and necessarily so: it happens
+ * before any device exists, so there is no `device_state.api_url` yet for the
+ * main process to hand back — VITE_API_URL, baked in at build time by `vite
+ * build`, is the only URL available at that point. See the "Build POS and
+ * its workspace dependencies" step in .github/workflows/pos-release.yml,
+ * which is what actually sets it for a real installer.
  *
  * Responsibilities:
  *  - Prefix every request with the configured API base URL

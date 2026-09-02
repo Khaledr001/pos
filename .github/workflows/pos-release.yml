@@ -1,0 +1,95 @@
+name: POS Terminal Release
+
+# Separate from ci.yml on purpose: the web apps redeploy on every push to
+# main, but an installer going out to every till in every shop is a
+# deliberate release, not a side effect of a commit landing. Bump
+# apps/pos/package.json's version and push a tag to ship one.
+#
+#   git tag pos-v1.3.0 && git push origin pos-v1.3.0
+#
+# workflow_dispatch exists to test this pipeline itself without cutting a
+# real tag.
+on:
+  push:
+    tags:
+      - "pos-v*"
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: "24.11.1"
+  PNPM_VERSION: "11.2.2"
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    strategy:
+      # Native runners per target, not cross-compilation from one Linux box:
+      # better-sqlite3 is a native binding, and electron-builder's own Wine
+      # cross-build path for Windows is the kind of thing that works until
+      # the one time it silently doesn't.
+      matrix:
+        include:
+          # scp-action's `source` wants a comma-separated list on one line,
+          # not one glob per line — and each OS only ever emits the yml
+          # manifest for the target it just built, so there's no cross-glob.
+          - os: windows-latest
+            artifacts: "apps/pos/release/*.exe,apps/pos/release/*.exe.blockmap,apps/pos/release/latest.yml"
+          - os: ubuntu-latest
+            artifacts: "apps/pos/release/*.AppImage,apps/pos/release/*.deb,apps/pos/release/latest-linux.yml"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Builds shared-types/shared-utils before pos, in that order — pos's own
+      # "build" script only compiles itself, the same gap that once made the
+      # API build against a stale shared-types dist.
+      #
+      # VITE_API_URL is inlined into the renderer bundle by `vite build` at
+      # THIS step — not read at runtime, and not something a person setting
+      # up a till can enter later. It is what apps/pos/src/lib/api-client.ts
+      # uses for the pairing screen's admin login and device-creation calls,
+      # before any device is registered and before device:activate has
+      # anywhere else to read a URL from. A CI runner has no apps/pos/.env
+      # (gitignored), so without this the value silently falls back to an
+      # empty string and the pairing screen fails on every till.
+      - name: Build POS and its workspace dependencies
+        env:
+          VITE_API_URL: https://api.devsfleet.com/api/v1
+        run: pnpm --filter=@devsfleet/pos... build
+
+      # --publish never: electron-builder's "generic" provider is read-only
+      # from the client's (auto-updater's) side — there is no credential or
+      # protocol for electron-builder itself to push to a plain static URL.
+      # It still writes latest*.yml locally because `publish` is configured
+      # in electron-builder.yml; the scp step below is what actually ships
+      # the files.
+      - name: Package the installer
+        working-directory: apps/pos
+        run: pnpm exec electron-builder --publish never
+
+      # Unsigned for now: no code-signing certificate is configured. Windows
+      # SmartScreen and macOS Gatekeeper will both warn on first run until
+      # WIN_CSC_LINK / WIN_CSC_KEY_PASSWORD (or the Apple equivalents) are
+      # added as secrets and wired into this step.
+      - name: Publish to the release feed
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST || '163.227.50.195' }}
+          username: ${{ secrets.SSH_USER || 'root' }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          passphrase: ${{ secrets.SSH_PASSPHRASE || '' }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          source: ${{ matrix.artifacts }}
+          target: /var/www/devsfleet-pos-releases/
+          strip_components: 3
