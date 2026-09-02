@@ -91,7 +91,12 @@ export function Login() {
   });
 
   return (
-    <div className="flex h-full items-center justify-center bg-steel-900 p-6">
+    // Forced dark regardless of the app's saved light/dark preference — see
+    // the identical comment in RegisterTerminal.tsx. This screen's `.panel`
+    // reads the theme-aware --pos-* tokens, which default to light until a
+    // cashier changes it in Settings, while the page background here is
+    // unconditionally dark.
+    <div data-theme="dark" className="flex h-full items-center justify-center bg-steel-900 p-6">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
           <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-xl bg-brass/12">

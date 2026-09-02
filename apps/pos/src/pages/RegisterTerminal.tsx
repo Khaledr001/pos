@@ -1,4 +1,4 @@
-import { Loader2, MonitorSmartphone } from "lucide-react";
+import { ArrowLeft, Lock, Loader2, Mail, MonitorSmartphone, Tag } from "lucide-react";
 import { useState } from "react";
 import { Select } from "../components/Select.js";
 import { clearApiTokens } from "../lib/api-client.js";
@@ -46,6 +46,14 @@ export function RegisterTerminal() {
     } finally {
       setLoading(false);
     }
+  }
+
+  /** Wrong account signed in — back to login rather than being stuck mid-registration. */
+  function backToLogin() {
+    clearApiTokens();
+    setPassword("");
+    setError(null);
+    setStep("login");
   }
 
   async function handleRegister(e: React.FormEvent) {
@@ -112,7 +120,14 @@ export function RegisterTerminal() {
   }
 
   return (
-    <div className="flex h-full items-center justify-center bg-steel-900 p-6 text-pos-text">
+    // Forced dark regardless of the app's saved light/dark preference — this
+    // screen's own background (bg-steel-900 below) is unconditionally dark,
+    // but `.panel` and `Select` read the theme-aware --pos-* tokens, which
+    // default to LIGHT (index.html ships data-theme="light") until a cashier
+    // has changed it in Settings — a place nobody has been able to reach yet
+    // on a terminal that isn't registered. Without this, a fresh install
+    // showed a white card and a white dropdown floating on a black screen.
+    <div data-theme="dark" className="flex h-full items-center justify-center bg-steel-900 p-6 text-pos-text">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
           <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-xl bg-brass/12">
@@ -126,6 +141,17 @@ export function RegisterTerminal() {
           </p>
         </div>
 
+        {/* Step indicator */}
+        <div className="mb-5 flex items-center justify-center gap-2" aria-hidden>
+          <span className="h-1 w-10 rounded-full bg-brass transition-colors" />
+          <span
+            className={[
+              "h-1 w-10 rounded-full transition-colors",
+              step === "details" ? "bg-brass" : "bg-steel-700",
+            ].join(" ")}
+          />
+        </div>
+
         <div className="panel p-6">
           {error && (
             <div className="mb-4 rounded bg-signal-red/10 p-3 text-[13px] text-signal-red">
@@ -137,25 +163,31 @@ export function RegisterTerminal() {
             <form onSubmit={handleLogin} className="flex flex-col gap-4">
               <label className="flex flex-col gap-1.5">
                 <span className="text-[12px] font-medium text-pos-text-2">Email</span>
-                <input
-                  autoFocus
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="input"
-                  placeholder="admin@example.com"
-                />
+                <div className="relative">
+                  <Mail className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-500" />
+                  <input
+                    autoFocus
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="field pl-9"
+                    placeholder="admin@example.com"
+                  />
+                </div>
               </label>
               <label className="flex flex-col gap-1.5">
                 <span className="text-[12px] font-medium text-pos-text-2">Password</span>
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="input"
-                />
+                <div className="relative">
+                  <Lock className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-500" />
+                  <input
+                    type="password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="field pl-9"
+                  />
+                </div>
               </label>
               <button
                 type="submit"
@@ -167,6 +199,23 @@ export function RegisterTerminal() {
             </form>
           ) : (
             <form onSubmit={handleRegister} className="flex flex-col gap-4">
+              {/* Confirms which business this till is about to belong to —
+                  previously captured in state and never shown, so signing in
+                  under the wrong admin account produced no visible warning. */}
+              <div className="mb-1 flex items-center justify-between rounded-lg bg-brass/10 px-3 py-2">
+                <p className="text-[12px] text-zinc-400">
+                  Registering for <span className="font-semibold text-pos-text">{tenantName}</span>
+                </p>
+                <button
+                  type="button"
+                  onClick={backToLogin}
+                  className="flex items-center gap-1 text-[11px] font-medium text-zinc-500 hover:text-brass"
+                >
+                  <ArrowLeft className="size-3" />
+                  Not you?
+                </button>
+              </div>
+
               <div className="flex flex-col gap-1.5">
                 <span className="text-[12px] font-medium text-pos-text-2">Branch</span>
                 <Select
@@ -180,15 +229,18 @@ export function RegisterTerminal() {
               </div>
               <label className="flex flex-col gap-1.5">
                 <span className="text-[12px] font-medium text-pos-text-2">Terminal Name</span>
-                <input
-                  autoFocus
-                  type="text"
-                  required
-                  value={deviceName}
-                  onChange={(e) => setDeviceName(e.target.value)}
-                  className="input"
-                  placeholder="e.g. Counter 1"
-                />
+                <div className="relative">
+                  <Tag className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-500" />
+                  <input
+                    autoFocus
+                    type="text"
+                    required
+                    value={deviceName}
+                    onChange={(e) => setDeviceName(e.target.value)}
+                    className="field pl-9"
+                    placeholder="e.g. Counter 1"
+                  />
+                </div>
               </label>
               <button
                 type="submit"
