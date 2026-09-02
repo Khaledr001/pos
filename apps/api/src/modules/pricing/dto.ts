@@ -1,5 +1,6 @@
 import { PRICE_LIST_TYPES, CURRENCIES } from "@devsfleet/shared-types";
 import { z } from "zod";
+import { zQueryBoolean } from "../../common/pipes/zod-validation.pipe.js";
 
 const DATE_STRING = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
 
@@ -17,7 +18,7 @@ export const UpdatePriceListSchema = CreatePriceListSchema.partial().extend({
 export type UpdatePriceListDto = z.infer<typeof UpdatePriceListSchema>;
 
 export const ListPriceListsSchema = z.object({
-  includeInactive: z.coerce.boolean().default(false),
+  includeInactive: zQueryBoolean(false),
 });
 export type ListPriceListsDto = z.infer<typeof ListPriceListsSchema>;
 

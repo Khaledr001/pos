@@ -1,5 +1,6 @@
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from "@devsfleet/shared-types";
 import { z } from "zod";
+import { zQueryBoolean } from "../../common/pipes/zod-validation.pipe.js";
 
 /**
  * REFERENCE MODULE — DTOs
@@ -54,7 +55,7 @@ export const ListBranchesSchema = z.object({
   limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
   q: z.string().trim().max(255).optional(),
   /** Defaults to active only — the common case is a picker, not an audit. */
-  includeInactive: z.coerce.boolean().default(false),
+  includeInactive: zQueryBoolean(false),
   sortBy: z.enum(["name", "code", "createdAt"]).default("name"),
   sortOrder: z.enum(["asc", "desc"]).default("asc"),
 });

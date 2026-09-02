@@ -1,5 +1,5 @@
 import { Injectable, PipeTransform } from "@nestjs/common";
-import type { ZodType } from "zod";
+import { z, type ZodType } from "zod";
 
 /**
  * Validate and coerce a request payload against a Zod schema.
@@ -33,3 +33,18 @@ export class ZodValidationPipe<T> implements PipeTransform<unknown, T> {
 
 /** Terser form for inline use: `@Body(zodPipe(Schema))`. */
 export const zodPipe = <T>(schema: ZodType<T>) => new ZodValidationPipe(schema);
+
+/**
+ * A boolean query or multipart-form field, e.g. `?dryRun=false`.
+ *
+ * NOT `z.coerce.boolean()`: query params and multipart fields arrive as
+ * strings, and `Boolean("false")` is `true` in JavaScript — every explicit
+ * `?flag=false` would silently coerce to `true`. This treats the literal
+ * string `"false"` as false and anything else (present-and-truthy, or
+ * absent) per `defaultValue`.
+ */
+export const zQueryBoolean = (defaultValue: boolean) =>
+  z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined ? defaultValue : v !== "false"));

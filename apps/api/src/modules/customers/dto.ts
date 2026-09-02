@@ -1,6 +1,7 @@
 import { CUSTOMER_TYPES, DEFAULT_PAGE_SIZE, LOCALES, MAX_PAGE_SIZE, PAYMENT_METHODS } from "@devsfleet/shared-types";
 import { normalizePhone } from "@devsfleet/shared-utils";
 import { z } from "zod";
+import { zQueryBoolean } from "../../common/pipes/zod-validation.pipe.js";
 
 /**
  * A phone number, stored E.164.
@@ -61,8 +62,8 @@ export const ListCustomersSchema = z.object({
   q: z.string().trim().max(100).optional(),
   type: z.enum(CUSTOMER_TYPES).optional(),
   /** Everyone currently over their credit limit — the collections view. */
-  overLimitOnly: z.coerce.boolean().default(false),
-  includeInactive: z.coerce.boolean().default(false),
+  overLimitOnly: zQueryBoolean(false),
+  includeInactive: zQueryBoolean(false),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
 });

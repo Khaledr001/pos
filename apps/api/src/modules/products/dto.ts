@@ -1,5 +1,6 @@
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from "@devsfleet/shared-types";
 import { z } from "zod";
+import { zQueryBoolean } from "../../common/pipes/zod-validation.pipe.js";
 
 /**
  * A variant is the sellable unit, so its price lives here rather than on the
@@ -80,7 +81,7 @@ export const ListProductsSchema = z.object({
   q: z.string().trim().max(255).optional(),
   categoryId: z.string().uuid().optional(),
   brandId: z.string().uuid().optional(),
-  includeInactive: z.coerce.boolean().default(false),
+  includeInactive: zQueryBoolean(false),
   /** Include per-branch stock. Costs a join, so it is opt-in. */
   branchId: z.string().uuid().optional(),
   /**
@@ -173,7 +174,7 @@ export type UpdateProductSupplierLinkDto = z.infer<typeof UpdateProductSupplierL
 export const UploadProductImageSchema = z.object({
   /** Set when this photo shows one specific variant rather than the family. */
   variantId: z.string().uuid().optional(),
-  isPrimary: z.coerce.boolean().default(false),
+  isPrimary: zQueryBoolean(false),
   altText: z.string().trim().max(255).optional(),
 });
 export type UploadProductImageDto = z.infer<typeof UploadProductImageSchema>;

@@ -1,5 +1,6 @@
 import { DEFAULT_PAGE_SIZE, INVENTORY_TX_TYPES, MAX_PAGE_SIZE } from "@devsfleet/shared-types";
 import { z } from "zod";
+import { zQueryBoolean } from "../../common/pipes/zod-validation.pipe.js";
 
 export const ListStockSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -7,7 +8,7 @@ export const ListStockSchema = z.object({
   q: z.string().trim().max(255).optional(),
   branchId: z.string().uuid().optional(),
   categoryId: z.string().uuid().optional(),
-  lowStockOnly: z.coerce.boolean().default(false),
+  lowStockOnly: zQueryBoolean(false),
 });
 export type ListStockDto = z.infer<typeof ListStockSchema>;
 

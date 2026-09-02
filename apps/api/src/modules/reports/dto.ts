@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { zQueryBoolean } from "../../common/pipes/zod-validation.pipe.js";
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a YYYY-MM-DD date");
 
@@ -26,7 +27,7 @@ export type TopProductsDto = z.infer<typeof TopProductsSchema>;
 export const InventoryReportSchema = z.object({
   branchId: z.string().uuid().optional(),
   /** Only what needs attention: at or below the variant's minimum. */
-  lowStockOnly: z.coerce.boolean().default(false),
+  lowStockOnly: zQueryBoolean(false),
   limit: z.coerce.number().int().min(1).max(500).default(100),
 });
 export type InventoryReportDto = z.infer<typeof InventoryReportSchema>;

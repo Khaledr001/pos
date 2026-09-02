@@ -1,5 +1,6 @@
 import { DEFAULT_PAGE_SIZE, LOCALES, MAX_PAGE_SIZE } from "@devsfleet/shared-types";
 import { z } from "zod";
+import { zQueryBoolean } from "../../common/pipes/zod-validation.pipe.js";
 
 /**
  * ABAC ceilings, editable per user.
@@ -93,6 +94,6 @@ export const ListUsersSchema = z.object({
   q: z.string().trim().max(255).optional(),
   roleId: z.string().uuid().optional(),
   branchId: z.string().uuid().optional(),
-  includeInactive: z.coerce.boolean().default(false),
+  includeInactive: zQueryBoolean(false),
 });
 export type ListUsersDto = z.infer<typeof ListUsersSchema>;

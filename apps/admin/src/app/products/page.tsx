@@ -4,7 +4,8 @@ import React, { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import {
   Package, Search, Plus, RefreshCw, X, AlertCircle, CheckCircle2, Boxes, Trash2,
-  Pencil, Image as ImageIcon, Upload, Star, FileUp
+  Pencil, Image as ImageIcon, Upload, Star, FileUp,
+  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api-client";
@@ -220,6 +221,23 @@ function flattenCategories(cats: Category[], depth = 0): { id: string; label: st
   return result;
 }
 
+// ── Page numbers with ellipsis, e.g. [1, "…", 4, 5, 6, "…", 42] ─────────────
+
+function paginationRange(current: number, total: number): (number | "ellipsis")[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+
+  const pages: (number | "ellipsis")[] = [1];
+  if (current > 3) pages.push("ellipsis");
+
+  for (let p = Math.max(2, current - 1); p <= Math.min(total - 1, current + 1); p++) {
+    pages.push(p);
+  }
+
+  if (current < total - 2) pages.push("ellipsis");
+  pages.push(total);
+  return pages;
+}
+
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function ProductsPage() {
@@ -228,6 +246,7 @@ export default function ProductsPage() {
   // List state
   const [products, setProducts] = useState<Product[]>([]);
   const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -274,8 +293,14 @@ export default function ProductsPage() {
       });
       const list = Array.isArray(res) ? res : (res?.items ?? []);
       const totalCount = res?.meta?.total ?? res?.total ?? list.length;
+      const pageCount = res?.meta?.totalPages ?? Math.max(1, Math.ceil(totalCount / LIMIT));
       setProducts(list);
       setTotal(totalCount);
+      setTotalPages(pageCount);
+      // A filter can shrink the result set out from under whatever page the
+      // user was on (e.g. deleting the last row on the last page) — land them
+      // on the new last page instead of showing an empty table.
+      if (page > pageCount) setPage(pageCount);
     } catch (err: any) {
       console.error("Failed to fetch products:", err);
       setActionError(err?.message || "Failed to load products from API.");
@@ -543,17 +568,52 @@ export default function ProductsPage() {
         )}
 
         {/* Pagination */}
-        {total > LIMIT && (
-          <div className="flex items-center justify-between border-t border-border px-4 py-3">
+        {totalPages > 1 && (
+          <div className="flex flex-col gap-3 border-t border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <span className="text-xs text-muted-foreground">
-              Showing {((page - 1) * LIMIT) + 1}–{Math.min(page * LIMIT, total)} of {total}
+              Showing {((page - 1) * LIMIT) + 1}–{Math.min(page * LIMIT, total)} of {total.toLocaleString()} · Page {page} of {totalPages}
             </span>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>
-                Previous
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline" size="sm" disabled={page === 1}
+                onClick={() => setPage(1)} aria-label="First page"
+              >
+                <ChevronsLeft className="h-3.5 w-3.5" />
               </Button>
-              <Button variant="outline" size="sm" disabled={page * LIMIT >= total} onClick={() => setPage(p => p + 1)}>
-                Next
+              <Button
+                variant="outline" size="sm" disabled={page === 1}
+                onClick={() => setPage((p) => p - 1)} aria-label="Previous page"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </Button>
+              {paginationRange(page, totalPages).map((p, i) =>
+                p === "ellipsis" ? (
+                  <span key={`e-${i}`} className="px-1.5 text-xs text-muted-foreground">…</span>
+                ) : (
+                  <Button
+                    key={p}
+                    variant={p === page ? "default" : "outline"}
+                    size="sm"
+                    className="min-w-8 px-0 font-mono"
+                    onClick={() => setPage(p)}
+                    aria-label={`Page ${p}`}
+                    aria-current={p === page ? "page" : undefined}
+                  >
+                    {p}
+                  </Button>
+                ),
+              )}
+              <Button
+                variant="outline" size="sm" disabled={page === totalPages}
+                onClick={() => setPage((p) => p + 1)} aria-label="Next page"
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                variant="outline" size="sm" disabled={page === totalPages}
+                onClick={() => setPage(totalPages)} aria-label="Last page"
+              >
+                <ChevronsRight className="h-3.5 w-3.5" />
               </Button>
             </div>
           </div>
