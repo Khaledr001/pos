@@ -72,6 +72,24 @@ export type CustomerType = (typeof CUSTOMER_TYPES)[number];
 export const ATTRIBUTE_TYPES = asConst(["text", "number", "boolean", "select"]);
 export type AttributeType = (typeof ATTRIBUTE_TYPES)[number];
 
+/**
+ * Every tenant starts with these instead of the single "Piece" a bare
+ * provisioning flow would otherwise leave them with — a hardware/electrical/
+ * sanitary/paint retailer needs Box and Roll on day one, not after opening a
+ * support ticket. Rows are plain tenant-scoped data after creation: a tenant
+ * can rename, delete, or add its own via the Units of Measure page.
+ */
+export const COMMON_UNITS = [
+  { name: "Piece", abbreviation: "pcs", allowsFractions: false },
+  { name: "Box", abbreviation: "box", allowsFractions: false },
+  { name: "Roll", abbreviation: "roll", allowsFractions: false },
+  { name: "Metre", abbreviation: "m", allowsFractions: true },
+  { name: "Kilogram", abbreviation: "kg", allowsFractions: true },
+  { name: "Litre", abbreviation: "ltr", allowsFractions: true },
+  { name: "Bag", abbreviation: "bag", allowsFractions: false },
+  { name: "Set", abbreviation: "set", allowsFractions: false },
+] as const;
+
 // -----------------------------------------------------------------------------
 // Inventory
 // -----------------------------------------------------------------------------

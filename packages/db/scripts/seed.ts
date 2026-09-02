@@ -11,6 +11,7 @@
  */
 
 import {
+  COMMON_UNITS,
   DEFAULT_ROLE_PERMISSIONS,
   DEFAULT_TENANT_SETTINGS,
   SYSTEM_ROLES,
@@ -781,18 +782,8 @@ async function seedTenant(
   const adminUserId = userMap.get(config.adminEmail)!;
 
   // 5. Units
-  const unitSeed = [
-    { name: "Piece", abbreviation: "pcs", allowsFractions: false },
-    { name: "Box", abbreviation: "box", allowsFractions: false },
-    { name: "Roll", abbreviation: "roll", allowsFractions: false },
-    { name: "Metre", abbreviation: "m", allowsFractions: true },
-    { name: "Kilogram", abbreviation: "kg", allowsFractions: true },
-    { name: "Litre", abbreviation: "ltr", allowsFractions: true },
-    { name: "Bag", abbreviation: "bag", allowsFractions: false },
-    { name: "Set", abbreviation: "set", allowsFractions: false },
-  ];
   const unitsMap = new Map<string, string>();
-  for (const u of unitSeed) {
+  for (const u of COMMON_UNITS) {
     const [unit] = await tx
       .insert(schema.units)
       .values({ tenantId, ...u })

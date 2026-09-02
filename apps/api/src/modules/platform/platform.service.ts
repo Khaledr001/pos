@@ -14,6 +14,7 @@ import {
   sql,
 } from "@devsfleet/db";
 import {
+  COMMON_UNITS,
   DEFAULT_ROLE_PERMISSIONS,
   DEFAULT_TENANT_SETTINGS,
   SYSTEM_ROLES,
@@ -421,15 +422,11 @@ export class PlatformService {
         })
         .returning();
 
-      const [unit] = await tx
-        .insert(schema.units)
-        .values({
-          tenantId: tenant.id,
-          name: "Piece",
-          abbreviation: "pcs",
-          allowsFractions: false,
-        })
-        .returning();
+      // A hardware/electrical/sanitary/paint retailer needs Box and Roll on
+      // day one, not just Piece — see COMMON_UNITS.
+      await tx.insert(schema.units).values(
+        COMMON_UNITS.map((u) => ({ tenantId: tenant.id, ...u })),
+      );
 
       await tx.insert(schema.priceLists).values({
         tenantId: tenant.id,
@@ -470,7 +467,7 @@ export class PlatformService {
         `Created tenant ${tenant.name} (${tenant.slug}) on plan ${dto.planId}`,
       );
 
-      return { tenant, owner, branch, unit };
+      return { tenant, owner, branch };
     });
 
     this.logger.log(

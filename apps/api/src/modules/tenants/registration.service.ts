@@ -1,5 +1,6 @@
 import { eq, schema } from "@devsfleet/db";
 import {
+  COMMON_UNITS,
   DEFAULT_ROLE_PERMISSIONS,
   DEFAULT_TENANT_SETTINGS,
   SYSTEM_ROLES,
@@ -19,7 +20,8 @@ import { RESERVED_SLUGS, type RegisterTenantDto } from "./dto.js";
  * Self-service signup — the front door of the SaaS.
  *
  * One unauthenticated call turns a form submission into a working business:
- * tenant, owner, roles, a branch, a unit, a default price list, and a signed-in
+ * tenant, owner, roles, a branch, a starter set of units, a default price
+ * list, and a signed-in
  * session. No second login, no setup wizard, no empty-state dead end.
  *
  * ALL-OR-NOTHING. Everything happens in one transaction. A half-created tenant
@@ -109,15 +111,11 @@ export class RegistrationService {
         })
         .returning();
 
-      const [unit] = await tx
-        .insert(schema.units)
-        .values({
-          tenantId: tenant.id,
-          name: "Piece",
-          abbreviation: "pcs",
-          allowsFractions: false,
-        })
-        .returning();
+      // A hardware/electrical/sanitary/paint retailer needs Box and Roll on
+      // day one, not just Piece — see COMMON_UNITS.
+      await tx.insert(schema.units).values(
+        COMMON_UNITS.map((u) => ({ tenantId: tenant.id, ...u })),
+      );
 
       // Without a default price list, the first product created has nowhere to
       // put its price and the pricing resolver has no fallback.
@@ -150,7 +148,7 @@ export class RegistrationService {
         .returning();
       if (!owner) throw new AppError(ERROR_CODES.INTERNAL_ERROR, "Could not create the owner account");
 
-      return { tenant, owner, branch, unit };
+      return { tenant, owner, branch };
     });
 
     this.logger.log(
