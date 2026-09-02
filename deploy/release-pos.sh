@@ -98,19 +98,30 @@ fi
 
 # -----------------------------------------------------------------------------
 # Collect whatever this platform actually produced. A native build only ever
-# writes one OS's files, so most of these globs match nothing — that's
+# writes one OS's files, so most of these candidates match nothing — that's
 # expected, not an error. On a Linux VPS, expect only the AppImage/deb/
-# latest-linux.yml lines below to ever match.
+# latest-linux.yml lines below to ever be real.
+#
+# Checked with `-f` explicitly rather than trusting `nullglob` alone:
+# nullglob only discards a WILDCARD pattern that matched nothing — the three
+# literal `latest*.yml` filenames below have no wildcard in them, so bash
+# never treats them as unmatched globs and keeps them in the array even when
+# the file does not exist, only for `cp` to fail on them afterwards.
 # -----------------------------------------------------------------------------
 say "Collecting build artifacts"
 shopt -s nullglob
-ARTIFACTS=(
+CANDIDATES=(
   "$RELEASE_OUT"/*.exe "$RELEASE_OUT"/*.exe.blockmap
   "$RELEASE_OUT"/*.AppImage "$RELEASE_OUT"/*.deb
   "$RELEASE_OUT"/*.dmg "$RELEASE_OUT"/*.dmg.blockmap
-  "$RELEASE_OUT"/latest.yml "$RELEASE_OUT"/latest-linux.yml "$RELEASE_OUT"/latest-mac.yml
+  "$RELEASE_OUT/latest.yml" "$RELEASE_OUT/latest-linux.yml" "$RELEASE_OUT/latest-mac.yml"
 )
 shopt -u nullglob
+
+ARTIFACTS=()
+for f in "${CANDIDATES[@]}"; do
+  [ -f "$f" ] && ARTIFACTS+=("$f")
+done
 
 [ "${#ARTIFACTS[@]}" -gt 0 ] || die "no installer or manifest found in $RELEASE_OUT — did the build actually run?"
 
@@ -134,7 +145,14 @@ cp -f "${ARTIFACTS[@]}" "$RELEASE_DIR/"
 say "Verifying"
 for manifest in latest.yml latest-linux.yml latest-mac.yml; do
   [ -f "$RELEASE_OUT/$manifest" ] || continue
-  code="$(curl -fsS -o /dev/null -w '%{http_code}' "$FEED_URL/$manifest" || echo "000")"
+  # `|| true`, not `|| echo "000"`: curl's own -w already prints "000" when it
+  # never got an HTTP response at all (DNS failure, refused, etc.) — an
+  # `echo "000"` fallback INSIDE the substitution stacks a second "000" onto
+  # what curl already wrote. But curl still exits non-zero in that case, and
+  # under `set -e` an assignment's exit status IS the command substitution's
+  # exit status — without `|| true` out here, a connection failure kills the
+  # whole script right on this line, before the die message below ever runs.
+  code="$(curl -s -o /dev/null -w '%{http_code}' "$FEED_URL/$manifest")" || true
   if [ "$code" = "200" ]; then
     echo "    $manifest -> $FEED_URL/$manifest  OK"
   else
