@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import {
   Package, Search, Plus, RefreshCw, X, AlertCircle, CheckCircle2, Boxes, Trash2,
-  Pencil, Image as ImageIcon, Upload, Star, FileUp,
+  Pencil, Image as ImageIcon, Upload, Star, FileUp, Layers,
   ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
@@ -18,6 +18,10 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Sheet, SheetContent, SheetHeader, SheetBody, SheetTitle,
+  SheetDescription, SheetFooter,
+} from "@/components/ui/sheet";
 import {
   Select,
   SelectContent,
@@ -35,6 +39,13 @@ interface ProductVariant {
   variantName: string;
   isActive: boolean;
   prices?: { sellingPrice: string; wholesalePrice?: string }[];
+  /** Present on GET /products/:id — base-unit quantity on hand. */
+  stock?: string;
+  minStock?: string;
+  sellingPrice?: string;
+  minSellingPrice?: string | null;
+  /** Only present when the requesting user holds canViewCost. */
+  purchasePrice?: string | null;
 }
 
 interface Product {
@@ -281,6 +292,9 @@ export default function ProductsPage() {
   // Edit dialog (includes image management)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
+  // Detail drawer, opened by clicking a row
+  const [viewingProduct, setViewingProduct] = useState<Product | null>(null);
+
   // ── Fetch products ──────────────────────────────────────────────────────
 
   const fetchProducts = useCallback(async () => {
@@ -507,7 +521,12 @@ export default function ProductsPage() {
                     : "—";
 
                   return (
-                    <tr key={product.id} className="hover:bg-secondary/30 transition-colors">
+                    <tr
+                      key={product.id}
+                      onDoubleClick={() => setViewingProduct(product)}
+                      title="Double-click to view details"
+                      className="cursor-pointer hover:bg-secondary/30 transition-colors"
+                    >
                       <td className="px-4 py-3.5 font-mono font-bold text-primary">{product.sku}</td>
                       <td className="px-4 py-3.5 font-medium text-foreground max-w-xs">
                         <div className="truncate font-semibold">{product.name}</div>
@@ -537,7 +556,14 @@ export default function ProductsPage() {
                         </Badge>
                       </td>
                       <td className="px-4 py-3.5 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
+                        {/* One stopPropagation for the whole action cluster, rather than
+                            one per button — a click (or two quick ones) here should never
+                            also open the row's detail drawer underneath it. */}
+                        <div
+                          className="flex items-center justify-end gap-1.5"
+                          onClick={(e) => e.stopPropagation()}
+                          onDoubleClick={(e) => e.stopPropagation()}
+                        >
                           <Button variant="outline" size="sm" onClick={() => setPackagingProduct(product)}>
                             <Boxes className="h-3.5 w-3.5" />
                           </Button>
@@ -767,6 +793,20 @@ export default function ProductsPage() {
         onSaved={() => {
           setActionSuccess("Product updated.");
           fetchProducts();
+        }}
+      />
+
+      <ProductDetailDrawer
+        product={viewingProduct}
+        accessToken={tokens?.accessToken}
+        onClose={() => setViewingProduct(null)}
+        onEdit={(product) => {
+          setViewingProduct(null);
+          setEditingProduct(product);
+        }}
+        onPackagings={(product) => {
+          setViewingProduct(null);
+          setPackagingProduct(product);
         }}
       />
 
@@ -1089,6 +1129,346 @@ function EditProductDialog({
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ── Product Detail Drawer ────────────────────────────────────────────────────
+
+/**
+ * Cascades a section in shortly after the one before it, rather than every
+ * section appearing at once — reads as considered rather than as everything
+ * just being dumped on screen the instant the drawer stops sliding.
+ */
+function Reveal({ index, children }: { index: number; children: React.ReactNode }) {
+  return (
+    <div
+      // fade-in-up is a real animation this project defines in globals.css.
+      // The tailwindcss-animate names (`animate-in`, `slide-in-from-bottom-2`)
+      // that were here emit no CSS — that plugin isn't installed on Tailwind v4.
+      className="animate-fade-in-up"
+      // Delay tracks the panel's own 0.3s slide so sections cascade in as it
+      // finishes its approach, rather than racing ahead of it mid-slide.
+      style={{ animationDelay: `${180 + index * 70}ms`, animationDuration: "300ms" }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/**
+ * A read-only, everything-in-one-place view of a product: opened by
+ * double-clicking its row (a single click is too easy to trigger by
+ * accident while scanning the table). Category/brand/unit labels come from
+ * the row data passed in (the list endpoint already resolved those names)
+ * rather than from a fresh lookup — GET /products/:id itself only returns
+ * the raw ids for those, not their names. Variants, images, description and
+ * per-variant packagings are fetched fresh on open, since the list row never
+ * carries those.
+ *
+ * Both the row data and the fetched detail are RETAINED after `product` goes
+ * null, and this component never returns null itself. That is what makes the
+ * close animation possible at all: Radix only plays a [data-state=closed]
+ * animation if the Sheet is still mounted to reach that state, and it only
+ * looks right if there is still content inside the panel on the way out.
+ */
+function ProductDetailDrawer({
+  product,
+  accessToken,
+  onClose,
+  onEdit,
+  onPackagings,
+}: {
+  product: Product | null;
+  accessToken?: string;
+  onClose: () => void;
+  onEdit: (product: Product) => void;
+  onPackagings: (product: Product) => void;
+}) {
+  /** Last product opened. Outlives `product` so the panel has something to show while sliding out. */
+  const [shown, setShown] = useState<Product | null>(null);
+  const [full, setFull] = useState<Product | null>(null);
+  const [packagingsByVariant, setPackagingsByVariant] = useState<Record<string, VariantUnit[]>>({});
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Deliberately does nothing on close: clearing state here would blank the
+    // panel out mid-slide instead of letting it leave with its content.
+    if (!product || !accessToken) return;
+
+    let cancelled = false;
+    setShown(product);
+    setFull(null);
+    setPackagingsByVariant({});
+    setError(null);
+    setLoading(true);
+
+    api
+      .get<Product>(`/products/${product.id}`, { accessToken })
+      .then(async (detail) => {
+        if (cancelled) return;
+        setFull(detail);
+        const entries = await Promise.all(
+          (detail.variants ?? []).map(async (v) => {
+            try {
+              const rows = await api.get<VariantUnit[]>(`/products/variants/${v.id}/units`, { accessToken });
+              return [v.id, rows ?? []] as const;
+            } catch {
+              return [v.id, []] as const; // Non-critical — the drawer still shows everything else.
+            }
+          }),
+        );
+        if (!cancelled) setPackagingsByVariant(Object.fromEntries(entries));
+      })
+      .catch((err: any) => {
+        if (!cancelled) setError(err?.message || "Failed to load product detail.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [product, accessToken]);
+
+  const categoryLabel = shown?.categoryName || shown?.category?.name || null;
+  const brandLabel = shown?.brandName || null;
+  const unitAbbr = shown?.unitAbbr || shown?.unit?.name || "";
+  const isActive = full?.isActive ?? shown?.isActive ?? false;
+  const primaryImage = full?.images?.find((i) => i.isPrimary) ?? full?.images?.[0] ?? null;
+  const variants = full?.variants ?? [];
+
+  const money = (value?: string | null) => (value ? `AED ${parseFloat(value).toFixed(2)}` : "—");
+
+  return (
+    <Sheet open={product !== null} onOpenChange={(open) => !open && onClose()}>
+      <SheetContent>
+        <SheetHeader>
+          <div className="flex items-start gap-3">
+            {primaryImage ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={primaryImage.url}
+                alt={primaryImage.altText ?? shown?.name ?? ""}
+                className="h-11 w-11 shrink-0 rounded-xl border border-border object-cover"
+              />
+            ) : (
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-blue-500 to-indigo-600 text-white">
+                <Package className="h-5 w-5" />
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <SheetTitle className="truncate leading-snug">{shown?.name ?? ""}</SheetTitle>
+              <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                <span className="truncate font-mono text-[11px] text-muted-foreground">{shown?.sku}</span>
+                <Badge variant={isActive ? "success" : "secondary"} className="shrink-0 text-[9px]">
+                  {isActive ? "Active" : "Inactive"}
+                </Badge>
+                {brandLabel && (
+                  <Badge variant="outline" className="shrink-0 text-[9px]">{brandLabel}</Badge>
+                )}
+              </div>
+            </div>
+          </div>
+        </SheetHeader>
+
+        <SheetBody>
+          {error ? (
+            <div className="flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              {error}
+            </div>
+          ) : loading || !full ? (
+            // Skeleton rather than a spinner: the shape of what's coming
+            // reads as "nearly there" instead of "nothing here yet".
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-2.5">
+                {[0, 1, 2, 3].map((i) => (
+                  <div key={i} className="h-16 animate-pulse rounded-xl bg-muted/60" />
+                ))}
+              </div>
+              <div className="h-3 w-1/3 animate-pulse rounded bg-muted/60" />
+              <div className="h-24 animate-pulse rounded-xl bg-muted/60" />
+              <div className="h-24 animate-pulse rounded-xl bg-muted/60" />
+            </div>
+          ) : (
+            <div className="space-y-6">
+              <Reveal index={0}>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <StatTile label="Category" value={categoryLabel || "—"} />
+                  <StatTile label="Brand" value={brandLabel || "—"} />
+                  <StatTile label="Unit of Measure" value={unitAbbr || "—"} />
+                  <StatTile label="Tax Rate" value={full.taxRate != null ? `${full.taxRate}%` : "—"} mono />
+                </div>
+              </Reveal>
+
+              {full.description && (
+                <Reveal index={1}>
+                  <section>
+                    <SectionLabel icon={FileUp}>Description</SectionLabel>
+                    <p className="rounded-xl bg-muted/40 p-3.5 text-xs leading-relaxed text-foreground">
+                      {full.description}
+                    </p>
+                  </section>
+                </Reveal>
+              )}
+
+              {full.images && full.images.length > 0 && (
+                <Reveal index={2}>
+                  <section>
+                    <SectionLabel icon={ImageIcon}>Photos ({full.images.length})</SectionLabel>
+                    <div className="flex flex-wrap gap-2">
+                      {full.images.map((img) => (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          key={img.id}
+                          src={img.url}
+                          alt={img.altText ?? shown?.name ?? ""}
+                          title={img.isPrimary ? "Primary photo" : undefined}
+                          className={cn(
+                            "h-18 w-18 rounded-xl border object-cover transition-transform hover:scale-105",
+                            img.isPrimary ? "border-primary ring-2 ring-primary/30" : "border-border",
+                          )}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                </Reveal>
+              )}
+
+              <Reveal index={3}>
+                <section>
+                  <SectionLabel icon={Layers}>Variants ({variants.length})</SectionLabel>
+
+                  {variants.length === 0 ? (
+                    <p className="rounded-xl border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
+                      No variants on this product.
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {variants.map((v) => {
+                        const packagings = packagingsByVariant[v.id] ?? [];
+                        return (
+                          <div
+                            key={v.id}
+                            className="overflow-hidden rounded-xl border border-border transition-colors hover:border-primary/40"
+                          >
+                            <div className="flex items-center justify-between gap-2 border-b border-border bg-muted/40 px-3.5 py-2.5">
+                              <div className="min-w-0">
+                                <p className="truncate text-xs font-bold text-foreground">{v.variantName}</p>
+                                <p className="truncate font-mono text-[10px] text-muted-foreground">
+                                  {v.sku}
+                                  {v.barcode ? ` · ${v.barcode}` : ""}
+                                </p>
+                              </div>
+                              <Badge variant={v.isActive ? "success" : "secondary"} className="shrink-0 text-[9px]">
+                                {v.isActive ? "Active" : "Inactive"}
+                              </Badge>
+                            </div>
+
+                            <div className="grid grid-cols-3 divide-x divide-border">
+                              <VariantStat label="Stock" value={`${v.stock ?? "—"} ${unitAbbr}`.trim()} />
+                              <VariantStat label="Selling" value={money(v.sellingPrice)} />
+                              <VariantStat
+                                label="Cost"
+                                value={v.purchasePrice === undefined ? "Hidden" : money(v.purchasePrice)}
+                                muted={v.purchasePrice === undefined}
+                              />
+                            </div>
+
+                            {packagings.length > 0 && (
+                              <div className="border-t border-border px-3.5 py-2.5">
+                                <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                  Packagings
+                                </p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {packagings.map((p) => (
+                                    <span
+                                      key={p.id}
+                                      className="inline-flex items-center gap-1 rounded-lg border border-border bg-muted/50 px-2 py-1 text-[10px]"
+                                    >
+                                      <Boxes className="h-3 w-3 text-muted-foreground" />
+                                      <span className="font-semibold text-foreground">{p.unitName}</span>
+                                      <span className="font-mono text-muted-foreground">
+                                        = {p.conversionFactor} {unitAbbr}
+                                      </span>
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </section>
+              </Reveal>
+            </div>
+          )}
+        </SheetBody>
+
+        {full && (
+          <SheetFooter>
+            <Button variant="outline" onClick={() => onPackagings(full)}>
+              <Boxes className="h-3.5 w-3.5" />
+              Packagings
+            </Button>
+            <Button onClick={() => onEdit(full)}>
+              <Pencil className="h-3.5 w-3.5" />
+              Edit Details
+            </Button>
+          </SheetFooter>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+/** Small labelled tile used for the product's top-level attributes. */
+function StatTile({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="rounded-xl bg-muted/40 p-3">
+      <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className={cn("mt-1 truncate text-xs font-semibold text-foreground", mono && "font-mono")} title={value}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+/** One cell of a variant card's stock/price row. */
+function VariantStat({ label, value, muted }: { label: string; value: string; muted?: boolean }) {
+  return (
+    <div className="px-3 py-2.5">
+      <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p
+        className={cn(
+          "mt-0.5 truncate font-mono text-[11px] font-semibold",
+          muted ? "text-muted-foreground italic" : "text-foreground",
+        )}
+        title={value}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+/** Section heading with a leading icon, consistent across the drawer. */
+function SectionLabel({
+  icon: Icon,
+  children,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  children: React.ReactNode;
+}) {
+  return (
+    <p className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <Icon className="h-3.5 w-3.5" />
+      {children}
+    </p>
   );
 }
 

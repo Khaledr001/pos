@@ -60,3 +60,5 @@ deploy/api.env
 deploy/backups/
 .bundle/
 .agent/mcp_config.json
+
+graphify-out/*

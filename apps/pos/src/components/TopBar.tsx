@@ -1,5 +1,6 @@
 import type { SyncStatusSnapshot } from "@devsfleet/shared-types";
 import {
+  AlertTriangle,
   CloudOff,
   Lock,
   RefreshCw,
@@ -107,6 +108,12 @@ export function TopBar({
   const isOnline = isElectron ? (sync?.online ?? false) : browserApiOnline;
   const isSyncing = (sync?.syncing ?? false) || manualSyncing;
   const pending = sync?.pendingPushCount ?? 0;
+  // runCycle() can fail (bad token, a 500, a malformed checkpoint) while
+  // `online` still reads true — this is the ONLY place that failure was
+  // visible anywhere in the app before, and only inside SyncStatusSnapshot,
+  // never rendered. A cashier or manager staring at a green "Online" badge
+  // had no way to know new catalogue data had stopped arriving.
+  const hasSyncError = isElectron && !!sync?.lastError;
 
   return (
     <header className="flex h-13 shrink-0 items-center justify-between gap-4 border-b border-(--pos-border) bg-(--pos-panel) px-3 md:px-4 select-none">
@@ -118,6 +125,9 @@ export function TopBar({
             <Store className="size-3.5" />
           </div>
           <div className="leading-tight min-w-0">
+            {terminal?.tenantName && (
+              <div className="eyebrow truncate">{terminal.tenantName}</div>
+            )}
             <div className="text-xs font-bold text-(--pos-text) truncate">
               {terminal?.branchName ?? "Counter Till"}
             </div>
@@ -190,20 +200,26 @@ export function TopBar({
           onClick={() => void handleSyncClick()}
           disabled={isSyncing}
           title={
-            isOnline
-              ? "Connected to central backend API. Click to trigger immediate sync."
-              : isElectron
-                ? "Disconnected from API. Offline-first SQLite active (sales queued locally)."
-                : "Disconnected from backend API. Click to check health."
+            hasSyncError
+              ? `Last sync failed: ${sync?.lastError}. Click to retry.`
+              : isOnline
+                ? "Connected to central backend API. Click to trigger immediate sync."
+                : isElectron
+                  ? "Disconnected from API. Offline-first SQLite active (sales queued locally)."
+                  : "Disconnected from backend API. Click to check health."
           }
           className={[
             "flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer",
-            isOnline
-              ? "bg-signal-green/10 text-signal-green border-signal-green/30 hover:bg-signal-green/15"
-              : "bg-signal-amber/10 text-signal-amber border-signal-amber/30 hover:bg-signal-amber/15",
+            hasSyncError
+              ? "bg-signal-red/10 text-signal-red border-signal-red/30 hover:bg-signal-red/15"
+              : isOnline
+                ? "bg-signal-green/10 text-signal-green border-signal-green/30 hover:bg-signal-green/15"
+                : "bg-signal-amber/10 text-signal-amber border-signal-amber/30 hover:bg-signal-amber/15",
           ].join(" ")}
         >
-          {isOnline ? (
+          {hasSyncError ? (
+            <AlertTriangle className="size-3 shrink-0" />
+          ) : isOnline ? (
             <RefreshCw
               className={`size-3 shrink-0 ${isSyncing ? "animate-spin" : ""}`}
             />
@@ -212,7 +228,7 @@ export function TopBar({
           )}
 
           <span className="hidden md:inline text-[11px]">
-            {isSyncing ? "Syncing…" : isOnline ? "Online" : "Disconnected"}
+            {isSyncing ? "Syncing…" : hasSyncError ? "Sync error" : isOnline ? "Online" : "Disconnected"}
           </span>
 
           {pending > 0 && (

@@ -153,7 +153,15 @@ export function Settings() {
       const st = await window.devsfleet.sync.now();
       setSync(st);
       refreshAttention();
-      setPrintResult({ text: "Sync cycle completed successfully.", tone: "green" });
+      // runCycle() swallows a failed push/pull internally and resolves with
+      // it stashed in lastError rather than throwing — a real API/network
+      // failure otherwise looked identical to a genuinely clean sync with
+      // nothing new to fetch, both showing this same green toast.
+      if (st.lastError) {
+        setPrintResult({ text: `Sync failed: ${st.lastError}`, tone: "red" });
+      } else {
+        setPrintResult({ text: "Sync cycle completed successfully.", tone: "green" });
+      }
     } catch (err) {
       setPrintResult({
         text: err instanceof Error ? err.message : "Sync failed.",
@@ -449,6 +457,16 @@ export function Settings() {
                     }
                   />
                 </div>
+
+                {/* The 30s background cycle sets this exactly the same way a manual
+                    sync does — without this, a recurring failure there (bad token,
+                    a flaky connection) never surfaces anywhere, because only the
+                    manual button's own toast used to check it. */}
+                {sync?.lastError && (
+                  <div className="mt-3 rounded-lg bg-signal-red/10 border border-signal-red/30 p-2.5 text-[11px] text-signal-red">
+                    <span className="font-semibold">Last sync failed:</span> {sync.lastError}
+                  </div>
+                )}
 
                 <div className="mt-3 flex items-center justify-between pt-2 border-t border-(--pos-border)/60">
                   <button
