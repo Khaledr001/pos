@@ -94,19 +94,21 @@ const MARGIN = 36;
 const BLANK_ROWS = 3;
 
 /**
- * Faux semi-bold for the item description.
+ * Faux medium weight for the item description — roughly a 500 against
+ * Helvetica regular's 400.
  *
  * The built-in font set is Helvetica: regular and bold, with nothing between
  * them, and the only embedded faces this package ships are Arabic. Stroking
  * the regular weight in its own colour thickens the stems by a fraction of a
- * point, which is what a semi-bold actually is — bold reads as shouting down
- * a column of 8pt figures, and regular disappears against them.
+ * point, which is what a heavier weight physically is. Bold reads as
+ * shouting down a column of 8pt figures; plain regular lets the item name
+ * disappear into them.
  *
- * Tuned against a rendered page, not guessed: below ~0.12 it is
- * indistinguishable from regular, above ~0.3 it closes up the counters at
- * this size.
+ * Tuned against a rendered page, not guessed. 0.2 landed nearer a 600, so
+ * this is a little over half of it: enough to separate the name from the
+ * numbers, not enough to read as bold.
  */
-const SEMIBOLD_STROKE = 0.2;
+const MEDIUM_STROKE = 0.09;
 
 /**
  * DESCRIPTION takes 46% — the item name is the only column whose content is
@@ -256,77 +258,112 @@ export function renderTaxDocument(input: TaxDocumentInput): Promise<Buffer> {
         });
     };
 
-    // ── Header ───────────────────────────────────────────────────────────
+    /**
+     * ── Header ─────────────────────────────────────────────────────────
+     *
+     * Two columns that each read as one block, rather than four lines of
+     * text drifting against three.
+     *
+     * LEFT is the business: a filled accent mark, the trading name, then its
+     * registration and contact details in a quiet stack beneath.
+     * RIGHT is the document: the title, then a tinted card holding the
+     * number, date and time — the three things anyone filing or querying the
+     * invoice actually looks for, so they are grouped and boxed instead of
+     * floating as loose label/value pairs.
+     *
+     * The card is measured from its rows, not given a fixed height: a
+     * quotation carries "Valid until" instead of a time, and a fixed box
+     * either clipped it or left a gap.
+     */
     let y = MARGIN;
 
     // Letter mark. A real logo would be an image; deriving it from the name
-    // means every tenant has one without configuring anything.
+    // means every tenant has one without configuring anything. Filled rather
+    // than tinted — at 38pt it is the only thing anchoring the top-left.
     const initial = (input.business.legalName.trim()[0] ?? "?").toUpperCase();
-    doc.roundedRect(MARGIN, y, 36, 36, 6).fill(ACCENT_SOFT);
+    doc.roundedRect(MARGIN, y, 38, 38, 8).fill(ACCENT);
     doc
       .font("Helvetica-Bold")
-      .fontSize(17)
-      .fillColor(ACCENT)
-      .text(initial, MARGIN, y + 11, { width: 36, align: "center" });
+      .fontSize(18)
+      .fillColor("#FFFFFF")
+      .text(initial, MARGIN, y + 11.5, { width: 38, align: "center" });
 
-    const leftX = MARGIN + 46;
-    doc.font("Helvetica-Bold").fontSize(13).fillColor(ACCENT).text(input.business.legalName, leftX, y + 1, {
-      width: contentW * 0.55,
-      lineBreak: false,
-    });
+    const leftX = MARGIN + 48;
+    const leftW = contentW * 0.52;
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(14)
+      .fillColor(INK)
+      .text(input.business.legalName, leftX, y + 1, { width: leftW, lineBreak: false });
 
-    let leftY = y + 17;
+    let leftY = y + 19;
     if (input.business.trn) {
-      doc.font("Helvetica").fontSize(8).fillColor(MUTED).text("TRN NO: ", leftX, leftY, { continued: true });
+      doc.font("Helvetica").fontSize(8).fillColor(MUTED).text("TRN ", leftX, leftY, { continued: true });
       doc.font("Helvetica-Bold").fillColor(INK).text(input.business.trn);
-      leftY += 11;
+      leftY += 11.5;
     }
 
-    // Right: the document title and its meta block.
-    const titleEn = input.kind === "invoice" ? L.taxInvoice[0] : L.quotation[0];
-    const titleAr = input.kind === "invoice" ? L.taxInvoice[1] : L.quotation[1];
-    doc.font("Helvetica-Bold").fontSize(17).fillColor(ACCENT).text(titleEn, MARGIN, y, {
-      width: contentW,
-      align: "right",
-    });
-    const titleW = doc.widthOfString(titleEn);
-    ar(titleAr, MARGIN, y + 4, { size: 9, width: contentW - titleW - 6, align: "right" });
-
-    let metaY = y + 24;
-    const metaRow = (label: string, value: string) => {
-      doc.font("Helvetica").fontSize(8).fillColor(MUTED).text(label, right - 210, metaY, {
-        width: 92,
-        align: "right",
-      });
-      doc.font("Helvetica-Bold").fontSize(9).fillColor(INK).text(value, right - 112, metaY - 0.5, {
-        width: 112,
-        align: "right",
-      });
-      metaY += 12.5;
-    };
-    metaRow(input.kind === "invoice" ? "Invoice No:" : "Quote No:", input.documentNumber);
-    metaRow("Date:", formatDate(input.issuedAt, input.timezone));
-    if (input.kind === "invoice") metaRow("Time:", formatTime(input.issuedAt, input.timezone));
-    else if (input.validUntil) metaRow("Valid until:", input.validUntil);
-
-    // Contact strip under the business name.
-    const contact = [input.business.phone, input.business.email].filter(Boolean).join("   ");
+    const contact = [input.business.phone, input.business.email].filter(Boolean).join("  ·  ");
     if (contact) {
       doc.font("Helvetica").fontSize(8).fillColor(MUTED).text(contact, leftX, leftY, {
-        width: contentW * 0.5,
+        width: leftW,
         lineBreak: false,
       });
       leftY += 11;
     }
     if (input.business.addressLines.length > 0) {
       doc.font("Helvetica").fontSize(8).fillColor(MUTED).text(input.business.addressLines.join(", "), leftX, leftY, {
-        width: contentW * 0.5,
+        width: leftW,
         lineBreak: false,
       });
       leftY += 11;
     }
 
-    y = Math.max(leftY, metaY) + 4;
+    // Right: the document title, then its meta card.
+    const titleEn = input.kind === "invoice" ? L.taxInvoice[0] : L.quotation[0];
+    const titleAr = input.kind === "invoice" ? L.taxInvoice[1] : L.quotation[1];
+    doc.font("Helvetica-Bold").fontSize(16).fillColor(ACCENT).text(titleEn.toUpperCase(), MARGIN, y, {
+      width: contentW,
+      align: "right",
+      characterSpacing: 0.8,
+    });
+    const titleW = doc.widthOfString(titleEn.toUpperCase()) + titleEn.length * 0.8;
+    ar(titleAr, MARGIN, y + 3.5, { size: 9, width: contentW - titleW - 8, align: "right" });
+
+    const meta: Array<[string, string]> = [
+      [input.kind === "invoice" ? "Invoice No" : "Quote No", input.documentNumber],
+      ["Date", formatDate(input.issuedAt, input.timezone)],
+    ];
+    if (input.kind === "invoice") meta.push(["Time", formatTime(input.issuedAt, input.timezone)]);
+    else if (input.validUntil) meta.push(["Valid until", input.validUntil]);
+
+    const CARD_W = 208;
+    const CARD_PAD = 8;
+    const META_ROW_H = 13;
+    const cardX = right - CARD_W;
+    const cardY = y + 26;
+    const cardH = CARD_PAD * 2 + meta.length * META_ROW_H - 2;
+
+    doc.roundedRect(cardX, cardY, CARD_W, cardH, 6).fill(ACCENT_SOFT);
+
+    let metaY = cardY + CARD_PAD;
+    for (const [label, value] of meta) {
+      doc.font("Helvetica").fontSize(8).fillColor(MUTED).text(label, cardX + CARD_PAD, metaY, {
+        width: 74,
+      });
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(9)
+        .fillColor(INK)
+        .text(value, cardX + CARD_PAD + 74, metaY - 0.5, {
+          width: CARD_W - CARD_PAD * 2 - 74,
+          align: "right",
+          lineBreak: false,
+        });
+      metaY += META_ROW_H;
+    }
+
+    y = Math.max(leftY, cardY + cardH) + 10;
     doc.moveTo(MARGIN, y).lineTo(right, y).lineWidth(0.8).strokeColor(LINE).stroke();
     y += 10;
 
@@ -497,14 +534,21 @@ export function renderTaxDocument(input: TaxDocumentInput): Promise<Buffer> {
         width: w.no - PAD * 2,
         align: "center",
       });
+      /**
+        * Centred on the row like every other cell, left-aligned within it.
+        * Measured height rather than a single line's, so a name that wraps
+        * to two lines centres as a block instead of hanging off the top.
+        */
+      const descY = y + (rowH - textH) / 2;
       doc
         .font("Helvetica")
         .fontSize(8)
         .fillColor(INK)
         .strokeColor(INK)
-        .lineWidth(SEMIBOLD_STROKE)
-        .text(text, x.description + PAD, y + PAD, {
+        .lineWidth(MEDIUM_STROKE)
+        .text(text, x.description + PAD, descY, {
           width: w.description - PAD * 2,
+          align: "left",
           fill: true,
           stroke: true,
         });
