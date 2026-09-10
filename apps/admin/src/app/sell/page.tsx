@@ -151,12 +151,6 @@ interface SellLine {
   /** `null` is the base unit, which has no `variant_units` row at all. */
   unit: VariantUnit | null;
   unitPrice: string;
-  /**
-   * Only an edited price is sent. Leaving it off lets the server's own price
-   * ladder decide, so a quantity break still applies and a price changed since
-   * this page loaded is not silently overridden by a stale figure.
-   */
-  priceEdited: boolean;
   discountPercent: string;
 }
 
@@ -196,6 +190,23 @@ function listPriceFor(variant: SearchVariant, unit: VariantUnit | null): string 
   return Money.toDecimalString(
     Money.multiplyByQuantity(Money.toMinor(variant.sellingPrice), unit.conversionFactor),
     4,
+  );
+}
+
+/**
+ * Is this line being sold away from its list price?
+ *
+ * Compared by VALUE rather than tracked as an "edited" flag. A flag drifts
+ * from the truth the moment somebody types a figure back to what it already
+ * was: the row would still badge as repriced, and — worse — the request would
+ * still carry an explicit `unitPrice`, which suppresses the server's own
+ * quantity-break ladder. One derived answer keeps the badge and the payload
+ * from ever disagreeing.
+ */
+function isRepriced(line: SellLine): boolean {
+  return (
+    Money.toMinor(line.unitPrice || "0") !==
+    Money.toMinor(listPriceFor(line.variant, line.unit))
   );
 }
 
@@ -442,7 +453,11 @@ export default function SellPage() {
       // Same variant, same packaging, untouched price and no discount: one
       // line with a bigger number reads better than two identical rows.
       const existing = current.find(
-        (l) => l.variant.id === variant.id && !l.unit && !l.priceEdited && l.discountPercent === "0",
+        (l) =>
+          l.variant.id === variant.id &&
+          !l.unit &&
+          !isRepriced(l) &&
+          l.discountPercent === "0",
       );
 
       if (existing) {
@@ -462,7 +477,6 @@ export default function SellPage() {
           quantity: "1",
           unit: null,
           unitPrice: variant.sellingPrice,
-          priceEdited: false,
           discountPercent: "0",
         },
       ];
@@ -503,7 +517,7 @@ export default function SellPage() {
     setLines((current) =>
       current.map((l) => {
         if (l.key !== key) return l;
-        const next = { ...l, unit, unitPrice: listPriceFor(l.variant, unit), priceEdited: false };
+        const next = { ...l, unit, unitPrice: listPriceFor(l.variant, unit) };
         const ceiling = maxQuantityFor(next);
         return { ...next, quantity: trimQty(Math.min(Number(next.quantity) || 1, ceiling)) };
       }),
@@ -602,7 +616,11 @@ export default function SellPage() {
             variantId: l.variant.id,
             quantity: Number(l.quantity),
             ...(l.unit ? { unitId: l.unit.unitId } : {}),
-            ...(l.priceEdited ? { unitPrice: l.unitPrice } : {}),
+            /* Sent only when moved off list. Omitting it lets the server's
+               own ladder price the line, so a quantity break still applies
+               and a price changed since this page loaded is not overridden
+               by a stale figure. */
+            ...(isRepriced(l) ? { unitPrice: l.unitPrice } : {}),
             ...(Number(l.discountPercent) > 0
               ? { discountPercent: Number(l.discountPercent) }
               : {}),
@@ -831,12 +849,11 @@ export default function SellPage() {
                       onNudge={(d) => nudgeQuantity(line.key, d)}
                       onUnit={(u) => setLineUnit(line.key, u)}
                       onPrice={(v) =>
-                        patchLine(line.key, { unitPrice: decimalOnly(v), priceEdited: true })
+                        patchLine(line.key, { unitPrice: decimalOnly(v) })
                       }
                       onResetPrice={() =>
                         patchLine(line.key, {
                           unitPrice: listPriceFor(line.variant, line.unit),
-                          priceEdited: false,
                         })
                       }
                       onDiscount={(v) =>
@@ -1105,6 +1122,10 @@ function CartRow({
   const ceiling = maxQuantityFor(line);
   const atCeiling = Number(line.quantity) >= ceiling;
 
+  const listPrice = Money.toMinor(listPriceFor(line.variant, line.unit));
+  const repriced = isRepriced(line);
+  const raised = Money.toMinor(line.unitPrice || "0") > listPrice;
+
   const lineTotal = useMemo(() => {
     const gross = Money.multiplyByQuantity(
       Money.toMinor(line.unitPrice || "0"),
@@ -1185,22 +1206,29 @@ function CartRow({
           <span className="px-1 text-xs text-muted-foreground">{unitLabel}</span>
         )}
 
-        {/* Unit price */}
+        {/* Unit price — type what you are actually charging, either direction */}
         <div className="flex items-center gap-1">
           <input
             value={line.unitPrice}
             onChange={(e) => onPrice(e.target.value)}
+            onFocus={(e) => e.target.select()}
             inputMode="decimal"
-            aria-label="Unit price"
+            aria-label={`Unit price of ${line.variant.productName}`}
+            title={
+              repriced
+                ? `Edited — list is ${money(listPrice, currency)}`
+                : "Sell at a different price — type it here"
+            }
             className={cn(
               "h-7 w-20 rounded-lg border bg-transparent px-1.5 text-right font-mono text-xs",
-              line.priceEdited ? "border-primary text-primary" : "border-input",
+              repriced ? "border-primary font-semibold text-primary" : "border-input",
             )}
           />
-          {line.priceEdited && (
+          {repriced && (
             <button
               type="button"
               onClick={onResetPrice}
+              title={`Restore list price ${money(listPrice, currency)}`}
               aria-label="Restore list price"
               className="cursor-pointer rounded p-0.5 text-muted-foreground hover:text-foreground"
             >
@@ -1221,6 +1249,19 @@ function CartRow({
           <span className="pr-1.5 text-[10px] text-muted-foreground">%</span>
         </div>
       </div>
+
+      {/* Which way the price was moved, and from what. Kept on the row rather
+          than only in a tooltip so a mistyped figure is visible at a glance. */}
+      {repriced && (
+        <p
+          className={cn(
+            "text-[10px] font-medium",
+            raised ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400",
+          )}
+        >
+          {raised ? "▲ Above" : "▼ Below"} list {money(listPrice, currency)} per {unitLabel}
+        </p>
+      )}
 
       {atCeiling && (
         <p className="text-[10px] text-muted-foreground">

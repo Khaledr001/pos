@@ -125,6 +125,11 @@ export interface DevsfleetBridge {
     recent(limit?: number): Promise<PosSaleReceipt[]>;
     find(reference: string): Promise<PosSaleReceipt | null>;
     commitReturn(draft: PosReturnDraft): Promise<PosReturnReceipt>;
+    /**
+     * Void a synced sale. Online only — rejects when the terminal is offline
+     * or the sale has never reached the server.
+     */
+    voidSale(localId: string, reason: string): Promise<void>;
   };
   quotations: {
     save(draft: PosQuotationDraft): Promise<PosQuotationReceipt>;

@@ -50,7 +50,6 @@ const BASE: InvoicePdfInput = {
   total: "86.63",
   paidAmount: "86.63",
   dueAmount: "0.00",
-  payments: [{ method: "cash", amount: "86.63" }],
   voided: false,
   notes: null,
 };
@@ -72,7 +71,7 @@ describe("renderInvoicePdf", () => {
     expect(buffer.subarray(0, 5).toString("latin1")).toBe("%PDF-");
   });
 
-  it("renders a discounted, multi-tender, part-paid credit sale", async () => {
+  it("renders a discounted, part-paid credit sale", async () => {
     const buffer = await renderInvoicePdf({
       ...BASE,
       lines: [
@@ -91,10 +90,6 @@ describe("renderInvoicePdf", () => {
         },
       ],
       discountAmount: "27.00",
-      payments: [
-        { method: "card", amount: "200.00" },
-        { method: "credit", amount: "141.78" },
-      ],
       paidAmount: "200.00",
       dueAmount: "141.78",
       notes: "Balance due in 30 days.",

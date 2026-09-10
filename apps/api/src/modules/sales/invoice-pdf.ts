@@ -28,11 +28,6 @@ export interface InvoicePdfLine {
   total: string;
 }
 
-export interface InvoicePdfPayment {
-  method: string;
-  amount: string;
-}
-
 export interface InvoicePdfInput {
   business: {
     legalName: string;
@@ -63,7 +58,6 @@ export interface InvoicePdfInput {
   total: string;
   paidAmount: string;
   dueAmount: string;
-  payments: InvoicePdfPayment[];
   /** A voided sale still has a downloadable document — stamped, never hidden. */
   voided: boolean;
   notes: string | null;
@@ -95,7 +89,6 @@ export function renderInvoicePdf(input: InvoicePdfInput): Promise<Buffer> {
     discountAmount: input.discountAmount,
     taxAmount: input.taxAmount,
     total: input.total,
-    payments: input.payments,
     dueAmount: input.dueAmount,
     voided: input.voided,
     notes: input.notes,

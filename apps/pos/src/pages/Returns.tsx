@@ -3,6 +3,7 @@ import { Money, calculateDocument } from "@devsfleet/shared-utils";
 import {
   AlertCircle,
   ArrowRight,
+  Ban,
   Banknote,
   CheckCircle2,
   CreditCard,
@@ -80,6 +81,49 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
   const [saleReference, setSaleReference] = useState("");
 
   const allowed = can("sale:return");
+
+  const [voiding, setVoiding] = useState(false);
+  const [voidReason, setVoidReason] = useState("");
+  const [voidError, setVoidError] = useState<string | null>(null);
+  const [voidSubmitting, setVoidSubmitting] = useState(false);
+
+  const canVoid = can("sale:void");
+
+  /**
+   * Why this particular sale cannot be voided, or null when it can.
+   *
+   * Mirrors the server's own guards so the button explains itself instead of
+   * the cashier finding out through a rejection — with one extra rule the
+   * server never sees: a sale that has not synced has no server id to
+   * address, and a void cannot be queued (see the `sales:void` handler).
+   */
+  const voidBlockedReason: string | null = !sale
+    ? "No sale selected."
+    : !sale.serverId
+      ? "This sale has not synced yet. Sync first, or take it all back as a return."
+      : sale.status === "voided"
+        ? "This sale is already voided."
+        : sale.status === "returned" || sale.status === "partially_returned"
+          ? "Something has already been returned against this sale. Return what is left instead."
+          : null;
+
+  async function submitVoid() {
+    if (!sale || !voidReason.trim() || voidSubmitting) return;
+    setVoidSubmitting(true);
+    setVoidError(null);
+    try {
+      await posData.voidSale(sale.localId, voidReason.trim());
+      setVoiding(false);
+      setVoidReason("");
+      setSale(null);
+      setReference("");
+      void posData.recentSales(8).then((list) => setRecent(list ?? []));
+    } catch (err) {
+      setVoidError(err instanceof Error ? err.message : "The void was refused.");
+    } finally {
+      setVoidSubmitting(false);
+    }
+  }
 
   useEffect(() => {
     void posData.recentSales(8).then((list) => setRecent(list ?? []));
@@ -457,6 +501,23 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
                     Return All Items
                   </button>
 
+                  {/* A void is not a bigger return — it says the sale should
+                      never have existed. Kept visually apart from the return
+                      controls, and only offered to someone who holds the
+                      permission, on a sale the server would actually accept. */}
+                  {canVoid && (
+                    <button
+                      type="button"
+                      onClick={() => setVoiding(true)}
+                      disabled={Boolean(voidBlockedReason)}
+                      title={voidBlockedReason ?? "Erase this sale entirely"}
+                      className="btn btn-ghost text-xs h-8 px-2.5 text-signal-red hover:bg-signal-red/10 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <Ban className="size-3.5" />
+                      Void Sale
+                    </button>
+                  )}
+
                   <button
                     type="button"
                     onClick={() => setSale(null)}
@@ -823,6 +884,92 @@ export function Returns({ cashSessionId }: { cashSessionId: string | null }) {
       >
         <div className="flex h-[28rem] flex-col">
           <ProductSearch onPick={addExchangeItem} />
+        </div>
+      </Dialog>
+
+      {/* ── Void confirmation ── */}
+      <Dialog
+        open={voiding}
+        onClose={() => {
+          setVoiding(false);
+          setVoidError(null);
+        }}
+        title={`Void ${sale?.saleNumber ?? "this sale"}`}
+        description="For a sale that should never have been rung up at all."
+        width="md"
+        footer={
+          <>
+            <button
+              type="button"
+              className="btn btn-ghost text-xs"
+              onClick={() => {
+                setVoiding(false);
+                setVoidError(null);
+              }}
+              disabled={voidSubmitting}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-danger text-xs font-bold min-w-36"
+              onClick={() => void submitVoid()}
+              disabled={voidSubmitting || !voidReason.trim()}
+            >
+              {voidSubmitting ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin" />
+                  Voiding…
+                </>
+              ) : (
+                "Void this sale"
+              )}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <ul className="space-y-1 rounded-xl border border-(--pos-border) bg-(--pos-raised) p-3 text-[11px] text-(--pos-text-2)">
+            <li>· Every line goes back on the shelf, in full.</li>
+            <li>· Every payment taken is reversed.</li>
+            <li>· The invoice stays, stamped VOIDED. There is no un-void.</li>
+          </ul>
+
+          {/* Unlike a return, this one needs the server on the line. Said up
+              front so a cashier on a dead connection is not left guessing. */}
+          <p className="flex items-start gap-1.5 text-[11px] text-(--pos-text-3)">
+            <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+            <span>
+              A void is applied on the server, so this needs a connection. Returns do
+              not — they queue and sync later.
+            </span>
+          </p>
+
+          <div>
+            <label htmlFor="void-reason" className="eyebrow block">
+              Reason (required)
+            </label>
+            <input
+              id="void-reason"
+              autoFocus
+              value={voidReason}
+              onChange={(e) => setVoidReason(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && void submitVoid()}
+              placeholder="e.g. Rung up on the wrong customer"
+              maxLength={500}
+              className="field mt-1 text-xs bg-(--pos-raised) border-(--pos-border) text-(--pos-text)"
+              autoComplete="off"
+            />
+          </div>
+
+          {voidError && (
+            <p
+              role="alert"
+              className="rounded-xl border border-signal-red/40 bg-signal-red/10 p-2.5 text-[11px] text-signal-red"
+            >
+              {voidError}
+            </p>
+          )}
         </div>
       </Dialog>
     </>

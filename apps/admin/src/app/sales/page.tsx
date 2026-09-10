@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import {
   Search, RefreshCw, CreditCard, Banknote, Receipt, ShoppingCart,
-  Printer, AlertCircle, FileText,
+  Printer, AlertCircle, FileText, Ban, Undo2,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { api, apiDownload, printBlob } from "@/lib/api-client";
@@ -16,6 +16,13 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
+import { usePermission } from "@/lib/require-auth";
+import {
+  ReturnSaleDialog,
+  VoidSaleDialog,
+  saleActionState,
+  type ActionableSale,
+} from "./sale-actions";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -34,6 +41,8 @@ interface SaleItem {
   discountPercent: string;
   taxPercent: string;
   total: string;
+  /** How much of this line has already gone back — caps a further return. */
+  returnedQuantity?: string;
 }
 
 /** `GET /sales/:id` — the full document, lines and payments included. */
@@ -42,6 +51,8 @@ interface SaleDetail extends Sale {
   discountAmount?: string;
   notes?: string | null;
   voidedAt?: string | null;
+  /** Set when this document is itself a return — it can be neither voided nor returned. */
+  returnOfSaleId?: string | null;
 }
 
 interface Sale {
@@ -115,6 +126,40 @@ export default function SalesPage() {
       setDetailLoading(false);
     }
   }, [tokens]);
+
+  /**
+   * Void and return.
+   *
+   * Both are gated on a permission AND on the sale's own state — a voided
+   * sale cannot be returned, a partly-returned one cannot be voided. The
+   * rules live in `saleActionState` next to the dialogs, so the button and
+   * the service cannot drift apart.
+   */
+  const mayVoid = usePermission("sale:void");
+  const mayReturn = usePermission("sale:return");
+  const [voiding, setVoiding] = useState(false);
+  const [returning, setReturning] = useState(false);
+  const actions = saleActionState(selected as ActionableSale | null);
+
+  /**
+   * After either one lands, the sale AND the list are both stale: its status,
+   * its returned quantities and the page's totals all moved. Re-reading the
+   * detail keeps the open dialog honest about what is still returnable.
+   */
+  const refreshAfterAction = useCallback(async () => {
+    const id = selected?.id;
+    void fetchSales();
+    if (!id) return;
+    try {
+      const full = await api.get<SaleDetail>(`/sales/${id}`, {
+        accessToken: tokens?.accessToken,
+      });
+      setSelected(full);
+    } catch {
+      // The action itself succeeded; a failed re-read is not worth an alarm.
+      setSelected(null);
+    }
+  }, [selected?.id, tokens]);
 
   const [printing, setPrinting] = useState<string | null>(null);
 
@@ -470,19 +515,71 @@ export default function SalesPage() {
             )}
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSelected(null)}>Close</Button>
-            <Button
-              onClick={() => selected && void printInvoice(selected)}
-              disabled={!selected || printing === selected?.id}
-              className="gap-2"
-            >
-              <Printer className="h-4 w-4" />
-              {printing === selected?.id ? "Opening print…" : "Print Tax Invoice"}
-            </Button>
+          {/* Why an action is unavailable, rather than a button that 403s.
+              Only shown when the operator holds the permission — someone who
+              cannot void has no use for the reason this particular sale
+              could not be voided. */}
+          {((mayVoid && actions.voidBlockedReason) ||
+            (mayReturn && actions.returnBlockedReason)) && (
+            <p className="flex items-start gap-1.5 rounded-lg border border-border bg-secondary/40 p-2 text-[11px] text-muted-foreground">
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>
+                {(mayVoid && actions.voidBlockedReason) ||
+                  (mayReturn && actions.returnBlockedReason)}
+              </span>
+            </p>
+          )}
+
+          <DialogFooter className="gap-2 sm:justify-between">
+            <div className="flex flex-wrap gap-2">
+              {mayReturn && actions.canReturn && (
+                <Button variant="outline" onClick={() => setReturning(true)}>
+                  <Undo2 className="h-4 w-4" />
+                  Return items
+                </Button>
+              )}
+              {mayVoid && actions.canVoid && (
+                <Button
+                  variant="outline"
+                  onClick={() => setVoiding(true)}
+                  className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Ban className="h-4 w-4" />
+                  Void sale
+                </Button>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setSelected(null)}>Close</Button>
+              <Button
+                onClick={() => selected && void printInvoice(selected)}
+                disabled={!selected || printing === selected?.id}
+                className="gap-2"
+              >
+                <Printer className="h-4 w-4" />
+                {printing === selected?.id ? "Opening print…" : "Print Tax Invoice"}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <VoidSaleDialog
+        sale={selected as ActionableSale | null}
+        open={voiding}
+        onClose={() => setVoiding(false)}
+        onDone={() => void refreshAfterAction()}
+        accessToken={tokens?.accessToken}
+      />
+
+      <ReturnSaleDialog
+        sale={selected as ActionableSale | null}
+        open={returning}
+        onClose={() => setReturning(false)}
+        onDone={() => void refreshAfterAction()}
+        accessToken={tokens?.accessToken}
+      />
     </div>
   );
 }

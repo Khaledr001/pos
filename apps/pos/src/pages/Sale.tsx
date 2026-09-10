@@ -10,7 +10,7 @@ import { PaymentDialog } from "../components/PaymentDialog.js";
 import { ProductSearch } from "../components/ProductSearch.js";
 import { ReceiptPanel } from "../components/ReceiptPanel.js";
 import { useBarcodeScanner, useHotkeys } from "../lib/keyboard.js";
-import { amount, money } from "../lib/money.js";
+import { amount, decimalOnly, money, percentOnly } from "../lib/money.js";
 import { hasBridge, posData, type PosCustomer } from "../lib/pos-data.js";
 import {
   scaledFloor,
@@ -701,6 +701,13 @@ function LineEditor({
 
   const floor = scaledFloor(line);
   const list = scaledListPrice(line);
+  /**
+   * Both boxes are parsed on every keystroke, in the render body, and
+   * `Money.toMinor` throws a TypeError on anything that is not a decimal.
+   * Thrown from here that is a blank sale screen mid-transaction, not a
+   * validation message — so the character set is constrained on the way in
+   * (see `decimalOnly`) and these two only ever see something parseable.
+   */
   const unit = Money.toMinor(price || "0");
   const effective = Money.subtract(unit, Money.percentOf(unit, discount || "0"));
   const belowFloor = floor !== null && effective < floor;
@@ -778,17 +785,33 @@ function LineEditor({
     >
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label htmlFor="line-price" className="eyebrow">
-            Unit price
-          </label>
+          <div className="flex items-baseline justify-between">
+            <label htmlFor="line-price" className="eyebrow">
+              Unit price
+            </label>
+            {/* Getting back to list should not mean remembering what list was. */}
+            {unit !== list && (
+              <button
+                type="button"
+                onClick={() => setPrice(Money.toDecimalString(list, 2))}
+                className="text-[10px] text-(--pos-text-3) underline underline-offset-2 hover:text-(--pos-accent)"
+              >
+                reset to {amount(list)}
+              </button>
+            )}
+          </div>
           <input
             id="line-price"
             autoFocus
             value={price}
-            onChange={(e) => setPrice(e.target.value)}
+            onChange={(e) => setPrice(decimalOnly(e.target.value))}
+            onFocus={(e) => e.target.select()}
             inputMode="decimal"
             className="field num mt-1.5 text-right text-lg font-semibold"
           />
+          <p className="mt-1 text-[10px] text-(--pos-text-3)">
+            Type the price you are actually selling at — above list is fine.
+          </p>
         </div>
         <div>
           <label htmlFor="line-discount" className="eyebrow">
@@ -797,10 +820,14 @@ function LineEditor({
           <input
             id="line-discount"
             value={discount}
-            onChange={(e) => setDiscount(e.target.value)}
+            onChange={(e) => setDiscount(percentOnly(e.target.value))}
+            onFocus={(e) => e.target.select()}
             inputMode="decimal"
             className="field num mt-1.5 text-right text-lg font-semibold"
           />
+          <p className="mt-1 text-[10px] text-(--pos-text-3)">
+            Optional. Leave at 0 when you have typed the final price.
+          </p>
         </div>
       </div>
 

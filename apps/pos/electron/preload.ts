@@ -158,6 +158,13 @@ const api = {
     /** Same fire-and-forget posture as `commit` — the refund is already real. */
     commitReturn: (draft: unknown): Promise<unknown> =>
       ipcRenderer.invoke("sales:commit-return", draft),
+    /**
+     * Erase a sale that should never have been rung up. Unlike everything
+     * else here this one waits for the server and rejects when offline —
+     * see the `sales:void` handler for why it cannot be queued.
+     */
+    voidSale: (localId: string, reason: string): Promise<void> =>
+      ipcRenderer.invoke("sales:void", localId, reason),
   },
 
   quotations: {

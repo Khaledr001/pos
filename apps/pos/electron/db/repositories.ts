@@ -831,10 +831,10 @@ export function recentSales(limit = 20): unknown[] {
   const db = getDatabase();
   const sales = db
     .prepare(
-      `SELECT s.local_id AS localId, s.sale_number AS saleNumber,
+      `SELECT s.local_id AS localId, s.server_id AS serverId, s.sale_number AS saleNumber,
               s.customer_id AS customerId, s.cash_session_id AS cashSessionId,
               s.subtotal, s.tax_amount AS taxAmount,
-              s.discount_amount AS discountAmount, s.total,
+              s.discount_amount AS discountAmount, s.total, s.status,
               s.occurred_at AS occurredAt, s.synced_at AS syncedAt
        FROM local_sales s ORDER BY s.occurred_at DESC LIMIT ?`,
     )
@@ -848,14 +848,33 @@ export function recentSales(limit = 20): unknown[] {
   }));
 }
 
+/**
+ * Mark a locally-mirrored sale voided after the server has accepted the void.
+ *
+ * Called only on a 2xx from `POST /sales/:id/void` — never optimistically.
+ * A void is a server operation on a synced sale, so the local row is a
+ * CACHE of the server's answer here, not a queued intention: writing it
+ * before the server agreed would show a cashier a voided sale that is still
+ * live in the business, and the outbox has nothing to reconcile it against.
+ *
+ * The stock the void put back is not adjusted locally. It arrives on the next
+ * catalogue pull like any other stock movement made elsewhere, which is the
+ * same path a void from the admin panel already takes.
+ */
+export function markSaleVoided(localId: string): void {
+  getDatabase()
+    .prepare(`UPDATE local_sales SET status = 'voided' WHERE local_id = ?`)
+    .run(localId);
+}
+
 export function findSale(reference: string): unknown | null {
   const db = getDatabase();
   const sale = db
     .prepare(
-      `SELECT local_id AS localId, sale_number AS saleNumber,
+      `SELECT local_id AS localId, server_id AS serverId, sale_number AS saleNumber,
               customer_id AS customerId, cash_session_id AS cashSessionId,
               subtotal, tax_amount AS taxAmount, discount_amount AS discountAmount,
-              total, occurred_at AS occurredAt, synced_at AS syncedAt
+              total, status, occurred_at AS occurredAt, synced_at AS syncedAt
        FROM local_sales WHERE sale_number = ? OR local_id = ? LIMIT 1`,
     )
     .get(reference.trim(), reference.trim()) as Record<string, unknown> | undefined;

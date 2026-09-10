@@ -49,7 +49,6 @@ const BASE: TaxDocumentInput = {
   discountAmount: "0.00",
   taxAmount: "4.13",
   total: "86.63",
-  payments: [{ method: "cash", amount: "86.63" }],
   dueAmount: "0.00",
   voided: false,
   notes: null,
@@ -68,7 +67,6 @@ describe("renderTaxDocument", () => {
       kind: "quotation",
       documentNumber: "QT-AUH-2026-000001",
       validUntil: "2026-02-14",
-      payments: undefined,
       dueAmount: undefined,
       voided: undefined,
     });
@@ -93,6 +91,54 @@ describe("renderTaxDocument", () => {
   it("handles an empty line list without throwing", async () => {
     const buffer = await renderTaxDocument({ ...BASE, lines: [] });
     expect(buffer.subarray(0, 5).toString("latin1")).toBe("%PDF-");
+  });
+
+  /**
+   * The billed party. A company is who the invoice is FOR; the contact's
+   * personal name only stands in when no company is on record. Asserted by
+   * byte length rather than by reading the PDF's text: the two names differ
+   * in length, so rendering the wrong one is detectable without a parser.
+   */
+  it("bills a company by its name, not the contact's", async () => {
+    const contactOnly = await renderTaxDocument({
+      ...BASE,
+      customer: { name: "A", company: null, phone: null, trn: null, address: null },
+    });
+    const withCompany = await renderTaxDocument({
+      ...BASE,
+      customer: {
+        name: "A",
+        company: "Gulf Contracting & Trading LLC",
+        phone: null,
+        trn: null,
+        address: null,
+      },
+    });
+    expect(withCompany.length).toBeGreaterThan(contactOnly.length);
+  });
+
+  it("falls back to the personal name when there is no company", async () => {
+    const buffer = await renderTaxDocument({
+      ...BASE,
+      customer: { name: "Khaled Rahman", company: null, phone: null, trn: null, address: null },
+    });
+    expect(buffer.subarray(0, 5).toString("latin1")).toBe("%PDF-");
+  });
+
+  /**
+   * A blank company string is not a company. Without the trim it would win
+   * over the real name and the invoice would be addressed to nobody.
+   */
+  it("treats a whitespace-only company as absent", async () => {
+    const blank = await renderTaxDocument({
+      ...BASE,
+      customer: { name: "Khaled Rahman", company: "   ", phone: null, trn: null, address: null },
+    });
+    const none = await renderTaxDocument({
+      ...BASE,
+      customer: { name: "Khaled Rahman", company: null, phone: null, trn: null, address: null },
+    });
+    expect(blank.length).toBe(none.length);
   });
 
   /**

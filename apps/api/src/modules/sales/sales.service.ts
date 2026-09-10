@@ -1202,13 +1202,15 @@ export class SalesService {
       // document about one shop's takings.
       assertBranchInScope(sale.branchId);
 
-      const [items, payments, tenant, branch, customer, cashier] = await Promise.all([
+      const [items, tenant, branch, customer, cashier] = await Promise.all([
         tx
           .select()
           .from(schema.saleItems)
           .where(eq(schema.saleItems.saleId, id))
           .orderBy(schema.saleItems.sortOrder),
-        tx.select().from(schema.payments).where(eq(schema.payments.saleId, id)),
+        // Payments are deliberately not read: the invoice layout no longer
+        // prints a tender breakdown, and `sale.dueAmount` already carries
+        // the only figure the paper needs.
         tx.query.tenants.findFirst({ columns: { name: true, settings: true } }),
         tx.query.branches.findFirst({
           where: (t, { eq: e }) => e(t.id, sale.branchId),
@@ -1230,10 +1232,10 @@ export class SalesService {
 
       const settings = resolveTenantSettings(tenant?.settings);
 
-      return { sale, items, payments, tenant, settings, branch, customer, cashier };
+      return { sale, items, tenant, settings, branch, customer, cashier };
     });
 
-    const { sale, items, payments, tenant, settings, branch, customer, cashier } = data;
+    const { sale, items, tenant, settings, branch, customer, cashier } = data;
 
     const body = await renderInvoicePdf({
       business: {
@@ -1280,7 +1282,6 @@ export class SalesService {
       total: sale.total,
       paidAmount: sale.paidAmount,
       dueAmount: sale.dueAmount,
-      payments: payments.map((p) => ({ method: p.method, amount: p.amount })),
       voided: sale.voidedAt !== null,
       notes: sale.notes,
     });

@@ -133,6 +133,44 @@ export function registerDataHandlers(ipcMain: IpcMain): void {
     return receipt;
   });
 
+  /**
+   * Void a sale outright. ONLINE ONLY, and deliberately so.
+   *
+   * Everything else a till does is queued through the outbox and reconciled
+   * later. A void cannot be: it addresses a sale by its SERVER id, restocks
+   * every line and reverses every payment in one server transaction, and the
+   * server refuses it once anything on that sale has been returned. Queuing
+   * one would mean promising the cashier an outcome that a return pushed
+   * from another terminal an hour earlier can invalidate — the till would
+   * print "voided" for a sale the business never voided.
+   *
+   * So a sale that has not synced has no server id and cannot be voided at
+   * all. That is not a gap to paper over: until it syncs, no other terminal
+   * and no report has ever seen it, and a full-quantity RETURN — which does
+   * work offline — reverses it in every way that matters to the shop.
+   */
+  ipcMain.handle("sales:void", async (_event, localId: string, reason: string) => {
+    const sale = repo.findSale(String(localId ?? "")) as
+      | { serverId?: string | null; saleNumber?: string | null }
+      | null;
+
+    if (!sale) throw new Error("That sale is not on this terminal.");
+    if (!sale.serverId) {
+      throw new Error(
+        "This sale has not reached the server yet, so it cannot be voided. " +
+          "Sync first, or take everything back as a return instead.",
+      );
+    }
+    if (!String(reason ?? "").trim()) throw new Error("A void needs a reason.");
+
+    await authorizedRequest("POST", `/sales/${sale.serverId}/void`, {
+      reason: String(reason).trim(),
+    });
+
+    // Only now — the server is the authority on whether the void happened.
+    repo.markSaleVoided(String(localId));
+  });
+
   ipcMain.handle("quotations:save", (_event, draft: repo.SaleDraftInput) => {
     const receipt = repo.saveQuotation(draft);
     syncNow();

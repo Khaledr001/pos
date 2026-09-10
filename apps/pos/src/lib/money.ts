@@ -51,6 +51,30 @@ export function parseAmount(input: string): Money.Minor4 | null {
 }
 
 /**
+ * Constrain a text field to something `Money.toMinor` can parse.
+ *
+ * Price and discount boxes hold raw text and are parsed on every keystroke —
+ * often inside a render, where `toMinor`'s TypeError is a blank screen rather
+ * than a validation message. Filtering on the way in means the parse can never
+ * be reached with a letter in it.
+ *
+ * Partial input ("", "3.", ".5") passes through deliberately: `toMinor` reads
+ * all three as a number, and rejecting them would make a decimal impossible
+ * to type. No sign either — nothing on a till is priced negatively.
+ */
+export function decimalOnly(raw: string, maxDecimals = 4): string {
+  const cleaned = raw.replace(/[^\d.]/g, "");
+  const [whole = "", ...rest] = cleaned.split(".");
+  return rest.length > 0 ? `${whole}.${rest.join("").slice(0, maxDecimals)}` : whole;
+}
+
+/** Same, capped at 100 — the API's own ceiling for a discount percentage. */
+export function percentOnly(raw: string): string {
+  const clean = decimalOnly(raw, 2);
+  return Number(clean) > 100 ? "100" : clean;
+}
+
+/**
  * Cash rounding for the drawer.
  *
  * The UAE withdrew the 1 and 5 fils coins, so the smallest cash a customer can

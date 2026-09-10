@@ -189,6 +189,14 @@ export interface PosSaleReceipt extends PosSaleDraft {
   /** Assigned by the server on sync; null while the sale is still local. */
   saleNumber: string | null;
   synced: boolean;
+  /**
+   * The server's own id for this sale, once it has one. Absent until the
+   * sale syncs — and a sale with no server id cannot be voided, because a
+   * void is a server operation addressed by this id.
+   */
+  serverId?: string | null;
+  /** "completed" | "returned" | "partially_returned" | "voided", once known. */
+  status?: string;
 }
 
 export interface PosReturnLine {
@@ -375,6 +383,11 @@ export interface PosDataAdapter {
   findSale(saleNumberOrClientId: string): Promise<PosSaleReceipt | null>;
   /** Same fire-and-forget posture as `commitSale` — the refund is already real. */
   commitReturn(draft: PosReturnDraft): Promise<PosReturnReceipt>;
+  /**
+   * Erase a sale entirely. Online only in every adapter — see the
+   * `sales:void` IPC handler for why this one cannot be queued offline.
+   */
+  voidSale(localId: string, reason: string): Promise<void>;
 
   saveQuotation(draft: PosQuotationDraft): Promise<PosQuotationReceipt>;
   listQuotations(): Promise<PosQuotationReceipt[]>;
@@ -471,6 +484,7 @@ const electronAdapter: PosDataAdapter = {
   recentSales: (limit) => window.devsfleet.sales.recent(limit),
   findSale: (ref) => window.devsfleet.sales.find(ref),
   commitReturn: (draft) => window.devsfleet.sales.commitReturn(draft),
+  voidSale: (localId, reason) => window.devsfleet.sales.voidSale(localId, reason),
   saveQuotation: (draft) => window.devsfleet.quotations.save(draft),
   listQuotations: () => window.devsfleet.quotations.list(),
 };
@@ -837,6 +851,11 @@ const browserAdapter: PosDataAdapter = {
   async commitReturn(draft) {
     return { ...draft, returnNumber: null, synced: false };
   },
+  async voidSale(localId) {
+    const sale = browserState.sales.find((s) => s.localId === localId);
+    if (!sale) throw new Error("That sale is not on this terminal.");
+    sale.status = "voided";
+  },
   async saveQuotation(draft) {
     return { ...draft, quotationNumber: null, synced: false };
   },
@@ -1043,6 +1062,9 @@ function mapHeldCart(h: ApiHeldCart): PosHeldCart {
 function mapSale(s: ApiSale): PosSaleReceipt {
   return {
     localId: s.localId ?? s.id,
+    // The route id, kept apart from localId: a sale rung up on a terminal
+    // has both, and only this one addresses it on the server.
+    serverId: s.id,
     customerId: s.customerId,
     cashSessionId: s.cashSessionId,
     lines: s.lines ?? [],
@@ -1361,6 +1383,11 @@ const apiAdapter: PosDataAdapter = {
     });
 
     return { ...draft, returnNumber: created.saleNumber, synced: true };
+  },
+  /** Resolved through the sale itself, since `localId` is not the route id. */
+  async voidSale(localId, reason) {
+    const sale = await apiClient.get<ApiSale>(`/sales/${localId}`);
+    await apiClient.post(`/sales/${sale.id}/void`, { reason });
   },
   async saveQuotation(draft) {
     return { ...draft, quotationNumber: null, synced: false };

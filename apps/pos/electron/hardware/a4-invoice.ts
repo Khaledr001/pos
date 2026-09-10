@@ -61,7 +61,6 @@ export function renderA4Invoice(
     discountAmount: sale.discountAmount,
     taxAmount: sale.taxAmount,
     total: sale.total,
-    payments: sale.payments.map((p) => ({ method: p.method, amount: p.amount })),
     dueAmount: due.toFixed(2),
     // A reprint of a duplicate is still the SAME sale, not a cancelled one —
     // "voided" is reserved for a sale actually voided at the till.

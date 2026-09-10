@@ -7,6 +7,7 @@ import { posData, type PosVariantUnit } from "../lib/pos-data.js";
 import {
   maxQuantityInLineUnit,
   scaledFloor,
+  scaledListPrice,
   useCart,
   useCartTotals,
   useFloorViolations,
@@ -233,6 +234,19 @@ function LineRow({
   const maxReached = Number.isFinite(stock) && stock > 0 && Number(line.quantity) >= maxInLineUnit;
   const lineUnitAbbr = line.unit?.unitAbbr ?? line.product.unitAbbr;
 
+  /**
+   * Whether this line is being sold away from its list price, and which way.
+   *
+   * Compared against `scaledListPrice`, which already accounts for the chosen
+   * packaging — a flat pack price if the merchant set one, otherwise the base
+   * price times the conversion factor. Comparing against the raw base price
+   * would flag every carton on the receipt as "edited".
+   */
+  const listPrice = scaledListPrice(line);
+  const enteredPrice = Money.toMinor(line.unitPrice);
+  const repriced = enteredPrice !== listPrice;
+  const raised = enteredPrice > listPrice;
+
   function commitQuantity() {
     const parsed = Number(quantityText);
     if (Number.isFinite(parsed) && parsed > 0) {
@@ -325,9 +339,49 @@ function LineRow({
               <span className="text-[10px] text-(--pos-text-3)">{line.product.unitAbbr} ×</span>
             )}
 
-            <span className="num text-[11px] text-(--pos-text-2) font-mono">
+            {/*
+              The price is the control, not just a readout.
+
+              Editing one used to be reachable only by clicking the product
+              NAME — the one thing on the row that does not look like a price
+              field. A cashier wanting to sell something dearer or cheaper
+              than list looked straight at the figure, found it inert, and
+              concluded the till could not do it. Same dialog, obvious handle.
+            */}
+            <button
+              type="button"
+              onClick={() => onEditLine(line)}
+              aria-label={`Edit unit price of ${line.product.name}`}
+              title={
+                repriced
+                  ? `Edited — list is ${amount(listPrice)}. Click to change.`
+                  : "Click to sell this at a different price"
+              }
+              className={[
+                "num rounded border border-dashed px-1 py-0.5 font-mono text-[11px] transition-colors",
+                repriced
+                  ? "border-(--pos-accent)/60 text-(--pos-accent) font-bold"
+                  : "border-(--pos-border) text-(--pos-text-2) hover:border-(--pos-accent)/60 hover:text-(--pos-accent)",
+              ].join(" ")}
+            >
               {amount(Money.toMinor(line.unitPrice))}
-            </span>
+            </button>
+
+            {/* Which way it was moved, so a mistyped price is visible on the
+                row rather than only inside the dialog that set it. */}
+            {repriced && (
+              <span
+                className={[
+                  "num rounded px-1 py-0.2 text-[9px] font-bold",
+                  raised
+                    ? "bg-signal-amber/10 text-signal-amber"
+                    : "bg-signal-green/10 text-signal-green",
+                ].join(" ")}
+                title={`List price ${amount(listPrice)}`}
+              >
+                {raised ? "▲" : "▼"} {amount(listPrice)}
+              </span>
+            )}
 
             {line.discountPercent !== "0" && (
               <span className="num rounded bg-signal-green/10 text-signal-green px-1 py-0.2 text-[9px] font-bold">

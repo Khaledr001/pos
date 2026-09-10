@@ -90,6 +90,10 @@ const LINE = "#E5E7EB";
 
 const MARGIN = 36;
 
+/** Body rows the table is padded out to, and the blanks always left below. */
+const MIN_BODY_ROWS = 8;
+const MIN_BLANK_ROWS = 2;
+
 /**
  * DESCRIPTION takes 46% — the item name is the only column whose content is
  * unbounded, and wrapping it to three lines to keep a wide TAX column that
@@ -155,20 +159,11 @@ export interface TaxDocumentInput {
   discountAmount: string;
   taxAmount: string;
   total: string;
-  /** Invoices only. */
-  payments?: Array<{ method: string; amount: string }>;
+  /** Invoices only — what is still owed after everything taken so far. */
   dueAmount?: string;
   voided?: boolean;
   notes?: string | null;
 }
-
-const METHOD_LABEL: Record<string, string> = {
-  cash: "Cash",
-  card: "Card",
-  bank_transfer: "Bank Transfer",
-  credit: "On Account",
-  loyalty_points: "Loyalty Points",
-};
 
 function money(value: string): string {
   const n = Number(value || "0");
@@ -334,7 +329,17 @@ export function renderTaxDocument(input: TaxDocumentInput): Promise<Buffer> {
     y += 11;
 
     if (input.customer) {
-      doc.font("Helvetica-Bold").fontSize(11).fillColor(ACCENT).text(input.customer.name, MARGIN, y, {
+      /**
+       * A business is billed by its trading name, a person by theirs.
+       *
+       * The company used to be a secondary detail line under the contact's
+       * name, which put "Khaled Rahman" in 11pt accent type on an invoice
+       * addressed to a company — wrong on a tax document, and wrong for the
+       * accounts department that files it. When a company is on record it IS
+       * the billed party; the personal name only stands in when there is none.
+       */
+      const billedTo = input.customer.company?.trim() || input.customer.name;
+      doc.font("Helvetica-Bold").fontSize(11).fillColor(ACCENT).text(billedTo, MARGIN, y, {
         width: contentW * 0.55,
         lineBreak: false,
       });
@@ -353,7 +358,8 @@ export function renderTaxDocument(input: TaxDocumentInput): Promise<Buffer> {
         doc.font("Helvetica-Bold").fillColor(INK).text(value);
         y += 10.5;
       };
-      if (input.customer.company) detail("", input.customer.company);
+      // The company is the headline above when it exists, so it is not
+      // repeated here.
       if (input.customer.phone) detail("Phone: ", input.customer.phone);
       // The customer's own TRN is what makes the tax reclaimable for them.
       if (input.customer.trn) detail("TRN NO: ", input.customer.trn);
@@ -434,6 +440,18 @@ export function renderTaxDocument(input: TaxDocumentInput): Promise<Buffer> {
     y = drawTableHeader(y);
 
     const ROW_MIN = 18;
+
+    /** The ruled box and its column separators — identical for filled and blank rows. */
+    const drawRowFrame = (top: number, height: number) => {
+      doc.rect(MARGIN, top, contentW, height).lineWidth(0.6).strokeColor(LINE).stroke();
+      for (const key of ["description", "qty", "unitPrice", "beforeTax", "tax", "total"] as const) {
+        doc.moveTo(x[key], top).lineTo(x[key], top + height).lineWidth(0.4).strokeColor(LINE).stroke();
+      }
+    };
+
+    /** Where a row must stop and move to the next page, leaving room for the totals. */
+    const pageLimit = () => doc.page.height - MARGIN - 120;
+
     for (const [index, line] of input.lines.entries()) {
       const label =
         line.variantName && line.variantName !== "Default"
@@ -447,16 +465,12 @@ export function renderTaxDocument(input: TaxDocumentInput): Promise<Buffer> {
 
       // Break to a new page before drawing, never across a row — a line split
       // over a page boundary is unreadable on a tax document.
-      if (y + rowH > doc.page.height - MARGIN - 120) {
+      if (y + rowH > pageLimit()) {
         doc.addPage();
         y = drawTableHeader(MARGIN);
       }
 
-      doc.rect(MARGIN, y, contentW, rowH).lineWidth(0.6).strokeColor(LINE).stroke();
-      // Column separators, so the numbers read as a table rather than a drift.
-      for (const key of ["description", "qty", "unitPrice", "beforeTax", "tax", "total"] as const) {
-        doc.moveTo(x[key], y).lineTo(x[key], y + rowH).lineWidth(0.4).strokeColor(LINE).stroke();
-      }
+      drawRowFrame(y, rowH);
 
       const midY = y + (rowH - 8) / 2;
       doc.font("Helvetica").fontSize(8).fillColor(MUTED).text(String(index + 1), x.no + PAD, midY, {
@@ -477,6 +491,26 @@ export function renderTaxDocument(input: TaxDocumentInput): Promise<Buffer> {
       });
 
       y += rowH;
+    }
+
+    /**
+     * Ruled but empty rows, closing the table off.
+     *
+     * Two jobs. A three-line invoice otherwise leaves the totals floating
+     * against white paper halfway up the page, which reads as an unfinished
+     * document; and a counter hand needs somewhere to write an item added
+     * after the bill was printed. Padded to a minimum body height, with at
+     * least a couple always present, so a long invoice does not collect
+     * pointless filler and a short one still looks like a form.
+     *
+     * Deliberately unnumbered: numbers in blank rows read as lines whose
+     * detail failed to print.
+     */
+    const blankRows = Math.max(MIN_BLANK_ROWS, MIN_BODY_ROWS - input.lines.length);
+    for (let i = 0; i < blankRows; i += 1) {
+      if (y + ROW_MIN > pageLimit()) break;
+      drawRowFrame(y, ROW_MIN);
+      y += ROW_MIN;
     }
 
     // Table footer: the column sums, as on the reference.
@@ -533,9 +567,15 @@ export function renderTaxDocument(input: TaxDocumentInput): Promise<Buffer> {
     sumRow(`${input.taxLabel} (${Number(input.lines[0]?.taxPercent ?? "5")}%)`, input.taxAmount);
     sumRow("TOTAL", input.total, { band: true, strong: true });
 
-    for (const payment of input.payments ?? []) {
-      sumRow(METHOD_LABEL[payment.method] ?? payment.method, payment.amount);
-    }
+    /**
+     * How the customer paid is NOT printed.
+     *
+     * "Cash 86.63" on the face of a tax invoice tells the reader nothing they
+     * need — they were there when they paid — while committing the document
+     * to a tender split that a later part-refund or a corrected payment makes
+     * wrong. What the paper has to state is what is still owed, and that is
+     * the one line kept below.
+     */
     // Only when actually outstanding — "Balance due 0.00" invites a second payment.
     if (Number(input.dueAmount ?? "0") > 0) {
       sumRow("Balance due", input.dueAmount!, { strong: true });
