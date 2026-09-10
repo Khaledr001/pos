@@ -90,9 +90,23 @@ const LINE = "#E5E7EB";
 
 const MARGIN = 36;
 
-/** Body rows the table is padded out to, and the blanks always left below. */
-const MIN_BODY_ROWS = 8;
-const MIN_BLANK_ROWS = 2;
+/** Ruled but empty rows left under the last item, page space permitting. */
+const BLANK_ROWS = 3;
+
+/**
+ * Faux semi-bold for the item description.
+ *
+ * The built-in font set is Helvetica: regular and bold, with nothing between
+ * them, and the only embedded faces this package ships are Arabic. Stroking
+ * the regular weight in its own colour thickens the stems by a fraction of a
+ * point, which is what a semi-bold actually is — bold reads as shouting down
+ * a column of 8pt figures, and regular disappears against them.
+ *
+ * Tuned against a rendered page, not guessed: below ~0.12 it is
+ * indistinguishable from regular, above ~0.3 it closes up the counters at
+ * this size.
+ */
+const SEMIBOLD_STROKE = 0.2;
 
 /**
  * DESCRIPTION takes 46% — the item name is the only column whose content is
@@ -457,9 +471,15 @@ export function renderTaxDocument(input: TaxDocumentInput): Promise<Buffer> {
         line.variantName && line.variantName !== "Default"
           ? `${line.productName} — ${line.variantName}`
           : line.productName;
-      const text = `${label} (${line.productSku})`;
+      const text = `${label} (${line.productSku})`.toUpperCase();
 
-      doc.font("Helvetica-Bold").fontSize(8);
+      /**
+       * Measured in the FONT IT IS DRAWN IN. Uppercase Helvetica regular sets
+       * to a different width than mixed-case Helvetica-Bold, so measuring
+       * with one and drawing with the other under-reports the height and
+       * clips the second line of a long product name.
+       */
+      doc.font("Helvetica").fontSize(8);
       const textH = doc.heightOfString(text, { width: w.description - PAD * 2 });
       const rowH = Math.max(ROW_MIN, textH + PAD * 2);
 
@@ -477,9 +497,20 @@ export function renderTaxDocument(input: TaxDocumentInput): Promise<Buffer> {
         width: w.no - PAD * 2,
         align: "center",
       });
-      doc.font("Helvetica-Bold").fontSize(8).fillColor(INK).text(text, x.description + PAD, y + PAD, {
-        width: w.description - PAD * 2,
-      });
+      doc
+        .font("Helvetica")
+        .fontSize(8)
+        .fillColor(INK)
+        .strokeColor(INK)
+        .lineWidth(SEMIBOLD_STROKE)
+        .text(text, x.description + PAD, y + PAD, {
+          width: w.description - PAD * 2,
+          fill: true,
+          stroke: true,
+        });
+      // Restored, or the next row's rules inherit the hairline stroke width.
+      doc.lineWidth(0.6);
+
       doc.font("Helvetica").fontSize(8).fillColor(INK);
       doc.text(qty(line.quantity), x.qty + PAD, midY, { width: w.qty - PAD * 2, align: "center" });
       doc.text(money(line.unitPrice), x.unitPrice + PAD, midY, { width: w.unitPrice - PAD * 2, align: "right" });
@@ -496,18 +527,16 @@ export function renderTaxDocument(input: TaxDocumentInput): Promise<Buffer> {
     /**
      * Ruled but empty rows, closing the table off.
      *
-     * Two jobs. A three-line invoice otherwise leaves the totals floating
-     * against white paper halfway up the page, which reads as an unfinished
-     * document; and a counter hand needs somewhere to write an item added
-     * after the bill was printed. Padded to a minimum body height, with at
-     * least a couple always present, so a long invoice does not collect
-     * pointless filler and a short one still looks like a form.
+     * They close the table off under the last item and leave a counter hand
+     * somewhere to write something added after the bill was printed. A fixed
+     * three, not padding to a minimum page height: filling a short invoice
+     * down to eight rows pushed the totals a third of the way down the page
+     * and made a two-item sale look like a form somebody failed to complete.
      *
      * Deliberately unnumbered: numbers in blank rows read as lines whose
      * detail failed to print.
      */
-    const blankRows = Math.max(MIN_BLANK_ROWS, MIN_BODY_ROWS - input.lines.length);
-    for (let i = 0; i < blankRows; i += 1) {
+    for (let i = 0; i < BLANK_ROWS; i += 1) {
       if (y + ROW_MIN > pageLimit()) break;
       drawRowFrame(y, ROW_MIN);
       y += ROW_MIN;
