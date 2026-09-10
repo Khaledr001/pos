@@ -94,21 +94,19 @@ const MARGIN = 36;
 const BLANK_ROWS = 3;
 
 /**
- * Faux medium weight for the item description — roughly a 500 against
- * Helvetica regular's 400.
+ * The item description is set at Helvetica regular — a true 400.
  *
- * The built-in font set is Helvetica: regular and bold, with nothing between
- * them, and the only embedded faces this package ships are Arabic. Stroking
- * the regular weight in its own colour thickens the stems by a fraction of a
- * point, which is what a heavier weight physically is. Bold reads as
- * shouting down a column of 8pt figures; plain regular lets the item name
- * disappear into them.
+ * It was bold, then a faux 600, then a faux 500, each produced by stroking
+ * the regular face in its own colour to thicken the stems. This is the floor:
+ * pdfkit's built-in family is Helvetica regular and bold with nothing below
+ * regular, and the only embedded faces this package ships are the two Arabic
+ * ones. Anything lighter would mean bundling a real Light face.
  *
- * Tuned against a rendered page, not guessed. 0.2 landed nearer a 600, so
- * this is a little over half of it: enough to separate the name from the
- * numbers, not enough to read as bold.
+ * The name no longer needs weight to stand out anyway — it is the only
+ * left-aligned, non-numeric cell on the row, which separates it from the
+ * figures on its own.
  */
-const MEDIUM_STROKE = 0.09;
+const DESCRIPTION_SIZE = 8.5;
 
 /**
  * DESCRIPTION takes 46% — the item name is the only column whose content is
@@ -117,10 +115,10 @@ const MEDIUM_STROKE = 0.09;
  * what is left.
  */
 export const COLS = {
-  no: 0.05,
-  description: 0.46,
-  qty: 0.07,
-  unitPrice: 0.11,
+  no: 0.04,
+  description: 0.50,
+  qty: 0.05,
+  unitPrice: 0.10,
   beforeTax: 0.11,
   tax: 0.09,
   total: 0.11,
@@ -516,7 +514,7 @@ export function renderTaxDocument(input: TaxDocumentInput): Promise<Buffer> {
        * with one and drawing with the other under-reports the height and
        * clips the second line of a long product name.
        */
-      doc.font("Helvetica").fontSize(8);
+      doc.font("Helvetica").fontSize(DESCRIPTION_SIZE);
       const textH = doc.heightOfString(text, { width: w.description - PAD * 2 });
       const rowH = Math.max(ROW_MIN, textH + PAD * 2);
 
@@ -542,18 +540,12 @@ export function renderTaxDocument(input: TaxDocumentInput): Promise<Buffer> {
       const descY = y + (rowH - textH) / 2;
       doc
         .font("Helvetica")
-        .fontSize(8)
+        .fontSize(DESCRIPTION_SIZE)
         .fillColor(INK)
-        .strokeColor(INK)
-        .lineWidth(MEDIUM_STROKE)
         .text(text, x.description + PAD, descY, {
           width: w.description - PAD * 2,
           align: "left",
-          fill: true,
-          stroke: true,
         });
-      // Restored, or the next row's rules inherit the hairline stroke width.
-      doc.lineWidth(0.6);
 
       doc.font("Helvetica").fontSize(8).fillColor(INK);
       doc.text(qty(line.quantity), x.qty + PAD, midY, { width: w.qty - PAD * 2, align: "center" });
