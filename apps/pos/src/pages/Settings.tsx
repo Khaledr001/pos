@@ -48,6 +48,13 @@ export function Settings() {
 
   const [device, setDevice] = useState<{
     deviceId: string | null;
+    /**
+     * The address this terminal actually talks to — read from device_state,
+     * written once at pairing. It takes priority over VITE_API_URL (see
+     * electron/sync/api-client.ts), so editing .env does NOT move a paired
+     * till, and nothing on screen used to say where it was pointed.
+     */
+    apiUrl: string | null;
     hardwareId: string;
     version: string;
   } | null>(null);
@@ -411,6 +418,7 @@ export function Settings() {
                   <Field label="Branch" value={terminal?.branchName ?? "—"} />
                   <Field label="Till Name" value={terminal?.deviceName ?? "—"} mono />
                   <Field label="Device ID" value={device?.deviceId ?? "Not activated"} mono />
+                  <Field label="API Server" value={device?.apiUrl ?? "Not set"} mono />
                   <Field label="App Version" value={device?.version ?? "1.0.0"} mono />
                   <Field
                     label="Data Mode"
@@ -828,6 +836,9 @@ function Field({
     <div className="flex items-center justify-between gap-4 py-2 text-xs">
       <span className="shrink-0 text-(--pos-text-3)">{label}</span>
       <span
+        // Values here truncate (device ids, API urls), and the truncated part
+        // is usually the part being checked — hover reveals the whole thing.
+        title={value}
         className={cn(
           "truncate text-right font-medium",
           mono ? "num text-xs font-mono" : "",

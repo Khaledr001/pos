@@ -4450,9 +4450,9 @@ function registerDataHandlers(ipcMain) {
       return { deviceId: device.trim() };
     }
   );
-  ipcMain.handle("device:unpair", () => {
+  ipcMain.handle("device:unpair", (_event, force = false) => {
     const { pending, failed } = outboxCounts();
-    if (pending + failed > 0) {
+    if (pending + failed > 0 && !force) {
       throw new Error(
         `${pending + failed} sale(s) have not synced to the server yet. Sync — or resolve the Sync Attention Queue — before unpairing this terminal.`
       );

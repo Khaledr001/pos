@@ -162,7 +162,7 @@ export interface DevsfleetBridge {
      * Undo `activate` and wipe the local database. Rejects if anything in the
      * outbox has not synced yet.
      */
-    unpair(): Promise<void>;
+    unpair(force?: boolean): Promise<void>;
   };
 
   outbox: {

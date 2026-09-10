@@ -140,7 +140,8 @@ const api = {
      * Undo `activate` and wipe the local database. Rejects if anything in the
      * outbox has not synced yet — see the `device:unpair` IPC handler.
      */
-    unpair: () => electron.ipcRenderer.invoke("device:unpair")
+    /** `force` discards unsynced outbox items — see the device:unpair handler. */
+    unpair: (force = false) => electron.ipcRenderer.invoke("device:unpair", force)
   },
   outbox: {
     /** Rejected pushes and applied-with-warning ones — see Settings. */

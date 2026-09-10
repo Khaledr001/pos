@@ -26,6 +26,7 @@ import {
   FolderTree,
   Tag,
   Ruler,
+  Calculator,
   Download,
   FileText,
   ChevronDown,
@@ -116,6 +117,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: "Sales & POS",
     items: [
+      { label: "Sales Terminal", href: "/sell", icon: Calculator, permission: "sale:create" },
       {
         label: "Sales & Orders",
         href: "/sales",

@@ -262,9 +262,21 @@ export function registerDataHandlers(ipcMain: IpcMain): void {
    * OUTBOX rows, and an unsynced sale is a day's takings with nowhere else to
    * go once this runs.
    */
-  ipcMain.handle("device:unpair", () => {
+  ipcMain.handle("device:unpair", (_event, force = false) => {
     const { pending, failed } = repo.outboxCounts();
-    if (pending + failed > 0) {
+    if (pending + failed > 0 && !force) {
+      /**
+       * Refusing outright is right by default, but it cannot be the ONLY
+       * answer: draining the outbox needs a signed-in session, and the
+       * reason to be unpairing is usually that nobody can sign in — a till
+       * bound to the wrong branch, or to a server that no longer answers.
+       * Refusal alone leaves that terminal unrecoverable from its own UI.
+       * `force` is the deliberate, typed-confirmation way out.
+       *
+       * The count leads the message because the renderer parses it back out
+       * to name what would be lost; custom Error properties do not survive
+       * Electron's IPC serialisation, so the message is the channel.
+       */
       throw new Error(
         `${pending + failed} sale(s) have not synced to the server yet. ` +
           "Sync — or resolve the Sync Attention Queue — before unpairing this terminal.",

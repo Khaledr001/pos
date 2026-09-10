@@ -258,7 +258,8 @@ const api = {
      * Undo `activate` and wipe the local database. Rejects if anything in the
      * outbox has not synced yet — see the `device:unpair` IPC handler.
      */
-    unpair: (): Promise<void> => ipcRenderer.invoke("device:unpair"),
+    /** `force` discards unsynced outbox items — see the device:unpair handler. */
+    unpair: (force = false): Promise<void> => ipcRenderer.invoke("device:unpair", force),
   },
 
   outbox: {

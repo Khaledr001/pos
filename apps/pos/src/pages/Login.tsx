@@ -1,8 +1,8 @@
-import { Loader2, Store } from "lucide-react";
+import { Loader2, LogOut, Store } from "lucide-react";
 import { useState } from "react";
 import { Keypad } from "../components/Keypad.js";
 import { useHotkeys } from "../lib/keyboard.js";
-import { posData } from "../lib/pos-data.js";
+import { hasBridge, posData } from "../lib/pos-data.js";
 import { useAuth } from "../store/auth.js";
 
 /**
@@ -21,10 +21,72 @@ import { useAuth } from "../store/auth.js";
 const PIN_LENGTH = 4;
 
 export function Login() {
-  const { terminal, signIn, bindTerminal } = useAuth();
+  const { terminal, signIn, bindTerminal, unbindTerminal } = useAuth();
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
+  const [unpairing, setUnpairing] = useState(false);
+  const [unpairError, setUnpairError] = useState<string | null>(null);
+  /** Set when unpair was refused for unsynced work — how many items are at stake. */
+  const [blockedCount, setBlockedCount] = useState<number | null>(null);
+  const [discardConfirm, setDiscardConfirm] = useState("");
+
+  /**
+   * Disconnect the till from its business, from the one screen you can always
+   * reach.
+   *
+   * The same action exists in Settings, but Settings is behind a PIN, and a
+   * PIN is exactly what you cannot get past when the till is bound to the
+   * wrong tenant or to a server that no longer answers — the terminal is
+   * then unrecoverable from its own UI.
+   *
+   * Deliberately NOT gated on a permission the way the Settings copy is:
+   * there is no signed-in cashier here to hold one, and gating it on the
+   * server would fail precisely when the server is unreachable, which is the
+   * main reason to be here. The guard that actually matters is in the main
+   * process — `device:unpair` refuses while the outbox holds anything
+   * unsynced, so this can never cost a day's takings. The worst it can cost
+   * is a re-pairing.
+   */
+  async function handleUnpair(force = false) {
+    setUnpairError(null);
+
+    if (!force) {
+      const business = terminal?.tenantName ?? "its current business";
+      const confirmed = confirm(
+        `Sign this terminal out of ${business}?\n\n` +
+          "It will need to be registered again before it can sell, and every " +
+          "product, price, customer and staff PIN cached here is wiped. " +
+          "Unpairing is refused if any sale has not synced yet.",
+      );
+      if (!confirmed) return;
+    }
+
+    setUnpairing(true);
+    try {
+      await window.devsfleet.device.unpair(force);
+      unbindTerminal();
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to sign out of this business.";
+      setUnpairError(message);
+
+      /**
+       * Turn the refusal into a decision rather than a wall.
+       *
+       * Draining the outbox needs a signed-in session, which is exactly what
+       * is missing when someone is unpairing from the PIN screen — so
+       * "sync first" is advice the operator often cannot act on. Offer the
+       * discard explicitly, with the count named and a word to type, instead
+       * of leaving the terminal stuck.
+       */
+      const unsynced = /^(\d+) sale\(s\) have not synced/.exec(message);
+      setBlockedCount(unsynced ? Number(unsynced[1]) : null);
+      setDiscardConfirm("");
+    } finally {
+      setUnpairing(false);
+    }
+  }
 
   /**
    * The PIN is verified by the server, never here.
@@ -150,9 +212,84 @@ export function Login() {
           />
         </div>
 
+        {/* Kept in step with packages/db/scripts/seed.ts (SEED_*_PIN). The
+            previous values here — 1234 admin, 2222 cashier, 3333 manager —
+            matched nothing the seed has ever created, so two of the three
+            simply returned "Incorrect PIN". */}
         <p className="mt-5 text-center text-[11px] leading-relaxed text-zinc-600">
-          Development PINs — 1234 admin · 2222 cashier · 3333 manager
+          Development PINs — 1234 cashier · 2580 manager · 4321 admin
         </p>
+
+        {/* Electron only: device.unpair is IPC, and there is nothing to unpair
+            in browser preview mode. */}
+        {hasBridge() && (
+          <div className="mt-6 border-t border-steel-800 pt-4 text-center">
+            {unpairError && (
+              <p role="alert" className="mb-2 text-[11px] text-signal-red">
+                {unpairError}
+              </p>
+            )}
+
+            {blockedCount !== null && (
+              <div className="mb-3 rounded-lg border border-signal-red/40 bg-signal-red/5 p-3 text-left">
+                <p className="text-[11px] leading-relaxed text-zinc-300">
+                  Nothing can drain that queue without a sign-in, so if you cannot get past
+                  the PIN screen, the only way forward is to discard it.{" "}
+                  <strong className="text-signal-red">
+                    {blockedCount} unsynced item{blockedCount === 1 ? "" : "s"} will be lost
+                    permanently.
+                  </strong>
+                </p>
+                <label className="mt-2.5 block text-[10px] uppercase tracking-wider text-zinc-500">
+                  Type DISCARD to confirm
+                </label>
+                <div className="mt-1 flex gap-2">
+                  <input
+                    autoFocus
+                    value={discardConfirm}
+                    onChange={(e) => setDiscardConfirm(e.target.value)}
+                    className="field flex-1 text-[12px]"
+                    placeholder="DISCARD"
+                  />
+                  <button
+                    type="button"
+                    disabled={discardConfirm !== "DISCARD" || unpairing}
+                    onClick={() => void handleUnpair(true)}
+                    className="btn btn-danger px-3 text-[11px]"
+                  >
+                    Discard &amp; sign out
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBlockedCount(null);
+                    setUnpairError(null);
+                    setDiscardConfirm("");
+                  }}
+                  className="mt-2 text-[10px] text-zinc-600 hover:text-zinc-400"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => void handleUnpair()}
+              disabled={unpairing}
+              className="inline-flex items-center gap-1.5 text-[11px] text-zinc-600 transition-colors hover:text-signal-red disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {unpairing ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <LogOut className="size-3" />
+              )}
+              {unpairing
+                ? "Signing out…"
+                : `Sign out of ${terminal?.tenantName ?? "this business"}`}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
