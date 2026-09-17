@@ -13,7 +13,7 @@
  *   - Returns structured result instead of printing to console
  *   - Uses TenantDatabase (tenant resolved from JWT)
  */
-import { schema, sql, type Transaction } from "@devsfleet/db";
+import { isNull, schema, sql, type Transaction } from "@devsfleet/db";
 import { normalizeBarcode, slugify, variantSearchKey } from "@devsfleet/shared-utils";
 import { Injectable, Logger } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
@@ -220,6 +220,41 @@ function findDuplicateSkus(rows: ParsedRow[]): Map<string, number[]> {
   return duplicates;
 }
 
+/**
+ * The key two product names are compared on.
+ *
+ * Case and stray spacing are typing artefacts, not different products —
+ * "PVC Elbow", "pvc elbow" and "PVC  Elbow" are one item in a supplier's
+ * price list, and treating them as three is how a catalogue ends up with the
+ * same part three times at three prices.
+ *
+ * Deliberately NOT `searchKey` from shared-utils, which also normalises
+ * measurements: that would fold `2.5"` and `2.5 inch` together, and while
+ * those usually ARE the same part, the importer has no way to be sure. This
+ * stops at the changes that cannot alter meaning.
+ */
+export function productNameKey(name: string): string {
+  return name.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+/** Every product name that appears more than once, with the row numbers. */
+export function findDuplicateNames(rows: Pick<ParsedRow, "name" | "rowNumber">[]): Map<string, number[]> {
+  const byName = new Map<string, number[]>();
+  for (const row of rows) {
+    const key = productNameKey(row.name);
+    if (!key) continue;
+    const existing = byName.get(key);
+    if (existing) existing.push(row.rowNumber);
+    else byName.set(key, [row.rowNumber]);
+  }
+
+  const duplicates = new Map<string, number[]>();
+  for (const [key, rowNumbers] of byName) {
+    if (rowNumbers.length > 1) duplicates.set(key, rowNumbers);
+  }
+  return duplicates;
+}
+
 /** Every barcode that appears more than once, with the row numbers. */
 function findDuplicateBarcodes(rows: ParsedRow[]): Map<string, number[]> {
   const byBarcode = new Map<string, number[]>();
@@ -248,14 +283,30 @@ interface Lookups {
   brandsByName: Map<string, string>;
   /** Catches two different names that slugify to the same slug — see `uq_brands_tenant_slug`. */
   brandsBySlug: Map<string, string>;
+  /**
+   * Names already in the catalogue, under `productNameKey`.
+   *
+   * Active products only. There is no unique index on `products.name` — this
+   * is a business rule, not a constraint — so a soft-deleted product holds no
+   * claim on its name, and re-importing something that was deleted on purpose
+   * should create it again rather than be refused for a reason nobody can see
+   * in the product list.
+   */
+  productNames: Set<string>;
   defaultPriceListId: string;
 }
 
 async function loadLookups(tx: Transaction): Promise<Lookups> {
-  const [categories, units, brands, defaultList] = await Promise.all([
+  const [categories, units, brands, products, defaultList] = await Promise.all([
     tx.select({ id: schema.categories.id, name: schema.categories.name, slug: schema.categories.slug }).from(schema.categories),
     tx.select({ id: schema.units.id, name: schema.units.name, abbreviation: schema.units.abbreviation }).from(schema.units),
     tx.select({ id: schema.brands.id, name: schema.brands.name, slug: schema.brands.slug }).from(schema.brands),
+    // Loaded once rather than queried per row: a 5,000-SKU catalogue is a few
+    // hundred KB of strings, against 5,000 round trips inside one transaction.
+    tx
+      .select({ name: schema.products.name })
+      .from(schema.products)
+      .where(isNull(schema.products.deletedAt)),
     tx.query.priceLists.findFirst({
       where: (t, { and: a, eq: e }) => a(e(t.isDefault, true), e(t.isActive, true)),
       columns: { id: true },
@@ -273,6 +324,7 @@ async function loadLookups(tx: Transaction): Promise<Lookups> {
     unitsByAbbr: new Map(units.map((u) => [u.abbreviation.trim().toLowerCase(), u.id])),
     brandsByName: new Map(brands.map((b) => [b.name.trim().toLowerCase(), b.id])),
     brandsBySlug: new Map(brands.map((b) => [b.slug, b.id])),
+    productNames: new Set(products.map((p) => productNameKey(p.name))),
     defaultPriceListId: defaultList.id,
   };
 }
@@ -295,13 +347,18 @@ export class BulkImportService {
 
     const errors: BulkImportRowError[] = [...rejected];
 
-    // Flag duplicate SKUs and barcodes within the file itself
+    // Flag duplicate SKUs, barcodes and product names within the file itself
     const duplicateSkuRows = findDuplicateSkus(rows);
     const duplicateSkus = new Set(duplicateSkuRows.keys());
     const duplicateBarcodeRows = findDuplicateBarcodes(rows);
     const duplicateBarcodes = new Set(duplicateBarcodeRows.keys());
+    const duplicateNameRows = findDuplicateNames(rows);
+    const duplicateNames = new Set(duplicateNameRows.keys());
     const importable = rows.filter(
-      (r) => (!r.sku || !duplicateSkus.has(r.sku)) && (!r.barcode || !duplicateBarcodes.has(r.barcode)),
+      (r) =>
+        (!r.sku || !duplicateSkus.has(r.sku)) &&
+        (!r.barcode || !duplicateBarcodes.has(r.barcode)) &&
+        !duplicateNames.has(productNameKey(r.name)),
     );
     for (const [sku, rowNumbers] of duplicateSkuRows) {
       errors.push({
@@ -313,6 +370,22 @@ export class BulkImportService {
       errors.push({
         row: rowNumbers[0]!,
         reason: `Barcode "${barcode}" appears on rows ${rowNumbers.join(", ")} — fix the file`,
+      });
+    }
+    /**
+     * ALL rows sharing a name are dropped, not just the second one onward.
+     *
+     * Same posture as the SKU and barcode rules above: when a file says the
+     * same product twice at two prices, there is no way to tell which line is
+     * the one the merchant meant, and silently keeping whichever happened to
+     * be first is how a catalogue ends up priced off a stale row. The message
+     * names every row so the file can be fixed in one pass.
+     */
+    for (const [key, rowNumbers] of duplicateNameRows) {
+      const shown = rows.find((r) => productNameKey(r.name) === key)?.name ?? key;
+      errors.push({
+        row: rowNumbers[0]!,
+        reason: `Product name "${shown}" appears on rows ${rowNumbers.join(", ")} — fix the file`,
       });
     }
 
@@ -411,6 +484,21 @@ export class BulkImportService {
           const brandId = row.brandName
             ? lookups.brandsByName.get(row.brandName.trim().toLowerCase()) ?? null
             : null;
+
+          // ── Reject a name the catalogue already holds ─────────────────
+          //
+          // Checked before SKU because `name` is the one column every row
+          // must have, so this is the rule that catches a re-imported price
+          // list whose SKU column is blank — the case where every other guard
+          // here passes and the catalogue quietly doubles.
+          if (lookups.productNames.has(productNameKey(row.name))) {
+            tally.rejected += 1;
+            errors.push({
+              row: row.rowNumber,
+              reason: `A product named "${row.name}" already exists — skipped`,
+            });
+            continue;
+          }
 
           // ── Reject a SKU that already exists rather than overwrite it ─
           //
