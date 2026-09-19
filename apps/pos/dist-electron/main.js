@@ -1404,10 +1404,10 @@ function commitReturn(draft) {
 function recentSales(limit = 20) {
   const db2 = getDatabase();
   const sales = db2.prepare(
-    `SELECT s.local_id AS localId, s.sale_number AS saleNumber,
+    `SELECT s.local_id AS localId, s.server_id AS serverId, s.sale_number AS saleNumber,
               s.customer_id AS customerId, s.cash_session_id AS cashSessionId,
               s.subtotal, s.tax_amount AS taxAmount,
-              s.discount_amount AS discountAmount, s.total,
+              s.discount_amount AS discountAmount, s.total, s.status,
               s.occurred_at AS occurredAt, s.synced_at AS syncedAt
        FROM local_sales s ORDER BY s.occurred_at DESC LIMIT ?`
   ).all(limit);
@@ -1418,13 +1418,16 @@ function recentSales(limit = 20) {
     payments: salePayments(db2, sale.localId)
   }));
 }
+function markSaleVoided(localId) {
+  getDatabase().prepare(`UPDATE local_sales SET status = 'voided' WHERE local_id = ?`).run(localId);
+}
 function findSale(reference) {
   const db2 = getDatabase();
   const sale = db2.prepare(
-    `SELECT local_id AS localId, sale_number AS saleNumber,
+    `SELECT local_id AS localId, server_id AS serverId, sale_number AS saleNumber,
               customer_id AS customerId, cash_session_id AS cashSessionId,
               subtotal, tax_amount AS taxAmount, discount_amount AS discountAmount,
-              total, occurred_at AS occurredAt, synced_at AS syncedAt
+              total, status, occurred_at AS occurredAt, synced_at AS syncedAt
        FROM local_sales WHERE sale_number = ? OR local_id = ? LIMIT 1`
   ).get(reference.trim(), reference.trim());
   if (!sale) return null;
@@ -1882,7 +1885,6 @@ function renderA4Invoice(sale, business, options = {}) {
     discountAmount: sale.discountAmount,
     taxAmount: sale.taxAmount,
     total: sale.total,
-    payments: sale.payments.map((p) => ({ method: p.method, amount: p.amount })),
     dueAmount: due.toFixed(2),
     // A reprint of a duplicate is still the SAME sale, not a cancelled one —
     // "voided" is reserved for a sale actually voided at the till.
@@ -4388,6 +4390,20 @@ function registerDataHandlers(ipcMain) {
     const receipt = commitReturn(draft);
     syncNow();
     return receipt;
+  });
+  ipcMain.handle("sales:void", async (_event, localId, reason) => {
+    const sale = findSale(String(localId ?? ""));
+    if (!sale) throw new Error("That sale is not on this terminal.");
+    if (!sale.serverId) {
+      throw new Error(
+        "This sale has not reached the server yet, so it cannot be voided. Sync first, or take everything back as a return instead."
+      );
+    }
+    if (!String(reason ?? "").trim()) throw new Error("A void needs a reason.");
+    await authorizedRequest("POST", `/sales/${sale.serverId}/void`, {
+      reason: String(reason).trim()
+    });
+    markSaleVoided(String(localId));
   });
   ipcMain.handle("quotations:save", (_event, draft) => {
     const receipt = saveQuotation(draft);

@@ -5,9 +5,30 @@
  * Light-first with class-based dark mode.
  */
 
-@custom-variant dark (&:is(.dark *));
+/*
+ * `.dark` itself, not only its descendants.
+ *
+ * `&:is(.dark *)` matched descendants alone, so a `dark:` utility placed on
+ * the <html> element that CARRIES the class did nothing.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
 
-@theme inline {
+/*
+ * NOT `@theme inline`.
+ *
+ * `inline` substitutes a token's declared value straight into the utility
+ * instead of emitting `var(--color-…)`. That is correct when the declared
+ * value is itself a `var()` — the shadcn pattern of a raw token layer mapped
+ * through @theme — but every value below is a literal colour, so `inline`
+ * froze them at build time: `bg-background` compiled to
+ * `background-color:#fff`, and the `.dark` block underneath spent its life
+ * reassigning variables that no rule ever read. The class toggled, the
+ * variables changed, and the page stayed white.
+ *
+ * Plain `@theme` emits the tokens into `:root` and has utilities reference
+ * them, which is what lets `.dark` override anything at runtime.
+ */
+@theme {
   /* ── Typography ── */
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
     Roboto, sans-serif;
@@ -90,8 +111,32 @@
   --animate-float: float 6s ease-in-out infinite;
 }
 
+/*
+ * What makes the BROWSER's own chrome follow the theme.
+ *
+ * ::-webkit-scrollbar below restyles WebKit's track and thumb and nothing
+ * else — the engine still paints the surrounding scrollbar chrome from
+ * `color-scheme`, which defaults to light, and Firefox ignores those
+ * pseudo-elements altogether. That is why the sidebar kept a white scrollbar
+ * on a dark page. This one property also darkens native form controls and
+ * the default canvas, so it has to be declared for BOTH themes rather than
+ * only the dark one.
+ */
+:root {
+  color-scheme: light;
+  --scrollbar-thumb: hsl(220 9% 46% / 0.35);
+  --scrollbar-thumb-hover: hsl(220 9% 46% / 0.55);
+}
+
 /* ── Dark Mode ── */
 .dark {
+  color-scheme: dark;
+  /* Lighter and slightly more opaque than the light-mode thumb: the same
+     mid-grey that reads fine on white is nearly invisible on the sidebar's
+     hsl(224 50% 6%). */
+  --scrollbar-thumb: hsl(217 10% 64% / 0.4);
+  --scrollbar-thumb-hover: hsl(217 10% 64% / 0.6);
+
   --color-background: hsl(224 71% 4%);
   --color-foreground: hsl(210 20% 98%);
   --color-card: hsl(224 50% 8%);
@@ -255,6 +300,16 @@
 }
 
 /* ── Scrollbar ── */
+
+/*
+ * Firefox honours neither ::-webkit-scrollbar nor its hover state — these two
+ * properties are the whole of what it supports. Set on :root so every
+ * scrolling descendant inherits them.
+ */
+:root {
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -264,13 +319,19 @@
   background: transparent;
 }
 
+/* The corner where a vertical and horizontal bar meet renders opaque white
+   by default, which is the one patch `color-scheme` does not cover. */
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 ::-webkit-scrollbar-thumb {
-  background: hsl(220 9% 46% / 0.3);
+  background: var(--scrollbar-thumb);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(220 9% 46% / 0.5);
+  background: var(--scrollbar-thumb-hover);
 }
 
 /* ── Base ── */

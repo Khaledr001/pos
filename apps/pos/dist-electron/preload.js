@@ -66,7 +66,13 @@ const api = {
     recent: (limit) => electron.ipcRenderer.invoke("sales:recent", limit),
     find: (reference) => electron.ipcRenderer.invoke("sales:find", reference),
     /** Same fire-and-forget posture as `commit` — the refund is already real. */
-    commitReturn: (draft) => electron.ipcRenderer.invoke("sales:commit-return", draft)
+    commitReturn: (draft) => electron.ipcRenderer.invoke("sales:commit-return", draft),
+    /**
+     * Erase a sale that should never have been rung up. Unlike everything
+     * else here this one waits for the server and rejects when offline —
+     * see the `sales:void` handler for why it cannot be queued.
+     */
+    voidSale: (localId, reason) => electron.ipcRenderer.invoke("sales:void", localId, reason)
   },
   quotations: {
     save: (draft) => electron.ipcRenderer.invoke("quotations:save", draft),

@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import "./globals.css";
 import { Providers } from "@/lib/providers";
 import { AppShell } from "@/components/layout/app-shell";
+import { THEME_BOOT_SCRIPT } from "@/lib/theme-context";
 
 export const metadata: Metadata = {
   title: {
@@ -25,6 +26,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" dir="ltr" suppressHydrationWarning>
       <head>
+        {/* Before first paint — see THEME_BOOT_SCRIPT for why it cannot wait
+            for React. Must stay ahead of the stylesheet links. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
