@@ -1,14 +1,31 @@
-import { eq, schema, sql } from "@devsfleet/db";
+import { and, desc, eq, schema, sql } from "@devsfleet/db";
 import type { WhatsappAccount } from "@devsfleet/db";
 import type { Locale, MessageType } from "@devsfleet/shared-types";
-import { normalizePhone } from "@devsfleet/shared-utils";
+import { AppError, ERROR_CODES, normalizePhone } from "@devsfleet/shared-utils";
 import { Injectable, Logger } from "@nestjs/common";
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { RequestContext } from "../../common/context/request-context.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import type { WhatsappWebhookDto, WhatsappWebhookValue } from "./dto.js";
 
 /** Meta's customer-service window. Free-form replies are refused after this. */
 const CUSTOMER_SERVICE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Pinned, not floating.
+ *
+ * Meta ships breaking changes between Graph versions and retires old ones on
+ * a published schedule. A pinned version fails on a date we can read in
+ * advance; `/latest` fails on a morning nobody chose.
+ *
+ * v23.0 is what Meta's own Get Started guide uses. Worth re-checking against
+ * their docs when this is next touched — a version that has aged past
+ * retirement fails every send with a 400, not a deprecation warning.
+ */
+const GRAPH_API_VERSION = "v23.0";
+
+/** How long to wait on Meta before giving up and recording the failure. */
+const SEND_TIMEOUT_MS = 15_000;
 
 /** Message types Meta sends that map onto our own enum. */
 const KNOWN_MESSAGE_TYPES = new Set<MessageType>([
@@ -197,6 +214,351 @@ export class WhatsappService {
         isNew: Boolean(message),
       };
     });
+  }
+
+  // ── Account configuration ──────────────────────────────────────────────────
+
+  /**
+   * Configured numbers, with the secrets stripped.
+   *
+   * `accessToken` and `appSecret` are write-only as far as this API is
+   * concerned: they go in when an admin pastes them and are never handed back
+   * out. A credential that round-trips through a browser ends up in devtools,
+   * in a screenshot, and in a support ticket. The UI shows only whether each
+   * one is SET, which is the single fact an operator needs to debug a silent
+   * webhook.
+   */
+  async listAccounts(): Promise<unknown[]> {
+    return this.db.run(async (tx) =>
+      tx
+        .select({
+          id: schema.whatsappAccounts.id,
+          phoneNumberId: schema.whatsappAccounts.phoneNumberId,
+          displayPhoneNumber: schema.whatsappAccounts.displayPhoneNumber,
+          businessAccountId: schema.whatsappAccounts.businessAccountId,
+          defaultBranchId: schema.whatsappAccounts.defaultBranchId,
+          isActive: schema.whatsappAccounts.isActive,
+          createdAt: schema.whatsappAccounts.createdAt,
+          hasAccessToken: sql<boolean>`length(coalesce(${schema.whatsappAccounts.accessToken}, '')) > 0`,
+          hasAppSecret: sql<boolean>`length(coalesce(${schema.whatsappAccounts.appSecret}, '')) > 0`,
+          hasVerifyToken: sql<boolean>`length(coalesce(${schema.whatsappAccounts.verifyToken}, '')) > 0`,
+        })
+        .from(schema.whatsappAccounts)
+        .orderBy(desc(schema.whatsappAccounts.createdAt)),
+    );
+  }
+
+  async createAccount(input: {
+    phoneNumberId: string;
+    displayPhoneNumber?: string | undefined;
+    businessAccountId?: string | undefined;
+    accessToken: string;
+    verifyToken: string;
+    appSecret: string;
+    defaultBranchId?: string | undefined;
+    isActive?: boolean | undefined;
+  }): Promise<{ id: string }> {
+    const tenantId = RequestContext.requireTenantId();
+
+    return this.db.run(async (tx) => {
+      /*
+       * `phone_number_id` is how an inbound webhook finds its tenant, so two
+       * rows sharing one would make routing ambiguous — checked here to give
+       * a readable message instead of a raw unique violation.
+       */
+      const clash = await tx.query.whatsappAccounts.findFirst({
+        where: (t, { eq: e }) => e(t.phoneNumberId, input.phoneNumberId),
+        columns: { id: true },
+      });
+      if (clash) {
+        throw new AppError(
+          ERROR_CODES.CONFLICT,
+          "That WhatsApp phone number id is already registered.",
+        );
+      }
+
+      const [account] = await tx
+        .insert(schema.whatsappAccounts)
+        .values({
+          tenantId,
+          phoneNumberId: input.phoneNumberId,
+          displayPhoneNumber: input.displayPhoneNumber ?? null,
+          businessAccountId: input.businessAccountId ?? null,
+          accessToken: input.accessToken,
+          verifyToken: input.verifyToken,
+          appSecret: input.appSecret,
+          defaultBranchId: input.defaultBranchId ?? null,
+          isActive: input.isActive ?? true,
+        })
+        .returning({ id: schema.whatsappAccounts.id });
+
+      return { id: account!.id };
+    });
+  }
+
+  /** Omitted secrets keep their stored value — a blank field is not an erasure. */
+  async updateAccount(
+    id: string,
+    input: {
+      displayPhoneNumber?: string | undefined;
+      businessAccountId?: string | undefined;
+      accessToken?: string | undefined;
+      verifyToken?: string | undefined;
+      appSecret?: string | undefined;
+      defaultBranchId?: string | null | undefined;
+      isActive?: boolean | undefined;
+    },
+  ): Promise<void> {
+    await this.db.run(async (tx) => {
+      const existing = await tx.query.whatsappAccounts.findFirst({
+        where: (t, { eq: e }) => e(t.id, id),
+        columns: { id: true },
+      });
+      if (!existing) throw new AppError(ERROR_CODES.NOT_FOUND, "No such WhatsApp account.");
+
+      await tx
+        .update(schema.whatsappAccounts)
+        .set({
+          ...(input.displayPhoneNumber !== undefined
+            ? { displayPhoneNumber: input.displayPhoneNumber }
+            : {}),
+          ...(input.businessAccountId !== undefined
+            ? { businessAccountId: input.businessAccountId }
+            : {}),
+          ...(input.accessToken ? { accessToken: input.accessToken } : {}),
+          ...(input.verifyToken ? { verifyToken: input.verifyToken } : {}),
+          ...(input.appSecret ? { appSecret: input.appSecret } : {}),
+          ...(input.defaultBranchId !== undefined
+            ? { defaultBranchId: input.defaultBranchId }
+            : {}),
+          ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+        })
+        .where(eq(schema.whatsappAccounts.id, id));
+    });
+  }
+
+  async deleteAccount(id: string): Promise<void> {
+    await this.db.run(async (tx) => {
+      await tx.delete(schema.whatsappAccounts).where(eq(schema.whatsappAccounts.id, id));
+    });
+  }
+
+  // ── Conversations ──────────────────────────────────────────────────────────
+
+  async listConversations(query: {
+    status?: string | undefined;
+    page: number;
+    pageSize: number;
+  }): Promise<{ items: unknown[]; total: number }> {
+    return this.db.run(async (tx) => {
+      const where = query.status
+        ? eq(schema.whatsappConversations.status, query.status)
+        : undefined;
+
+      const [totals] = await tx
+        .select({ value: sql<number>`count(*)::int` })
+        .from(schema.whatsappConversations)
+        .where(where);
+
+      const items = await tx
+        .select()
+        .from(schema.whatsappConversations)
+        .where(where)
+        .orderBy(desc(schema.whatsappConversations.lastMessageAt))
+        .limit(query.pageSize)
+        .offset((query.page - 1) * query.pageSize);
+
+      return { items, total: totals?.value ?? 0 };
+    });
+  }
+
+  async getConversation(id: string): Promise<unknown> {
+    return this.db.run(async (tx) => {
+      const conversation = await tx.query.whatsappConversations.findFirst({
+        where: (t, { eq: e }) => e(t.id, id),
+      });
+      if (!conversation) throw new AppError(ERROR_CODES.NOT_FOUND, "No such conversation.");
+
+      const messages = await tx
+        .select()
+        .from(schema.whatsappMessages)
+        .where(eq(schema.whatsappMessages.conversationId, id))
+        .orderBy(schema.whatsappMessages.occurredAt);
+
+      /*
+       * Computed rather than stored: the window is a function of the last
+       * INBOUND message, and a client that re-derives it from a timestamp it
+       * was handed will disagree with the server the moment a clock drifts.
+       */
+      const windowOpen = Boolean(
+        conversation.windowExpiresAt && conversation.windowExpiresAt.getTime() > Date.now(),
+      );
+
+      return { ...conversation, windowOpen, messages };
+    });
+  }
+
+  // ── Outbound ───────────────────────────────────────────────────────────────
+
+  /**
+   * Send a free-form text reply on an existing conversation.
+   *
+   * Free-form, so the 24-hour customer-service window governs it. Outside that
+   * window Meta accepts ONLY approved template messages, and a plain text send
+   * is rejected at their end — so it is refused here, with the reason, rather
+   * than round-tripped to collect a 400. Templates are a separate capability
+   * and are not implemented yet.
+   *
+   * The message row is written in BOTH outcomes. A send that Meta refused is
+   * a thing that happened to the conversation: leaving no trace means an
+   * operator retypes a reply believing the first one never left, and support
+   * has nothing to read back. Failures are stored with `status: "failed"` and
+   * the provider's own error text.
+   */
+  async sendText(conversationId: string, body: string): Promise<{ id: string; status: string }> {
+    const user = RequestContext.requireUser();
+
+    const context = await this.db.run(async (tx) => {
+      const conversation = await tx.query.whatsappConversations.findFirst({
+        where: (t, { eq: e }) => e(t.id, conversationId),
+      });
+      if (!conversation) {
+        throw new AppError(ERROR_CODES.NOT_FOUND, "That conversation does not exist.");
+      }
+
+      /*
+       * Scoped by tenant through RLS, but the ACCOUNT still has to be chosen:
+       * a tenant can hold more than one business number, and a reply must go
+       * out on the number the customer wrote to.
+       */
+      const account = await tx.query.whatsappAccounts.findFirst({
+        where: (t, { eq: e }) => e(t.isActive, true),
+      });
+      if (!account) {
+        throw new AppError(
+          ERROR_CODES.VALIDATION_FAILED,
+          "No active WhatsApp number is configured for this business.",
+        );
+      }
+
+      return { conversation, account };
+    });
+
+    const { conversation, account } = context;
+    const expires = conversation.windowExpiresAt;
+    if (!expires || expires.getTime() <= Date.now()) {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_FAILED,
+        "The 24-hour reply window on this conversation has closed. WhatsApp only accepts an approved template message now.",
+        { windowExpiresAt: expires?.toISOString() ?? null },
+      );
+    }
+
+    const result = await this.postToGraph(account, conversation.phoneNumber, body);
+
+    return this.db.run(async (tx) => {
+      const [message] = await tx
+        .insert(schema.whatsappMessages)
+        .values({
+          tenantId: account.tenantId,
+          conversationId: conversation.id,
+          direction: "outbound",
+          type: "text",
+          content: body,
+          sentBy: user.id,
+          isAiGenerated: false,
+          ...(result.ok
+            ? { waMessageId: result.waMessageId, status: "sent" as const }
+            : {
+                status: "failed" as const,
+                errorCode: result.code,
+                errorMessage: result.message,
+              }),
+        })
+        .returning({ id: schema.whatsappMessages.id });
+
+      await tx
+        .update(schema.whatsappConversations)
+        .set({ lastMessageAt: new Date() })
+        .where(eq(schema.whatsappConversations.id, conversation.id));
+
+      if (!result.ok) {
+        throw new AppError(
+          ERROR_CODES.INTERNAL_ERROR,
+          `WhatsApp refused the message: ${result.message}`,
+          { messageId: message?.id ?? null, providerCode: result.code },
+        );
+      }
+
+      return { id: message?.id ?? "", status: "sent" };
+    });
+  }
+
+  /**
+   * The one place this service talks to Meta.
+   *
+   * Never throws: every failure comes back as a value, because the caller has
+   * to record the attempt before deciding what to do about it. An exception
+   * here would skip the row that tells an operator their reply did not send.
+   */
+  private async postToGraph(
+    account: WhatsappAccount,
+    to: string,
+    body: string,
+  ): Promise<
+    { ok: true; waMessageId: string } | { ok: false; code: string; message: string }
+  > {
+    const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${account.phoneNumberId}/messages`;
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${account.accessToken}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to,
+          type: "text",
+          // Link previews cost a fetch on Meta's side and surprise the
+          // sender with a card they did not compose.
+          text: { preview_url: false, body },
+        }),
+        signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
+      });
+
+      const payload = (await response.json().catch(() => null)) as
+        | { messages?: Array<{ id?: string }>; error?: { code?: number; message?: string } }
+        | null;
+
+      if (!response.ok) {
+        const message = payload?.error?.message ?? `HTTP ${response.status}`;
+        /*
+         * Logged WITHOUT the access token or the message body — this line
+         * lands in a shared log and the body is a customer's conversation.
+         */
+        this.logger.warn(
+          { phoneNumberId: account.phoneNumberId, status: response.status },
+          "WhatsApp send rejected",
+        );
+        return { ok: false, code: String(payload?.error?.code ?? response.status), message };
+      }
+
+      const waMessageId = payload?.messages?.[0]?.id;
+      if (!waMessageId) {
+        return { ok: false, code: "NO_MESSAGE_ID", message: "Meta accepted the call but returned no message id." };
+      }
+
+      return { ok: true, waMessageId };
+    } catch (error) {
+      // A timeout or a DNS failure is indistinguishable from "not sent" at
+      // this layer, so it is recorded as a failure rather than assumed sent.
+      const message = error instanceof Error ? error.message : "Network error";
+      this.logger.error({ phoneNumberId: account.phoneNumberId }, `WhatsApp send failed: ${message}`);
+      return { ok: false, code: "NETWORK", message };
+    }
   }
 
   /**

@@ -59,3 +59,54 @@ export const WebhookVerifySchema = z.object({
   "hub.challenge": z.string().optional(),
 });
 export type WebhookVerifyDto = z.infer<typeof WebhookVerifySchema>;
+
+// ── Admin-facing DTOs ────────────────────────────────────────────────────────
+
+/**
+ * The three secrets are REQUIRED on create and optional on update.
+ *
+ * On update an omitted secret means "leave it alone", which is what lets an
+ * admin change the display number without re-pasting a 200-character access
+ * token they no longer have to hand. `.min(1)` rather than `.optional()` on
+ * create, because an account missing any one of them is an account whose
+ * webhook will silently reject everything.
+ */
+export const CreateWhatsappAccountSchema = z.object({
+  phoneNumberId: z.string().trim().min(1).max(64),
+  displayPhoneNumber: z.string().trim().max(20).optional(),
+  businessAccountId: z.string().trim().max(64).optional(),
+  accessToken: z.string().trim().min(1),
+  verifyToken: z.string().trim().min(1).max(128),
+  appSecret: z.string().trim().min(1).max(128),
+  defaultBranchId: z.string().uuid().optional(),
+  isActive: z.boolean().optional(),
+});
+export type CreateWhatsappAccountDto = z.infer<typeof CreateWhatsappAccountSchema>;
+
+export const UpdateWhatsappAccountSchema = z.object({
+  displayPhoneNumber: z.string().trim().max(20).optional(),
+  businessAccountId: z.string().trim().max(64).optional(),
+  accessToken: z.string().trim().min(1).optional(),
+  verifyToken: z.string().trim().min(1).max(128).optional(),
+  appSecret: z.string().trim().min(1).max(128).optional(),
+  defaultBranchId: z.string().uuid().nullable().optional(),
+  isActive: z.boolean().optional(),
+});
+export type UpdateWhatsappAccountDto = z.infer<typeof UpdateWhatsappAccountSchema>;
+
+export const ListConversationsSchema = z.object({
+  status: z.enum(["active", "resolved", "escalated"]).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25),
+});
+export type ListConversationsDto = z.infer<typeof ListConversationsSchema>;
+
+/**
+ * 4096 is WhatsApp's own limit for a text body. Enforced here so an
+ * over-long reply is refused with a readable message rather than a 400 from
+ * Meta after the operator has already hit send.
+ */
+export const SendWhatsappMessageSchema = z.object({
+  body: z.string().trim().min(1, "A reply cannot be empty").max(4096),
+});
+export type SendWhatsappMessageDto = z.infer<typeof SendWhatsappMessageSchema>;
