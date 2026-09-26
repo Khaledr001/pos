@@ -30,12 +30,13 @@ import {
   Download,
   FileText,
   ChevronDown,
-  CircleDot,
   X,
   Crown,
   Building2,
   Layers,
   Activity,
+  UserRound,
+  ChevronsUpDown,
 } from "lucide-react";
 import { hasPermission, type Permission } from "@devsfleet/shared-types";
 import { useAuth } from "@/lib/auth-context";
@@ -56,6 +57,15 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 // ─── Information Architecture ──────────────────────────────────────────────────
 //
@@ -77,6 +87,15 @@ type SubItem = {
 type NavItem = {
   label: string;
   href: string;
+  /**
+   * What the collapsed rail prints under the icon.
+   *
+   * The full label is written for a 264px panel — "Products & Catalog",
+   * "Day Close Registers" — and simply cannot be read in an 88px rail. Rather
+   * than truncate it to "Produc…", each item carries a one-word form. Falls
+   * back to `label` when the label is already short enough.
+   */
+  short?: string;
   icon: typeof LayoutDashboard;
   permission?: Permission;
   children?: SubItem[];
@@ -93,11 +112,11 @@ const NAV_SECTIONS: NavSection[] = [
     label: "Platform Admin",
     platformOnly: true,
     items: [
-      { label: "Platform Overview", href: "/platform", icon: Crown },
-      { label: "Tenants Directory", href: "/platform/tenants", icon: Building2 },
-      { label: "Subscription Plans", href: "/platform/plans", icon: Layers },
-      { label: "Platform Audit Log", href: "/platform/audit-logs", icon: ScrollText },
-      { label: "System Diagnostics", href: "/platform/health", icon: Activity },
+      { label: "Platform Overview", short: "Platform", href: "/platform", icon: Crown },
+      { label: "Tenants Directory", short: "Tenants", href: "/platform/tenants", icon: Building2 },
+      { label: "Subscription Plans", short: "Plans", href: "/platform/plans", icon: Layers },
+      { label: "Platform Audit Log", short: "Audit", href: "/platform/audit-logs", icon: ScrollText },
+      { label: "System Diagnostics", short: "Health", href: "/platform/health", icon: Activity },
     ],
   },
   {
@@ -110,16 +129,17 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: "Analytics & Comms",
     items: [
-      { label: "Reports & KPIs", href: "/reports", icon: BarChart3, permission: "report:read" },
-      { label: "WhatsApp AI", href: "/whatsapp", icon: MessageSquare, permission: "whatsapp:read" },
+      { label: "Reports & KPIs", short: "Reports", href: "/reports", icon: BarChart3, permission: "report:read" },
+      { label: "WhatsApp AI", short: "WhatsApp", href: "/whatsapp", icon: MessageSquare, permission: "whatsapp:read" },
     ],
   },
   {
     label: "Sales & POS",
     items: [
-      { label: "Sales Terminal", href: "/sell", icon: Calculator, permission: "sale:create" },
+      { label: "Sales Terminal", short: "Terminal", href: "/sell", icon: Calculator, permission: "sale:create" },
       {
         label: "Sales & Orders",
+        short: "Sales",
         href: "/sales",
         icon: ShoppingCart,
         permission: "sale:read",
@@ -137,6 +157,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       {
         label: "Products & Catalog",
+        short: "Products",
         href: "/products",
         icon: Package,
         permission: "product:read",
@@ -147,7 +168,7 @@ const NAV_SECTIONS: NavSection[] = [
           { label: "Units of Measure", href: "/units", icon: Ruler, permission: "product:read" },
         ],
       },
-      { label: "Inventory Stock", href: "/inventory", icon: Boxes, permission: "inventory:read" },
+      { label: "Inventory Stock", short: "Inventory", href: "/inventory", icon: Boxes, permission: "inventory:read" },
     ],
   },
   {
@@ -169,11 +190,11 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: "Administration",
     items: [
-      { label: "Staff & Users", href: "/users", icon: UserCheck, permission: "user:read" },
-      { label: "Roles & Permissions", href: "/roles", icon: ShieldCheck, permission: "role:write" },
-      { label: "Terminals & POS", href: "/devices", icon: Tablet, permission: "branch:read" },
+      { label: "Staff & Users", short: "Staff", href: "/users", icon: UserCheck, permission: "user:read" },
+      { label: "Roles & Permissions", short: "Roles", href: "/roles", icon: ShieldCheck, permission: "role:write" },
+      { label: "Terminals & POS", short: "Devices", href: "/devices", icon: Tablet, permission: "branch:read" },
       { label: "Releases", href: "/releases", icon: Download, permission: "device:manage" },
-      { label: "Audit Trail", href: "/audit-log", icon: ScrollText, permission: "audit:read" },
+      { label: "Audit Trail", short: "Audit", href: "/audit-log", icon: ScrollText, permission: "audit:read" },
       { label: "Settings", href: "/settings", icon: Settings, permission: "settings:read" },
     ],
   },
@@ -213,7 +234,6 @@ export function Sidebar({
   const router = useRouter();
   const { user, logout, isImpersonating } = useAuth();
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [brandHovered, setBrandHovered] = useState(false);
 
   // Initialize open state for expandable parents that match the current route
   const [openParents, setOpenParents] = useState<Record<string, boolean>>(() => {
@@ -231,6 +251,9 @@ export function Sidebar({
   const toggleParent = (label: string) => {
     setOpenParents((prev) => ({ ...prev, [label]: !prev[label] }));
   };
+
+  /** Desktop icon-rail. The mobile drawer is always the full panel. */
+  const isRail = collapsed && !mobileOpen;
 
   const permissions = (user?.permissions ?? []) as Permission[];
 
@@ -262,188 +285,225 @@ export function Sidebar({
     }))
     .filter((s) => s.items.length > 0);
 
-  // ── Render an expandable item with children ────────────────────────────────
+  /**
+   * One shared shape for every row in the rail, so an item that gains or
+   * loses children does not change height, indent or hit area.
+   */
+  const ROW =
+    "group relative flex w-full items-center gap-3 rounded-lg px-3 text-sm transition-colors " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset";
+  /** 40px — comfortably past the 24×24 CSS px pointer-target minimum. */
+  const ROW_H = "h-10";
+
+  /**
+   * A rail tile — icon over a VISIBLE label.
+   *
+   * The rail used to be icons alone, with every destination named only by a
+   * hover tooltip. That fails two groups outright: touch users, who have no
+   * hover at all (this panel runs on counter tablets), and anyone who simply
+   * does not know that a bare glyph is hoverable. Printing a short label under
+   * each icon is the Material navigation-rail pattern and costs 16px of width.
+   *
+   * 48px tall — double the 24x24 CSS px pointer-target minimum, and short
+   * enough that the whole nav still fits a laptop viewport without
+   * scrolling, which 56px did not.
+   */
+  const RAIL_TILE =
+    "group relative flex h-12 w-full flex-col items-center justify-center gap-0.5 rounded-lg " +
+    "px-1 transition-colors focus-visible:outline-none focus-visible:ring-2 " +
+    "focus-visible:ring-ring focus-visible:ring-inset";
+
+  const railLabel = (item: NavItem) => item.short ?? item.label;
+
+  /**
+   * Active is signalled three ways — accent bar, tinted ground, and weight —
+   * because colour alone is not a signal for everyone. `aria-current` carries
+   * it to assistive tech, which none of the three visual cues do.
+   */
+  const rowTone = (active: boolean) =>
+    active
+      ? "bg-primary/10 font-semibold text-primary"
+      : "font-medium text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground";
+
+  const ActiveBar = () => (
+    <span
+      aria-hidden="true"
+      className="absolute left-0 top-1/2 h-5 w-0.75 -translate-y-1/2 rounded-r-full gradient-brand"
+    />
+  );
+
+  // ── An item with children ──────────────────────────────────────────────────
   const renderExpandableItem = (item: NavItem) => {
     const Icon = item.icon;
-    const hasChildren = item.children && item.children.length > 0;
     const isOpen = openParents[item.label] ?? itemContainsRoute(item, pathname);
     const isParentActive = itemContainsRoute(item, pathname);
+    const panelId = `nav-panel-${item.label.replace(/\W+/g, "-").toLowerCase()}`;
 
-    if (collapsed) {
-      // In collapsed mode: Tooltip shows the parent and clickable children
+    /**
+     * Collapsed: a DropdownMenu, not a Tooltip.
+     *
+     * The children used to live inside TooltipContent. A Radix tooltip is
+     * `role="tooltip"` and closes on pointer-leave and blur — it is not a
+     * container you can move into and click, and nothing in it is reachable
+     * by keyboard at all. Sub-navigation was therefore unreachable in the
+     * collapsed rail for anyone not using a mouse, and flaky for those who
+     * were. A menu is built for exactly this: arrow keys, Escape, focus
+     * return, and it stays open while you aim at it.
+     */
+    if (isRail) {
       return (
-        <Tooltip key={item.label}>
-          <TooltipTrigger asChild>
-            <Link
-              href={item.href}
+        <DropdownMenu key={item.label}>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              /* The visible short label is an abbreviation, so the accessible
+                 name stays the full one. */
+              aria-label={item.label}
               className={cn(
-                "group relative flex h-10 w-full items-center justify-center rounded-xl transition-all duration-200",
-                isParentActive
-                  ? "bg-primary/10 text-primary font-semibold shadow-sm"
-                  : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                RAIL_TILE,
+                rowTone(isParentActive),
+                "data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground",
               )}
             >
-              {isParentActive && (
-                <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.75 rounded-r-full gradient-brand" />
-              )}
-              <Icon className="h-5 w-5 shrink-0 transition-colors" />
-            </Link>
-          </TooltipTrigger>
-          <TooltipContent side="right" sideOffset={10} className="p-2 space-y-1 bg-popover border shadow-lg">
-            <p className="font-semibold text-xs text-foreground px-2 py-1 border-b border-border/50">
-              {item.label}
-            </p>
-            <div className="space-y-0.5 pt-1">
-              {item.children?.map((child) => {
-                const isChildActive = isRouteActive(pathname, child.href);
-                return (
+              {isParentActive && <ActiveBar />}
+              <Icon className="size-4.5 shrink-0" aria-hidden="true" />
+              <span aria-hidden="true" className="w-full truncate text-center text-[10px] leading-none">
+                {railLabel(item)}
+              </span>
+            </button>
+          </DropdownMenuTrigger>
+
+          <DropdownMenuContent side="right" align="start" sideOffset={10} className="w-56">
+            <DropdownMenuLabel>{item.label}</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {item.children?.map((child) => {
+              const isChildActive = isRouteActive(pathname, child.href);
+              return (
+                <DropdownMenuItem key={child.href} asChild>
                   <Link
-                    key={child.href}
                     href={child.href}
-                    className={cn(
-                      "flex items-center gap-2 rounded-md px-2 py-1 text-xs transition-colors",
-                      isChildActive
-                        ? "bg-primary/10 text-primary font-medium"
-                        : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                    )}
+                    aria-current={isChildActive ? "page" : undefined}
+                    className={cn("cursor-pointer", isChildActive && "font-semibold text-primary")}
                   >
-                    <CircleDot className={cn("h-2.5 w-2.5", isChildActive ? "text-primary" : "text-muted-foreground/40")} />
-                    <span>{child.label}</span>
+                    {child.label}
                   </Link>
-                );
-              })}
-            </div>
-          </TooltipContent>
-        </Tooltip>
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
       );
     }
 
     return (
-      <div key={item.label} className="space-y-1">
-        {/* Parent Row */}
-        <div
-          className={cn(
-            "group relative flex items-center justify-between rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200 cursor-pointer select-none",
-            isParentActive
-              ? "bg-primary/10 text-primary font-semibold shadow-sm"
-              : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-          )}
-          onClick={() => {
-            toggleParent(item.label);
-          }}
+      <div key={item.label}>
+        {/*
+          A real <button> with aria-expanded, not a div with onClick.
+          Previously this row was an unfocusable div, so the whole group could
+          not be opened from the keyboard and screen readers announced neither
+          that it was a disclosure nor whether it was open. The chevron's own
+          nested button — which called the same toggle — is gone with it.
+        */}
+        <button
+          type="button"
+          onClick={() => toggleParent(item.label)}
+          aria-expanded={isOpen}
+          aria-controls={panelId}
+          className={cn(ROW, ROW_H, "text-left", rowTone(isParentActive))}
         >
-          {isParentActive && (
-            <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.75 rounded-r-full gradient-brand" />
-          )}
-
-          <div className="flex items-center gap-3 min-w-0 flex-1">
-            <Icon
-              className={cn(
-                "h-4.5 w-4.5 shrink-0 transition-colors",
-                isParentActive
-                  ? "text-primary"
-                  : "text-muted-foreground group-hover:text-sidebar-accent-foreground",
-              )}
-            />
-            <span className="truncate">{item.label}</span>
-          </div>
-
-          {hasChildren && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleParent(item.label);
-              }}
-              className="p-1 rounded-md text-muted-foreground/70 hover:text-foreground hover:bg-sidebar-accent transition-transform duration-200"
-              aria-label={`Toggle ${item.label}`}
-            >
-              <ChevronDown
-                className={cn(
-                  "h-4 w-4 transition-transform duration-200",
-                  isOpen ? "rotate-180 text-primary" : "rotate-0",
-                )}
-              />
-            </button>
-          )}
-        </div>
-
-        {/* Child Sub-items Accordion */}
-        {hasChildren && (
-          <div
+          {isParentActive && <ActiveBar />}
+          <Icon className="size-4.5 shrink-0" aria-hidden="true" />
+          <span className="flex-1 truncate">{item.label}</span>
+          <ChevronDown
+            aria-hidden="true"
             className={cn(
-              "grid transition-all duration-200 ease-in-out overflow-hidden",
-              isOpen ? "grid-rows-[1fr] opacity-100 mt-1" : "grid-rows-[0fr] opacity-0",
+              "size-4 shrink-0 text-muted-foreground/70 transition-transform duration-200 motion-reduce:transition-none",
+              isOpen && "rotate-180",
             )}
-          >
-            <div className="min-h-0">
-              <div className="ml-5 pl-3 border-l-2 border-sidebar-border/70 space-y-0.5 py-0.5">
-                {item.children?.map((child) => {
-                  const isChildActive = isRouteActive(pathname, child.href);
+          />
+        </button>
 
-                  return (
+        {/*
+          grid-rows 0fr→1fr animates to the content's real height without
+          measuring it, and without animating `height` — which would force a
+          layout pass on every frame of the open.
+        */}
+        <div
+          id={panelId}
+          className={cn(
+            "grid overflow-hidden transition-all duration-200 ease-in-out motion-reduce:transition-none",
+            isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
+          )}
+        >
+          <div className="min-h-0">
+            <ul className="ml-[1.4rem] space-y-0.5 border-l border-sidebar-border py-1 pl-2">
+              {item.children?.map((child) => {
+                const isChildActive = isRouteActive(pathname, child.href);
+                return (
+                  <li key={child.href}>
                     <Link
-                      key={child.href}
                       href={child.href}
                       onClick={() => onMobileClose?.()}
+                      aria-current={isChildActive ? "page" : undefined}
+                      tabIndex={isOpen ? undefined : -1}
                       className={cn(
-                        "group flex items-center justify-between rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-150",
+                        "flex h-8 items-center rounded-md px-2.5 text-xs transition-colors",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
                         isChildActive
-                          ? "bg-primary/10 text-primary font-semibold shadow-xs"
-                          : "text-muted-foreground hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
+                          ? "bg-primary/10 font-semibold text-primary"
+                          : "font-medium text-muted-foreground hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
                       )}
                     >
                       <span className="truncate">{child.label}</span>
-                      {isChildActive && (
-                        <CircleDot className="h-2 w-2 text-primary shrink-0 animate-pulse" />
-                      )}
                     </Link>
-                  );
-                })}
-              </div>
-            </div>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
-        )}
+        </div>
       </div>
     );
   };
 
-  // ── Render a direct flat item (No children) ─────────────────────────────────
+  // ── An item with no children ───────────────────────────────────────────────
   const renderFlatItem = (item: NavItem) => {
     const Icon = item.icon;
     const isActive = isRouteActive(pathname, item.href);
+    const showLabel = !collapsed || mobileOpen;
 
-    const linkContent = (
+    const link = (
       <Link
         href={item.href}
         onClick={() => onMobileClose?.()}
+        aria-current={isActive ? "page" : undefined}
+        aria-label={showLabel ? undefined : item.label}
         className={cn(
-          "group relative flex items-center gap-3 rounded-xl text-sm font-medium transition-all duration-200",
-          collapsed ? "h-10 w-full justify-center px-0 lg:justify-center" : "px-3 py-2",
-          isActive
-            ? "bg-primary/10 text-primary font-semibold shadow-sm"
-            : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+          showLabel ? cn(ROW, ROW_H) : RAIL_TILE,
+          rowTone(isActive),
         )}
       >
-        {isActive && (
-          <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.75 rounded-r-full gradient-brand" />
+        {isActive && <ActiveBar />}
+        <Icon className="size-4.5 shrink-0" aria-hidden="true" />
+        {showLabel ? (
+          <span className="truncate">{item.label}</span>
+        ) : (
+          <span aria-hidden="true" className="w-full truncate text-center text-[10px] leading-none">
+            {railLabel(item)}
+          </span>
         )}
-        <Icon
-          className={cn(
-            "h-4.5 w-4.5 shrink-0 transition-colors",
-            isActive
-              ? "text-primary"
-              : "text-muted-foreground group-hover:text-sidebar-accent-foreground",
-          )}
-        />
-        {(!collapsed || mobileOpen) && <span className="truncate">{item.label}</span>}
       </Link>
     );
 
-    if (collapsed && !mobileOpen) {
+    /*
+     * The tooltip now SUPPLEMENTS a visible label rather than replacing it —
+     * it restores the full wording for an abbreviated or truncated one. Only
+     * worth mounting when the two actually differ.
+     */
+    if (!showLabel && railLabel(item) !== item.label) {
       return (
         <Tooltip key={item.href}>
-          <TooltipTrigger asChild>{linkContent}</TooltipTrigger>
+          <TooltipTrigger asChild>{link}</TooltipTrigger>
           <TooltipContent side="right" sideOffset={10}>
             {item.label}
           </TooltipContent>
@@ -451,7 +511,7 @@ export function Sidebar({
       );
     }
 
-    return <React.Fragment key={item.href}>{linkContent}</React.Fragment>;
+    return <React.Fragment key={item.href}>{link}</React.Fragment>;
   };
 
   return (
@@ -474,54 +534,49 @@ export function Sidebar({
             ? "translate-x-0 w-70 max-w-[85vw] shadow-2xl"
             : "-translate-x-full lg:translate-x-0",
           // Desktop: collapsed vs expanded
-          collapsed ? "lg:w-18" : "lg:w-66",
+          collapsed ? "lg:w-22" : "lg:w-66",
         )}
       >
-        {/* ── Brand Header ── */}
-        <div
-          className="relative flex h-16 shrink-0 items-center justify-between gap-3 border-b border-sidebar-border px-3 overflow-hidden"
-          onMouseEnter={() => setBrandHovered(true)}
-          onMouseLeave={() => setBrandHovered(false)}
-        >
-          <div className="flex items-center gap-3 min-w-0 flex-1">
-            {/* Store icon */}
-            <button
-              onClick={collapsed ? onToggle : undefined}
-              className={cn(
-                "relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all duration-300",
-                collapsed
-                  ? "cursor-pointer hover:scale-105 gradient-brand text-white shadow-md shadow-primary/25"
-                  : "gradient-brand text-white shadow-md shadow-primary/25 cursor-default pointer-events-none",
-              )}
-              tabIndex={collapsed ? 0 : -1}
-              aria-label={collapsed ? "Expand sidebar" : undefined}
-            >
-              <Store
-                className={cn(
-                  "absolute h-5 w-5 transition-all duration-300",
-                  collapsed && brandHovered ? "opacity-0 scale-75" : "opacity-100 scale-100",
-                )}
-              />
-              <PanelRightOpen
-                className={cn(
-                  "absolute h-5 w-5 transition-all duration-300",
-                  collapsed && brandHovered ? "opacity-100 scale-100" : "opacity-0 scale-75",
-                )}
-              />
-            </button>
+        {/*
+          ── Brand header ──
 
-            {/* Brand Name & Tagline */}
-            {(!collapsed || mobileOpen) && (
-              <div className="flex min-w-0 flex-1 flex-col animate-slide-in-right overflow-hidden">
-                <span className="text-sm font-bold tracking-tight text-sidebar-foreground">
-                  DevsFleet
-                </span>
-                <span className="text-[11px] font-medium text-muted-foreground truncate">
-                  Retail & Enterprise POS
-                </span>
+          Collapsed, this is a mark over an explicit "Expand" button.
+
+          It used to be one button whose icon swapped from the logo to a
+          panel glyph ON HOVER — so the only clue that the rail could be
+          reopened appeared once you were already pointing at it, and never
+          at all on a touch screen. The control is now permanently visible
+          and permanently labelled.
+        */}
+        <div
+          className={cn(
+            "flex shrink-0 flex-col border-b border-sidebar-border",
+            isRail ? "gap-1.5 px-2 py-2.5" : "h-16 justify-center px-3",
+          )}
+        >
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <div
+                aria-hidden="true"
+                className={cn(
+                  "flex size-9 shrink-0 items-center justify-center rounded-xl gradient-brand text-white shadow-md shadow-primary/25",
+                  isRail && "mx-auto",
+                )}
+              >
+                <Store className="size-5" />
               </div>
-            )}
-          </div>
+
+              {(!collapsed || mobileOpen) && (
+                <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                  <span className="text-sm font-bold tracking-tight text-sidebar-foreground">
+                    DevsFleet
+                  </span>
+                  <span className="truncate text-[11px] font-medium text-muted-foreground">
+                    Retail &amp; Enterprise POS
+                  </span>
+                </div>
+              )}
+            </div>
 
           {/* Desktop Collapse Button */}
           {!collapsed && (
@@ -544,70 +599,187 @@ export function Sidebar({
               <X className="h-5 w-5" />
             </button>
           )}
+          </div>
+
+          {/* Always visible in the rail, never hover-revealed. */}
+          {isRail && (
+            <button
+              type="button"
+              onClick={onToggle}
+              aria-label="Expand sidebar"
+              aria-expanded={false}
+              className={cn(
+                "hidden w-full cursor-pointer items-center justify-center gap-1 rounded-lg py-1.5",
+                "text-[10px] font-medium text-muted-foreground transition-colors",
+                "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+                "lg:flex",
+              )}
+            >
+              <PanelRightOpen className="size-3.5" aria-hidden="true" />
+              Expand
+            </button>
+          )}
+
         </div>
 
-        {/* ── Navigation Items ── */}
-        <nav className="flex-1 overflow-y-auto px-2.5 py-4 space-y-4 scrollbar-thin">
-          {visibleSections.map((section) => (
-            <div key={section.label} className="space-y-1">
-              {!collapsed && (
-                <p className="px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">
-                  {section.label}
-                </p>
-              )}
-              {collapsed && <Separator className="my-1.5 opacity-60" />}
+        {/*
+          ── Navigation ──
 
-              <div className="space-y-1">
-                {section.items.map((item) =>
-                  item.children && item.children.length > 0
-                    ? renderExpandableItem(item)
-                    : renderFlatItem(item),
-                )}
-              </div>
+          A labelled landmark: a screen-reader user listing the page's regions
+          gets "Main navigation" rather than an anonymous second <nav>, since
+          the header carries one too.
+
+          Each section is its own group with an accessible name. Collapsed,
+          the visible heading is replaced by a rule — so the name moves onto
+          the group via aria-label, and the grouping survives the rail rather
+          than flattening into one long run of icons.
+        */}
+        <nav
+          aria-label="Main navigation"
+          className={cn(
+            "flex flex-1 flex-col overflow-y-auto px-2.5 scrollbar-thin",
+            /*
+             * `gap`, not `space-y`.
+             *
+             * The rail's group spacing used to be three margins stacked on
+             * top of each other — space-y-5 on the nav, mb-2 on the rule, then
+             * space-y-1 from the group — about 33px between groups against 4px
+             * between tiles. Gaps do not compound, so the number written here
+             * is the number you get.
+             *
+             * The rail is deliberately tighter than the panel: with a label
+             * under every icon, the tiles already read as separate blocks, so
+             * the generous rhythm that stops a 264px panel feeling cramped
+             * just pushes the lower half of the nav off-screen at 88px.
+             */
+            isRail ? "gap-1 py-2" : "gap-5 py-4",
+          )}
+        >
+          {visibleSections.map((section, index) => (
+            <div
+              key={section.label}
+              role="group"
+              aria-label={section.label}
+              className="flex flex-col gap-1"
+            >
+              {isRail ? (
+                /* Short and centred: a full-bleed rule across an 88px rail
+                   reads as heavier than the items it is separating. */
+                index > 0 && (
+                  <Separator className="mx-auto my-0.5 w-8 opacity-60" aria-hidden="true" />
+                )
+              ) : (
+                <h2 className="px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
+                  {section.label}
+                </h2>
+              )}
+
+              {section.items.map((item) =>
+                item.children && item.children.length > 0
+                  ? renderExpandableItem(item)
+                  : renderFlatItem(item),
+              )}
             </div>
           ))}
         </nav>
 
-        {/* ── User Profile Footer ── */}
-        <div className="border-t border-sidebar-border px-2 py-1">
-          <div
-            className={cn(
-              "flex items-center gap-3 rounded-xl bg-sidebar-accent/40 hover:bg-sidebar-accent/70 p-2.5 transition-all",
-              collapsed && "justify-center p-2",
-            )}
-          >
-            <Avatar className="h-8 w-8 shrink-0 border-2 border-primary/20">
-              <AvatarFallback className="bg-primary/10 text-primary text-[11px] font-bold">
-                {user?.name ? user.name.slice(0, 2).toUpperCase() : "AD"}
-              </AvatarFallback>
-            </Avatar>
+        {/*
+          ── User menu ──
 
-            {!collapsed && (
-              <div className="min-w-0 flex-1 animate-slide-in-right">
-                <p className="truncate text-xs font-semibold text-sidebar-foreground">
+          A DropdownMenu, not a Popover: this is a list of ACTIONS, and Radix's
+          menu gives arrow-key traversal, type-ahead, Escape-to-close and
+          focus return to the trigger for free — all of which a Popover full of
+          buttons would have to reimplement by hand.
+
+          Sign out sits below a separator rather than inline, because a
+          destructive action adjacent to navigation is one mis-click away from
+          ending someone's shift. It still opens the confirmation dialog.
+        */}
+        <div className="border-t border-sidebar-border px-2 py-1">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label={`Account menu for ${user?.name ?? "current user"}`}
+                className={cn(
+                  "flex w-full cursor-pointer items-center gap-3 rounded-xl bg-sidebar-accent/40 p-2.5 text-left transition-colors",
+                  "hover:bg-sidebar-accent/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  "data-[state=open]:bg-sidebar-accent/70",
+                  collapsed && "justify-center p-2",
+                )}
+              >
+                <Avatar className="h-8 w-8 shrink-0 border-2 border-primary/20">
+                  <AvatarFallback className="bg-primary/10 text-[11px] font-bold text-primary">
+                    {user?.name ? user.name.slice(0, 2).toUpperCase() : "AD"}
+                  </AvatarFallback>
+                </Avatar>
+
+                {!collapsed && (
+                  <>
+                    <div className="min-w-0 flex-1 animate-slide-in-right">
+                      <p className="truncate text-xs font-semibold text-sidebar-foreground">
+                        {user?.name || "Admin User"}
+                      </p>
+                      <p className="truncate text-[10px] text-muted-foreground">
+                        {user?.roleName || "Owner / Admin"}
+                      </p>
+                    </div>
+                    <ChevronsUpDown
+                      className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                  </>
+                )}
+              </button>
+            </DropdownMenuTrigger>
+
+            {/* Opens upward and to the right — the trigger sits at the very
+                bottom of a full-height rail, so a downward menu would open
+                off-screen. */}
+            <DropdownMenuContent
+              side="top"
+              align="start"
+              sideOffset={8}
+              className="w-60"
+            >
+              <DropdownMenuLabel className="font-normal">
+                <p className="truncate text-sm font-semibold text-foreground">
                   {user?.name || "Admin User"}
                 </p>
-                <p className="truncate text-[10px] text-muted-foreground">
-                  {user?.roleName || "Owner / Admin"}
+                <p className="truncate text-xs text-muted-foreground">
+                  {user?.email || user?.roleName}
                 </p>
-              </div>
-            )}
+              </DropdownMenuLabel>
 
-            {!collapsed && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => setConfirmOpen(true)}
-                    className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors cursor-pointer"
-                    aria-label="Log out"
-                  >
-                    <LogOut className="h-4 w-4" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>Log Out</TooltipContent>
-              </Tooltip>
-            )}
-          </div>
+              <DropdownMenuSeparator />
+
+              <DropdownMenuGroup>
+                <DropdownMenuItem asChild>
+                  <Link href="/profile" className="cursor-pointer">
+                    <UserRound className="h-4 w-4" aria-hidden="true" />
+                    Profile
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/settings" className="cursor-pointer">
+                    <Settings className="h-4 w-4" aria-hidden="true" />
+                    Settings
+                  </Link>
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+
+              <DropdownMenuSeparator />
+
+              <DropdownMenuItem
+                onSelect={() => setConfirmOpen(true)}
+                className="cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive"
+              >
+                <LogOut className="h-4 w-4" aria-hidden="true" />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </aside>
 
