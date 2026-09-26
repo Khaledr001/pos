@@ -593,23 +593,48 @@ function SetupDialog({
         )}
 
         <form onSubmit={create} className="space-y-3">
-          <Field label="Phone number ID" value={phoneNumberId} onChange={setPhoneNumberId} required />
+          <Field
+            label="Phone number ID"
+            value={phoneNumberId}
+            onChange={setPhoneNumberId}
+            required
+            hint="Not the phone number — Meta's numeric ID for it, e.g. 779418925277868. Find it under the From dropdown in Meta's API Setup."
+            /* Entering the phone number here is the single most common setup
+               mistake, and it fails silently: inbound webhooks never resolve
+               to a tenant and every send 404s. Warned inline rather than
+               validated, because the format is Meta's to change. */
+            warn={/[+\s]/.test(phoneNumberId) ? "That looks like a phone number, not a phone number ID." : null}
+          />
           <Field
             label="Display number"
             value={displayPhoneNumber}
             onChange={setDisplayPhoneNumber}
-            hint="Optional, for your own reference — never used for routing."
+            hint="The human-readable number, for your reference only — never used for routing."
           />
-          <Field label="Access token" value={tokenValue} onChange={setTokenValue} required secret />
+          <Field
+            label="Access token"
+            value={tokenValue}
+            onChange={setTokenValue}
+            required
+            secret
+            hint="From Business Settings → System users, NOT the temporary one on the API Setup page — that expires in about a day."
+          />
           <Field
             label="Verify token"
             value={verifyToken}
             onChange={setVerifyToken}
             required
             secret
-            hint="Any long random string. Paste the same value into Meta."
+            hint="You invent this one. Any long random string; paste the same value into Meta's webhook config."
           />
-          <Field label="App secret" value={appSecret} onChange={setAppSecret} required secret />
+          <Field
+            label="App secret"
+            value={appSecret}
+            onChange={setAppSecret}
+            required
+            secret
+            hint="App settings → Basic → App secret. Signs every inbound webhook."
+          />
 
           {formError && (
             <p role="alert" className="text-xs text-destructive">
@@ -639,6 +664,7 @@ function Field({
   required,
   secret,
   hint,
+  warn,
 }: {
   label: string;
   value: string;
@@ -646,6 +672,8 @@ function Field({
   required?: boolean;
   secret?: boolean;
   hint?: string;
+  /** A caution, not an error — it never blocks submit. */
+  warn?: string | null;
 }) {
   const id = `wa-${label.replace(/\s+/g, "-").toLowerCase()}`;
   return (
@@ -663,6 +691,12 @@ function Field({
         autoComplete="off"
         className={secret ? "font-mono text-xs" : undefined}
       />
+      {warn && (
+        <p className="mt-1 flex items-start gap-1 text-[11px] text-amber-600 dark:text-amber-400">
+          <AlertCircle className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
+          {warn}
+        </p>
+      )}
       {hint && <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>}
     </div>
   );
