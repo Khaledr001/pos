@@ -179,8 +179,20 @@ const BROWSE_LIMIT = 24;
 
 // ── Money helpers ────────────────────────────────────────────────────────────
 
+/**
+ * Grouped thousands, always two decimals.
+ *
+ * `toDecimalString` alone gives "12450.00", and a wholesale total of five or
+ * six figures is genuinely hard to read ungrouped — the difference between
+ * 12,450.00 and 124,500.00 is one glance at a comma, or a careful digit count
+ * without one.
+ */
 function money(minor: Money.Minor4, currency: string): string {
-  return `${currency} ${Money.toDecimalString(minor, 2)}`;
+  const plain = Money.toDecimalString(minor, 2);
+  const sign = plain.startsWith("-") ? "-" : "";
+  const [whole = "0", fraction = "00"] = plain.replace("-", "").split(".");
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return `${sign}${currency} ${grouped}.${fraction}`;
 }
 
 /** What one `line.unit` costs at list: a flat pack price, else base × factor. */
@@ -297,6 +309,16 @@ export default function SellPage() {
   const [receipt, setReceipt] = useState<SaleReceipt | null>(null);
 
   const searchRef = useRef<HTMLInputElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Which result the keyboard is on.
+   *
+   * -1 means "nothing chosen yet", which is not the same as "row 0": a scan
+   * arrives as a burst of keystrokes followed by Enter, and it must commit the
+   * exact barcode match rather than whatever happens to be highlighted.
+   */
+  const [activeIndex, setActiveIndex] = useState(-1);
 
   /**
    * The idempotency key for the sale currently being rung up.
@@ -417,6 +439,77 @@ export default function SellPage() {
       clearTimeout(timer);
     };
   }, [query, branchId, accessToken, customer]);
+
+  // Any new result set invalidates the old highlight position.
+  useEffect(() => {
+    setActiveIndex(-1);
+  }, [results]);
+
+  /**
+   * The scan loop: type or scan, press Enter, line added, box cleared, focus
+   * kept. A barcode scanner is a keyboard that types a code and sends Enter,
+   * so supporting it is entirely a matter of handling that Enter — which this
+   * page previously did not, making it unusable with the one input device a
+   * sales counter actually has.
+   */
+  function commitSearch() {
+    if (results.length === 0) return;
+    const term = query.trim().toLowerCase();
+
+    /*
+     * An exact barcode or SKU beats the highlight and beats relevance order.
+     * A scanned code is unambiguous — resolving it to "whatever ranked first"
+     * is how the wrong product ends up on an invoice.
+     */
+    const exact =
+      term.length > 0
+        ? results.find(
+            (r) => r.barcode?.toLowerCase() === term || r.sku.toLowerCase() === term,
+          )
+        : undefined;
+
+    const chosen = exact ?? results[activeIndex >= 0 ? activeIndex : 0];
+    if (!chosen) return;
+    if (Number(chosen.stock) <= 0) {
+      setError(`${chosen.productName} has no stock at this branch.`);
+      return;
+    }
+
+    addVariant(chosen);
+    // Cleared so the next scan starts from nothing rather than appending to
+    // the last code; focus never leaves the box.
+    setQuery("");
+    setActiveIndex(-1);
+    searchRef.current?.focus();
+  }
+
+  function onSearchKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      commitSearch();
+      return;
+    }
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      if (results.length === 0) return;
+      event.preventDefault();
+      setActiveIndex((current) => {
+        const next =
+          event.key === "ArrowDown"
+            ? Math.min(current + 1, results.length - 1)
+            : Math.max(current - 1, 0);
+        resultsRef.current
+          ?.querySelector(`[data-index="${next}"]`)
+          ?.scrollIntoView({ block: "nearest" });
+        return next;
+      });
+      return;
+    }
+    if (event.key === "Escape" && query) {
+      event.preventDefault();
+      setQuery("");
+      setActiveIndex(-1);
+    }
+  }
 
   // ── Cart ───────────────────────────────────────────────────────────────────
 
@@ -734,14 +827,21 @@ export default function SellPage() {
                 ref={searchRef}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search by name, SKU or barcode…"
-                className="h-11 pl-9 text-sm"
+                onKeyDown={onSearchKeyDown}
+                placeholder="Scan a barcode, or search by name or SKU…"
+                aria-describedby="sell-search-help"
+                className="h-11 pl-9 pr-10 text-sm"
                 autoFocus
               />
               {searching && (
                 <Loader2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
               )}
             </div>
+
+            {/* Named where they are used, not hidden in a help screen. */}
+            <p id="sell-search-help" className="px-1 text-[11px] text-muted-foreground">
+              <Kbd>Enter</Kbd> adds · <Kbd>↑</Kbd> <Kbd>↓</Kbd> choose · <Kbd>Esc</Kbd> clears
+            </p>
 
             {results.length === 0 ? (
               <Card className="flex flex-col items-center justify-center gap-2 p-10 text-center">
@@ -769,13 +869,15 @@ export default function SellPage() {
                   </span>
                 </div>
 
-                <div className="divide-y divide-border">
-                {results.map((variant) => {
+                <div ref={resultsRef} className="divide-y divide-border">
+                {results.map((variant, index) => {
                   const stock = Number(variant.stock);
+                  const isActive = index === activeIndex;
                   return (
                     <button
                       key={variant.id}
                       type="button"
+                      data-index={index}
                       onClick={() => addVariant(variant)}
                       disabled={stock <= 0}
                       className={cn(
@@ -783,6 +885,10 @@ export default function SellPage() {
                         stock > 0
                           ? "cursor-pointer hover:bg-accent"
                           : "cursor-not-allowed opacity-50",
+                        /* Keyboard highlight is an inset ring, not a background:
+                           the row already uses background for hover, and two
+                           meanings on one property cannot both be read. */
+                        isActive && "bg-accent ring-2 ring-inset ring-primary",
                       )}
                     >
                       <div className="min-w-0 flex-1">
@@ -838,7 +944,7 @@ export default function SellPage() {
                   Click a product on the left to add it.
                 </p>
               ) : (
-                <ul className="max-h-[22rem] divide-y divide-border overflow-y-auto">
+                <ul className="max-h-[min(22rem,45vh)] divide-y divide-border overflow-y-auto">
                   {lines.map((line) => (
                     <CartRow
                       key={line.key}
@@ -937,7 +1043,7 @@ export default function SellPage() {
                 <TotalRow label="Tax" value={money(totals.taxAmount, currency)} />
                 <div className="flex items-baseline justify-between border-t border-border pt-1.5">
                   <span className="text-sm font-semibold">Total</span>
-                  <span className="font-mono text-lg font-bold">
+                  <span className="font-mono text-lg font-bold tabular-nums">
                     {money(totals.total, currency)}
                   </span>
                 </div>
@@ -1012,6 +1118,14 @@ export default function SellPage() {
         }}
       />
     </div>
+  );
+}
+
+function Kbd({ children }: { children: React.ReactNode }) {
+  return (
+    <kbd className="rounded border border-border bg-secondary px-1 py-px font-mono text-[10px] font-medium text-foreground">
+      {children}
+    </kbd>
   );
 }
 
@@ -1276,7 +1390,7 @@ function TotalRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline justify-between">
       <span className="text-muted-foreground">{label}</span>
-      <span className="font-mono">{value}</span>
+      <span className="font-mono tabular-nums">{value}</span>
     </div>
   );
 }
