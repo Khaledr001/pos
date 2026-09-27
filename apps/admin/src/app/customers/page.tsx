@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
-import { Search, Plus, RefreshCw, X, AlertCircle, CheckCircle2, Users } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Search, Plus, RefreshCw, X, AlertCircle, CheckCircle2, Users, ChevronRight, Eye } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
@@ -57,6 +58,7 @@ const TYPE_GRADIENT: Record<string, string> = {
 // ── Component ─────────────────────────────────────────────────────────────
 
 export default function CustomersPage() {
+  const router = useRouter();
   const { tokens } = useAuth();
 
   // List state
@@ -254,6 +256,7 @@ export default function CustomersPage() {
                     <th className="px-4 py-3.5 text-right font-medium">Credit Limit (AED)</th>
                     <th className="px-4 py-3.5 text-right font-medium">Outstanding (AED)</th>
                     <th className="px-4 py-3.5 text-center font-medium">Usage</th>
+                    <th className="px-4 py-3.5 text-right font-medium">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -263,7 +266,11 @@ export default function CustomersPage() {
                     const usagePct = limit > 0 ? Math.min((balance / limit) * 100, 100) : 0;
 
                     return (
-                      <tr key={c.id} className="hover:bg-secondary/30 transition-colors">
+                      <tr
+                        key={c.id}
+                        onClick={() => router.push(`/customers/${c.id}`)}
+                        className="hover:bg-secondary/30 transition-colors cursor-pointer group"
+                      >
                         <td className="px-4 py-3.5">
                           <div className="flex items-center gap-3">
                             <Avatar className="h-8 w-8">
@@ -272,7 +279,9 @@ export default function CustomersPage() {
                               </AvatarFallback>
                             </Avatar>
                             <div>
-                              <p className="font-semibold text-foreground">{c.name}</p>
+                              <p className="font-semibold text-foreground group-hover:text-primary transition-colors flex items-center gap-1">
+                                <span>{c.name}</span>
+                              </p>
                               <p className="text-[11px] text-muted-foreground font-mono">{c.phone ?? c.email ?? "—"}</p>
                             </div>
                           </div>
@@ -311,6 +320,18 @@ export default function CustomersPage() {
                           ) : (
                             <span className="text-[10px] text-muted-foreground">No credit</span>
                           )}
+                        </td>
+                        <td className="px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => router.push(`/customers/${c.id}`)}
+                            className="h-8 text-xs text-muted-foreground hover:text-primary hover:bg-primary/10 gap-1"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                            <span>Details</span>
+                            <ChevronRight className="h-3.5 w-3.5 opacity-60" />
+                          </Button>
                         </td>
                       </tr>
                     );

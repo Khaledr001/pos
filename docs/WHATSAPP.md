@@ -49,76 +49,78 @@ In the [Meta App Dashboard](https://developers.facebook.com/apps):
 
 You land on **Customize use case → Connect on WhatsApp → Quickstart**.
 
-## 2. Connect a WhatsApp Business account
+## 2. Find the use-case console
 
-1. **Start using the API** → you are on **API Setup**.
-2. Select an existing WhatsApp Business account or create one.
-3. Record two values:
-   - **Phone number ID** — the `From` number's ID, *not* the phone number.
-   - **WhatsApp Business account ID**.
+Meta has two navigations in the wild. Newer apps have **no "WhatsApp" item in
+the left sidebar** — the settings live inside the use case:
 
-> The phone number ID is what routes an inbound webhook to your tenant. The
-> display number is stored for humans and never used for routing.
+**Dashboard → "Customize the Connect with customers through WhatsApp use case"**
+(or **Use cases** in the sidebar) → **Basic setup → Step 2. Production setup**
 
-## 3. Generate a PERMANENT access token
+The URL looks like `/use_cases/customize/wa-configurations-v2/`.
 
-**Do not use the dashboard's "Generate access token" button.** That token is
-temporary and expires within about a day. Sends will work this afternoon and
-fail tomorrow with a 401 — visible in the admin panel as messages marked
-*Not delivered*, which reads like a broken feature rather than an expired
-credential.
+Older apps instead have **WhatsApp → API Setup** in the sidebar, which prints
+the phone number ID directly under the **From** dropdown. If you have that
+page, take the ID from there and skip step 3.
 
-In [Business Settings](https://business.facebook.com/latest/settings):
+## 3. Collect the four values
 
-1. **System users** → **Add** → create one.
-2. **Assign Assets**:
-   - your app → **Manage app** (Full control)
-   - your WhatsApp account → **Manage WhatsApp Business accounts** (Full control)
-3. **Generate token**, with all three permissions:
-   - `business_management`
-   - `whatsapp_business_messaging`
-   - `whatsapp_business_management`
+The `wa-configurations-v2` console does **not** display the phone number ID
+anywhere, which is the single most common place to get stuck.
 
-Miss `whatsapp_business_messaging` and inbound keeps working while every send
-fails — the most confusing failure of the three.
-
-Copy the token now; Meta will not show it again.
-
-## 4. Get the app secret, and invent a verify token
-
-- **App secret**: App Dashboard → **App settings → Basic → App secret → Show**.
-  Every inbound webhook is HMAC-signed with this. Wrong secret = every message
-  silently rejected.
-- **Verify token**: you invent it. Any long random string, used once during
-  Meta's handshake. Generate one with:
-
-  ```bash
-  openssl rand -hex 32
-  ```
-
-You now have four values:
-
-| Value | From |
+| Value | Where |
 | --- | --- |
-| Phone number ID | API Setup |
-| Access token | System user (step 3) |
-| App secret | App settings → Basic |
-| Verify token | You, just now |
+| **Access token** | *Send message → Step 1 → **Generate token***. This one is permanent — no system user needed. |
+| **WhatsApp Business account ID** | Printed in the *Add payment to send business-initiated messages* card. |
+| **Phone number ID** | Not shown. Query it (below). |
+| **App secret** | **App settings → Basic → App secret → Show**. |
+| **Verify token** | You invent it: `openssl rand -hex 32`. |
 
-## 5. Register the number in the admin panel
+Ask the API for the phone number ID, using the token and WABA ID above:
+
+```bash
+curl -s "https://graph.facebook.com/v23.0/WABA_ID/phone_numbers?access_token=TOKEN"
+```
+
+```json
+{ "data": [ { "id": "779418925277868", "display_phone_number": "+971 50 671 4572" } ] }
+```
+
+`id` is the **Phone number ID**; `display_phone_number` is the **Display
+number**. They are different fields and are not interchangeable — the ID is
+what routes inbound webhooks and what every send is posted to.
+
+> If the console offers a system-user fallback ("Having trouble generating a
+> token?"), that path still works: Business Settings → System users → Generate
+> token with `business_management`, `whatsapp_business_messaging` and
+> `whatsapp_business_management`.
+
+## 3b. Publish the app, or nothing will arrive
+
+The *Configure Webhooks* card warns:
+
+> Apps will only be able to receive test webhooks sent from the app dashboard
+> while the app is unpublished. No production data, including from app admins,
+> developers or testers, will be delivered unless the app has been published.
+
+An unpublished app can therefore pass Meta's handshake and still deliver
+nothing — no error, no log line, just silence. Check the **Publish** state
+before debugging the webhook.
+
+## 4. Register the number in the admin panel
 
 `pos.devsfleet.com/whatsapp` → **Setup**. Requires `settings:write`, which only
 the admin role holds.
 
 Paste all four values and save.
 
-Do this **before** step 6. With no account row the webhook rejects Meta's
+Do this **before** step 5. With no account row the webhook rejects Meta's
 handshake outright, so verification cannot succeed.
 
 Secrets are write-only: they are stored server-side and never returned to the
 browser. The panel shows only whether each is set.
 
-## 6. Point Meta at the webhook
+## 5. Point Meta at the webhook
 
 App Dashboard → **WhatsApp → Configuration → Webhook → Edit**:
 
@@ -131,7 +133,7 @@ back as plain text. A green tick means the handshake passed.
 Then **Manage** the webhook fields and subscribe to **`messages`**. Without
 that subscription the handshake succeeds and no message ever arrives.
 
-## 7. Open a conversation and reply
+## 6. Open a conversation and reply
 
 A conversation can only start from the customer's side — the 24-hour window
 opens when *they* message *you*.
@@ -187,8 +189,8 @@ psql "$DATABASE_URL_MIGRATOR" -c \
 
 | Symptom | Cause |
 | --- | --- |
-| Handshake fails in Meta's UI | No account row yet, or verify token mismatch. Do step 5 first. |
-| Handshake passes, no messages arrive | The `messages` field is not subscribed (step 6). |
+| Handshake fails in Meta's UI | No account row yet, or verify token mismatch. Do step 4 first. |
+| Handshake passes, no messages arrive | Either the app is unpublished (see 3b) or the `messages` field is not subscribed (step 5). |
 | Messages arrive, replies say *Not delivered* | Token expired (temporary instead of system user), or missing `whatsapp_business_messaging`. |
 | Reply box replaced by a window notice | More than 24h since their last message. Needs a template — not built. |
 | Nothing at all, `curl` returns 502/523 | The API is not up. Check PM2 and nginx, not WhatsApp. |
