@@ -43,12 +43,12 @@ function jsonLd(p: ProductDetail) {
       "@type": "Product",
       sku: v.sku,
       name: `${p.name} ${v.name}`,
-      image: p.images[0]?.url ? `${site}${p.images[0].url}` : undefined,
+      image: p.images[0]?.url ? (p.images[0].url.startsWith("http") ? p.images[0].url : `${site}${p.images[0].url}`) : undefined,
       offers: v.units[0]
         ? {
             "@type": "Offer",
             priceCurrency: "AED",
-            price: (v.units[0].price.unit.fils / 100).toFixed(2),
+            price: v.units[0].price.unit.amount,
             availability: v.availability.label === "OUT_OF_STOCK" ? "https://schema.org/OutOfStock" : "https://schema.org/InStock",
           }
         : undefined,

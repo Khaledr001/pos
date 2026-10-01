@@ -415,6 +415,8 @@ export interface ProjectListDetail {
   id: string;
   name: string;
   isWishlist: boolean;
+  /** Every available item at today's price, totalled by the server. */
+  total: Money;
   items: {
     id: string;
     variantId: string;

@@ -13,7 +13,7 @@ import { QtyInput } from "@/components/ui/qty-input";
 import { track } from "@/lib/analytics";
 import { api, errorMessage } from "@/lib/api-browser";
 import { cn } from "@/lib/cn";
-import { aed, formatQty, uomCount, uomShort } from "@/lib/format";
+import { formatQty, uomCount, uomShort } from "@/lib/format";
 import { useCartActions, useMe } from "@/lib/hooks/store";
 import { SaveToList } from "./save-to-list";
 import { TileCalculator } from "./tile-calculator";
@@ -47,7 +47,7 @@ export function BuyBox({ product }: { product: ProductDetail }) {
   const price: PriceView | undefined = personal?.[variant.sku]?.find((u) => u.uom === unit?.uom)?.price ?? unit?.price;
   const tier = price ? [...price.tiers].reverse().find((t) => t.minQty <= qty) : undefined;
   const unitPrice = tier?.unit ?? price?.unit;
-  const lineTotal = unitPrice ? Math.round(unitPrice.fils * qty) : 0;
+  const unitNet = tier?.unitNet ?? price?.unitNet;
   const out = variant.availability.label === "OUT_OF_STOCK";
   const boxUnit = variant.baseUom === "sqm" ? variant.units.find((u) => u.uom === "box") : undefined;
 
@@ -66,7 +66,8 @@ export function BuyBox({ product }: { product: ProductDetail }) {
     try {
       await add.mutateAsync({ variantId: variant.id, uom: unit?.uom, quantity: qty });
       track("add_to_cart", {
-        value: lineTotal / 100,
+        // Analytics estimate only; never shown to the shopper.
+        value: ((unitPrice?.fils ?? 0) * qty) / 100,
         items: [{ item_id: variant.sku, item_name: product.name, price: (unitPrice?.fils ?? 0) / 100, quantity: qty }],
       });
       setAdded(`${uomCount(qty, unit?.uom ?? variant.baseUom)} added to your cart`);
@@ -112,7 +113,7 @@ export function BuyBox({ product }: { product: ProductDetail }) {
             <div>
               <PriceTag price={unitPrice} uom={unit?.uom} was={price.discounted || tier ? price.retailUnit : null} size="xl" />
               <p className="mt-1 text-sm text-steel">
-                Incl. 5% VAT, {aed(Math.round(unitPrice.fils / 1.05))} excl. VAT
+                Incl. {Number(product.taxPercent)}% VAT{unitNet ? `, ${unitNet.formatted} excl. VAT` : ""}
                 {price.priceListType === "TRADE" && <span className="ml-2 font-semibold text-[#7a5a0c]">Your trade price</span>}
                 {price.priceListType === "PROMO" && <span className="ml-2 font-semibold text-[#7a5a0c]">Online offer</span>}
               </p>
@@ -177,7 +178,8 @@ export function BuyBox({ product }: { product: ProductDetail }) {
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <QtyInput value={qty} onChange={setQty} uom={unit?.uom ?? variant.baseUom} />
           <Button size="lg" className="flex-1 min-w-48" onClick={onAdd} loading={add.isPending} disabled={!price || out}>
-            {out ? "Out of stock" : `Add to cart${lineTotal ? ` — ${aed(lineTotal)}` : ""}`}
+            {/* No total here: VAT rounds per line, so shelf price x quantity can be a fils off the cart's own figure. */}
+            {out ? "Out of stock" : qty > 1 ? `Add ${qty} to cart` : "Add to cart"}
           </Button>
           <SaveToList
             variantId={variant.id}

@@ -284,7 +284,7 @@ export function CheckoutForm() {
                     <strong>{quote.courier.feeNetFils === 0 ? "Free" : quote.courier.fee.formatted}</strong>, usually {quote.courier.etaDays}{" "}
                     {quote.courier.etaDays === 1 ? "working day" : "working days"}.
                     {quote.courier.freeOverFils && quote.courier.feeNetFils > 0 && (
-                      <span className="text-steel"> Free on orders over AED {((quote.courier.freeOverFils * 1.05) / 100).toFixed(0)}.</span>
+                      <span className="text-steel"> Free on orders over AED {(quote.courier.freeOverFils / 100).toFixed(0)} excl. VAT.</span>
                     )}
                   </p>
                 )}

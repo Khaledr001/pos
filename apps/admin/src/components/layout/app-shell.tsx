@@ -39,6 +39,11 @@ const ROUTE_PERMISSIONS: Array<[string, Permission]> = [
   ["/day-close", "day_close:read"],
   ["/transfers", "transfer:read"],
   ["/purchases", "purchase:read"],
+  // Order matters: the first matching prefix wins, so the online store's
+  // specific screens come before its overview.
+  ["/online-store/orders", "order:read"],
+  ["/online-store/trade", "customer:read"],
+  ["/online-store", "storefront:read"],
 ];
 
 function permissionFor(pathname: string): Permission | undefined {

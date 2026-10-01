@@ -152,7 +152,8 @@ export function ListDetail({ id }: { id: string }) {
 
   const otherLists = (lists ?? []).filter((l) => l.id !== list.id);
   const available = list.items.filter((i) => i.available);
-  const total = available.reduce((sum, i) => sum + (i.lineTotal?.fils ?? 0), 0);
+  // From the server, through calculateDocument — never summed here.
+  const total = list.total?.fils ?? 0;
   const names = Object.fromEntries(list.items.map((i) => [i.sku, i.productName]));
 
   return (

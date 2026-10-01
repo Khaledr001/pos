@@ -37,6 +37,9 @@ import {
   Activity,
   UserRound,
   ChevronsUpDown,
+  Globe,
+  TicketPercent,
+  Briefcase,
 } from "lucide-react";
 import { hasPermission, type Permission } from "@devsfleet/shared-types";
 import { useAuth } from "@/lib/auth-context";
@@ -150,6 +153,26 @@ const NAV_SECTIONS: NavSection[] = [
         ],
       },
       { label: "Customers", href: "/customers", icon: Users, permission: "customer:read" },
+    ],
+  },
+  {
+    label: "Online Store",
+    items: [
+      {
+        label: "Online Store",
+        short: "Web",
+        href: "/online-store",
+        icon: Globe,
+        permission: "storefront:read",
+        children: [
+          { label: "Online Orders", href: "/online-store/orders", icon: ShoppingCart, permission: "order:read" },
+          { label: "Website Listings", href: "/online-store/listings", icon: Package, permission: "storefront:read" },
+          { label: "Pages & Banners", href: "/online-store/content", icon: FileText, permission: "storefront:read" },
+          { label: "Promo Codes", href: "/online-store/coupons", icon: TicketPercent, permission: "storefront:read" },
+          { label: "Trade Applications", href: "/online-store/trade", icon: Briefcase, permission: "customer:read" },
+          { label: "Store Settings", href: "/online-store", icon: Settings, permission: "storefront:read" },
+        ],
+      },
     ],
   },
   {

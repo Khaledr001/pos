@@ -1,5 +1,5 @@
 import { and, count, eq, inArray, schema, type Transaction } from "@devsfleet/db";
-import { AppError, calculateLine, ERROR_CODES } from "@devsfleet/shared-utils";
+import { AppError, calculateDocument, calculateLine, ERROR_CODES } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
 import { RequestContext } from "../../../common/context/request-context.js";
 import { TenantDatabase } from "../../../database/tenant-database.service.js";
@@ -244,11 +244,21 @@ export class AccountService {
       const gross = (unitPrice: string, taxPercent: string, quantity: string) =>
         calculateLine({ quantity, unitPrice, taxPercent }, tenantSettings.tax.mode, tenantSettings.currency.decimals).total;
 
+      const available = priced.filter((p): p is NonNullable<typeof p> => !!p);
+      const total = available.length
+        ? calculateDocument({
+            taxMode: tenantSettings.tax.mode,
+            decimals: tenantSettings.currency.decimals,
+            lines: available.map((p) => ({ quantity: p.quantity, unitPrice: p.unitPrice, taxPercent: p.taxPercent })),
+          }).total
+        : 0n;
+
       let cursor = 0;
       return {
         id: list.id,
         name: list.name,
         isWishlist: list.isWishlist,
+        total: money(total),
         items: items.map((i) => {
           const price = sellable(i) ? priced[cursor++] : null;
           return {
