@@ -121,6 +121,8 @@ export class StorefrontContentService {
     const codMax = Money.toMinor(settings.checkout.cod.maxTotal);
     return {
       name: settings.displayName ?? name,
+      tagline: settings.tagline ?? null,
+      logoUrl: tenantSettings.logoUrl ?? null,
       legalName: tenantSettings.legalName ?? tenantName,
       trn: tenantSettings.trn ?? "",
       address: (tenantSettings.addressLines ?? []).join(", "),

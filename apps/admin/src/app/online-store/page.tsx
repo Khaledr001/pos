@@ -36,6 +36,7 @@ interface OnlineBranch {
 
 interface Settings {
   displayName?: string;
+  tagline?: string;
   whatsapp?: string;
   siteUrl?: string;
   revalidateUrl?: string;
@@ -140,6 +141,7 @@ export default function OnlineStorePage() {
             name,
             isActive,
             ...(draft.displayName ? { displayName: draft.displayName } : {}),
+            ...(draft.tagline ? { tagline: draft.tagline } : {}),
             ...(draft.whatsapp ? { whatsapp: draft.whatsapp } : {}),
             ...(draft.siteUrl ? { siteUrl: draft.siteUrl } : {}),
             ...(draft.revalidateUrl ? { revalidateUrl: draft.revalidateUrl } : {}),
@@ -219,6 +221,7 @@ export default function OnlineStorePage() {
             <div className="grid gap-4 md:grid-cols-3">
               <Field label="Store name"><Input value={name} onChange={(e) => setName(e.target.value)} /></Field>
               <Field label="Shown as"><Input value={draft.displayName ?? ""} onChange={(e) => setDraft({ ...draft, displayName: e.target.value })} placeholder={name} /></Field>
+              <Field label="Tagline" hint="Under the name in the website header."><Input value={draft.tagline ?? ""} onChange={(e) => setDraft({ ...draft, tagline: e.target.value })} placeholder="Building Materials" /></Field>
               <Field label="WhatsApp number"><Input value={draft.whatsapp ?? ""} onChange={(e) => setDraft({ ...draft, whatsapp: e.target.value })} placeholder="+9715…" /></Field>
               <Field label="Public site address" hint="Where card payments return to. Leave empty to use https:// + the domain."><Input value={draft.siteUrl ?? ""} onChange={(e) => setDraft({ ...draft, siteUrl: e.target.value })} /></Field>
               <Field label="Cache refresh URL" hint="The website's /api/revalidate. Price and stock changes refresh pages within a minute."><Input value={draft.revalidateUrl ?? ""} onChange={(e) => setDraft({ ...draft, revalidateUrl: e.target.value })} /></Field>

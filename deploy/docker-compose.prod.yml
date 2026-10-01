@@ -51,7 +51,7 @@ services:
       DOMAIN_CDN: ${DOMAIN_CDN:-}
       ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL}
     networks: [edge]
-    depends_on: [api, admin]
+    depends_on: [api, admin, storefront]
 
   # ---------------------------------------------------------------------------
   # API — the only service that talks to Postgres
@@ -96,6 +96,27 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
+    networks: [edge]
+
+  # ---------------------------------------------------------------------------
+  # Storefront — every tenant's online shop, from one container. The API picks
+  # the tenant from the hostname; Caddy issues each custom domain a
+  # certificate on demand, after the API confirms it is a registered shop.
+  # ---------------------------------------------------------------------------
+  storefront:
+    image: ${REGISTRY:-devsfleet}/storefront:${TAG:-latest}
+    build:
+      context: ..
+      dockerfile: apps/storefront/Dockerfile
+    container_name: devsfleet-storefront
+    <<: [*restart, *logging]
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      API_ORIGIN: http://api:3001
+      REVALIDATE_SECRET: ${STOREFRONT_REVALIDATE_SECRET:?set STOREFRONT_REVALIDATE_SECRET}
+      # Same value as the API's: lets the API rate-limit per shopper, not per storefront.
+      STOREFRONT_PROXY_SECRET: ${STOREFRONT_PROXY_SECRET:?set STOREFRONT_PROXY_SECRET}
     networks: [edge]
 
   # ---------------------------------------------------------------------------

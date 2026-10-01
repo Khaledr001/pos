@@ -53,10 +53,12 @@ apps/
   api/        NestJS 11 — REST API, the only thing that talks to Postgres
   admin/      Next.js 16 — admin panel (Phase 6)
   pos/        Electron + React + SQLite — offline terminal (Phase 3)
+  storefront/ Next.js 16 — every tenant's online shop (docs/STOREFRONT.md)
 packages/
-  db/           Drizzle schema, migrations, RLS policies, seed
-  shared-types/ enums, permissions, tenant settings, API + sync contracts
-  shared-utils/ money, tax totals, document numbers, text normalisation
+  db/                 Drizzle schema, migrations, RLS policies, seed
+  shared-types/       enums, permissions, tenant settings, API + sync contracts
+  shared-utils/       money, tax totals, document numbers, text normalisation
+  storefront-client/  the storefront API's types + fetch client, contract-tested
 tools/
   import/     Excel/CSV price-list profiler and product importer
 ```
@@ -67,6 +69,7 @@ tools/
 pnpm infra:up          # Postgres + Redis + MinIO
 pnpm db:migrate        # drizzle migrations, then RLS + triggers, then verify
 pnpm db:seed           # tenant #1, 2 branches, roles, admin, sample catalogue
+pnpm db:seed:storefront -- --tenant devsfleet --domain localhost   # put a tenant's shop online
 pnpm dev               # everything, via turbo
 pnpm build             # everything
 pnpm test              # everything
@@ -74,6 +77,7 @@ pnpm test              # everything
 pnpm --filter @devsfleet/api dev        # API only, port 3001
 pnpm --filter @devsfleet/admin dev      # admin only, port 3000
 pnpm --filter @devsfleet/pos dev        # POS only, Electron window
+pnpm --filter @devsfleet/storefront dev # online store only, port 3002
 
 pnpm db:generate       # after editing packages/db/src/schema/**
 pnpm db:studio         # drizzle studio

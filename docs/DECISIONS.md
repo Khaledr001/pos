@@ -422,6 +422,44 @@ apply to it.
 
 ---
 
+## D20 — The online store is a channel on the platform, not a second backend
+
+**Decided.** The Al Lahiq website was first built as a standalone shop with
+its own NestJS + Prisma backend. That backend held its own copy of products,
+price lists, stock, customers and orders, and synced them with the POS over
+signed webhooks, an outbox and a nightly reconciliation job. Its backend is
+gone. The website is now `apps/storefront`, served by the platform API's
+`storefront` module from the POS's own rows (see docs/STOREFRONT.md).
+
+Why:
+
+- **One pricing engine, one tax calculation.** The copy stored whole fils and
+  computed VAT its own way; the POS uses Minor4 and `calculateDocument`. Two
+  implementations disagree sooner or later, on a tax document.
+- **Overselling becomes a transaction, not a sync problem.** A web order
+  reserves stock in the same transaction that creates it, so the outbox,
+  versioning, dead letters and reconciliation existed only to paper over a
+  second database.
+- **It works for every tenant.** The sync contract served exactly one shop.
+  As a channel, any tenant on a plan with `onlineStore` gets one, on its own
+  domain, from one storefront deployment.
+
+Consequences worth knowing:
+
+- Public traffic hits the same API the tills use. The POS is offline-first,
+  so a slow API does not stop the counter, and the API image can be deployed
+  twice (shop vs staff) if load ever demands it.
+- The tenant comes from the hostname (`storefront_domains`), resolved before
+  any tenant context exists, the same pre-authentication pattern as a
+  WhatsApp phone number id. Shopper tokens use a separate signing key, so they
+  cannot pass the staff guard.
+- A web order is handed over through `OrdersService.fulfill` and
+  `SalesService`, so it is re-checked against the staff member's own ceilings.
+  Online coupons are therefore percentages applied per line, the shape a sale
+  reproduces exactly.
+- Card payments use each tenant's own Stripe account, never a platform key,
+  stored like WhatsApp credentials (plaintext, the same known gap).
+
 ## Still open
 
 | # | Question | Blocks |

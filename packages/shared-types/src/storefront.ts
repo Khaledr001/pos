@@ -112,6 +112,8 @@ export interface StorefrontBranch {
 export interface StorefrontSettings {
   /** Shown in the header and on emails. Falls back to the tenant's name. */
   displayName?: string;
+  /** The line under the name in the header, e.g. "Building Materials". */
+  tagline?: string;
   /**
    * The shop's public origin, e.g. "https://shop.al-lahiq.ae". Where a payment
    * gateway sends the shopper back to. Defaults to https:// plus the host the

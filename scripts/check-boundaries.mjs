@@ -32,13 +32,16 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-const APPS = ["api", "admin", "pos"];
+const APPS = ["api", "admin", "pos", "storefront"];
 /** Packages that must never reach a browser or an Electron renderer. */
 const SERVER_ONLY = ["@devsfleet/db"];
 /** Code that ships to a client. */
 const CLIENT_SURFACES = [
   { app: "admin", dirs: ["src"] },
   { app: "pos", dirs: ["src"] },
+  // The online store: public internet, every tenant. It reaches data only
+  // through the API's /storefront routes.
+  { app: "storefront", dirs: ["app", "components", "lib"] },
 ];
 
 const SOURCE_EXT = /\.(ts|tsx|mts|cts|js|jsx|mjs)$/;

@@ -26,6 +26,7 @@ import { CheckoutController } from "./checkout/checkout.controller.js";
 import { CheckoutService } from "./checkout/checkout.service.js";
 import { StorefrontContentController } from "./content/storefront-content.controller.js";
 import { StorefrontContentService } from "./content/storefront-content.service.js";
+import { DomainCheckController } from "./context/domain-check.controller.js";
 import { SessionCookies } from "./context/session-cookies.service.js";
 import { ShopperTokens } from "./context/shopper-tokens.service.js";
 import { StorefrontGuard } from "./context/storefront.guard.js";
@@ -62,6 +63,7 @@ import { RevalidationService } from "./revalidation/revalidation.service.js";
     WebOrdersController,
     StripeWebhookController,
     DevPaymentsController,
+    DomainCheckController,
     // Staff side — ordinary JWT + permission routes under /storefront-admin.
     OrderDeskController,
     ListingsAdminController,

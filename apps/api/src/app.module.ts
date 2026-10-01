@@ -2,7 +2,7 @@ import { Module, type MiddlewareConsumer, type NestModule } from "@nestjs/common
 import { ConfigModule } from "@nestjs/config";
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
 import { EventEmitterModule } from "@nestjs/event-emitter";
-import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
+import { ThrottlerModule } from "@nestjs/throttler";
 import { LoggerModule } from "nestjs-pino";
 import { resolve } from "node:path";
 import { RequestContext } from "./common/context/request-context.js";
@@ -11,6 +11,7 @@ import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter.js";
 import { JwtAuthGuard } from "./common/guards/jwt-auth.guard.js";
 import { PermissionsGuard } from "./common/guards/permissions.guard.js";
 import { PlatformGuard } from "./common/guards/platform.guard.js";
+import { StorefrontAwareThrottlerGuard } from "./common/guards/storefront-aware-throttler.guard.js";
 import { AuditInterceptor } from "./common/interceptors/audit.interceptor.js";
 import { TransformInterceptor } from "./common/interceptors/transform.interceptor.js";
 import { RequestContextMiddleware } from "./common/middleware/request-context.middleware.js";
@@ -184,7 +185,7 @@ import { StorefrontModule } from "./modules/storefront/storefront.module.js";
      * the caller nothing. It stays after JwtAuthGuard so the limiter can key on
      * an identified principal.
      */
-    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: StorefrontAwareThrottlerGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
     { provide: APP_GUARD, useClass: PlatformGuard },
     /**

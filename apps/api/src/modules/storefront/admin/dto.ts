@@ -198,6 +198,7 @@ export const UpdateSettingsSchema = z.object({
   name: z.string().trim().min(1).max(255).optional(),
   isActive: z.boolean().optional(),
   displayName: z.string().trim().max(255).optional(),
+  tagline: z.string().trim().max(100).optional(),
   whatsapp: z.string().trim().max(30).optional(),
   siteUrl: z.string().trim().url().max(255).optional(),
   revalidateUrl: z.string().trim().url().max(500).optional(),

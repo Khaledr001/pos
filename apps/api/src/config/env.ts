@@ -17,6 +17,10 @@ const bool = z
 
 const port = z.coerce.number().int().min(1).max(65535);
 
+/** An optional secret. `KEY=` in a copied .env.example means "not set", not "an empty secret". */
+const optionalSecret = (min: number) =>
+  z.preprocess((v) => (v === "" ? undefined : v), z.string().min(min).optional());
+
 export const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 
@@ -57,18 +61,23 @@ export const envSchema = z.object({
    * point is that a shopper token can never verify as a staff token, not that
    * one more secret has to be provisioned.
    */
-  STOREFRONT_JWT_SECRET: z.string().min(32).optional(),
+  STOREFRONT_JWT_SECRET: optionalSecret(32),
   STOREFRONT_ACCESS_TTL: z.string().default("15m"),
   /** Days. A shopper stays signed in on their own phone for a month. */
   STOREFRONT_REFRESH_DAYS: z.coerce.number().int().min(1).max(365).default(30),
   /** Sent as a bearer token to a storefront's revalidate URL. Unset = no push, pages expire on their TTL. */
-  STOREFRONT_REVALIDATE_SECRET: z.string().min(16).optional(),
+  STOREFRONT_REVALIDATE_SECRET: optionalSecret(16),
   /** Defaults to true in production. Off locally, where the storefront is plain http. */
-  STOREFRONT_COOKIE_SECURE: bool.optional(),
+  STOREFRONT_COOKIE_SECURE: z.preprocess((v) => (v === "" ? undefined : v), bool.optional()),
+  /**
+   * Shared with the storefront server, which sends it with the shopper's IP so
+   * rate limits count shoppers rather than the storefront itself. Read by
+   * StorefrontAwareThrottlerGuard. Unset = every storefront call is limited
+   * as one client — fine locally, not under real traffic.
+   */
+  STOREFRONT_PROXY_SECRET: optionalSecret(32),
   /** Card payments go to a test page instead of a gateway. Refused in production. */
   STOREFRONT_DEV_PAYMENTS: bool.default(false),
-  STRIPE_SECRET_KEY: z.string().optional(),
-  STRIPE_WEBHOOK_SECRET: z.string().optional(),
 
   // ---------------------------------------------------------------------------
   // HTTP

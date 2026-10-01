@@ -152,6 +152,21 @@ checks pass.
 
 ---
 
+## Online store ✅ built (D20, docs/STOREFRONT.md)
+
+- [x] Storefront as a channel on the platform API, tenant from the hostname
+- [x] Catalogue, search with typos and synonyms, product pages, content, branches
+- [x] Shopper accounts, guest carts, checkout into a POS order with stock reserved
+- [x] Cash on delivery, store pickup slots, per-tenant Stripe, dev payment gateway
+- [x] Order desk, listings, content, promo codes, trade approvals in apps/admin
+- [x] Cache revalidation from `updated_at`; per-shopper rate limiting behind the storefront
+- [x] One storefront deployment for every tenant; on-demand TLS for shop domains
+- [ ] Shopper notifications (order confirmation, dispatch, ready for pickup)
+- [ ] Tax invoice download in the shopper's account
+- [ ] Fixed-amount coupons (needs a line discount amount on sales)
+- [ ] Courier API integration; Tabby / Tamara
+- [ ] Encrypt payment credentials at rest (with `whatsapp_accounts`)
+
 ## Cross-cutting, not phase-bound
 
 - [ ] Integration test suite proving RLS actually isolates tenants
