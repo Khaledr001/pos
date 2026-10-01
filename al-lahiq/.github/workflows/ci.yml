@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: al_lahiq_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ci" --health-interval 5s --health-retries 10
+      redis:
+        image: redis:8-alpine
+        ports: ["6379:6379"]
+    env:
+      TEST_DATABASE_URL: postgresql://ci:ci@localhost:5432/al_lahiq_test
+      TEST_REDIS_URL: redis://localhost:6379/6
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Backend lint, unit and e2e tests
+        run: |
+          pnpm --filter backend lint
+          pnpm --filter backend test
+          pnpm --filter backend test:e2e
+      - name: API contract (backend responses vs frontend types)
+        run: pnpm --filter @al-lahiq/api-client test
+      - name: Frontend typecheck and lint
+        run: |
+          pnpm --filter frontend typecheck
+          pnpm --filter frontend lint
+      - name: Build
+        run: |
+          pnpm --filter backend build
+          pnpm --filter frontend build
+        env:
+          API_ORIGIN: http://localhost:4000
+          NEXT_PUBLIC_SITE_URL: https://www.example.ae

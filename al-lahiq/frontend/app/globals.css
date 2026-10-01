@@ -1,0 +1,126 @@
+@import "tailwindcss";
+
+/*
+ * Al-Lahiq design tokens.
+ * Grounded in the trade counter: graphite ink, galvanised steel greys,
+ * pipe green for action and "in stock", brass for offers and trade prices.
+ * The one bold element is the shelf-tag price (condensed numerals + unit).
+ */
+@theme {
+  --color-ink: #1c2530;
+  --color-steel: #5b6673;
+  --color-steel-light: #8a939d;
+  --color-galv: #e3e7eb;
+  --color-sheet: #f4f6f7;
+  --color-paper: #ffffff;
+  --color-pipe: #0e6b53;
+  --color-pipe-dark: #0a5241;
+  --color-pipe-tint: #e6f2ee;
+  --color-brass: #c9971c;
+  --color-brass-tint: #fbf3dc;
+  --color-signal: #b83227;
+  --color-signal-tint: #fbe9e7;
+
+  --font-sans: var(--font-barlow), ui-sans-serif, system-ui, sans-serif;
+  --font-cond: var(--font-barlow-condensed), var(--font-barlow), ui-sans-serif, sans-serif;
+
+  --radius-tag: 4px;
+  --radius-panel: 10px;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    background: var(--color-sheet);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.5;
+    font-feature-settings: "tnum" 1;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-cond);
+    font-weight: 600;
+    line-height: 1.1;
+    letter-spacing: 0.005em;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-pipe);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: var(--color-brass-tint);
+  }
+}
+
+@layer components {
+  /* Shelf-tag price: the signature element. */
+  .tag-price {
+    font-family: var(--font-cond);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+    line-height: 1;
+  }
+
+  /* Long-form content from the CMS (markdown). */
+  .prose-store {
+    max-width: 72ch;
+    color: var(--color-ink);
+  }
+  .prose-store h2 {
+    font-size: 1.6rem;
+    margin: 2rem 0 0.75rem;
+  }
+  .prose-store h3 {
+    font-size: 1.25rem;
+    margin: 1.5rem 0 0.5rem;
+  }
+  .prose-store p,
+  .prose-store ul,
+  .prose-store ol {
+    margin: 0 0 1rem;
+  }
+  .prose-store ul {
+    list-style: disc;
+    padding-left: 1.25rem;
+  }
+  .prose-store ol {
+    list-style: decimal;
+    padding-left: 1.25rem;
+  }
+  .prose-store a {
+    color: var(--color-pipe);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .prose-store table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0 1.5rem;
+    font-size: 0.95rem;
+  }
+  .prose-store th,
+  .prose-store td {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--color-galv);
+  }
+  .prose-store th {
+    font-weight: 600;
+    background: var(--color-sheet);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

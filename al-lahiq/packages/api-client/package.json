@@ -1,0 +1,19 @@
+{
+  "name": "@al-lahiq/api-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "API contract between the NestJS backend and the Next.js frontend: response types and a small fetch client.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "tsc -p tsconfig.json && tsc -p tsconfig.contract.json",
+    "lint": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.2",
+    "@types/node": "^24.0.0"
+  }
+}
