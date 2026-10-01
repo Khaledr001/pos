@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findDuplicateNames, productNameKey } from "./bulk-import.service.js";
+import { describeRows, findDuplicateNames, placeSubCategory, productNameKey } from "./bulk-import.service.js";
 
 /**
  * The name-duplicate rule.
@@ -60,12 +60,12 @@ describe("findDuplicateNames", () => {
     ]);
 
     expect(found.size).toBe(1);
-    expect([...found.values()][0]).toEqual([2, 4, 9]);
+    expect([...found.values()][0]!.map((r) => r.rowNumber)).toEqual([2, 4, 9]);
   });
 
   it("catches duplicates that differ only in case or spacing", () => {
     const found = findDuplicateNames([row(2, "Ball Valve 1in"), row(5, "  ball valve 1in ")]);
-    expect([...found.values()][0]).toEqual([2, 5]);
+    expect([...found.values()][0]!.map((r) => r.rowNumber)).toEqual([2, 5]);
   });
 
   /**
@@ -76,5 +76,55 @@ describe("findDuplicateNames", () => {
   it("ignores blank and whitespace-only names", () => {
     const found = findDuplicateNames([row(2, ""), row(3, "   "), row(4, "\t")]);
     expect(found.size).toBe(0);
+  });
+});
+
+describe("placeSubCategory", () => {
+  const parent = { id: "fasteners", depth: 0 };
+
+  it("creates a sub-category the tenant does not have yet", () => {
+    expect(placeSubCategory(null, parent)).toBe("create");
+  });
+
+  it("leaves one already filed under that parent alone", () => {
+    expect(placeSubCategory({ id: "screw", parentId: "fasteners", isParent: false }, parent)).toBe("keep");
+  });
+
+  it("treats a sub-category named like its parent as the parent", () => {
+    expect(placeSubCategory({ id: "fasteners", parentId: null, isParent: true }, parent)).toBe("keep");
+  });
+
+  it("moves a flat, childless category under the parent the sheet names", () => {
+    expect(placeSubCategory({ id: "screw", parentId: null, isParent: false }, parent)).toBe("regroup");
+  });
+
+  it("never moves a category the tree already places under another parent", () => {
+    expect(placeSubCategory({ id: "hook", parentId: "bathroom", isParent: false }, parent)).toBe("conflict");
+  });
+
+  it("never moves a category that has sub-categories of its own", () => {
+    expect(placeSubCategory({ id: "lighting", parentId: null, isParent: true }, parent)).toBe("conflict");
+  });
+
+  it("refuses to nest past the tree's depth limit", () => {
+    expect(placeSubCategory(null, { id: "deep", depth: 4 })).toBe("too-deep");
+    expect(placeSubCategory({ id: "x", parentId: null, isParent: false }, { id: "deep", depth: 4 })).toBe("too-deep");
+  });
+});
+
+describe("describeRows", () => {
+  it("reads as plain row numbers in a single-sheet file", () => {
+    expect(describeRows([{ sheet: null, rowNumber: 4 }, { sheet: null, rowNumber: 9 }])).toBe("rows 4, 9");
+  });
+
+  /** Row 4 means nothing in a workbook where every sheet has a row 4. */
+  it("names the sheet of every row when the file has several", () => {
+    expect(
+      describeRows([
+        { sheet: "Hardware", rowNumber: 4 },
+        { sheet: "Hardware", rowNumber: 9 },
+        { sheet: "Electric", rowNumber: 12 },
+      ]),
+    ).toBe("Hardware rows 4, 9 and Electric row 12");
   });
 });

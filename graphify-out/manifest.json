@@ -1,7 +1,1255 @@
 {
-  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/next-env.d.ts": {
-    "mtime": 1789035575.4765997,
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/prisma.config.ts": {
+    "mtime": 1790778054.3459456,
+    "hash": "f6143a6083213d512c0beaa8d98daf63"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/vitest.config.e2e.ts": {
+    "mtime": 1790782187.8663268,
+    "hash": "14f64113408a42b01f86218ad8414e48"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/vitest.config.ts": {
+    "mtime": 1790782187.868485,
+    "hash": "146c12857e309dd86a90bcf76addd6ef"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/prisma/migrations/20260930142518_init/migration.sql": {
+    "mtime": 1790778318.5078883,
+    "hash": "c32e34fe812c5344d59f0aaf892354f3"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/prisma/migrations/20260930142526_search_trgm/migration.sql": {
+    "mtime": 1790778338.302297,
+    "hash": "d78a306c88908a93ce43a99da939c610"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/prisma/migrations/20260930144401_order_stock_deductions/migration.sql": {
+    "mtime": 1790779441.7051406,
+    "hash": "052f0ab120d74bd3ddcde3e33f8b2627"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/app.module.ts": {
+    "mtime": 1790780788.5454814,
+    "hash": "b072ad4bd72ad3c21fd803b0c112ef82"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/main.ts": {
+    "mtime": 1790780790.6446123,
+    "hash": "10eab6d355c5b8fae34f73f934dc8300"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/setup-app.ts": {
+    "mtime": 1790780789.5897465,
+    "hash": "b4e612f66f46b1b7901b270aeb7a9cdf"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/common/api-error.ts": {
+    "mtime": 1790778833.731522,
+    "hash": "ab103c9979ba10c32548d5ca83ba5674"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/common/auth.ts": {
+    "mtime": 1790778861.1598246,
+    "hash": "e74d619386924fbd8922c0edadbb8cb9"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/common/money.ts": {
+    "mtime": 1790778832.6839826,
+    "hash": "61265f2cc9f42a686eb7636fc06a9ef1"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/common/slug.ts": {
+    "mtime": 1790779674.819522,
+    "hash": "4ddc34eea696409129b649ab623bcccb"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/common/totals.spec.ts": {
+    "mtime": 1790782068.4240327,
+    "hash": "d93c079442c6c78975bd7a7ca5b307a5"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/common/totals.ts": {
+    "mtime": 1790779494.1214807,
+    "hash": "10af66a6628f696ccde1420af7f14d6d"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/common/decorators/principals.ts": {
+    "mtime": 1790778863.2484653,
+    "hash": "5fd92e818e183055aa85027e3054191a"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/common/filters/api-exception.filter.ts": {
+    "mtime": 1790778834.799958,
+    "hash": "98143b0977a0547e88afdcce720259e3"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/common/guards/auth.guards.ts": {
+    "mtime": 1790778862.2045732,
+    "hash": "513d498fc190bd64785263c6215c6db6"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/config/app-config.service.ts": {
+    "mtime": 1790778799.206127,
+    "hash": "27b17f72cdfe9081b6f529405658de8b"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/config/config.module.ts": {
+    "mtime": 1790778800.2480628,
+    "hash": "69bc00f49441a37aaba73daf29b25232"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/config/env.ts": {
+    "mtime": 1790778798.140619,
+    "hash": "747d58f3591c9f94970aef089d0351e3"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/browser.ts": {
+    "mtime": 1790792135.9398983,
+    "hash": "8f023e05d49be52da5cba314a3f2a60e"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/client.ts": {
+    "mtime": 1790792135.9398541,
+    "hash": "89cb8a80e75e0b7a6e0ef0e5c592b911"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/commonInputTypes.ts": {
+    "mtime": 1790792135.9414482,
+    "hash": "e4649ef00c737730ec11f2b280ad5aa7"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/enums.ts": {
+    "mtime": 1790792135.9402626,
+    "hash": "21b448169dd3a2c62ac800da1a1724de"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models.ts": {
+    "mtime": 1790792135.9404721,
+    "hash": "81454b5723e5418028fe1dab036ddcd0"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/internal/class.ts": {
+    "mtime": 1790792135.9667184,
+    "hash": "e360db78269236225f08fec7a0e8e933"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/internal/prismaNamespace.ts": {
+    "mtime": 1790792135.948045,
+    "hash": "12b02ff395d5c52d82b38cb57bb7515a"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/internal/prismaNamespaceBrowser.ts": {
+    "mtime": 1790792135.960967,
+    "hash": "334ce3f096b65ebe09b4f94d81ffd431"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/Payment.ts": {
+    "mtime": 1790792135.9751825,
+    "hash": "6f51ffcbde20a774b0f2e0098dd55dbe"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/Address.ts": {
+    "mtime": 1790792135.9720416,
+    "hash": "4b8992d1f54c35199b77171d5ad5eedd"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/Attribute.ts": {
+    "mtime": 1790792135.9624846,
+    "hash": "9a8a76aec2cce2c70ff8f3925be512d1"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/Banner.ts": {
+    "mtime": 1790792135.978858,
+    "hash": "8dce31700ff414c11c007667399c2f2f"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/Branch.ts": {
+    "mtime": 1790792135.96251,
+    "hash": "c5e0f6f2cf6d13a413043a711030b02f"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/Brand.ts": {
+    "mtime": 1790792135.9638994,
+    "hash": "840fb340b7f8626d6431d5017feda7be"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/Cart.ts": {
+    "mtime": 1790792135.9723613,
+    "hash": "4b66c79b17fa0620477f06a19ab045ac"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/CartItem.ts": {
+    "mtime": 1790792135.9732938,
+    "hash": "38a12ce5f3e0638cda790725778d2fdf"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/Category.ts": {
+    "mtime": 1790792135.963069,
+    "hash": "810e71df45ce76c40e3004a2708197f0"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/Counter.ts": {
+    "mtime": 1790792135.976352,
+    "hash": "64b46dd0c5b15de31854ebaef5a25ac6"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/Coupon.ts": {
+    "mtime": 1790792135.9776103,
+    "hash": "466241df307263caf83886287f8e10ea"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/Customer.ts": {
+    "mtime": 1790792135.9713464,
+    "hash": "777a4d6110cb60ecfbf32049e7ad3224"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/CustomerPriceList.ts": {
+    "mtime": 1790792135.9690127,
+    "hash": "41af289cb304d1716cc1b38972916f81"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/InboundEvent.ts": {
+    "mtime": 1790792135.9789815,
+    "hash": "68488a218bee1cdcfea7a0cda8c31da0"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/Invoice.ts": {
+    "mtime": 1790792135.9763222,
+    "hash": "c577a8099b96542f91da42c8ce8f3d5d"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/Order.ts": {
+    "mtime": 1790792135.9764779,
+    "hash": "2d9eb0a6437a43e5b2536792a018cedb"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/OrderLine.ts": {
+    "mtime": 1790792135.9746866,
+    "hash": "b4c5094fb4ab93cf48959af6b8a58646"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/OrderStatusHistory.ts": {
+    "mtime": 1790792135.974838,
+    "hash": "fb7094d3d3704da16544ecbb87099ec9"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/OutboxEvent.ts": {
+    "mtime": 1790792135.9790387,
+    "hash": "0e01a0bf1057be131f8df523cbac4f90"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/Page.ts": {
+    "mtime": 1790792135.9778433,
+    "hash": "0cf3cc7e55f92ae29ab55473c872071c"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/PriceList.ts": {
+    "mtime": 1790792135.9695022,
+    "hash": "90f79f4f5d07fd14a8a3dac151fc76af"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/PriceListItem.ts": {
+    "mtime": 1790792135.9698842,
+    "hash": "839ef914b798a7fffd411e54aa58e615"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/Product.ts": {
+    "mtime": 1790792135.965771,
+    "hash": "9445255bd04f7a38689bb211b083e9b3"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/ProductDocument.ts": {
+    "mtime": 1790792135.9683416,
+    "hash": "dad2c21679a66be5ba9ed21ac70bbdf6"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/ProductImage.ts": {
+    "mtime": 1790792135.9671907,
+    "hash": "e0843615a986f58ee9f76d04c89f7879"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/ProductLink.ts": {
+    "mtime": 1790792135.9689364,
+    "hash": "8a531866b32fe8dc4a041da43186ea03"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/ProjectList.ts": {
+    "mtime": 1790792135.9735317,
+    "hash": "0137da4ddd84b4936401684067ea44b5"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/ProjectListItem.ts": {
+    "mtime": 1790792135.9716785,
+    "hash": "a61f33dd2a670fce32c16e724186fe36"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/RefreshToken.ts": {
+    "mtime": 1790792135.9707317,
+    "hash": "dd447ab9a3fb9d3b229068e9fb53035f"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/SearchLog.ts": {
+    "mtime": 1790792135.979597,
+    "hash": "b4fb4e4cba774bf12d3e10dd12b2ceb6"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/Setting.ts": {
+    "mtime": 1790792135.977495,
+    "hash": "2064c26c34be76d46077e1a49e047cf4"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/Shipment.ts": {
+    "mtime": 1790792135.9762704,
+    "hash": "d1d601791530913613cc8ff74f973526"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/ShippingRate.ts": {
+    "mtime": 1790792135.9776623,
+    "hash": "ae4314ab4e0648bed5c40ad49dc7fe64"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/StaffUser.ts": {
+    "mtime": 1790792135.970246,
+    "hash": "df6b9f4fe0d9527c83a277a12ea239e0"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/StockLevel.ts": {
+    "mtime": 1790792135.9676492,
+    "hash": "83a42a03778fb5d86d55e9f82fe6df97"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/SyncRun.ts": {
+    "mtime": 1790792135.9791408,
+    "hash": "f0d08074120026af5b2543c621d26332"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/UomConversion.ts": {
+    "mtime": 1790792135.9670758,
+    "hash": "3d704bc09e49ef48259a11ec7a9968bc"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/Variant.ts": {
+    "mtime": 1790792135.965919,
+    "hash": "0ee2b29bd013826540965825ca62705a"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/generated/prisma/models/VariantAttribute.ts": {
+    "mtime": 1790792135.9656515,
+    "hash": "2daf621ec27283218da92daeab035864"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/account/account.dto.ts": {
+    "mtime": 1790780325.6356728,
+    "hash": "3273659b9c9189742e49477c2c6f8a25"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/account/account.module.ts": {
+    "mtime": 1790780337.6396437,
+    "hash": "dad5186b904d13757fe9bb866b06bd6f"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/account/account.service.ts": {
+    "mtime": 1790786810.236076,
+    "hash": "578ffa5069257425cf120759cd2d961d"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/admin/admin-catalog.service.ts": {
+    "mtime": 1790782811.0255394,
+    "hash": "931ad8fcf4e544d47c5d2cbca7b181d4"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/admin/admin-ops.service.ts": {
+    "mtime": 1790780873.200272,
+    "hash": "f0b64de05c468d2d0acd93d782bdfb70"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/admin/admin.controllers.ts": {
+    "mtime": 1790780873.2009742,
+    "hash": "e00201181a73269ef49e01c6208ff25c"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/admin/admin.dto.ts": {
+    "mtime": 1790780425.1187606,
+    "hash": "4db053af7114f618b65a17e659926d0f"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/admin/admin.module.ts": {
+    "mtime": 1790780607.6848247,
+    "hash": "e1d2c3ecc0705c03134510e3674f0577"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/auth/auth.controller.ts": {
+    "mtime": 1790786900.4391596,
+    "hash": "15c9e8145f6ebed771c1982084aa468f"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/auth/auth.module.ts": {
+    "mtime": 1790780255.099932,
+    "hash": "daa3332981bf13cee227ad8cea7af8ff"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/auth/auth.service.ts": {
+    "mtime": 1790778977.8766925,
+    "hash": "373e5843118e8105ba5c6768fe262fff"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/auth/dto/auth.dto.ts": {
+    "mtime": 1790778921.085851,
+    "hash": "faf088bf76c96ebb79c3afaf65ed39b8"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/cart/cart-context.service.ts": {
+    "mtime": 1790780232.9279156,
+    "hash": "067fbd28c7b71746e17f7ffe9fa171cd"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/cart/cart.controller.ts": {
+    "mtime": 1790781545.6269512,
+    "hash": "47d85a966377451fc1278e993b26f724"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/cart/cart.module.ts": {
+    "mtime": 1790780234.0902808,
+    "hash": "71a35eca4f850b224f9a277c5caa9f2d"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/cart/cart.service.ts": {
+    "mtime": 1790779972.5350494,
+    "hash": "4b4e37ebd6fef5917bf5fee6441299c7"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/catalog/catalog-indexer.service.ts": {
+    "mtime": 1790779217.0911646,
+    "hash": "1df32d8f2b85905dbd3cb5f9d49b6990"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/catalog/catalog.controller.ts": {
+    "mtime": 1790779342.033855,
+    "hash": "2622cf2a079f991b81b78f087f27ee06"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/catalog/catalog.module.ts": {
+    "mtime": 1790779343.450824,
+    "hash": "bca475dde9ce912fcab770622abb27b7"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/catalog/catalog.service.ts": {
+    "mtime": 1790783586.9660501,
+    "hash": "9f9d547988e9ba4bb8459ed19c3d390a"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/catalog/product.mapper.ts": {
+    "mtime": 1790779234.72704,
+    "hash": "4e7fa9a956dbdd869801e3ffa80b4617"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/catalog/dto/list-products.dto.ts": {
+    "mtime": 1790779233.686259,
+    "hash": "b33cf41315a9520719d7b6ecd4812288"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/checkout/checkout.module.ts": {
+    "mtime": 1790780234.141162,
+    "hash": "201a48a33cc2522aaeca2575cb0a2df5"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/checkout/checkout.service.ts": {
+    "mtime": 1790781596.952165,
+    "hash": "830fb39ea4283911fea8e31934209253"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/checkout/dto/checkout.dto.ts": {
+    "mtime": 1790780131.449412,
+    "hash": "c7e9af8f817e940362e2acd971fbb2f8"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/content/content.module.ts": {
+    "mtime": 1790780356.5150197,
+    "hash": "7bcf9d7e3887f8050dce610793e6ffde"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/health/health.module.ts": {
+    "mtime": 1790780787.4732335,
+    "hash": "86c6643c9e53584005fbce0c832281bb"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/inventory/inventory.module.ts": {
+    "mtime": 1790779131.7183824,
+    "hash": "a06877b2797934dd3bb1ca266c35ea91"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/inventory/inventory.service.ts": {
+    "mtime": 1790779463.5714378,
+    "hash": "974de46daf4630f7ec9988fdb2bb358f"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/invoices/invoices.service.ts": {
+    "mtime": 1790781596.9513793,
+    "hash": "9c4eadca82813cc54874adc0b318fe84"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/jobs/jobs.service.ts": {
+    "mtime": 1790779492.9948218,
+    "hash": "6f6db0691d98d374488b75bdac450983"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/notifications/notifications.service.ts": {
+    "mtime": 1790779768.1349292,
+    "hash": "939808f5c482f060766490f1298e257d"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/orders/order-status.spec.ts": {
+    "mtime": 1790782070.5148027,
+    "hash": "ae446f1c8ff151c3d0bff77153f1da44"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/orders/order-status.ts": {
+    "mtime": 1790779844.8007824,
+    "hash": "3066bed1bd91d42c40d6359bbe82d843"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/orders/order.mapper.ts": {
+    "mtime": 1790779845.8555312,
+    "hash": "24667a0146d288ee056fec6efdd0d2f9"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/orders/orders.module.ts": {
+    "mtime": 1790779847.9360428,
+    "hash": "8f61e162d8aaf1cf6751e3de9b5dfc3f"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/orders/orders.service.ts": {
+    "mtime": 1790787192.8727868,
+    "hash": "fb34c4c1b06720c319e73571f09997e3"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/payments/dev-pay.provider.ts": {
+    "mtime": 1790780075.6350632,
+    "hash": "c45af2f4628354480cc49fc6ded2204a"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/payments/payment-provider.ts": {
+    "mtime": 1790780073.542279,
+    "hash": "e775b126986307a1c2b009a4bca02cf3"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/payments/payments.module.ts": {
+    "mtime": 1790780130.39162,
+    "hash": "8b08c780523c7243c64cabe052194c3d"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/payments/payments.service.ts": {
+    "mtime": 1790780098.1478045,
+    "hash": "ea011d878d522acff4b646eb1ad0b714"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/payments/stripe.provider.ts": {
+    "mtime": 1790780074.591701,
+    "hash": "1e135620876166064c3ff79e9e88086b"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/pos-sync/inbound.service.ts": {
+    "mtime": 1790781778.4219978,
+    "hash": "597852211df30f6bd872fb6719a1bd3e"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/pos-sync/outbox.service.ts": {
+    "mtime": 1790781778.4226005,
+    "hash": "1ce31baf00732f98d788081c71a2bf63"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/pos-sync/pos-client.ts": {
+    "mtime": 1790779624.045713,
+    "hash": "439571ad6996c5d11a347dc37f4a0fde"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/pos-sync/pos-event-handler.service.ts": {
+    "mtime": 1790779689.8700407,
+    "hash": "f9da8013ad08c0912a2b7e69e5411ef1"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/pos-sync/pos-events.ts": {
+    "mtime": 1790779596.6344624,
+    "hash": "be353b31a7e89c191fef73a6d1ebe484"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/pos-sync/pos-signature.guard.ts": {
+    "mtime": 1790779595.5880206,
+    "hash": "c24ab497227f437c5b9e7a4b0d2ee043"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/pos-sync/pos-signature.ts": {
+    "mtime": 1790779594.538648,
+    "hash": "7ec610a919346e7176936f99775e3e07"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/pos-sync/pos-sync.module.ts": {
+    "mtime": 1790779914.563885,
+    "hash": "166cbec8131d57bcab65400548d54c08"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/pos-sync/pos-sync.spec.ts": {
+    "mtime": 1790782069.4654758,
+    "hash": "f744bf4de66a472be3c02f8b34cbd3c3"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/pos-sync/pos-webhook.controller.ts": {
+    "mtime": 1790779913.5259461,
+    "hash": "3759f22e527b94f7825d6ee121e3905d"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/pos-sync/reconciliation.service.ts": {
+    "mtime": 1790779912.4874904,
+    "hash": "fdeb91e7632aa282747df2cb13098021"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/pricing/price-resolver.spec.ts": {
+    "mtime": 1790782067.3696468,
+    "hash": "5bd62053bccfafdd695a0a6969edb164"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/pricing/price-resolver.ts": {
+    "mtime": 1790781171.9452457,
+    "hash": "f2175f2156c6122b6457af9ca5888556"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/pricing/pricing.module.ts": {
+    "mtime": 1790779095.059761,
+    "hash": "f65c47976d9ebb9d665d475278bcddb1"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/pricing/pricing.service.ts": {
+    "mtime": 1790782251.6200926,
+    "hash": "70c89f8edd94595c530508cc6225aeb1"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/promotions/promotions.service.ts": {
+    "mtime": 1790779534.1228588,
+    "hash": "e87b4785fa7c4d6d31287c4b7894e3c3"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/revalidation/revalidation.service.ts": {
+    "mtime": 1790779149.2298982,
+    "hash": "13a63b2ecdb83a19e58011ce430a9a91"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/scheduler/scheduler.service.ts": {
+    "mtime": 1790781778.4237745,
+    "hash": "87f20945891ea86ab5b177c36012bf64"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/search/search.service.ts": {
+    "mtime": 1790782332.7235067,
+    "hash": "c00651772a60c4a3ab92db14348d5416"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/settings/counters.service.ts": {
+    "mtime": 1790778889.9656694,
+    "hash": "dcc69c86895ecd677b728870d33184f1"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/settings/settings.module.ts": {
+    "mtime": 1790778891.0120163,
+    "hash": "cde2fee263d754992a22bc49b7608e3c"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/settings/settings.service.ts": {
+    "mtime": 1790781425.06489,
+    "hash": "8d8440cb7609a57912726c81ba627cf4"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/shipping/shipping-provider.ts": {
+    "mtime": 1790779536.216274,
+    "hash": "34e13e2b958eeb4a02ec6f38dbb0473e"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/shipping/shipping.module.ts": {
+    "mtime": 1790779537.25665,
+    "hash": "470bc2c2fee7c0937a52345320e7461b"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/shipping/shipping.service.ts": {
+    "mtime": 1790779544.0740411,
+    "hash": "f95c36b8a85d239fddaea1871b26d59b"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/shipping/shipping.spec.ts": {
+    "mtime": 1790782071.560459,
+    "hash": "63ec2c01130e517a4637c45b47da358e"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/modules/storage/storage.service.ts": {
+    "mtime": 1790780433.6158743,
+    "hash": "efbc9cfd0f3916a7b58b8b0b629aa781"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/prisma/prisma.module.ts": {
+    "mtime": 1790778802.3331017,
+    "hash": "ae4acd5ac9a0b7fa08e67ce5f927858e"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/prisma/prisma.service.ts": {
+    "mtime": 1790778801.2926877,
+    "hash": "ff545c987625cc629fd96970b827ad12"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/redis/redis.module.ts": {
+    "mtime": 1790778803.3768425,
+    "hash": "0055fdda928c0fcd8c190969081386ae"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/seed/catalog-data.ts": {
+    "mtime": 1790781151.2104244,
+    "hash": "22f27371472fc8efccb7649d343ec75c"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/seed/pages-data.ts": {
+    "mtime": 1790781254.006111,
+    "hash": "4e163a033016f6b708de8f5beecd7cb7"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/src/seed/seed.ts": {
+    "mtime": 1790781218.208092,
+    "hash": "a9208c691d085fe5f6c0568fb3ea0298"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/test/global-setup.ts": {
+    "mtime": 1790782184.7005465,
+    "hash": "b99979cef63ae26314999078edb4d472"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/test/helpers.ts": {
+    "mtime": 1790782185.7578309,
+    "hash": "10018b21b1d21b8c80d7ac0e5a97daff"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/test/setup-env.ts": {
+    "mtime": 1790782183.6257138,
+    "hash": "3d97779e2017eb3ccd0330daca42d7a4"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/test/store.e2e-spec.ts": {
+    "mtime": 1790782186.8071141,
+    "hash": "b4f2f6252e9ed670f5afc653389f97d5"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/eslint.config.mjs": {
+    "mtime": 1790773450.82818,
+    "hash": "dfa1f5f6a7037bf39dc510f30b180002"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/next-env.d.ts": {
+    "mtime": 1790787324.6224713,
     "hash": "8195d2c60ce847a459ae9d308d6a5724"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/next.config.ts": {
+    "mtime": 1790787242.7175322,
+    "hash": "3381300fc79ea1c2dd23f7bb9320dc85"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/playwright.config.ts": {
+    "mtime": 1790784723.7567906,
+    "hash": "7ba6b8ccdfd0db5142c57e8c49d120ad"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/postcss.config.mjs": {
+    "mtime": 1790773450.8285937,
+    "hash": "239f3ebf717465dc636818a1a619398d"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/proxy.ts": {
+    "mtime": 1790783266.0538118,
+    "hash": "1959c9035a2d0ec60310872d344370b5"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/layout.tsx": {
+    "mtime": 1790783190.5865953,
+    "hash": "2f8671277bf3c0669f3fe4ee2805ec96"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/robots.ts": {
+    "mtime": 1790785490.4743176,
+    "hash": "c83025d02bca4cdbfc664ba7d8f9a42f"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/sitemap.ts": {
+    "mtime": 1790785490.469815,
+    "hash": "1a749bf752eb4e38f84db140e627b65e"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/(store)/error.tsx": {
+    "mtime": 1790785506.6567543,
+    "hash": "6bf1fe7c2187c4fd8638c55416ca7b05"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/(store)/layout.tsx": {
+    "mtime": 1790787378.6292958,
+    "hash": "e2d9d78f1d49d5987c98ee4189ec6e55"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/(store)/not-found.tsx": {
+    "mtime": 1790785506.654341,
+    "hash": "3c3aebd42543bb7ab72e07e3be9696b0"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/(store)/page.tsx": {
+    "mtime": 1790783461.844992,
+    "hash": "0d985b11f4e8270e304a2e0e59574e94"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/(store)/account/layout.tsx": {
+    "mtime": 1790786054.3525693,
+    "hash": "8ed50c355ff980f4633e232954ddcaec"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/(store)/account/page.tsx": {
+    "mtime": 1790786075.9354808,
+    "hash": "91d15ea18d569983b83a984ef4d39117"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/(store)/account/addresses/page.tsx": {
+    "mtime": 1790786097.5742667,
+    "hash": "f4d1fd1136d57c2c86fa66ad515239c2"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/(store)/account/lists/page.tsx": {
+    "mtime": 1790786076.3003163,
+    "hash": "a920c7c8c33270609f6314ed56d7edf3"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/(store)/account/lists/[id]/page.tsx": {
+    "mtime": 1790786076.7510343,
+    "hash": "cd9bceb45dcd687998d3fd14a42bd72f"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/(store)/account/orders/page.tsx": {
+    "mtime": 1790786075.9477875,
+    "hash": "3ea360b7aae61489ee8bfb1214ed0c9f"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/(store)/account/orders/[id]/page.tsx": {
+    "mtime": 1790786076.0281005,
+    "hash": "d143fb3d2fa191a8d2382067e1acb241"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/(store)/account/profile/page.tsx": {
+    "mtime": 1790786097.5777855,
+    "hash": "53721404be35bc1dab25ae6ccf3550ef"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/(store)/account/trade/page.tsx": {
+    "mtime": 1790786165.4774232,
+    "hash": "be7dd7aa625f8e120ade9c8a20c02580"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/(store)/blog/page.tsx": {
+    "mtime": 1790785428.5827935,
+    "hash": "a536de656074da65a25992a44302dc5e"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/(store)/blog/[slug]/page.tsx": {
+    "mtime": 1790785428.5805743,
+    "hash": "a445c2b60ac593d7421958b77145c7db"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/(store)/branches/page.tsx": {
+    "mtime": 1790785468.2779489,
+    "hash": "99dd79c0fd0cfd967ac6f8599c80e354"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/(store)/brand/[slug]/page.tsx": {
+    "mtime": 1790783667.0572002,
+    "hash": "ac2d19226f1a13b0dd06d6ed1699d37e"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/(store)/brands/page.tsx": {
+    "mtime": 1790783667.058892,
+    "hash": "78c0a606f525fa165e3b711a1eb45c59"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/(store)/cart/page.tsx": {
+    "mtime": 1790783880.0676386,
+    "hash": "f4072978a619e615b7ab32b3d44ce910"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/(store)/category/[slug]/page.tsx": {
+    "mtime": 1790783667.0555701,
+    "hash": "226a3514d17a0206fb8adb1abdb2c684"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/(store)/checkout/page.tsx": {
+    "mtime": 1790787377.7100387,
+    "hash": "5a3d64602d1c0a769e84259aa7511cf8"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/(store)/checkout/pay/dev/page.tsx": {
+    "mtime": 1790783964.5195632,
+    "hash": "1d884145d967148998f06b7c3952ed35"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/(store)/checkout/success/page.tsx": {
+    "mtime": 1790785149.6295495,
+    "hash": "10b6b51040e9acd07be9c15e2adf7d22"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/(store)/contact/page.tsx": {
+    "mtime": 1790786323.7781634,
+    "hash": "0d424d2b4b3f36efb1477e5c14d19527"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/(store)/login/page.tsx": {
+    "mtime": 1790786165.4782088,
+    "hash": "333c7bd899aae83feeeed5082c36b27b"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/(store)/pages/[slug]/page.tsx": {
+    "mtime": 1790785428.5787654,
+    "hash": "b115f12bf6d53a9fcd7ffa3aa4b4dc98"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/(store)/product/[slug]/page.tsx": {
+    "mtime": 1790783766.644519,
+    "hash": "f444cf733255518ca6e58534ab9eb9ee"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/(store)/register/page.tsx": {
+    "mtime": 1790786165.4787328,
+    "hash": "69bda427d177e4c3e87ea354dfbf3ee0"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/(store)/search/page.tsx": {
+    "mtime": 1790783667.0608335,
+    "hash": "2090c3129d90c8a133990d3134bddb94"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/(store)/track/page.tsx": {
+    "mtime": 1790786237.8070798,
+    "hash": "83ba49a33cf8f65c27ac7695e2233d29"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/(store)/track/[token]/page.tsx": {
+    "mtime": 1790785375.9708967,
+    "hash": "27d615c8ae5f2c7750c937e646fa8558"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/(store)/trade/page.tsx": {
+    "mtime": 1790786165.4776971,
+    "hash": "d0b76df985709b16bc200e75e41b01f5"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/(store)/[...missing]/page.tsx": {
+    "mtime": 1790785506.6518464,
+    "hash": "e3819eae23ab636dcfb208740bd7c309"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/admin/layout.tsx": {
+    "mtime": 1790784799.9404192,
+    "hash": "fc8a41751c036294dd4f31e8cdd681b9"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/admin/(panel)/layout.tsx": {
+    "mtime": 1790786562.0621076,
+    "hash": "8bdbdde1a8ab93a32e08fa97afcc1cdc"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/admin/(panel)/page.tsx": {
+    "mtime": 1790784959.5693707,
+    "hash": "87febf538ce5abf9ec2e7c43754b895b"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/admin/(panel)/attributes/page.tsx": {
+    "mtime": 1790785866.692817,
+    "hash": "b25e99c0ee1b460763ea7d28daad7081"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/admin/(panel)/brands/page.tsx": {
+    "mtime": 1790785866.6889913,
+    "hash": "62c87f34dc3be80bc09dc8497957acba"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/admin/(panel)/categories/page.tsx": {
+    "mtime": 1790785866.6858582,
+    "hash": "a8e8ac8d40b22f0a7d29aa21e82e673f"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/admin/(panel)/content/page.tsx": {
+    "mtime": 1790785998.4330225,
+    "hash": "2728c32cfd5689d617365c6208ec6198"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/admin/(panel)/content/pages/new/page.tsx": {
+    "mtime": 1790785998.4367452,
+    "hash": "05f47d225596777969a7a860c902b0fc"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/admin/(panel)/content/pages/[id]/page.tsx": {
+    "mtime": 1790785998.439334,
+    "hash": "8abf988e59f65d8cd8b88411d8096f7c"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/admin/(panel)/customers/page.tsx": {
+    "mtime": 1790785910.6231585,
+    "hash": "99dc724bf209dac94b12523967a646ab"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/admin/(panel)/customers/[id]/page.tsx": {
+    "mtime": 1790785910.626637,
+    "hash": "8919739acd6a350964640be5d2a100fa"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/admin/(panel)/orders/page.tsx": {
+    "mtime": 1790785049.2683568,
+    "hash": "559dcf2054c5bdc98f7ce7a9f718d1b5"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/admin/(panel)/orders/[id]/page.tsx": {
+    "mtime": 1790785133.177218,
+    "hash": "2cbea46103ceb13a837bee9cb24c88ba"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/admin/(panel)/orders/[id]/packing-slip/page.tsx": {
+    "mtime": 1790785133.179222,
+    "hash": "acfd0f3d31cf82a7cf1f55c1bc044d12"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/admin/(panel)/products/page.tsx": {
+    "mtime": 1790785186.4353125,
+    "hash": "aead198768a0d67221232d48321cb0c2"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/admin/(panel)/products/[id]/page.tsx": {
+    "mtime": 1790785186.4377193,
+    "hash": "b5c0a7cc30c9e8ee4c8fe1e933029688"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/admin/(panel)/promotions/page.tsx": {
+    "mtime": 1790786041.7767043,
+    "hash": "262097f8ce12c6062586645439f1850b"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/admin/(panel)/settings/page.tsx": {
+    "mtime": 1790786238.670464,
+    "hash": "eae451fcfcd72c9e39c138f42d000ebe"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/admin/(panel)/settings/branches/page.tsx": {
+    "mtime": 1790786238.6757035,
+    "hash": "0f8c611d803c113c5b337cfd7ec4739e"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/admin/(panel)/settings/delivery/page.tsx": {
+    "mtime": 1790786238.6728017,
+    "hash": "1453e134b8dacb131fbea1658df8f313"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/admin/(panel)/staff/page.tsx": {
+    "mtime": 1790786268.0129452,
+    "hash": "3aad573675927f40ba029f86f7d2618d"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/admin/(panel)/sync/page.tsx": {
+    "mtime": 1790786268.0148387,
+    "hash": "a217172556db65a5021bb4e91b6cc934"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/admin/login/page.tsx": {
+    "mtime": 1790786521.8508997,
+    "hash": "e6475f72623c632b80ef855c640f1f9b"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/app/api/revalidate/route.ts": {
+    "mtime": 1790783267.277346,
+    "hash": "371f9bd5a7d9e40923b67016f1c9cbd4"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/providers.tsx": {
+    "mtime": 1790783342.4349227,
+    "hash": "a9ae4f69414187911c9066dfe52fbc17"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/catalog-helpers.ts": {
+    "mtime": 1790785229.2278159,
+    "hash": "0b7e1f28ef2f4c36e6c9ab387b5aed01"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/dashboard.tsx": {
+    "mtime": 1790786726.6453443,
+    "hash": "c8863bcfa22554f79a89cd78a08ecc31"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/data.ts": {
+    "mtime": 1790784597.6410472,
+    "hash": "f2a34a58fa4ef9a748ba3dca2b2edff4"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/helpers.ts": {
+    "mtime": 1790784834.7352004,
+    "hash": "2169a8f4d17cb7a87622ecca7cea348d"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/list-controls.tsx": {
+    "mtime": 1790785013.889697,
+    "hash": "876efbaf56333a2d05eb136d2008dabe"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/login-form.tsx": {
+    "mtime": 1790784834.7346144,
+    "hash": "44ab6fb53788d8306b72c66a0fd20c88"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/login-redirect.tsx": {
+    "mtime": 1790785608.599957,
+    "hash": "efb039985ac49a8156f0d103f1dc8c50"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/markdown-editor.tsx": {
+    "mtime": 1790785014.9502528,
+    "hash": "d68d9974912d63af4fa87db7a8c1d73c"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/modal.tsx": {
+    "mtime": 1790784714.024137,
+    "hash": "d81ce4ec975f167746dfd6b22ee2eaf5"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/promotions.tsx": {
+    "mtime": 1790786040.7117624,
+    "hash": "1ffa3dd1839d19efcf89f26622e95b24"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/roles.ts": {
+    "mtime": 1790784596.60086,
+    "hash": "f836e9ecb509d3eee7d249533f060b4c"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/row-controls.tsx": {
+    "mtime": 1790785322.656501,
+    "hash": "38ea90464ccb6ad5567b45e9f4388a84"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/session.ts": {
+    "mtime": 1790786511.0167384,
+    "hash": "9eb2ae271b867c160ea430a1d9d95707"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/shell.tsx": {
+    "mtime": 1790784767.136337,
+    "hash": "bd21cc3617ca0431ad6707844bd0f044"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/staff-context.tsx": {
+    "mtime": 1790784715.3598428,
+    "hash": "b1e0c65073bc633c3746374ecccc3c84"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/staff.tsx": {
+    "mtime": 1790786266.9425929,
+    "hash": "152cca636ab7ce52bb1528777d7b8e6e"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/sync.tsx": {
+    "mtime": 1790786683.7948873,
+    "hash": "6d79b9ebb42d65fbd4b470f6dded539f"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/toast.tsx": {
+    "mtime": 1790784712.8651984,
+    "hash": "87be59b2bcf7239f3a8ea6cadd50dea8"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/ui.tsx": {
+    "mtime": 1790786726.4850929,
+    "hash": "08dc30d01663302f8ed007192c865489"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/upload.tsx": {
+    "mtime": 1790785016.5547452,
+    "hash": "4f9933a9e36936777a4517835261073e"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/catalog/attributes.tsx": {
+    "mtime": 1790785865.3837917,
+    "hash": "8934d491b18f20ca4ceaa4cb171332fe"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/catalog/brands.tsx": {
+    "mtime": 1790785863.622114,
+    "hash": "b86c18d2c748ba105d8b5c2aafc17a35"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/catalog/categories.tsx": {
+    "mtime": 1790785823.4162898,
+    "hash": "bc2e57c4a7d2aaa55055df83717878d3"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/content/content.tsx": {
+    "mtime": 1790786051.8865852,
+    "hash": "6f8e644d3f184ced641edfd41e648e11"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/content/page-editor.tsx": {
+    "mtime": 1790785997.3384676,
+    "hash": "fe7a1908eb948b37f6ea40b6ecedbf0c"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/customers/customers.tsx": {
+    "mtime": 1790786051.887184,
+    "hash": "0c5f3ddb65b2bf937e3461e1100ffee5"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/orders/order-detail.tsx": {
+    "mtime": 1790786745.9644713,
+    "hash": "778d35ac47b162c3443a8e0f67de3cd4"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/orders/order-list.tsx": {
+    "mtime": 1790785048.2026215,
+    "hash": "c689bff6844ba65e62baea43a5f772be"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/orders/packing-slip.tsx": {
+    "mtime": 1790785157.5214436,
+    "hash": "a895f088aa6ec7fc6101cbc5da35b563"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/products/pos-panel.tsx": {
+    "mtime": 1790785522.4040403,
+    "hash": "a9e9db0fda9abf5d3581ad13c8ef2973"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/products/product-editor.tsx": {
+    "mtime": 1790785608.601744,
+    "hash": "47b8a02902de5c48adba7c5b702362d1"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/products/product-links.tsx": {
+    "mtime": 1790785469.259396,
+    "hash": "3c41b4ad24bb79a05e722567bf66aa41"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/products/product-list.tsx": {
+    "mtime": 1790785185.2857895,
+    "hash": "f197fc46532b699ec3838a75e6544727"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/products/product-media.tsx": {
+    "mtime": 1790785425.4375308,
+    "hash": "a6e9855dfbc8f571f4008daa0e488b86"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/settings/branches.tsx": {
+    "mtime": 1790786237.5947819,
+    "hash": "1e33dd8f22625f6efa6a1cd364113f93"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/settings/delivery.tsx": {
+    "mtime": 1790786191.492927,
+    "hash": "4a607b57d9392b3c24e8b87af2b50d3e"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/admin/settings/general.tsx": {
+    "mtime": 1790786166.1738274,
+    "hash": "83122a7d788b8d923d02e7fd7609a951"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/store/analytics.tsx": {
+    "mtime": 1790785149.4100318,
+    "hash": "0d8f5384eef74fd2f80b9eeecec73ff4"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/store/dept-nav.tsx": {
+    "mtime": 1790784132.0015976,
+    "hash": "8679ae77759e4d15b9f91e8c373bc311"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/store/footer.tsx": {
+    "mtime": 1790783432.2652164,
+    "hash": "4a4cbd2e0ccd17e76cc538e8d3d0bf5d"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/store/header-actions.tsx": {
+    "mtime": 1790783384.9426448,
+    "hash": "912c05c417df5cc2c0ecd124e1e34953"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/store/header.tsx": {
+    "mtime": 1790786810.2398453,
+    "hash": "8cb7e0fea8b4b9a15bcb4a14d19ec026"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/store/listing.tsx": {
+    "mtime": 1790783766.6273425,
+    "hash": "4faefd061c5d421cda88997a56cd9aff"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/store/logo.tsx": {
+    "mtime": 1790783384.938549,
+    "hash": "25866532febc453d2ba056e8f7e2b687"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/store/markdown.tsx": {
+    "mtime": 1790783766.6359975,
+    "hash": "5b449367249f6743f1e2ff4125b6c2ea"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/store/product-card.tsx": {
+    "mtime": 1790783586.9617138,
+    "hash": "750d63b8a4f7b24ce223986fa9e73b4c"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/store/search-box.tsx": {
+    "mtime": 1790784132.0025196,
+    "hash": "8ebf8d486b19e16aa41a17e57d4d9ea4"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/store/sort-select.tsx": {
+    "mtime": 1790783667.0478506,
+    "hash": "fb8b65f2bde848bf06282d3043ca303b"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/store/whatsapp-button.tsx": {
+    "mtime": 1790783432.267025,
+    "hash": "dbdcfcbe6288f9ff9a86181b117a767c"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/store/account/account-nav.tsx": {
+    "mtime": 1790786434.019973,
+    "hash": "c760df4ac1e248e9398a02ad45146606"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/store/account/account-shell.tsx": {
+    "mtime": 1790786621.7207475,
+    "hash": "78eb83c0457757249bb299409c63d8a9"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/store/account/add-to-cart-result.tsx": {
+    "mtime": 1790786434.0371575,
+    "hash": "2e0607528dc38db854446198404ec185"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/store/account/address-book.tsx": {
+    "mtime": 1790786499.4891474,
+    "hash": "7832266334c1c7be9dc39a37c70af892"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/store/account/auth-forms.tsx": {
+    "mtime": 1790786434.0429633,
+    "hash": "899b6e611203a319d351c9af444118b6"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/store/account/list-detail.tsx": {
+    "mtime": 1790786434.048254,
+    "hash": "b6e3d77299b31acc360887fac2243771"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/store/account/lists.tsx": {
+    "mtime": 1790786434.054186,
+    "hash": "64fac50a566af9f8c80ae1fb12f00418"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/store/account/order-detail.tsx": {
+    "mtime": 1790786434.0593028,
+    "hash": "8fa787bfa15b5354cdc4a0862a5c53f0"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/store/account/order-status.tsx": {
+    "mtime": 1790786434.0646815,
+    "hash": "a8f9cac547634d0eb5a68efba8ece0b0"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/store/account/profile-form.tsx": {
+    "mtime": 1790786434.0687618,
+    "hash": "17014f7471689e60479ee6722fea7159"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/store/account/session.tsx": {
+    "mtime": 1790786434.0746834,
+    "hash": "ba81041feef89b5f8f7ebbece3ace9e3"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/store/account/trade-form.tsx": {
+    "mtime": 1790786434.079757,
+    "hash": "86bd434d986d66c13ec8b335410d67e9"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/store/account/trade.tsx": {
+    "mtime": 1790786434.0840037,
+    "hash": "19f03b9936fd8c957a3230d4399cc863"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/store/account/welcome.tsx": {
+    "mtime": 1790786434.0893185,
+    "hash": "4aa6f407d8709462e667832a8bbae8a6"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/store/cart/cart-page.tsx": {
+    "mtime": 1790783880.071963,
+    "hash": "1912f747c3533f993e288ffee7561a01"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/store/checkout/checkout-form.tsx": {
+    "mtime": 1790785149.6002662,
+    "hash": "1137bf096f866f72f4e038d3f97f476e"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/store/checkout/dev-pay.tsx": {
+    "mtime": 1790783964.521302,
+    "hash": "862187c7f2024bf64dbf49ac582b56bc"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/store/checkout/purchase-event.tsx": {
+    "mtime": 1790785149.6055896,
+    "hash": "9b2e674ef9374e352622ffb3817c1cc4"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/store/content/branch-card.tsx": {
+    "mtime": 1790785468.2750099,
+    "hash": "d266f803ac3d567657cc41178ecd546a"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/store/product/buy-box.tsx": {
+    "mtime": 1790786853.8969073,
+    "hash": "ef009c85ba22879ec6afccc652b7ebbc"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/store/product/gallery.tsx": {
+    "mtime": 1790783766.637998,
+    "hash": "d7028c28b408ddd64c569cbf8aca42eb"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/store/product/save-to-list.tsx": {
+    "mtime": 1790786836.4415333,
+    "hash": "bee74fe461ddc0424f24382ec6cb8c3a"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/store/product/tile-calculator.tsx": {
+    "mtime": 1790783766.639921,
+    "hash": "30f5d65ed4cf59221ee5033445f29ce8"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/ui/badge.tsx": {
+    "mtime": 1790783321.658875,
+    "hash": "48603a92c3bc11ebc2ff1e64d7ad2f99"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/ui/button.tsx": {
+    "mtime": 1790783321.6552246,
+    "hash": "5631de787b00456df5aab8399ade5940"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/ui/empty.tsx": {
+    "mtime": 1790783321.6686327,
+    "hash": "2050cb30c1660a7c3181733526c441ae"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/ui/field.tsx": {
+    "mtime": 1790783321.6571116,
+    "hash": "56da19fe502c1549a22bbcebe81c3095"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/ui/pagination.tsx": {
+    "mtime": 1790783321.666752,
+    "hash": "e6fb4a0ffcdd69b092e666f3e94eceb2"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/ui/price-tag.tsx": {
+    "mtime": 1790783321.6605992,
+    "hash": "67a30354471a6cc8d9f2e9f86c198a78"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/ui/product-image.tsx": {
+    "mtime": 1790783586.9611719,
+    "hash": "9b3f5ca97aa3f1892bcd5d8dc3a0e795"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/components/ui/qty-input.tsx": {
+    "mtime": 1790784131.9998052,
+    "hash": "ff3ff9e131a26553947f8dd96789869c"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/e2e/accounts.spec.ts": {
+    "mtime": 1790787503.3870668,
+    "hash": "fbc9e579227dbe77d470093cd9aad2fd"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/e2e/checkout.spec.ts": {
+    "mtime": 1790785009.788256,
+    "hash": "1f81e127c3c8bb11cec353a7d71c2193"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/e2e/smoke.spec.ts": {
+    "mtime": 1790785009.7889357,
+    "hash": "9ca9eedf13e618aafa315f86b36f8a56"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/lib/account-server.ts": {
+    "mtime": 1790786038.3985772,
+    "hash": "77cea5d154eaacc054ce82d88562d75d"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/lib/analytics.ts": {
+    "mtime": 1790785149.4079275,
+    "hash": "e36aa6784f97376dd9d29b730029784b"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/lib/api-browser.ts": {
+    "mtime": 1790783263.845411,
+    "hash": "36b52e4fe7d6c0a23e6c16a553a1e127"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/lib/api-server.ts": {
+    "mtime": 1790786810.2386308,
+    "hash": "50ff094ff85ff59d2ea5e6b719023838"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/lib/cn.ts": {
+    "mtime": 1790783321.6532326,
+    "hash": "07bce7bca9d04af49a54415293032a93"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/lib/content.ts": {
+    "mtime": 1790785428.5759642,
+    "hash": "362bbd69ea76481e87cdbaf5818db50c"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/lib/data.ts": {
+    "mtime": 1790783432.2614224,
+    "hash": "652b3f57526d7560f685a5340a4bf06e"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/lib/format.ts": {
+    "mtime": 1790784832.7697256,
+    "hash": "9a68352e54d30a42a2efc16fb41b82f6"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/lib/listing.ts": {
+    "mtime": 1790783667.045925,
+    "hash": "0abe4376a59edac15641bbc0575b72ae"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/lib/hooks/store.ts": {
+    "mtime": 1790783342.4368992,
+    "hash": "0bcdf9eadefc3520a642a4ba15bb813f"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/packages/api-client/contract/contract.check.ts": {
+    "mtime": 1790783517.5449705,
+    "hash": "39485dc6775eee2d6cb84f8dd67e7ded"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/packages/api-client/src/admin-types.ts": {
+    "mtime": 1790783517.543993,
+    "hash": "20d92c69401ec23b22696940bdb20726"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/packages/api-client/src/client.ts": {
+    "mtime": 1790783517.5444748,
+    "hash": "9d08119bc434b3acc95cc5ef3be37582"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/packages/api-client/src/index.ts": {
+    "mtime": 1790783517.2831612,
+    "hash": "747a02269100e40d3f2d81457afd5445"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/packages/api-client/src/types.ts": {
+    "mtime": 1790782694.5807843,
+    "hash": "fcca5bfafbcee80c7f4b0b78147b0549"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/next-env.d.ts": {
+    "mtime": 1790534517.417415,
+    "hash": "aa94238a90e7d04b7a47ecc3145ba6a0"
   },
   "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/next.config.ts": {
     "mtime": 1788156459.9598289,
@@ -12,8 +1260,8 @@
     "hash": "a0cc1d073219d2a488673881f06cd111"
   },
   "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/src/app/layout.tsx": {
-    "mtime": 1787827031.6776621,
-    "hash": "7eea1c5ee461f15e8f64194c363ed755"
+    "mtime": 1789808937.1245134,
+    "hash": "dc59313a44a69d88bb81570d28c22bca"
   },
   "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/src/app/page.tsx": {
     "mtime": 1787825351.3311884,
@@ -36,8 +1284,12 @@
     "hash": "1e8b172c68f784886dcb09f477d18b05"
   },
   "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/src/app/customers/page.tsx": {
-    "mtime": 1787825351.3987954,
-    "hash": "95463228de487c00bb3b8048e46f7659"
+    "mtime": 1790534356.3110716,
+    "hash": "43b88820c24f0eefae2d0461e3993be5"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/src/app/customers/[id]/page.tsx": {
+    "mtime": 1790534495.470993,
+    "hash": "89a0ab3030e9ed7a27985c5099ecb1b4"
   },
   "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/src/app/day-close/page.tsx": {
     "mtime": 1787825430.1000862,
@@ -91,6 +1343,10 @@
     "mtime": 1788345437.1195183,
     "hash": "143fa99428dab246bdfb35be8c216632"
   },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/src/app/profile/page.tsx": {
+    "mtime": 1790411077.3955164,
+    "hash": "f537a88a58cbbdd5d1c4a1ed9b8db92f"
+  },
   "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/src/app/purchases/page.tsx": {
     "mtime": 1787912689.4352984,
     "hash": "5ab4cc9229a7f7874727e4476d9ae738"
@@ -120,8 +1376,8 @@
     "hash": "225c8c0146c9d69d8ce577c6c9fc5c34"
   },
   "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/src/app/sell/page.tsx": {
-    "mtime": 1789037570.071096,
-    "hash": "15df6efa5a64cacc30b4dfc8afee902b"
+    "mtime": 1790415054.7820525,
+    "hash": "34ac81f04b9a2d0668a68dc3749cae8d"
   },
   "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/src/app/settings/page.tsx": {
     "mtime": 1787825351.3404348,
@@ -144,12 +1400,12 @@
     "hash": "ba78e85884eba36faaf12e08f0d5888d"
   },
   "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/src/app/whatsapp/page.tsx": {
-    "mtime": 1787825351.3413808,
-    "hash": "04b58f604cbba69087244aaaebad52f9"
+    "mtime": 1790431581.8387053,
+    "hash": "0884aa6453c0a294de7e8c347618966a"
   },
   "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/src/components/layout/app-shell.tsx": {
-    "mtime": 1789033701.6073768,
-    "hash": "2a4ddd5772233d14e395e12efcede9f5"
+    "mtime": 1790411735.1734595,
+    "hash": "bec61ec098ef82ff36ef542bdec65a7d"
   },
   "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/src/components/layout/command-search.tsx": {
     "mtime": 1787565594.236742,
@@ -168,8 +1424,8 @@
     "hash": "fee4a9c88b1f1c73d965723a9e35d402"
   },
   "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/src/components/layout/sidebar.tsx": {
-    "mtime": 1789033715.7343657,
-    "hash": "3495e9390e6afdc2b8f0b1f3d1183b48"
+    "mtime": 1790413766.1615882,
+    "hash": "1223c85f3a0343c51655824baaaca222"
   },
   "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/src/components/ui/avatar.tsx": {
     "mtime": 1786903916.876801,
@@ -244,8 +1500,8 @@
     "hash": "57a21da9419a838e7c697adad71e84af"
   },
   "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/src/lib/theme-context.tsx": {
-    "mtime": 1786903853.8733127,
-    "hash": "6c9ae016eee8c229831dd5c81f4d2aaf"
+    "mtime": 1789808927.6832855,
+    "hash": "3b073d26c9ee995ad98e9cd3de20cfdd"
   },
   "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/src/lib/use-notifications.ts": {
     "mtime": 1787824203.9799747,
@@ -719,9 +1975,13 @@
     "mtime": 1788345318.2253456,
     "hash": "20b2ecb15e2f30dad66d15297391e5bc"
   },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/src/modules/products/bulk-import.service.spec.ts": {
+    "mtime": 1789474493.8139274,
+    "hash": "a8afcd58e6d8180b20db2b349522936c"
+  },
   "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/src/modules/products/bulk-import.service.ts": {
-    "mtime": 1788346176.3361185,
-    "hash": "64eb9a3059ea7e786207d7b5369dffc0"
+    "mtime": 1789474434.41711,
+    "hash": "ff133a83cabbc7cc81e5e0942221aa23"
   },
   "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/src/modules/products/dto.ts": {
     "mtime": 1788342596.6337197,
@@ -984,24 +2244,28 @@
     "hash": "c18d1ff497d954ff0eeefcf4353343d7"
   },
   "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/src/modules/whatsapp/dto.ts": {
-    "mtime": 1787988003.2201803,
-    "hash": "5cf0bdbc2062fdc3c9d9b01e4aea3fa0"
+    "mtime": 1790417042.0219193,
+    "hash": "e402a2c020219472c09619f3e216a93f"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/src/modules/whatsapp/whatsapp-admin.controller.ts": {
+    "mtime": 1790417090.4561815,
+    "hash": "6b84d70593649528f9968efa58ec70ae"
   },
   "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/src/modules/whatsapp/whatsapp.controller.ts": {
     "mtime": 1787988224.9125648,
     "hash": "46cfa95080798b484c8153ada3d63577"
   },
   "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/src/modules/whatsapp/whatsapp.module.ts": {
-    "mtime": 1787988099.5584443,
-    "hash": "f4f7811d832390bc9bd3ead7034f0b24"
+    "mtime": 1790417069.968732,
+    "hash": "a12ed41901a3f8f6ec208d58dc49246c"
   },
   "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/src/modules/whatsapp/whatsapp.service.spec.ts": {
     "mtime": 1787988448.4445572,
     "hash": "5525bb793d08245f842dcb825c985c1a"
   },
   "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/api/src/modules/whatsapp/whatsapp.service.ts": {
-    "mtime": 1787988360.7075539,
-    "hash": "36816bf1647a3debcf9d81f3430918ec"
+    "mtime": 1790421392.6385415,
+    "hash": "a9541e4b4d258a3a46c0404373903bb6"
   },
   "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/pos/vite.config.ts": {
     "mtime": 1787298070.2839193,
@@ -1012,12 +2276,12 @@
     "hash": "53efaff90534ca78c2b1e098988bec33"
   },
   "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/pos/dist-electron/main.js": {
-    "mtime": 1789031910.2077818,
-    "hash": "a5e3083f4fe6aa41018060c55f85b6a2"
+    "mtime": 1790534497.1276157,
+    "hash": "cecfc329667b1fd5837a6f9c39557899"
   },
   "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/pos/dist-electron/preload.js": {
-    "mtime": 1789031909.7947514,
-    "hash": "0c92c3ae3e9885c31a48c1fe9cf9e038"
+    "mtime": 1790534495.167328,
+    "hash": "f1b7409e08b9142b20f50ab9698f11bb"
   },
   "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/pos/electron/main.ts": {
     "mtime": 1788268247.3616495,
@@ -1511,6 +2775,42 @@
     "mtime": 1787237256.7375476,
     "hash": "52484caaec292cdb6983a292da03d2d8"
   },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/docker-compose.yml": {
+    "mtime": 1790784408.9571676,
+    "hash": "9ec5c8cdc0610fe0e3f9441b751eecc9"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/PLAN.md": {
+    "mtime": 1790787607.6484876,
+    "hash": "7864fef5c4f5b29a91906d14f579e71e"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/pnpm-workspace.yaml": {
+    "mtime": 1790777931.4693668,
+    "hash": "5801f1146ad3889785d138e74c82f8ba"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/README.md": {
+    "mtime": 1790785108.815603,
+    "hash": "771ac1839c33b261c4511658d4445b77"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/README.md": {
+    "mtime": 1790777651.5236704,
+    "hash": "602ed02fc377874b8b411c4799a9bee1"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/docs/pos-integration.yaml": {
+    "mtime": 1790784380.4707305,
+    "hash": "939685c6158d15777b95122f5fd47958"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/AGENTS.md": {
+    "mtime": 1790773497.7542348,
+    "hash": "01e8142356e15c3404e0d84c48187cd0"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/CLAUDE.md": {
+    "mtime": 1790773497.7546954,
+    "hash": "5c27369b226fcf2be8a6cfe52224e767"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/frontend/README.md": {
+    "mtime": 1790773450.827796,
+    "hash": "f15aaa42d5d299d091b1171097ea56ad"
+  },
   "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/admin/AGENTS.md": {
     "mtime": 1787852887.2052097,
     "hash": "01e8142356e15c3404e0d84c48187cd0"
@@ -1563,9 +2863,17 @@
     "mtime": 1787855046.8577309,
     "hash": "8ccb2410ece9f58615bbb2bf95ab100a"
   },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/docs/WHATSAPP.md": {
+    "mtime": 1790434726.3281753,
+    "hash": "2e1134ba3462e0611a310fbc38b48a7d"
+  },
   "/media/khaled/Education/DevsFleet/DevsFleet POS/packages/pdf-documents/assets/fonts/README.md": {
     "mtime": 1787259717.6870284,
     "hash": "1953847682d5703fc319cedcf1e46753"
+  },
+  "/media/khaled/Education/DevsFleet/DevsFleet POS/al-lahiq/backend/uploads/2026-09/560367c3-ba40-4211-afd8-a823fb70feda.png": {
+    "mtime": 1790786998.0009115,
+    "hash": "ee76702403cd15dbc71587365494cbe5"
   },
   "/media/khaled/Education/DevsFleet/DevsFleet POS/apps/pos/public/icon/DevsFleet-Fav.png": {
     "mtime": 1785089567.04899,

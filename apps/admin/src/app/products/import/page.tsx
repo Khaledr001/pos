@@ -32,6 +32,7 @@ export default function BulkImportPage() {
 
   const [branches, setBranches] = useState<{ id: string; name: string; code: string }[]>([]);
   const [branchId, setBranchId] = useState("");
+  const [moveExisting, setMoveExisting] = useState(false);
 
   const [file, setFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -39,9 +40,9 @@ export default function BulkImportPage() {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{
-    created: number; rejected: number;
-    autoCreated: { categories: string[]; brands: string[] };
-    errors: { row: number; reason: string }[];
+    created: number; rejected: number; recategorized: number;
+    autoCreated: { categories: string[]; brands: string[]; regrouped: string[] };
+    errors: { row: number; sheet?: string; reason: string }[];
     dryRun: boolean;
   } | null>(null);
 
@@ -62,7 +63,7 @@ export default function BulkImportPage() {
     if (file) {
       runImport(true);
     }
-  }, [file, branchId]); // Re-run if branch changes while file is selected
+  }, [file, branchId, moveExisting]); // Re-run if an option changes while a file is selected
 
   const downloadTemplate = async () => {
     try {
@@ -107,6 +108,7 @@ export default function BulkImportPage() {
       const params = new URLSearchParams();
       params.set("dryRun", String(dryRun));
       if (branchId) params.set("branchId", branchId);
+      if (moveExisting) params.set("moveExisting", "true");
 
       const res = await api.postForm<typeof result>(
         `/products/import?${params.toString()}`,
@@ -115,7 +117,7 @@ export default function BulkImportPage() {
       );
       setResult(res);
 
-      if (!dryRun && res && res.created > 0) {
+      if (!dryRun && res && (res.created > 0 || res.recategorized > 0)) {
         // Navigate back to products after successful import
         router.push("/products");
       }
@@ -154,7 +156,7 @@ export default function BulkImportPage() {
           <h2 className="text-lg font-bold text-card-foreground">Download the template</h2>
         </div>
         <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
-          One row per product. Columns marked with * are required. Unit must match a name that already exists (see the "Valid Values" sheet inside the template). Category and Brand are created automatically when the name is new. SKU is optional — leave it blank and one is auto-generated from the category prefix (e.g. ELC-0007). Current Stock creates opening stock in the selected warehouse.
+          One row per product. Columns marked with * are required. Unit must match a name that already exists (see the "Valid Values" sheet inside the template). Category and Brand are created automatically when the name is new; a Sub Category is created under its Category, and the product is filed under the sub-category. SKU is optional — leave it blank and one is auto-generated from the category prefix (e.g. ELC-0007). Current Stock creates opening stock in the selected warehouse. A workbook with one sheet per department is imported in one go.
         </p>
         <Button variant="outline" onClick={downloadTemplate} className="gap-2">
           <Download className="h-4 w-4 text-muted-foreground" />
@@ -196,6 +198,21 @@ export default function BulkImportPage() {
               </p>
             </div>
           )}
+
+          <label className="flex max-w-xl cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              checked={moveExisting}
+              onChange={(e) => setMoveExisting(e.target.checked)}
+              className="mt-0.5 h-4 w-4 cursor-pointer accent-primary"
+            />
+            <span>
+              <span className="block text-sm font-medium text-foreground">Move existing products into the file&apos;s categories</span>
+              <span className="block text-xs text-muted-foreground mt-0.5">
+                A product that already exists is moved to the category on its row instead of being skipped. Its price, stock and unit are not changed.
+              </span>
+            </span>
+          </label>
 
           {/* File Drop Zone */}
           <div
@@ -265,21 +282,26 @@ export default function BulkImportPage() {
                     {result.dryRun ? "⚡ Dry Run Preview" : "✅ Import Complete"}
                   </p>
                   
-                  {result.dryRun && result.created > 0 && (
+                  {result.dryRun && (result.created > 0 || result.recategorized > 0) && (
                     <Button
                       onClick={() => runImport(false)}
                       disabled={running}
                       className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
                     >
                       {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
-                      {running ? "Importing…" : `Confirm & Import ${result.created} products`}
+                      {running
+                        ? "Importing…"
+                        : result.recategorized > 0
+                          ? `Confirm: import ${result.created}, move ${result.recategorized}`
+                          : `Confirm & Import ${result.created} products`}
                     </Button>
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className={cn("grid gap-4", moveExisting ? "grid-cols-3" : "grid-cols-2")}>
                   {[
                     { label: "Created", value: result.created, color: "text-emerald-600 dark:text-emerald-400" },
+                    ...(moveExisting ? [{ label: "Moved", value: result.recategorized, color: "text-blue-600 dark:text-blue-400" }] : []),
                     { label: "Rejected", value: result.rejected, color: "text-destructive" },
                   ].map((stat) => (
                     <div key={stat.label} className="text-center rounded-lg bg-background p-4 border shadow-sm">
@@ -291,7 +313,7 @@ export default function BulkImportPage() {
               </div>
 
               {/* Auto-created entities */}
-              {(result.autoCreated.categories.length > 0 || result.autoCreated.brands.length > 0) && (
+              {(result.autoCreated.categories.length > 0 || result.autoCreated.brands.length > 0 || result.autoCreated.regrouped.length > 0) && (
                 <div className="rounded-xl border border-blue-500/30 bg-blue-500/5 p-5">
                   <p className="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-3">
                     Entities that will be auto-created
@@ -309,6 +331,12 @@ export default function BulkImportPage() {
                         <span className="text-muted-foreground">{result.autoCreated.brands.join(", ")}</span>
                       </p>
                     )}
+                    {result.autoCreated.regrouped.length > 0 && (
+                      <p className="text-sm text-foreground">
+                        <span className="font-semibold">Existing categories moved under a parent:</span>{" "}
+                        <span className="text-muted-foreground">{result.autoCreated.regrouped.join(", ")}</span>
+                      </p>
+                    )}
                   </div>
                 </div>
               )}
@@ -322,7 +350,7 @@ export default function BulkImportPage() {
                   <div className="max-h-60 overflow-y-auto space-y-1.5 rounded-md bg-background/50 p-2">
                     {result.errors.map((err, i) => (
                       <p key={i} className="text-sm text-muted-foreground">
-                        <span className="font-mono font-semibold text-destructive">Row {err.row}:</span>{" "}
+                        <span className="font-mono font-semibold text-destructive">{err.sheet ? `${err.sheet} row` : "Row"} {err.row}:</span>{" "}
                         {err.reason}
                       </p>
                     ))}

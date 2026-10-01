@@ -7,13 +7,14 @@
  * the NestJS request context rather than as a standalone CLI script.
  *
  * KEY DIFFERENCES FROM THE CLI TOOL:
- *   - Auto-creates categories and brands instead of rejecting unknown ones
+ *   - Auto-creates categories and brands instead of rejecting unknown ones,
+ *     and files a "Sub Category" under its "Category"
  *   - Auto-generates SKUs when the column is blank
  *   - Handles wholesalePrice and currentStock columns
  *   - Returns structured result instead of printing to console
  *   - Uses TenantDatabase (tenant resolved from JWT)
  */
-import { isNull, schema, sql, type Transaction } from "@devsfleet/db";
+import { eq, isNull, schema, sql, type Transaction } from "@devsfleet/db";
 import { normalizeBarcode, slugify, variantSearchKey } from "@devsfleet/shared-utils";
 import { Injectable, Logger } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
@@ -39,6 +40,7 @@ const KNOWN_HEADERS = new Set([
   "name",
   "sku",
   "category",
+  "subcategory",
   "unit",
   "brand",
   "barcode",
@@ -53,10 +55,14 @@ const KNOWN_HEADERS = new Set([
 // ── Row parsing ─────────────────────────────────────────────────────────────
 
 interface ParsedRow {
+  /** Null when the file has a single product sheet, so messages stay "row 12". */
+  sheet: string | null;
   rowNumber: number;
   name: string;
   sku: string | null;
   categoryName: string | null;
+  /** Placed under `categoryName`; the product is filed here when present. */
+  subCategoryName: string | null;
   unitName: string;
   brandName: string | null;
   barcode: string | null;
@@ -92,32 +98,58 @@ async function readWorkbook(buffer: Buffer): Promise<ParseResult> {
     await workbook.csv.read(stream);
   }
 
-  const sheet = workbook.worksheets[0];
-  if (!sheet) throw new Error("The workbook has no sheets");
+  if (workbook.worksheets.length === 0) throw new Error("The workbook has no sheets");
 
-  const headerRow = sheet.getRow(1);
-  const headers: string[] = [];
-  headerRow.eachCell({ includeEmpty: true }, (cell, col) => {
-    headers[col - 1] = String(cell.value ?? "").trim();
-  });
+  // A price list split into one sheet per department imports in one go. A
+  // sheet with no Name column — a legend, a category map — is not products.
+  const productSheets = workbook.worksheets
+    .map((sheet) => {
+      const headers: string[] = [];
+      sheet.getRow(1).eachCell({ includeEmpty: true }, (cell, col) => {
+        headers[col - 1] = String(cell.value ?? "").trim();
+      });
+      return { sheet, headers };
+    })
+    .filter(({ headers }) => headers.some((h) => normalizeHeader(h) === "name"));
+  if (productSheets.length === 0) throw new Error('No sheet has a "Name" column');
+  const named = productSheets.length > 1;
 
   const rows: ParsedRow[] = [];
   const rejected: BulkImportRowError[] = [];
 
-  sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-    if (rowNumber === 1) return;
+  for (const { sheet, headers } of productSheets) {
+    const sheetName = named ? sheet.name : null;
+    sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+      if (rowNumber === 1) return;
 
-    const values: unknown[] = [];
-    row.eachCell({ includeEmpty: true }, (cell, col) => {
-      values[col - 1] = cell.value;
+      const values: unknown[] = [];
+      row.eachCell({ includeEmpty: true }, (cell, col) => {
+        values[col - 1] = cell.value;
+      });
+
+      const result = parseRow(headers, values, rowNumber, sheetName);
+      if (result.ok) rows.push(result.row);
+      else rejected.push({ ...rowRef({ sheet: sheetName, rowNumber }), reason: result.reason });
     });
-
-    const result = parseRow(headers, values, rowNumber);
-    if (result.ok) rows.push(result.row);
-    else rejected.push({ row: result.rowNumber, reason: result.reason });
-  });
+  }
 
   return { rows, rejected };
+}
+
+type RowRef = Pick<ParsedRow, "sheet" | "rowNumber">;
+
+function rowRef(row: RowRef): Pick<BulkImportRowError, "row" | "sheet"> {
+  return row.sheet ? { row: row.rowNumber, sheet: row.sheet } : { row: row.rowNumber };
+}
+
+/** "rows 4, 9" — or "Hardware rows 4, 9 and Electric row 12" across sheets. */
+export function describeRows(rows: RowRef[]): string {
+  const bySheet = new Map<string | null, number[]>();
+  for (const r of rows) bySheet.set(r.sheet, [...(bySheet.get(r.sheet) ?? []), r.rowNumber]);
+  const parts = [...bySheet].map(
+    ([sheet, numbers]) => `${sheet ? `${sheet} ` : ""}${numbers.length > 1 ? "rows" : "row"} ${numbers.join(", ")}`,
+  );
+  return parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}` : parts[0]!;
 }
 
 function cellToString(raw: unknown): string {
@@ -130,6 +162,7 @@ function parseRow(
   headers: string[],
   values: unknown[],
   rowNumber: number,
+  sheet: string | null = null,
 ): { ok: true; row: ParsedRow } | { ok: false; rowNumber: number; reason: string } {
   const cells = headers.map((header, i) => ({
     key: normalizeHeader(header),
@@ -186,10 +219,12 @@ function parseRow(
   return {
     ok: true,
     row: {
+      sheet,
       rowNumber,
       name,
       sku,
       categoryName: get("category") || null,
+      subCategoryName: get("subcategory") || null,
       unitName,
       brandName: get("brand") || null,
       barcode,
@@ -203,19 +238,19 @@ function parseRow(
   };
 }
 
-/** Every SKU that appears more than once, with the row numbers. */
-function findDuplicateSkus(rows: ParsedRow[]): Map<string, number[]> {
-  const bySku = new Map<string, number[]>();
+/** Every SKU that appears more than once, with the rows it is on. */
+function findDuplicateSkus(rows: ParsedRow[]): Map<string, ParsedRow[]> {
+  const bySku = new Map<string, ParsedRow[]>();
   for (const row of rows) {
     if (!row.sku) continue;
     const existing = bySku.get(row.sku);
-    if (existing) existing.push(row.rowNumber);
-    else bySku.set(row.sku, [row.rowNumber]);
+    if (existing) existing.push(row);
+    else bySku.set(row.sku, [row]);
   }
 
-  const duplicates = new Map<string, number[]>();
-  for (const [sku, rowNumbers] of bySku) {
-    if (rowNumbers.length > 1) duplicates.set(sku, rowNumbers);
+  const duplicates = new Map<string, ParsedRow[]>();
+  for (const [sku, dupes] of bySku) {
+    if (dupes.length > 1) duplicates.set(sku, dupes);
   }
   return duplicates;
 }
@@ -237,47 +272,82 @@ export function productNameKey(name: string): string {
   return name.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
-/** Every product name that appears more than once, with the row numbers. */
-export function findDuplicateNames(rows: Pick<ParsedRow, "name" | "rowNumber">[]): Map<string, number[]> {
-  const byName = new Map<string, number[]>();
+/** Every product name that appears more than once, with the rows it is on. */
+export function findDuplicateNames<T extends Pick<ParsedRow, "name">>(rows: T[]): Map<string, T[]> {
+  const byName = new Map<string, T[]>();
   for (const row of rows) {
     const key = productNameKey(row.name);
     if (!key) continue;
     const existing = byName.get(key);
-    if (existing) existing.push(row.rowNumber);
-    else byName.set(key, [row.rowNumber]);
+    if (existing) existing.push(row);
+    else byName.set(key, [row]);
   }
 
-  const duplicates = new Map<string, number[]>();
-  for (const [key, rowNumbers] of byName) {
-    if (rowNumbers.length > 1) duplicates.set(key, rowNumbers);
+  const duplicates = new Map<string, T[]>();
+  for (const [key, dupes] of byName) {
+    if (dupes.length > 1) duplicates.set(key, dupes);
   }
   return duplicates;
 }
 
-/** Every barcode that appears more than once, with the row numbers. */
-function findDuplicateBarcodes(rows: ParsedRow[]): Map<string, number[]> {
-  const byBarcode = new Map<string, number[]>();
+/** Mirrors `CategoriesService.MAX_DEPTH`. */
+const MAX_CATEGORY_DEPTH = 5;
+
+export type SubCategoryPlacement = "create" | "keep" | "regroup" | "conflict" | "too-deep";
+
+/**
+ * What a row that files `existing` under a parent does to the tree.
+ *
+ * A flat, childless category is moved under the parent the sheet names: that
+ * is how a catalogue imported before it had sub-categories gets its tree, and
+ * its products follow because they point at the category, not its path. A
+ * category the tree already places elsewhere is a conflict, never a silent
+ * move — someone put it there on purpose.
+ */
+export function placeSubCategory(
+  existing: { id: string; parentId: string | null; isParent: boolean } | null,
+  parent: { id: string; depth: number },
+): SubCategoryPlacement {
+  if (existing && (existing.id === parent.id || existing.parentId === parent.id)) return "keep";
+  if (existing && (existing.parentId !== null || existing.isParent)) return "conflict";
+  if (parent.depth + 1 >= MAX_CATEGORY_DEPTH) return "too-deep";
+  return existing ? "regroup" : "create";
+}
+
+/** Every barcode that appears more than once, with the rows it is on. */
+function findDuplicateBarcodes(rows: ParsedRow[]): Map<string, ParsedRow[]> {
+  const byBarcode = new Map<string, ParsedRow[]>();
   for (const row of rows) {
     if (!row.barcode) continue;
     const existing = byBarcode.get(row.barcode);
-    if (existing) existing.push(row.rowNumber);
-    else byBarcode.set(row.barcode, [row.rowNumber]);
+    if (existing) existing.push(row);
+    else byBarcode.set(row.barcode, [row]);
   }
 
-  const duplicates = new Map<string, number[]>();
-  for (const [barcode, rowNumbers] of byBarcode) {
-    if (rowNumbers.length > 1) duplicates.set(barcode, rowNumbers);
+  const duplicates = new Map<string, ParsedRow[]>();
+  for (const [barcode, dupes] of byBarcode) {
+    if (dupes.length > 1) duplicates.set(barcode, dupes);
   }
   return duplicates;
 }
 
 // ── Lookups ─────────────────────────────────────────────────────────────────
 
+interface CategoryRef {
+  name: string;
+  slug: string;
+  parentId: string | null;
+  path: string;
+  depth: number;
+}
+
 interface Lookups {
   categoriesByName: Map<string, string>;
   /** Catches two different names that slugify to the same slug — see `uq_categories_tenant_slug`. */
   categoriesBySlug: Map<string, string>;
+  categoriesById: Map<string, CategoryRef>;
+  /** Categories with at least one child — never regrouped under another. */
+  categoryParents: Set<string>;
   unitsByName: Map<string, string>;
   unitsByAbbr: Map<string, string>;
   brandsByName: Map<string, string>;
@@ -292,19 +362,28 @@ interface Lookups {
    * should create it again rather than be refused for a reason nobody can see
    * in the product list.
    */
-  productNames: Set<string>;
+  productNames: Map<string, { id: string; categoryId: string | null }[]>;
   defaultPriceListId: string;
 }
 
 async function loadLookups(tx: Transaction): Promise<Lookups> {
   const [categories, units, brands, products, defaultList] = await Promise.all([
-    tx.select({ id: schema.categories.id, name: schema.categories.name, slug: schema.categories.slug }).from(schema.categories),
+    tx
+      .select({
+        id: schema.categories.id,
+        name: schema.categories.name,
+        slug: schema.categories.slug,
+        parentId: schema.categories.parentId,
+        path: schema.categories.path,
+        depth: schema.categories.depth,
+      })
+      .from(schema.categories),
     tx.select({ id: schema.units.id, name: schema.units.name, abbreviation: schema.units.abbreviation }).from(schema.units),
     tx.select({ id: schema.brands.id, name: schema.brands.name, slug: schema.brands.slug }).from(schema.brands),
     // Loaded once rather than queried per row: a 5,000-SKU catalogue is a few
     // hundred KB of strings, against 5,000 round trips inside one transaction.
     tx
-      .select({ name: schema.products.name })
+      .select({ id: schema.products.id, name: schema.products.name, categoryId: schema.products.categoryId })
       .from(schema.products)
       .where(isNull(schema.products.deletedAt)),
     tx.query.priceLists.findFirst({
@@ -320,13 +399,33 @@ async function loadLookups(tx: Transaction): Promise<Lookups> {
   return {
     categoriesByName: new Map(categories.map((c) => [c.name.trim().toLowerCase(), c.id])),
     categoriesBySlug: new Map(categories.map((c) => [c.slug, c.id])),
+    categoriesById: new Map(categories.map((c) => [c.id, c])),
+    categoryParents: new Set(categories.flatMap((c) => (c.parentId ? [c.parentId] : []))),
     unitsByName: new Map(units.map((u) => [u.name.trim().toLowerCase(), u.id])),
     unitsByAbbr: new Map(units.map((u) => [u.abbreviation.trim().toLowerCase(), u.id])),
     brandsByName: new Map(brands.map((b) => [b.name.trim().toLowerCase(), b.id])),
     brandsBySlug: new Map(brands.map((b) => [b.slug, b.id])),
-    productNames: new Set(products.map((p) => productNameKey(p.name))),
+    productNames: products.reduce((byName, p) => {
+      const key = productNameKey(p.name);
+      byName.set(key, [...(byName.get(key) ?? []), { id: p.id, categoryId: p.categoryId }]);
+      return byName;
+    }, new Map<string, { id: string; categoryId: string | null }[]>()),
     defaultPriceListId: defaultList.id,
   };
+}
+
+/**
+ * A category by name, or by a different spelling that slugifies the same
+ * ("PVC & Fittings" / "PVC/Fittings") — reused rather than inserted, since
+ * uq_categories_tenant_slug would reject the INSERT with a generic conflict.
+ */
+function findCategory(lookups: Lookups, name: string): string | undefined {
+  const key = name.trim().toLowerCase();
+  const byName = lookups.categoriesByName.get(key);
+  if (byName) return byName;
+  const bySlug = lookups.categoriesBySlug.get(slugify(name));
+  if (bySlug) lookups.categoriesByName.set(key, bySlug);
+  return bySlug;
 }
 
 // ── Service ─────────────────────────────────────────────────────────────────
@@ -360,16 +459,16 @@ export class BulkImportService {
         (!r.barcode || !duplicateBarcodes.has(r.barcode)) &&
         !duplicateNames.has(productNameKey(r.name)),
     );
-    for (const [sku, rowNumbers] of duplicateSkuRows) {
+    for (const [sku, dupes] of duplicateSkuRows) {
       errors.push({
-        row: rowNumbers[0]!,
-        reason: `SKU "${sku}" appears on rows ${rowNumbers.join(", ")} — fix the file`,
+        ...rowRef(dupes[0]!),
+        reason: `SKU "${sku}" appears on ${describeRows(dupes)} — fix the file`,
       });
     }
-    for (const [barcode, rowNumbers] of duplicateBarcodeRows) {
+    for (const [barcode, dupes] of duplicateBarcodeRows) {
       errors.push({
-        row: rowNumbers[0]!,
-        reason: `Barcode "${barcode}" appears on rows ${rowNumbers.join(", ")} — fix the file`,
+        ...rowRef(dupes[0]!),
+        reason: `Barcode "${barcode}" appears on ${describeRows(dupes)} — fix the file`,
       });
     }
     /**
@@ -381,16 +480,16 @@ export class BulkImportService {
      * be first is how a catalogue ends up priced off a stale row. The message
      * names every row so the file can be fixed in one pass.
      */
-    for (const [key, rowNumbers] of duplicateNameRows) {
-      const shown = rows.find((r) => productNameKey(r.name) === key)?.name ?? key;
+    for (const dupes of duplicateNameRows.values()) {
       errors.push({
-        row: rowNumbers[0]!,
-        reason: `Product name "${shown}" appears on rows ${rowNumbers.join(", ")} — fix the file`,
+        ...rowRef(dupes[0]!),
+        reason: `Product name "${dupes[0]!.name}" appears on ${describeRows(dupes)} — fix the file`,
       });
     }
 
-    const tally = { created: 0, rejected: errors.length };
-    const autoCreated = { categories: [] as string[], brands: [] as string[] };
+    const tally = { created: 0, rejected: errors.length, recategorized: 0 };
+    const autoCreated: BulkImportResult["autoCreated"] = { categories: [], brands: [], regrouped: [] };
+    const categoryRefusals = new Map<ParsedRow, string>();
     const batchId = randomUUID();
 
     for (let i = 0; i < importable.length; i += CHUNK_SIZE) {
@@ -402,40 +501,8 @@ export class BulkImportService {
 
         // ── Auto-create missing categories & brands ──────────────────
         for (const row of chunk) {
-          if (row.categoryName) {
-            const key = row.categoryName.trim().toLowerCase();
-            if (!lookups.categoriesByName.has(key)) {
-              const slug = slugify(row.categoryName);
-              const bySlug = lookups.categoriesBySlug.get(slug);
-              if (bySlug) {
-                // A different spelling of a name already taken by this slug
-                // (e.g. "PVC & Fittings" / "PVC/Fittings") — reuse it instead
-                // of attempting an INSERT that uq_categories_tenant_slug
-                // would reject with a generic conflict.
-                lookups.categoriesByName.set(key, bySlug);
-              } else if (!options.dryRun) {
-                const [created] = await tx
-                  .insert(schema.categories)
-                  .values({ tenantId, name: row.categoryName.trim(), slug, path: slug, depth: 0 })
-                  .returning({ id: schema.categories.id });
-                if (created) {
-                  lookups.categoriesByName.set(key, created.id);
-                  lookups.categoriesBySlug.set(slug, created.id);
-                }
-                if (!autoCreated.categories.includes(row.categoryName.trim())) {
-                  autoCreated.categories.push(row.categoryName.trim());
-                }
-              } else {
-                // In dry-run, use a placeholder so later rows with the same
-                // category don't register as "needs creation" twice.
-                lookups.categoriesByName.set(key, "dry-run-placeholder");
-                lookups.categoriesBySlug.set(slug, "dry-run-placeholder");
-                if (!autoCreated.categories.includes(row.categoryName.trim())) {
-                  autoCreated.categories.push(row.categoryName.trim());
-                }
-              }
-            }
-          }
+          const refused = await this.placeCategories(tx, lookups, row, options.dryRun, autoCreated);
+          if (refused) categoryRefusals.set(row, refused);
 
           if (row.brandName) {
             const key = row.brandName.trim().toLowerCase();
@@ -469,20 +536,16 @@ export class BulkImportService {
 
         // ── Process each row ─────────────────────────────────────────
         for (const row of chunk) {
-          // Resolve unit — try both name and abbreviation
-          const unitKey = row.unitName.trim().toLowerCase();
-          const unitId = lookups.unitsByName.get(unitKey) ?? lookups.unitsByAbbr.get(unitKey);
-          if (!unitId) {
+          const refusal = categoryRefusals.get(row);
+          if (refusal) {
             tally.rejected += 1;
-            errors.push({ row: row.rowNumber, reason: `Unknown unit "${row.unitName}"` });
+            errors.push({ ...rowRef(row), reason: `${row.name}: ${refusal}` });
             continue;
           }
 
-          const categoryId = row.categoryName
-            ? lookups.categoriesByName.get(row.categoryName.trim().toLowerCase()) ?? null
-            : null;
-          const brandId = row.brandName
-            ? lookups.brandsByName.get(row.brandName.trim().toLowerCase()) ?? null
+          const leafName = row.subCategoryName ?? row.categoryName;
+          const categoryId = leafName
+            ? lookups.categoriesByName.get(leafName.trim().toLowerCase()) ?? null
             : null;
 
           // ── Reject a name the catalogue already holds ─────────────────
@@ -491,14 +554,45 @@ export class BulkImportService {
           // must have, so this is the rule that catches a re-imported price
           // list whose SKU column is blank — the case where every other guard
           // here passes and the catalogue quietly doubles.
-          if (lookups.productNames.has(productNameKey(row.name))) {
-            tally.rejected += 1;
-            errors.push({
-              row: row.rowNumber,
-              reason: `A product named "${row.name}" already exists — skipped`,
-            });
+          //
+          // With `moveExisting`, the row's category is the one thing taken
+          // from it: prices, stock and units of a product already trading are
+          // never rewritten by a spreadsheet.
+          const existing = lookups.productNames.get(productNameKey(row.name));
+          if (existing) {
+            if (!options.moveExisting) {
+              tally.rejected += 1;
+              errors.push({ ...rowRef(row), reason: `A product named "${row.name}" already exists — skipped` });
+            } else if (existing.length > 1) {
+              tally.rejected += 1;
+              errors.push({
+                ...rowRef(row),
+                reason: `${existing.length} products are named "${row.name}" — not moved; rename one first`,
+              });
+            } else if (categoryId && existing[0]!.categoryId !== categoryId) {
+              tally.recategorized += 1;
+              if (!options.dryRun) {
+                await tx
+                  .update(schema.products)
+                  .set({ categoryId })
+                  .where(eq(schema.products.id, existing[0]!.id));
+              }
+            }
             continue;
           }
+
+          // Resolve unit — try both name and abbreviation
+          const unitKey = row.unitName.trim().toLowerCase();
+          const unitId = lookups.unitsByName.get(unitKey) ?? lookups.unitsByAbbr.get(unitKey);
+          if (!unitId) {
+            tally.rejected += 1;
+            errors.push({ ...rowRef(row), reason: `Unknown unit "${row.unitName}"` });
+            continue;
+          }
+
+          const brandId = row.brandName
+            ? lookups.brandsByName.get(row.brandName.trim().toLowerCase()) ?? null
+            : null;
 
           // ── Reject a SKU that already exists rather than overwrite it ─
           //
@@ -514,7 +608,7 @@ export class BulkImportService {
             if (existingVariant) {
               tally.rejected += 1;
               errors.push({
-                row: row.rowNumber,
+                ...rowRef(row),
                 reason: `${row.name} (SKU ${row.sku}) already exists — skipped`,
               });
               continue;
@@ -532,7 +626,7 @@ export class BulkImportService {
             if (existingBarcode) {
               tally.rejected += 1;
               errors.push({
-                row: row.rowNumber,
+                ...rowRef(row),
                 reason: `${row.name}: barcode "${row.barcode}" is already assigned to another product — skipped`,
               });
               continue;
@@ -578,7 +672,7 @@ export class BulkImportService {
             if (!product) {
               tally.created -= 1;
               tally.rejected += 1;
-              errors.push({ row: row.rowNumber, reason: `Could not create product "${row.name}"` });
+              errors.push({ ...rowRef(row), reason: `Could not create product "${row.name}"` });
               continue;
             }
 
@@ -646,6 +740,110 @@ export class BulkImportService {
   }
 
   /**
+   * Finds or creates the row's category, then its sub-category beneath it.
+   *
+   * Returns a reason when the row cannot be filed where the sheet says; the
+   * caller rejects that row rather than guessing.
+   */
+  private async placeCategories(
+    tx: Transaction,
+    lookups: Lookups,
+    row: ParsedRow,
+    dryRun: boolean,
+    autoCreated: BulkImportResult["autoCreated"],
+  ): Promise<string | null> {
+    const main = row.categoryName?.trim();
+    const sub = row.subCategoryName?.trim();
+    if (!main) {
+      if (sub) await this.findOrCreateCategory(tx, lookups, sub, null, dryRun, autoCreated);
+      return null;
+    }
+
+    const parentId = await this.findOrCreateCategory(tx, lookups, main, null, dryRun, autoCreated);
+    if (!sub) return null;
+    const parent = lookups.categoriesById.get(parentId)!;
+
+    const existingId = findCategory(lookups, sub);
+    const existing = existingId ? lookups.categoriesById.get(existingId) : undefined;
+    const placement = placeSubCategory(
+      existingId && existing
+        ? { id: existingId, parentId: existing.parentId, isParent: lookups.categoryParents.has(existingId) }
+        : null,
+      { id: parentId, depth: parent.depth },
+    );
+
+    switch (placement) {
+      case "keep":
+        return null;
+      case "create":
+        await this.findOrCreateCategory(tx, lookups, sub, parentId, dryRun, autoCreated);
+        return null;
+      case "too-deep":
+        return `"${sub}" under "${main}" would nest categories more than ${MAX_CATEGORY_DEPTH} levels deep`;
+      case "conflict": {
+        const current = existing?.parentId ? lookups.categoriesById.get(existing.parentId)?.name : null;
+        return current
+          ? `category "${existing!.name}" already sits under "${current}", not "${main}" — move it in Categories or change the sheet`
+          : `category "${existing!.name}" has sub-categories of its own, so it cannot go under "${main}"`;
+      }
+      case "regroup": {
+        const moved = { ...existing!, parentId, path: `${parent.path}/${existing!.slug}`, depth: parent.depth + 1 };
+        if (!dryRun) {
+          await tx
+            .update(schema.categories)
+            .set({ parentId: moved.parentId, path: moved.path, depth: moved.depth })
+            .where(eq(schema.categories.id, existingId!));
+        }
+        lookups.categoriesById.set(existingId!, moved);
+        lookups.categoryParents.add(parentId);
+        const label = `${parent.name} / ${existing!.name}`;
+        if (!autoCreated.regrouped.includes(label)) autoCreated.regrouped.push(label);
+        return null;
+      }
+    }
+  }
+
+  /** The category's id, inserting it (under `parentId`, if given) when the tenant has none by that name. */
+  private async findOrCreateCategory(
+    tx: Transaction,
+    lookups: Lookups,
+    name: string,
+    parentId: string | null,
+    dryRun: boolean,
+    autoCreated: BulkImportResult["autoCreated"],
+  ): Promise<string> {
+    const found = findCategory(lookups, name);
+    if (found) return found;
+
+    const parent = parentId ? lookups.categoriesById.get(parentId)! : null;
+    const slug = slugify(name);
+    const ref: CategoryRef = {
+      name,
+      slug,
+      parentId,
+      path: parent ? `${parent.path}/${slug}` : slug,
+      depth: parent ? parent.depth + 1 : 0,
+    };
+
+    let id = `dry-run:${slug}`;
+    if (!dryRun) {
+      const [created] = await tx
+        .insert(schema.categories)
+        .values({ tenantId: RequestContext.requireTenantId(), ...ref })
+        .returning({ id: schema.categories.id });
+      id = created!.id;
+    }
+    lookups.categoriesByName.set(name.toLowerCase(), id);
+    lookups.categoriesBySlug.set(slug, id);
+    lookups.categoriesById.set(id, ref);
+    if (parentId) lookups.categoryParents.add(parentId);
+
+    const label = parent ? `${parent.name} / ${name}` : name;
+    if (!autoCreated.categories.includes(label)) autoCreated.categories.push(label);
+    return id;
+  }
+
+  /**
    * Generate a template workbook with correct headers and a "Valid Values"
    * reference sheet populated from the tenant's actual lookups.
    */
@@ -658,6 +856,7 @@ export class BulkImportService {
       { header: "Name*", key: "name", width: 30 },
       { header: "SKU", key: "sku", width: 15 },
       { header: "Category*", key: "category", width: 20 },
+      { header: "Sub Category", key: "subCategory", width: 20 },
       { header: "Unit*", key: "unit", width: 12 },
       { header: "Brand", key: "brand", width: 18 },
       { header: "Barcode", key: "barcode", width: 18 },
