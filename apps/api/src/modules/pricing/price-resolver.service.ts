@@ -45,6 +45,25 @@ export interface ResolvedPrice {
   priceListId: string | null;
 }
 
+/**
+ * The listed price of one sold unit — a carton, a box, or the base unit.
+ *
+ * `priceOverride` wins outright when the merchant set a flat pack price;
+ * otherwise it is the base price scaled by the conversion factor. Shared by
+ * the till and the online store so a box costs the same in both.
+ */
+export function listedUnitPrice(
+  price: Pick<ResolvedPrice, "unitPrice"> | undefined,
+  packaging: { conversionFactor: string; priceOverride: string | null } | null | undefined,
+): string | null {
+  if (packaging?.priceOverride) return packaging.priceOverride;
+  if (!price?.unitPrice) return null;
+  return Money.toDecimalString(
+    Money.multiplyByQuantity(Money.toMinor(price.unitPrice), packaging?.conversionFactor ?? "1"),
+    4,
+  );
+}
+
 @Injectable()
 export class PriceResolverService {
   /**

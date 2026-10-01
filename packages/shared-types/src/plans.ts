@@ -38,6 +38,8 @@ export interface Plan {
     apiAccess: boolean;
     /** Cost, margin and profit reporting. */
     financialReports: boolean;
+    /** A storefront on the tenant's own domain, selling from the same catalogue and stock. */
+    onlineStore: boolean;
   };
 }
 
@@ -56,6 +58,7 @@ export const PLANS: Record<PlanId, Plan> = {
       automatedBackups: false,
       apiAccess: false,
       financialReports: false,
+      onlineStore: false,
     },
   },
   trial: {
@@ -74,6 +77,7 @@ export const PLANS: Record<PlanId, Plan> = {
       automatedBackups: false,
       apiAccess: false,
       financialReports: true,
+      onlineStore: true,
     },
   },
   starter: {
@@ -90,6 +94,7 @@ export const PLANS: Record<PlanId, Plan> = {
       automatedBackups: true,
       apiAccess: false,
       financialReports: true,
+      onlineStore: false,
     },
   },
   pro: {
@@ -106,6 +111,7 @@ export const PLANS: Record<PlanId, Plan> = {
       automatedBackups: true,
       apiAccess: true,
       financialReports: true,
+      onlineStore: true,
     },
   },
   enterprise: {
@@ -122,6 +128,7 @@ export const PLANS: Record<PlanId, Plan> = {
       automatedBackups: true,
       apiAccess: true,
       financialReports: true,
+      onlineStore: true,
     },
   },
 };

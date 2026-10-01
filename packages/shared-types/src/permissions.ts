@@ -64,6 +64,11 @@ export const PERMISSIONS = [
   "whatsapp:reply",
   "whatsapp:takeover",
 
+  // online store: listings, content, delivery settings. Web orders are
+  // orders, so they stay under order:read / order:write.
+  "storefront:read",
+  "storefront:write",
+
   // admin
   "report:read",
   "report:financial", // cost prices, margins, profit
@@ -140,6 +145,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, readonly PermissionGrant[]
     "whatsapp:read",
     "whatsapp:reply",
     "whatsapp:takeover",
+    "storefront:read",
+    "storefront:write",
     "report:read",
     "report:financial",
     "branch:read",

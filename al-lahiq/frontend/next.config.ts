@@ -1,7 +1,7 @@
 import path from "node:path";
 import type { NextConfig } from "next";
 
-const API_ORIGIN = process.env.API_ORIGIN ?? "http://localhost:4000";
+const API_ORIGIN = process.env.API_ORIGIN ?? "http://localhost:3001";
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@al-lahiq/api-client"],
@@ -12,15 +12,19 @@ const nextConfig: NextConfig = {
   images: {
     // Product images uploaded through the admin are served by the API at /uploads.
     localPatterns: [{ pathname: "/uploads/**" }],
-    remotePatterns: [{ protocol: "https", hostname: "**" }],
+    // Product photos are the POS's own, served from its object storage.
+    remotePatterns: [
+      { protocol: "https", hostname: "**" },
+      { protocol: "http", hostname: "localhost" },
+      { protocol: "http", hostname: "127.0.0.1" },
+    ],
   },
-  // The browser only ever talks to this origin; the API sits behind it, so
-  // its httpOnly cookies are first-party and there is no CORS.
+  // The browser only ever talks to this origin; the platform API sits behind
+  // it, so its httpOnly cookies are first-party and there is no CORS. The
+  // proxy forwards this site's host as x-forwarded-host, which is how the API
+  // knows which tenant's shop this is.
   async rewrites() {
-    return [
-      { source: "/api/v1/:path*", destination: `${API_ORIGIN}/api/v1/:path*` },
-      { source: "/uploads/:path*", destination: `${API_ORIGIN}/uploads/:path*` },
-    ];
+    return [{ source: "/api/v1/:path*", destination: `${API_ORIGIN}/api/v1/storefront/:path*` }];
   },
 };
 

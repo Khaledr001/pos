@@ -1,12 +1,15 @@
 /**
- * Response shapes of the Al-Lahiq API (JSON, so dates are ISO strings).
- * The backend type-checks its responses against these in
- * backend/src/contract.check.ts, so a change on either side fails the build.
+ * Response shapes of the platform's storefront API (JSON, so dates are ISO
+ * strings). contract/contract.check.ts type-checks the API's storefront
+ * services against these, so a change on either side fails the build.
  */
 
 // ── shared ──
 
 export interface Money {
+  /** Decimal string, e.g. "12.50" — the authority. */
+  amount: string;
+  /** The same figure in whole fils, for comparing and sorting on a page. */
   fils: number;
   formatted: string;
 }
@@ -136,6 +139,7 @@ export interface PriceView {
 
 export interface VariantUnit {
   uom: string;
+  unitId: string;
   factor: number;
   price: PriceView;
 }
@@ -165,6 +169,8 @@ export interface ProductDetail {
   seoTitle: string | null;
   seoDescription: string | null;
   pickupOnly: boolean;
+  /** The VAT rate the product is sold at, e.g. "5". */
+  taxPercent: string;
   vatClass: 'STANDARD_5' | 'ZERO' | 'EXEMPT';
   brand: { slug: string; name: string; logoUrl: string | null } | null;
   category: { slug: string; name: string } | null;
@@ -257,7 +263,7 @@ export interface CheckoutQuote {
   weightKg: number;
   courier: {
     available: boolean;
-    reason?: 'NO_ADDRESS' | 'EMIRATE_NOT_SERVED' | 'PICKUP_ONLY_ITEMS' | 'OVERWEIGHT';
+    reason?: 'NO_ADDRESS' | 'EMIRATE_NOT_SERVED' | 'PICKUP_ONLY_ITEMS' | 'OVERWEIGHT' | 'NOT_OFFERED';
     feeNetFils: number;
     etaDays: number;
     freeOverFils: number | null;
@@ -294,6 +300,8 @@ export interface AddressInput {
 }
 
 export interface PlaceOrderInput {
+  /** Minted once per checkout attempt; a retry with the same key returns the same order. */
+  idempotencyKey?: string;
   deliveryMethod: DeliveryMethod;
   contact: { fullName: string; email: string; phone: string };
   address?: AddressInput;
@@ -471,6 +479,7 @@ export interface BlogList {
 }
 
 export interface Branch {
+  id: string;
   code: string;
   name: string;
   emirate: Emirate;
@@ -490,5 +499,6 @@ export interface StoreInfo {
   phone: string;
   email: string;
   whatsapp: string;
-  cod: { enabled: boolean; maxFils: number };
+  currency: string;
+  cod: { enabled: boolean; max: string; maxFils: number };
 }

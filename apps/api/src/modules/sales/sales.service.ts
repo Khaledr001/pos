@@ -17,7 +17,10 @@ import { assertBranchInScope, branchScope } from "../../common/context/branch-sc
 import { RequestContext } from "../../common/context/request-context.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import { StockService } from "../inventory/stock.service.js";
-import { PriceResolverService } from "../pricing/price-resolver.service.js";
+import {
+  PriceResolverService,
+  listedUnitPrice as listedPriceFor,
+} from "../pricing/price-resolver.service.js";
 import { OverrideGrantsService } from "../auth/override-grants.service.js";
 import { SerialsService } from "../serials/serials.service.js";
 import { renderInvoicePdf } from "./invoice-pdf.js";
@@ -208,14 +211,7 @@ export class SalesService {
         }
         const conversionFactor = packaging?.conversionFactor ?? "1";
 
-        const listedUnitPrice = packaging?.priceOverride
-          ? packaging.priceOverride
-          : price?.unitPrice
-            ? Money.toDecimalString(
-                Money.multiplyByQuantity(Money.toMinor(price.unitPrice), conversionFactor),
-                4,
-              )
-            : null;
+        const listedUnitPrice = listedPriceFor(price, packaging);
         const listedFloor = price?.minSellingPrice
           ? Money.toDecimalString(
               Money.multiplyByQuantity(Money.toMinor(price.minSellingPrice), conversionFactor),

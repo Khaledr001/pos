@@ -49,6 +49,28 @@ export const envSchema = z.object({
   BCRYPT_ROUNDS: z.coerce.number().int().min(10).max(15).default(12),
 
   // ---------------------------------------------------------------------------
+  // Online store
+  // ---------------------------------------------------------------------------
+  /**
+   * Signs shopper tokens. Optional: when unset it is derived from
+   * JWT_ACCESS_SECRET with a fixed label, which is still a DIFFERENT key — the
+   * point is that a shopper token can never verify as a staff token, not that
+   * one more secret has to be provisioned.
+   */
+  STOREFRONT_JWT_SECRET: z.string().min(32).optional(),
+  STOREFRONT_ACCESS_TTL: z.string().default("15m"),
+  /** Days. A shopper stays signed in on their own phone for a month. */
+  STOREFRONT_REFRESH_DAYS: z.coerce.number().int().min(1).max(365).default(30),
+  /** Sent as a bearer token to a storefront's revalidate URL. Unset = no push, pages expire on their TTL. */
+  STOREFRONT_REVALIDATE_SECRET: z.string().min(16).optional(),
+  /** Defaults to true in production. Off locally, where the storefront is plain http. */
+  STOREFRONT_COOKIE_SECURE: bool.optional(),
+  /** Card payments go to a test page instead of a gateway. Refused in production. */
+  STOREFRONT_DEV_PAYMENTS: bool.default(false),
+  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+
+  // ---------------------------------------------------------------------------
   // HTTP
   // ---------------------------------------------------------------------------
   API_PORT: port.default(3001),
@@ -178,6 +200,13 @@ export function validateEnv(raw: Record<string, unknown>): Env {
     if (env.NODE_ENV === "production" && value.includes("change-me")) {
       throw new Error(`${name} still holds its .env.example placeholder value.`);
     }
+  }
+
+  if (env.NODE_ENV === "production" && env.STOREFRONT_DEV_PAYMENTS) {
+    throw new Error(
+      "STOREFRONT_DEV_PAYMENTS=true in production would let any shopper mark " +
+        "their own card payment as paid.",
+    );
   }
 
   return env;

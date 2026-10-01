@@ -1,10 +1,11 @@
 import { and, count, desc, eq, gte, inArray, lte, schema, sql } from "@devsfleet/db";
-import { resolveTenantSettings } from "@devsfleet/shared-types";
+import { resolveTenantSettings, type DocumentSource } from "@devsfleet/shared-types";
 import {
   AppError,
   ERROR_CODES,
   Money,
   calculateDocument,
+  type DocumentTotals,
   formatDocumentNumber,
   sequenceKey,
 } from "@devsfleet/shared-utils";
@@ -18,6 +19,28 @@ import { SalesService } from "../sales/sales.service.js";
 import type { CancelOrderDto, CreateOrderDto, FulfillOrderDto, ListOrdersDto } from "./dto.js";
 
 type Transaction = Parameters<Parameters<TenantDatabase["run"]>[0]>[0];
+
+/** One priced line of a channel order. Quantity is in the SOLD unit, as on any order line. */
+export interface ChannelOrderLine {
+  variantId: string;
+  /** null = the product's base unit. */
+  unitId: string | null;
+  conversionFactor: string;
+  quantity: string;
+  unitPrice: string;
+  discountPercent: string;
+  taxPercent: string;
+  /** Printed under the line. The online store marks its delivery line here. */
+  notes?: string;
+}
+
+/**
+ * Stock is held and moved in base units; an order line counts sold units. A
+ * box of 100 reserved as "1" would leave 99 pieces free to promise twice.
+ */
+function inBaseUnits(quantity: string, conversionFactor: string): string {
+  return Money.toDecimalString(Money.multiplyByQuantity(Money.toMinor(quantity), conversionFactor), 4);
+}
 
 /**
  * Orders: a commitment, unlike a quotation. Confirming one RESERVES stock —
@@ -164,29 +187,37 @@ export class OrdersService {
    */
   async confirm(id: string): Promise<unknown> {
     return this.db.run(async (tx) => {
-      const order = await this.require(tx, id);
-      if (order.status !== "pending") {
-        throw new AppError(ERROR_CODES.CONFLICT, `This order is already ${order.status}`);
-      }
-
-      const items = await this.itemsWithStockFlag(tx, id);
-      for (const item of items) {
-        if (!item.isStockTracked) continue;
-        await this.stock.reserveStock({
-          tx,
-          variantId: item.variantId,
-          branchId: order.branchId,
-          quantity: item.quantity,
-        });
-      }
-
-      await tx
-        .update(schema.orders)
-        .set({ status: "processing", stockReserved: new Date() })
-        .where(eq(schema.orders.id, id));
-
+      await this.confirmInTransaction(tx, id);
       return this.findById(id, tx);
     });
+  }
+
+  /**
+   * `confirm`, inside a transaction the caller already holds — the online
+   * checkout creates and confirms an order in one, so a placed web order can
+   * never exist without the stock it promised being held.
+   */
+  async confirmInTransaction(tx: Transaction, id: string): Promise<void> {
+    const order = await this.require(tx, id);
+    if (order.status !== "pending") {
+      throw new AppError(ERROR_CODES.CONFLICT, `This order is already ${order.status}`);
+    }
+
+    const items = await this.itemsWithStockFlag(tx, id);
+    for (const item of items) {
+      if (!item.isStockTracked) continue;
+      await this.stock.reserveStock({
+        tx,
+        variantId: item.variantId,
+        branchId: order.branchId,
+        quantity: inBaseUnits(item.quantity, item.unitConversionFactor),
+      });
+    }
+
+    await tx
+      .update(schema.orders)
+      .set({ status: "processing", stockReserved: new Date() })
+      .where(eq(schema.orders.id, id));
   }
 
   /**
@@ -196,39 +227,51 @@ export class OrdersService {
    */
   async cancel(id: string, dto: CancelOrderDto): Promise<unknown> {
     return this.db.run(async (tx) => {
-      const order = await this.require(tx, id);
-      if (order.status === "completed") {
-        throw new AppError(ERROR_CODES.CONFLICT, "This order is already completed.");
-      }
-      if (order.status === "cancelled") {
-        throw new AppError(ERROR_CODES.CONFLICT, "This order is already cancelled.");
-      }
-
-      if (order.status === "processing" || order.status === "ready") {
-        const items = await this.itemsWithStockFlag(tx, id);
-        for (const item of items) {
-          if (!item.isStockTracked) continue;
-          const remaining = Money.subtract(
-            Money.toMinor(item.quantity),
-            Money.toMinor(item.fulfilledQuantity),
-          );
-          if (!Money.isPositive(remaining)) continue;
-          await this.stock.releaseReservedStock({
-            tx,
-            variantId: item.variantId,
-            branchId: order.branchId,
-            quantity: Money.toDecimalString(remaining, 4),
-          });
-        }
-      }
-
-      await tx
-        .update(schema.orders)
-        .set({ status: "cancelled", cancelledAt: new Date(), cancellationReason: dto.reason })
-        .where(eq(schema.orders.id, id));
-
+      await this.cancelInTransaction(tx, id, dto.reason);
       return this.findById(id, tx);
     });
+  }
+
+  /** Packed and waiting at the counter. Still holding its stock; nothing has been handed over. */
+  async markReadyInTransaction(tx: Transaction, id: string): Promise<void> {
+    const order = await this.require(tx, id);
+    if (order.status !== "processing") {
+      throw new AppError(ERROR_CODES.CONFLICT, `This order is ${order.status}; only a confirmed order can be made ready.`);
+    }
+    await tx.update(schema.orders).set({ status: "ready" }).where(eq(schema.orders.id, id));
+  }
+
+  async cancelInTransaction(tx: Transaction, id: string, reason: string): Promise<void> {
+    const order = await this.require(tx, id);
+    if (order.status === "completed") {
+      throw new AppError(ERROR_CODES.CONFLICT, "This order is already completed.");
+    }
+    if (order.status === "cancelled") {
+      throw new AppError(ERROR_CODES.CONFLICT, "This order is already cancelled.");
+    }
+
+    if (order.status === "processing" || order.status === "ready") {
+      const items = await this.itemsWithStockFlag(tx, id);
+      for (const item of items) {
+        if (!item.isStockTracked) continue;
+        const remaining = Money.subtract(
+          Money.toMinor(item.quantity),
+          Money.toMinor(item.fulfilledQuantity),
+        );
+        if (!Money.isPositive(remaining)) continue;
+        await this.stock.releaseReservedStock({
+          tx,
+          variantId: item.variantId,
+          branchId: order.branchId,
+          quantity: inBaseUnits(Money.toDecimalString(remaining, 4), item.unitConversionFactor),
+        });
+      }
+    }
+
+    await tx
+      .update(schema.orders)
+      .set({ status: "cancelled", cancelledAt: new Date(), cancellationReason: reason })
+      .where(eq(schema.orders.id, id));
   }
 
   /**
@@ -259,6 +302,8 @@ export class OrdersService {
           fulfilledQuantity: schema.orderItems.fulfilledQuantity,
           unitPrice: schema.orderItems.unitPrice,
           discountPercent: schema.orderItems.discountPercent,
+          unitId: schema.orderItems.unitId,
+          unitConversionFactor: schema.orderItems.unitConversionFactor,
           isStockTracked: schema.products.isStockTracked,
         })
         .from(schema.orderItems)
@@ -299,10 +344,12 @@ export class OrdersService {
       branchId: order.branchId,
       customerId: order.customerId,
       cashSessionId: dto.cashSessionId ?? null,
-      source: "pos",
+      // The sale reports under the channel that took the order.
+      source: order.source === "web" ? "web" : "pos",
       lines: fulfilling.map((line) => ({
         variantId: line.item.variantId,
         quantity: line.quantity,
+        ...(line.item.unitId ? { unitId: line.item.unitId } : {}),
         unitPrice: line.item.unitPrice,
         ...(Number(line.item.discountPercent) > 0
           ? { discountPercent: Number(line.item.discountPercent) }
@@ -331,7 +378,7 @@ export class OrdersService {
             tx,
             variantId: line.item.variantId,
             branchId: order.branchId,
-            quantity: String(line.quantity),
+            quantity: inBaseUnits(String(line.quantity), line.item.unitConversionFactor),
           });
         }
       }
@@ -356,6 +403,95 @@ export class OrdersService {
 
       return this.findById(id, tx);
     });
+  }
+
+  /**
+   * An order from a sales channel with no staff member behind it — the
+   * online store. Lines arrive already priced by the caller through
+   * PriceResolverService (the same ladder `create` uses); totals are computed
+   * here, by calculateDocument, exactly as for an order taken at the counter.
+   *
+   * Runs in the caller's transaction and does not confirm: the caller decides
+   * when stock is held, in the same transaction.
+   */
+  async createInTransaction(
+    tx: Transaction,
+    input: {
+      branchId: string;
+      customerId: string | null;
+      source: DocumentSource;
+      lines: ChannelOrderLine[];
+      notes?: string | null;
+    },
+  ): Promise<{ id: string; orderNumber: string; totals: DocumentTotals }> {
+    const tenantId = RequestContext.requireTenantId();
+    const settings = await this.settings(tx);
+    const variants = await this.loadVariants(
+      tx,
+      input.lines.map((line) => line.variantId),
+    );
+
+    const totals = calculateDocument({
+      taxMode: settings.tax.mode,
+      decimals: settings.currency.decimals,
+      lines: input.lines.map((line) => ({
+        quantity: line.quantity,
+        unitPrice: line.unitPrice,
+        discountPercent: line.discountPercent,
+        taxPercent: line.taxPercent,
+      })),
+    });
+
+    const orderNumber = await this.nextNumber(tx, input.branchId);
+    const [order] = await tx
+      .insert(schema.orders)
+      .values({
+        tenantId,
+        branchId: input.branchId,
+        orderNumber,
+        customerId: input.customerId,
+        source: input.source,
+        status: "pending",
+        currency: settings.currency.base,
+        taxMode: settings.tax.mode,
+        subtotal: Money.toDecimalString(totals.subtotal, 4),
+        discountAmount: Money.toDecimalString(totals.discountAmount, 4),
+        taxAmount: Money.toDecimalString(totals.taxAmount, 4),
+        total: Money.toDecimalString(totals.total, 4),
+        ...(input.notes ? { notes: input.notes } : {}),
+        createdBy: null,
+      })
+      .returning({ id: schema.orders.id, orderNumber: schema.orders.orderNumber });
+    if (!order) throw new AppError(ERROR_CODES.INTERNAL_ERROR, "Could not create the order");
+
+    await tx.insert(schema.orderItems).values(
+      input.lines.map((line, index) => {
+        const variant = variants.get(line.variantId)!;
+        const computed = totals.lines[index]!;
+        return {
+          tenantId,
+          orderId: order.id,
+          variantId: line.variantId,
+          productName: variant.productName,
+          variantName: variant.variantName ?? "Default",
+          productSku: variant.sku,
+          unitId: line.unitId,
+          unitConversionFactor: line.conversionFactor,
+          quantity: line.quantity,
+          unitPrice: line.unitPrice,
+          discountPercent: line.discountPercent,
+          discountAmount: Money.toDecimalString(computed.discount, 4),
+          taxPercent: line.taxPercent,
+          taxAmount: Money.toDecimalString(computed.tax, 4),
+          lineSubtotal: Money.toDecimalString(computed.net, 4),
+          total: Money.toDecimalString(computed.total, 4),
+          sortOrder: index,
+          ...(line.notes ? { notes: line.notes } : {}),
+        };
+      }),
+    );
+
+    return { id: order.id, orderNumber: order.orderNumber, totals };
   }
 
   async findById(id: string, existing?: Transaction): Promise<unknown> {
@@ -430,6 +566,7 @@ export class OrdersService {
         variantId: schema.orderItems.variantId,
         quantity: schema.orderItems.quantity,
         fulfilledQuantity: schema.orderItems.fulfilledQuantity,
+        unitConversionFactor: schema.orderItems.unitConversionFactor,
         isStockTracked: schema.products.isStockTracked,
       })
       .from(schema.orderItems)

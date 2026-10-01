@@ -1,11 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-const API_ORIGIN = process.env.API_ORIGIN ?? "http://localhost:4000";
+const API_ORIGIN = process.env.API_ORIGIN ?? "http://localhost:3001";
+const STOREFRONT_HOST = process.env.STOREFRONT_HOST ?? "localhost";
 
-const SESSIONS = [
-  { access: "al_at", refresh: "al_rt", path: "/api/v1/auth/refresh" },
-  { access: "al_sat", refresh: "al_srt", path: "/api/v1/auth/staff/refresh" },
-];
+const SESSIONS = [{ access: "sf_at", refresh: "sf_rt", path: "/api/v1/storefront/auth/refresh" }];
 
 /** True when the JWT is missing or expires within 30 s. Signature is checked by the API, not here. */
 function expiresSoon(token: string | undefined) {
@@ -33,7 +31,7 @@ export async function proxy(request: NextRequest) {
     try {
       const res = await fetch(`${API_ORIGIN}${s.path}`, {
         method: "POST",
-        headers: { cookie: `${s.refresh}=${refresh}` },
+        headers: { cookie: `${s.refresh}=${refresh}`, "x-storefront-host": STOREFRONT_HOST },
         signal: AbortSignal.timeout(5000),
       });
       const fresh = res.headers.getSetCookie();

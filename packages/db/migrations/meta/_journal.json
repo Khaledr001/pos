@@ -8,6 +8,20 @@
       "when": 1788161242033,
       "tag": "0000_acoustic_tomas",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790848454700,
+      "tag": "0001_storefront",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790850715892,
+      "tag": "0002_storefront_payments",
+      "breakpoints": true
     }
   ]
 }

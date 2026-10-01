@@ -20,7 +20,8 @@ const FALLBACK_STORE: StoreInfo = {
   phone: "",
   email: "",
   whatsapp: "",
-  cod: { enabled: true, maxFils: 200_000 },
+  currency: "AED",
+  cod: { enabled: true, max: "2000.00", maxFils: 200_000 },
 };
 
 export const getStore = cache(() =>

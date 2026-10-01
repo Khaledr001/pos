@@ -18,6 +18,7 @@
     "db:generate": "pnpm --filter @devsfleet/db generate",
     "db:migrate": "pnpm --filter @devsfleet/db migrate",
     "db:seed": "pnpm --filter @devsfleet/db seed",
+    "db:seed:storefront": "pnpm --filter @devsfleet/db seed:storefront",
     "db:studio": "pnpm --filter @devsfleet/db studio",
     "db:reset": "pnpm --filter @devsfleet/db reset",
     "db:normalize-phones": "pnpm --filter @devsfleet/db normalize-phones",

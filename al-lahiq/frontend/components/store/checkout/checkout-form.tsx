@@ -101,6 +101,10 @@ export function CheckoutForm() {
   }
   const addressId = chosenAddressId ?? (addresses?.find((a) => a.isDefault) ?? addresses?.[0])?.id ?? "new";
 
+  // One key per checkout attempt, resent on every retry: a double click or a
+  // timeout-and-retry lands on the order already placed instead of a second one.
+  const [idempotencyKey] = useState(() => crypto.randomUUID());
+
   const savedAddress = addresses?.find((a) => a.id === addressId);
   const [lastQuoteMethod, setLastQuoteMethod] = useState<DeliveryMethod | null>(null);
   const method = chosenMethod ?? lastQuoteMethod;
@@ -136,6 +140,8 @@ export function CheckoutForm() {
         return `This order weighs about ${quote.weightKg} kg, over the courier limit. Choose store pickup.`;
       case "EMIRATE_NOT_SERVED":
         return "We don't deliver to this emirate yet. Choose store pickup.";
+      case "NOT_OFFERED":
+        return "Courier delivery isn't offered yet. Choose store pickup.";
       default:
         return null;
     }
@@ -154,6 +160,7 @@ export function CheckoutForm() {
     setError(null);
     if (!method || !payment || !quote) return;
     const body: PlaceOrderInput = {
+      idempotencyKey,
       deliveryMethod: method,
       paymentMethod: payment,
       contact,
@@ -180,12 +187,12 @@ export function CheckoutForm() {
       }
       router.push(`/checkout/success?order=${result.trackingToken}`);
     } catch (err) {
-      if (err instanceof ApiError && ["PRICE_CHANGED", "TOTAL_CHANGED", "OUT_OF_STOCK", "ITEM_UNAVAILABLE"].includes(err.code)) {
+      if (err instanceof ApiError && ["PRICE_CHANGED", "INSUFFICIENT_STOCK", "CHECKOUT_UNAVAILABLE"].includes(err.code)) {
         await Promise.all([qc.invalidateQueries({ queryKey: ["cart"] }), refetchQuote()]);
         setError(
-          err.code === "OUT_OF_STOCK"
-            ? `${err.message}. Please update your cart.`
-            : "Prices changed since you added these items. We've updated your total. Check it and place the order again.",
+          err.code === "PRICE_CHANGED"
+            ? "Prices changed since you added these items. We've updated your total. Check it and place the order again."
+            : `${err.message} Please update your cart.`,
         );
       } else {
         setError(errorMessage(err));

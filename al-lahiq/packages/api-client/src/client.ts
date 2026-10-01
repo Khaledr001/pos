@@ -16,7 +16,7 @@ export class ApiError extends Error {
 }
 
 export interface ApiClientOptions {
-  /** e.g. "http://localhost:4000/api/v1" on the server, "/api/v1" in the browser */
+  /** e.g. "http://localhost:3001/api/v1/storefront" on the server, "/api/v1" in the browser */
   baseUrl: string;
   /** Extra headers per request (cookies forwarded by the Next.js server). */
   headers?: () => HeadersInit | Promise<HeadersInit>;
@@ -46,8 +46,8 @@ export function createApiClient(options: ApiClientOptions) {
     if (res.status === 204) return undefined as T;
     const text = await res.text();
     const data = text ? JSON.parse(text) : undefined;
-    if (!res.ok) throw new ApiError(res.status, (data ?? {}) as Partial<ApiErrorBody>);
-    return data as T;
+    if (!res.ok) throw new ApiError(res.status, errorBody(data));
+    return unwrap<T>(data);
   }
 
   return {
@@ -60,6 +60,31 @@ export function createApiClient(options: ApiClientOptions) {
 }
 
 export type ApiClient = ReturnType<typeof createApiClient>;
+
+/**
+ * The platform API wraps every success as `{ success: true, data }` and every
+ * failure as `{ success: false, error: { code, message, details } }`. Callers
+ * of this client see the payload and an ApiError, as before.
+ */
+function unwrap<T>(body: unknown): T {
+  if (body && typeof body === 'object' && 'success' in body && 'data' in body) {
+    return (body as { data: T }).data;
+  }
+  return body as T;
+}
+
+function errorBody(body: unknown): Partial<ApiErrorBody> {
+  const envelope = body as { error?: { code?: string; message?: string; details?: Record<string, string[]> } } | undefined;
+  const error = envelope?.error;
+  if (!error) return (body ?? {}) as Partial<ApiErrorBody>;
+  // Field errors arrive keyed by path; the pages read them as one list of sentences.
+  const details = error.details
+    ? Object.entries(error.details).flatMap(([path, messages]) =>
+        messages.map((message) => (path === '_' ? message : `${path} ${message.charAt(0).toLowerCase()}${message.slice(1)}`)),
+      )
+    : undefined;
+  return { code: error.code, message: error.message, details };
+}
 
 /** Builds a query string, skipping empty values. Arrays become comma lists. */
 export function qs(params: Record<string, unknown>): string {

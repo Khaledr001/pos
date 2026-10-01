@@ -123,6 +123,19 @@ export const ERROR_CODES = {
   /** The provider was reachable and configured but the call itself failed. */
   LLM_REQUEST_FAILED: "LLM_REQUEST_FAILED",
 
+  // online store
+  /** No active storefront answers on this host, or the tenant's plan has none. */
+  STOREFRONT_NOT_FOUND: "STOREFRONT_NOT_FOUND",
+  /** The route needs a signed-in shopper. Distinct from a staff 401. */
+  SHOPPER_AUTH_REQUIRED: "SHOPPER_AUTH_REQUIRED",
+  /** A price moved between the cart and checkout. The shopper must see it before paying. */
+  PRICE_CHANGED: "PRICE_CHANGED",
+  CART_EMPTY: "CART_EMPTY",
+  /** Delivery, pickup or payment cannot be offered for this cart as it stands. */
+  CHECKOUT_UNAVAILABLE: "CHECKOUT_UNAVAILABLE",
+  COUPON_INVALID: "COUPON_INVALID",
+  PAYMENT_FAILED: "PAYMENT_FAILED",
+
   // generic
   VALIDATION_FAILED: "VALIDATION_FAILED",
   NOT_FOUND: "NOT_FOUND",

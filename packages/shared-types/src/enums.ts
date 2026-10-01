@@ -149,7 +149,7 @@ export const SALE_STATUSES = asConst(["completed", "returned", "partially_return
 export type SaleStatus = (typeof SALE_STATUSES)[number];
 
 /** Which surface created the document. Drives reporting and sync rules. */
-export const DOCUMENT_SOURCES = asConst(["pos", "whatsapp", "admin", "manual", "api"]);
+export const DOCUMENT_SOURCES = asConst(["pos", "whatsapp", "admin", "manual", "api", "web"]);
 export type DocumentSource = (typeof DOCUMENT_SOURCES)[number];
 
 export const PURCHASE_ORDER_STATUSES = asConst([

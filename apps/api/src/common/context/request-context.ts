@@ -1,4 +1,4 @@
-import type { AuthenticatedUser } from "@devsfleet/shared-types";
+import type { AuthenticatedUser, StorefrontSettings, TenantSettings } from "@devsfleet/shared-types";
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { DomainEvent } from "../events/domain-events.js";
 
@@ -14,6 +14,18 @@ import type { DomainEvent } from "../events/domain-events.js";
  *
  * Populated by RequestContextMiddleware (requestId) and JwtAuthGuard (user).
  */
+/** The storefront a request's host resolved to, with the settings it runs on. */
+export interface StorefrontScope {
+  id: string;
+  tenantId: string;
+  name: string;
+  /** The shop's public origin — see StorefrontSettings.siteUrl. */
+  siteUrl: string;
+  settings: StorefrontSettings;
+  tenantName: string;
+  tenantSettings: TenantSettings;
+}
+
 export interface RequestContextStore {
   requestId: string;
   /** Set once the request is authenticated. Absent on public routes. */
@@ -36,6 +48,15 @@ export interface RequestContextStore {
    * separately "enter" a second context for it to propagate correctly.
    */
   events?: DomainEvent[];
+  /**
+   * Set on storefront routes, which have no staff user: the storefront the
+   * request's host resolved to. It also supplies `tenantId`, so
+   * TenantDatabase.run() scopes a shopper's queries exactly as it scopes a
+   * cashier's.
+   */
+  storefront?: StorefrontScope;
+  /** A signed-in shopper on a storefront route. Never set alongside `user`. */
+  shopper?: { accountId: string; customerId: string };
 }
 
 const storage = new AsyncLocalStorage<RequestContextStore>();
@@ -89,6 +110,29 @@ export const RequestContext = {
     store.tenantId = user.tenantId ?? undefined;
     store.branchId = user.branchId;
     store.trialEndsAt = user.trialEndsAt ? new Date(user.trialEndsAt) : null;
+  },
+
+  /**
+   * Scope the request to a storefront's tenant. Called by StorefrontGuard
+   * after the host has been resolved — the storefront equivalent of setUser.
+   */
+  setStorefront(storefront: StorefrontScope): void {
+    const store = storage.getStore();
+    if (!store) return;
+    store.storefront = storefront;
+    store.tenantId = storefront.tenantId;
+  },
+
+  setShopper(shopper: { accountId: string; customerId: string } | undefined): void {
+    const store = storage.getStore();
+    if (store) store.shopper = shopper;
+  },
+
+  /** The storefront this request is on. Throws off a storefront route — a bug, not a 404. */
+  requireStorefront(): StorefrontScope {
+    const storefront = storage.getStore()?.storefront;
+    if (!storefront) throw new Error("No storefront in the request context. Is StorefrontGuard on this route?");
+    return storefront;
   },
 
   /** Narrow the request to one branch, after the guard has authorised it. */

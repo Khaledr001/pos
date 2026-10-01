@@ -33,6 +33,7 @@
     "push": "drizzle-kit push",
     "studio": "drizzle-kit studio",
     "seed": "tsx scripts/seed.ts",
+    "seed:storefront": "tsx scripts/seed-storefront.ts",
     "reset": "tsx scripts/reset.ts",
     "normalize-phones": "tsx scripts/normalize-phones.ts",
     "test": "vitest run --passWithNoTests",

@@ -70,6 +70,10 @@ export const categories = pgTable(
     depth: integer().notNull().default(0),
     sortOrder: integer().notNull().default(0),
     imageUrl: varchar({ length: 500 }),
+    /** Storefront copy. Markdown. */
+    description: text(),
+    seoTitle: varchar({ length: 255 }),
+    seoDescription: varchar({ length: 500 }),
     ...activeFlag(),
     ...timestamps(),
     ...softDelete(),
@@ -89,6 +93,10 @@ export const brands = pgTable(
     name: varchar({ length: 255 }).notNull(),
     slug: varchar({ length: 255 }).notNull(),
     logoUrl: varchar({ length: 500 }),
+    /** Storefront copy. Markdown. */
+    description: text(),
+    /** Shown in the storefront's "featured brands" strip. */
+    isFeatured: boolean().notNull().default(false),
     ...activeFlag(),
     ...timestamps(),
     ...softDelete(),

@@ -38,6 +38,7 @@ export {
   sql,
   sum,
 } from "drizzle-orm";
+export type { SQL } from "drizzle-orm";
 
 /**
  * Self-join helper. Lives in `pg-core` rather than the root, but callers need

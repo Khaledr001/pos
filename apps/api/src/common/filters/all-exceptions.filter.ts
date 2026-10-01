@@ -220,6 +220,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     switch (code) {
       case ERROR_CODES.INVALID_CREDENTIALS:
       case ERROR_CODES.TOKEN_EXPIRED:
+      case ERROR_CODES.SHOPPER_AUTH_REQUIRED:
         return HttpStatus.UNAUTHORIZED;
       case ERROR_CODES.INSUFFICIENT_PERMISSIONS:
       case ERROR_CODES.TENANT_INACTIVE:
@@ -236,6 +237,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
         return HttpStatus.CONFLICT;
       case ERROR_CODES.PRODUCT_NOT_FOUND:
       case ERROR_CODES.CUSTOMER_NOT_FOUND:
+      case ERROR_CODES.STOREFRONT_NOT_FOUND:
       case ERROR_CODES.NOT_FOUND:
         return HttpStatus.NOT_FOUND;
       case ERROR_CODES.SKU_ALREADY_EXISTS:
@@ -248,6 +250,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       case ERROR_CODES.SALE_ALREADY_VOIDED:
       case ERROR_CODES.SALE_ALREADY_RETURNED:
       case ERROR_CODES.CANNOT_RETURN_A_RETURN:
+      case ERROR_CODES.PRICE_CHANGED:
         return HttpStatus.CONFLICT;
       case ERROR_CODES.VALIDATION_FAILED:
         return HttpStatus.BAD_REQUEST;

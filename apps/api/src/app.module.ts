@@ -48,6 +48,7 @@ import { SyncModule } from "./modules/sync/sync.module.js";
 import { UsersModule } from "./modules/users/users.module.js";
 import { DevicesModule } from "./modules/devices/devices.module.js";
 import { TransfersModule } from "./modules/transfers/transfers.module.js";
+import { StorefrontModule } from "./modules/storefront/storefront.module.js";
 
 /**
  * Application root.
@@ -171,6 +172,7 @@ import { TransfersModule } from "./modules/transfers/transfers.module.js";
     NotificationsModule,
     AiModule,
     WhatsappModule,
+    StorefrontModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
