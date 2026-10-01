@@ -29,6 +29,8 @@ export interface CategoryNode {
   slug: string;
   name: string;
   imageUrl: string | null;
+  /** Published products in this category and everything under it. */
+  productCount: number;
   children: CategoryNode[];
 }
 
@@ -67,9 +69,17 @@ export class StorefrontCatalogService {
   }
 
   async categoryTreeIn(tx: Transaction): Promise<CategoryNode[]> {
-    const rows = await this.activeCategories(tx);
+    const [rows, counts] = await Promise.all([
+      this.activeCategories(tx),
+      tx.execute<{ category_id: string; n: number }>(sql`
+        SELECT products.category_id, count(*)::int AS n
+        FROM products JOIN product_listings ON product_listings.product_id = products.id
+        WHERE ${this.publishedPredicate()} AND products.category_id IS NOT NULL
+        GROUP BY products.category_id`),
+    ]);
+    const own = new Map(counts.map((c) => [c.category_id, Number(c.n)]));
     const nodes = new Map<string, CategoryNode>(
-      rows.map((c) => [c.id, { id: c.id, slug: c.slug, name: c.name, imageUrl: c.imageUrl, children: [] }]),
+      rows.map((c) => [c.id, { id: c.id, slug: c.slug, name: c.name, imageUrl: c.imageUrl, productCount: 0, children: [] }]),
     );
     const roots: CategoryNode[] = [];
     for (const row of rows) {
@@ -77,7 +87,15 @@ export class StorefrontCatalogService {
       const parent = row.parentId ? nodes.get(row.parentId) : undefined;
       (parent ? parent.children : roots).push(node);
     }
-    return roots;
+    // A department counts what is under it, so the shop can lead with its busiest ones.
+    const total = (node: CategoryNode): number =>
+      (node.productCount = (own.get(node.id) ?? 0) + node.children.reduce((sum, child) => sum + total(child), 0));
+    roots.forEach(total);
+    // An empty department is a dead end for a shopper: it stays reachable by
+    // its own URL, but the shop's menus do not offer it.
+    const stocked = (list: CategoryNode[]): CategoryNode[] =>
+      list.filter((node) => node.productCount > 0).map((node) => ({ ...node, children: stocked(node.children) }));
+    return stocked(roots);
   }
 
   async category(slug: string) {

@@ -10,6 +10,7 @@ import { Gallery } from "@/components/store/product/gallery";
 import { ProductGrid } from "@/components/store/product-card";
 import { cached, publicApi, tags } from "@/lib/api-server";
 import { siteOrigin } from "@/lib/site";
+import { displayName } from "@/lib/format";
 
 async function getProduct(slug: string) {
   try {
@@ -24,7 +25,7 @@ export async function generateMetadata({ params }: PageProps<"/product/[slug]">)
   const { slug } = await params;
   const p = await getProduct(slug);
   return {
-    title: p.seoTitle ?? p.name,
+    title: p.seoTitle ?? displayName(p.name),
     description: p.seoDescription ?? p.description?.slice(0, 160) ?? undefined,
     alternates: { canonical: `/product/${slug}` },
     openGraph: { title: p.name, images: p.images[0] ? [p.images[0].url] : undefined },
@@ -66,17 +67,17 @@ export default async function ProductPage({ params }: PageProps<"/product/[slug]
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd(product, site)).replace(/</g, "\\u003c") }}
       />
-      <Breadcrumbs items={[...crumbsFrom(product.breadcrumbs), { href: `/product/${slug}`, label: product.name }]} />
+      <Breadcrumbs items={[...crumbsFrom(product.breadcrumbs), { href: `/product/${slug}`, label: displayName(product.name) }]} />
 
       <div className="mt-4 grid gap-8 lg:grid-cols-2">
-        <Gallery images={product.images} name={product.name} brand={product.brand?.name} />
+        <Gallery images={product.images} name={displayName(product.name)} brand={product.brand ? displayName(product.brand.name) : undefined} />
         <div>
           {product.brand && (
             <Link href={`/brand/${product.brand.slug}`} className="font-medium text-steel hover:text-ink">
-              {product.brand.name}
+              {displayName(product.brand.name)}
             </Link>
           )}
-          <h1 className="mt-1 text-3xl sm:text-4xl">{product.name}</h1>
+          <h1 className="mt-1 text-3xl sm:text-4xl">{displayName(product.name)}</h1>
           <div className="mt-5">
             <BuyBox product={product} />
           </div>

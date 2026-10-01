@@ -9,6 +9,7 @@ import { cn } from "@/lib/cn";
 import { activeFilterCount, type ListingQuery, toggle, toSearch } from "@/lib/listing";
 import { ProductGrid } from "./product-card";
 import { SortSelect } from "./sort-select";
+import { displayName } from "@/lib/format";
 
 export function Breadcrumbs({ items }: { items: { href: string; label: string }[] }) {
   return (
@@ -39,7 +40,7 @@ export function Breadcrumbs({ items }: { items: { href: string; label: string }[
 }
 
 export function crumbsFrom(trail: Crumb[]) {
-  return trail.map((c) => ({ href: `/category/${c.slug}`, label: c.name }));
+  return trail.map((c) => ({ href: `/category/${c.slug}`, label: displayName(c.name) }));
 }
 
 function FilterLink({ href, active, children, count }: { href: string; active: boolean; children: ReactNode; count?: number }) {
@@ -82,7 +83,7 @@ function Filters({ data, query, path }: { data: ProductList; query: ListingQuery
           <h3 className="mb-2 text-lg">Brand</h3>
           {facets.brands.map((b) => (
             <FilterLink key={b.slug} href={href(toggle(query, "brand", b.slug))} active={query.brand.includes(b.slug)} count={b.count}>
-              {b.name}
+              {displayName(b.name)}
             </FilterLink>
           ))}
         </section>
@@ -178,7 +179,7 @@ export function Listing({
           {subcategories.map((s) => (
             <li key={s.slug}>
               <Link href={`/category/${s.slug}`} className="inline-flex h-9 items-center rounded-full border border-galv bg-paper px-4 text-[15px] hover:border-ink">
-                {s.name}
+                {displayName(s.name)}
               </Link>
             </li>
           ))}

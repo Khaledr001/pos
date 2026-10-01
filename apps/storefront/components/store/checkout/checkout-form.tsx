@@ -21,7 +21,7 @@ import { EmptyState } from "@/components/ui/empty";
 import { track } from "@/lib/analytics";
 import { api, ApiError, errorMessage } from "@/lib/api-browser";
 import { cn } from "@/lib/cn";
-import { EMIRATES, emirateName, uomCount } from "@/lib/format";
+import { displayName, emirateName, EMIRATES, uomCount } from "@/lib/format";
 import { useCart, useMe } from "@/lib/hooks/store";
 
 const emptyAddress: AddressInput = { fullName: "", phone: "", emirate: "DUBAI", area: "", street: "", building: "", landmark: "" };
@@ -343,7 +343,7 @@ export function CheckoutForm() {
             {cart.items.map((i) => (
               <li key={i.id} className="flex justify-between gap-3">
                 <span className="min-w-0">
-                  <span className="line-clamp-1">{i.productName}</span>
+                  <span className="line-clamp-1">{displayName(i.productName)}</span>
                   <span className="text-sm text-steel">
                     {uomCount(i.quantity, i.uom)}
                     {i.variantName && i.variantName !== i.productName ? `, ${i.variantName}` : ""}

@@ -5,17 +5,7 @@ import type { ReactNode } from "react";
 import { buttonClass } from "@/components/ui/button";
 import { ProductImage } from "@/components/ui/product-image";
 import { cn } from "@/lib/cn";
-import {
-  addressLine,
-  DELIVERY_METHOD,
-  formatDate,
-  formatDateTime,
-  PAYMENT_METHOD,
-  PAYMENT_STATUS,
-  uomCount,
-  uomShort,
-  whatsappLink,
-} from "@/lib/format";
+import { addressLine, DELIVERY_METHOD, displayName, formatDate, formatDateTime, PAYMENT_METHOD, PAYMENT_STATUS, uomCount, uomShort, whatsappLink } from "@/lib/format";
 import { OrderStatusBadge } from "./order-status";
 
 /** Mirrors the backend lifecycle: forward steps may be skipped (placed → packed). */
@@ -256,10 +246,10 @@ export function OrderDetail({
                   <div className="min-w-0">
                     {l.productSlug ? (
                       <Link href={`/product/${l.productSlug}`} className="font-medium hover:underline">
-                        {l.name}
+                        {displayName(l.name)}
                       </Link>
                     ) : (
-                      <p className="font-medium">{l.name}</p>
+                      <p className="font-medium">{displayName(l.name)}</p>
                     )}
                     <p className="text-sm text-steel">SKU {l.sku}</p>
                     <p className="text-sm text-steel">

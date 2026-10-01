@@ -12,7 +12,7 @@ import { FormError, inputClass } from "@/components/ui/field";
 import { ProductImage } from "@/components/ui/product-image";
 import { QtyInput } from "@/components/ui/qty-input";
 import { api, ApiError } from "@/lib/api-browser";
-import { aed, uomShort } from "@/lib/format";
+import { aed, displayName, uomShort } from "@/lib/format";
 import { AddToCartAction } from "./add-to-cart-result";
 import { QueryError, friendlyError } from "./session";
 
@@ -84,7 +84,7 @@ function ItemRow({ listId, item, otherLists }: { listId: string; item: Item; oth
       </Link>
       <div className="min-w-0">
         <Link href={`/product/${item.productSlug}`} className="font-medium hover:underline">
-          {item.productName}
+          {displayName(item.productName)}
         </Link>
         {item.variantName && item.variantName !== item.productName && <p className="text-sm text-steel">{item.variantName}</p>}
         <p className="text-sm text-steel">SKU {item.sku}</p>

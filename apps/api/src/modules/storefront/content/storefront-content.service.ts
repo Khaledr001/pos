@@ -36,6 +36,7 @@ export class StorefrontContentService {
           slug: c.slug,
           name: c.name,
           imageUrl: c.imageUrl,
+          productCount: c.productCount,
           children: c.children.map((child) => ({ slug: child.slug, name: child.name })),
         })),
         featuredBrands: brands.map((b) => ({ ...b, featured: true })),

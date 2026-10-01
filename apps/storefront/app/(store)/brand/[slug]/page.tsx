@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Listing } from "@/components/store/listing";
 import { cached, publicApi, tags } from "@/lib/api-server";
 import { apiQuery, parseListing } from "@/lib/listing";
+import { displayName } from "@/lib/format";
 
 async function getBrand(slug: string) {
   try {
@@ -17,7 +18,7 @@ async function getBrand(slug: string) {
 export async function generateMetadata({ params }: PageProps<"/brand/[slug]">): Promise<Metadata> {
   const { slug } = await params;
   const b = await getBrand(slug);
-  return { title: `${b.name} products`, description: b.description ?? undefined, alternates: { canonical: `/brand/${slug}` } };
+  return { title: `${displayName(b.name)} products`, description: b.description ?? undefined, alternates: { canonical: `/brand/${slug}` } };
 }
 
 export default async function BrandPage({ params, searchParams }: PageProps<"/brand/[slug]">) {
@@ -31,9 +32,9 @@ export default async function BrandPage({ params, searchParams }: PageProps<"/br
   data.facets.brands = [];
   return (
     <Listing
-      title={brand.name}
+      title={displayName(brand.name)}
       intro={brand.description}
-      crumbs={[{ href: "/brands", label: "Brands" }, { href: `/brand/${slug}`, label: brand.name }]}
+      crumbs={[{ href: "/brands", label: "Brands" }, { href: `/brand/${slug}`, label: displayName(brand.name) }]}
       data={data}
       query={{ ...query, brand: [] }}
       path={`/brand/${slug}`}

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getCategories, getStore } from "@/lib/data";
-import { whatsappLink } from "@/lib/format";
+import { busiestFirst, displayName, whatsappLink } from "@/lib/format";
 import { Logo } from "./logo";
 
 export async function Footer() {
@@ -22,13 +22,20 @@ export async function Footer() {
         <div>
           <h2 className="mb-3 text-lg text-white">Shop</h2>
           <ul className="space-y-1.5 text-sm">
-            {categories.map((c) => (
-              <li key={c.slug}>
-                <Link href={`/category/${c.slug}`} className="hover:text-white">
-                  {c.name}
-                </Link>
-              </li>
-            ))}
+            {busiestFirst(categories)
+              .slice(0, 6)
+              .map((c) => (
+                <li key={c.slug}>
+                  <Link href={`/category/${c.slug}`} className="hover:text-white">
+                    {displayName(c.name)}
+                  </Link>
+                </li>
+              ))}
+            <li className="pt-1">
+              <Link href="/departments" className="font-semibold text-white hover:underline">
+                All departments
+              </Link>
+            </li>
             <li>
               <Link href="/brands" className="hover:text-white">
                 All brands

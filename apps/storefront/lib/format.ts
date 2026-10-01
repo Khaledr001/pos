@@ -147,3 +147,23 @@ export const WEEKDAYS: { key: string; label: string }[] = [
   { key: "sat", label: "Saturday" },
   { key: "sun", label: "Sunday" },
 ];
+
+/**
+ * A catalogue name as shown to shoppers. Names imported from a price list are
+ * often all lowercase ("italia brass double angle valve"); those get a capital
+ * first letter. Anything with capitals of its own — "Schneider Electric",
+ * "60X60 grill light", "iPhone" — is left exactly as the shop wrote it.
+ */
+export function displayName(name: string): string {
+  if (!name || name !== name.toLowerCase()) return name;
+  return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
+/** Departments to lead with: the most stocked first, ties alphabetical. */
+export function busiestFirst<T extends { name: string; productCount: number }>(items: T[]): T[] {
+  return [...items].sort((a, b) => b.productCount - a.productCount || a.name.localeCompare(b.name));
+}
+
+export function alphabetical<T extends { name: string }>(items: T[]): T[] {
+  return [...items].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
+}

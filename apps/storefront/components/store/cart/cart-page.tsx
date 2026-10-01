@@ -11,7 +11,7 @@ import { FormError } from "@/components/ui/field";
 import { ProductImage } from "@/components/ui/product-image";
 import { QtyInput } from "@/components/ui/qty-input";
 import { errorMessage } from "@/lib/api-browser";
-import { uomShort } from "@/lib/format";
+import { displayName, uomShort } from "@/lib/format";
 import { useCart, useCartActions } from "@/lib/hooks/store";
 
 function Line({ item }: { item: CartItem }) {
@@ -32,7 +32,7 @@ function Line({ item }: { item: CartItem }) {
       </Link>
       <div className="min-w-0">
         <Link href={`/product/${item.productSlug}`} className="font-medium hover:underline">
-          {item.productName}
+          {displayName(item.productName)}
         </Link>
         {item.variantName && item.variantName !== item.productName && <p className="text-sm text-steel">{item.variantName}</p>}
         <p className="text-sm text-steel">SKU {item.sku}</p>

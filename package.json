@@ -9,6 +9,12 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
+    "dev:api": "turbo run dev --filter=@devsfleet/api...",
+    "dev:backend": "pnpm dev:api",
+    "dev:admin": "turbo run dev --filter=@devsfleet/admin...",
+    "dev:storefront": "turbo run dev --filter=@devsfleet/storefront...",
+    "dev:pos": "turbo run dev --filter=@devsfleet/pos...",
+    "dev:pos:ui": "pnpm --filter @devsfleet/pos dev:ui",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",

@@ -3,16 +3,17 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { PriceTag } from "@/components/ui/price-tag";
 import { ProductImage } from "@/components/ui/product-image";
+import { displayName } from "@/lib/format";
 
 export function ProductCard({ product, priority }: { product: Card; priority?: boolean }) {
   return (
     <article className="group relative flex flex-col overflow-hidden rounded-[var(--radius-panel)] border border-galv bg-paper">
-      <ProductImage image={product.image} name={product.name} brand={product.brand?.name} priority={priority} />
+      <ProductImage image={product.image} name={displayName(product.name)} brand={product.brand ? displayName(product.brand.name) : undefined} priority={priority} />
       <div className="flex flex-1 flex-col gap-2 border-t border-galv p-3">
-        {product.brand && <p className="text-sm font-medium text-steel">{product.brand.name}</p>}
+        {product.brand && <p className="text-sm font-medium text-steel">{displayName(product.brand.name)}</p>}
         <h3 className="font-sans text-[15px] font-medium leading-snug line-clamp-2">
           <Link href={`/product/${product.slug}`} className="after:absolute after:inset-0 group-hover:underline underline-offset-2">
-            {product.name}
+            {displayName(product.name)}
           </Link>
         </h3>
         <div className="mt-auto pt-1">

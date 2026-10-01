@@ -7,6 +7,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { api } from "@/lib/api-browser";
 import { cn } from "@/lib/cn";
+import { displayName } from "@/lib/format";
 
 /** Search by product name, brand, SKU or barcode, with instant suggestions. */
 /** `hideOnHome`: the home page has its own large search. */
@@ -96,12 +97,12 @@ export function SearchBox({ className, hideOnHome }: { className?: string; hideO
             <div className="flex flex-wrap gap-2 border-b border-galv p-3">
               {data.categories.map((c) => (
                 <Link key={c.slug} href={`/category/${c.slug}`} onClick={() => setOpen(false)} className="rounded-full bg-sheet px-3 py-1 text-sm hover:bg-galv">
-                  {c.name}
+                  {displayName(c.name)}
                 </Link>
               ))}
               {data.brands.map((b) => (
                 <Link key={b.slug} href={`/brand/${b.slug}`} onClick={() => setOpen(false)} className="rounded-full bg-sheet px-3 py-1 text-sm font-medium hover:bg-galv">
-                  {b.name}
+                  {displayName(b.name)}
                 </Link>
               ))}
             </div>
@@ -115,8 +116,8 @@ export function SearchBox({ className, hideOnHome }: { className?: string; hideO
                   className="flex items-center justify-between gap-4 px-3 py-2.5 hover:bg-sheet"
                 >
                   <span className="min-w-0">
-                    <span className="block truncate font-medium">{p.name}</span>
-                    {p.brand && <span className="text-sm text-steel">{p.brand.name}</span>}
+                    <span className="block truncate font-medium">{displayName(p.name)}</span>
+                    {p.brand && <span className="text-sm text-steel">{displayName(p.brand.name)}</span>}
                   </span>
                   {p.fromPrice && <span className="tag-price shrink-0 text-lg">{p.fromPrice.formatted}</span>}
                 </Link>

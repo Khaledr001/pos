@@ -67,6 +67,8 @@ export interface CategoryNode {
   slug: string;
   name: string;
   imageUrl: string | null;
+  /** Published products in this category and everything under it. */
+  productCount: number;
   children: CategoryNode[];
 }
 
@@ -452,7 +454,7 @@ export interface Banner {
 export interface HomeData {
   hero: Banner[];
   strip: Banner[];
-  categories: { slug: string; name: string; imageUrl: string | null; children: Crumb[] }[];
+  categories: { slug: string; name: string; imageUrl: string | null; productCount: number; children: Crumb[] }[];
   featuredBrands: BrandSummary[];
   bestSellers: ProductCard[];
   newArrivals: ProductCard[];

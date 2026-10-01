@@ -5,6 +5,7 @@ import { crumbsFrom, Listing } from "@/components/store/listing";
 import { ApiError } from "@devsfleet/storefront-client";
 import { cached, publicApi, tags } from "@/lib/api-server";
 import { apiQuery, parseListing } from "@/lib/listing";
+import { displayName } from "@/lib/format";
 
 async function getCategory(slug: string) {
   try {
@@ -19,7 +20,7 @@ export async function generateMetadata({ params }: PageProps<"/category/[slug]">
   const { slug } = await params;
   const c = await getCategory(slug);
   return {
-    title: c.seoTitle ?? `${c.name} in the UAE`,
+    title: c.seoTitle ?? `${displayName(c.name)} in the UAE`,
     description: c.seoDescription ?? `Buy ${c.name.toLowerCase()} online. Prices include VAT; delivery across the UAE or store pickup.`,
     alternates: { canonical: `/category/${slug}` },
   };
@@ -37,7 +38,7 @@ export default async function CategoryPage({ params, searchParams }: PageProps<"
   ]);
   return (
     <Listing
-      title={category.name}
+      title={displayName(category.name)}
       intro={category.description}
       crumbs={crumbsFrom(category.breadcrumbs)}
       subcategories={category.children}

@@ -5,6 +5,11 @@ import { SearchBox } from "@/components/store/search-box";
 import { ButtonLink } from "@/components/ui/button";
 import { cached, publicApi, tags } from "@/lib/api-server";
 import { Suspense } from "react";
+import { busiestFirst, displayName } from "@/lib/format";
+import { ArrowRight } from "lucide-react";
+
+/** The hero's department index: the busiest few, then a tile for the rest. Odd, so the tile completes the grid. */
+const HOME_DEPARTMENTS = 7;
 
 const QUICK_SEARCHES = ["PPR pipe 20 mm", "2.5 mm² cable", "Basin mixer", "MCB 20 A", "Silicone sealant", "Porcelain tiles"];
 
@@ -43,22 +48,30 @@ export default async function HomePage() {
 
           {/* Department index, like the first page of a parts catalogue. */}
           <nav aria-label="Shop by department" className="grid grid-cols-2 gap-px overflow-hidden rounded-[var(--radius-panel)] border border-galv bg-galv">
-            {home.categories.map((c) => (
+            {busiestFirst(home.categories).slice(0, HOME_DEPARTMENTS).map((c) => (
               <div key={c.slug} className="bg-paper p-4">
                 <Link href={`/category/${c.slug}`} className="font-cond text-xl font-semibold hover:text-pipe">
-                  {c.name}
+                  {displayName(c.name)}
                 </Link>
                 <ul className="mt-1.5 space-y-0.5">
                   {c.children.slice(0, 4).map((s) => (
                     <li key={s.slug}>
                       <Link href={`/category/${s.slug}`} className="text-sm text-steel hover:text-ink">
-                        {s.name}
+                        {displayName(s.name)}
                       </Link>
                     </li>
                   ))}
                 </ul>
               </div>
             ))}
+            {home.categories.length > HOME_DEPARTMENTS && (
+              <Link href="/departments" className="group flex flex-col justify-center bg-sheet p-4 hover:bg-pipe-tint">
+                <span className="font-cond text-xl font-semibold text-pipe">All departments</span>
+                <span className="mt-1 inline-flex items-center gap-1 text-sm text-steel group-hover:text-ink">
+                  {home.categories.length} departments <ArrowRight className="size-4" aria-hidden />
+                </span>
+              </Link>
+            )}
           </nav>
         </div>
       </section>
@@ -109,7 +122,7 @@ export default async function HomePage() {
                     href={`/brand/${b.slug}`}
                     className="inline-flex h-12 items-center rounded-[var(--radius-tag)] border border-galv bg-paper px-5 font-cond text-lg font-semibold hover:border-ink"
                   >
-                    {b.name}
+                    {displayName(b.name)}
                   </Link>
                 </li>
               ))}
