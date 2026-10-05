@@ -153,6 +153,10 @@ export class AccountService {
     return this.orders.forAccount(requireShopper().accountId, id);
   }
 
+  async invoicePdf(id: string) {
+    return this.orders.accountInvoicePdf(requireShopper().accountId, id);
+  }
+
   /** Every still-available line of a past order, back into the cart at today's price. */
   async reorder(id: string) {
     const order = await this.order(id);

@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { Package } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 /**
@@ -25,12 +26,11 @@ export function ProductImage({
       {image ? (
         <Image src={image.url} alt={image.alt} fill sizes={sizes} priority={priority} className="object-contain p-4" />
       ) : (
-        <div
-          role="img"
-          aria-label={name}
-          className="absolute inset-0 flex items-center justify-center bg-[repeating-linear-gradient(135deg,var(--color-sheet)_0_10px,#eef1f3_10px_20px)] p-6"
-        >
-          <span className="font-cond text-3xl font-bold text-steel-light/80 text-center leading-none">{brand ?? "No photo yet"}</span>
+        // Quiet on purpose: a grid of missing photos should read as a list of
+        // products, not as a wall of grey boxes louder than the names below.
+        <div role="img" aria-label={name} className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-sheet/70 p-6">
+          <Package className="size-9 text-steel-light/60" strokeWidth={1.5} aria-hidden />
+          <span className="text-center font-cond text-lg font-semibold leading-none text-steel-light">{brand ?? "Photo coming soon"}</span>
         </div>
       )}
     </div>

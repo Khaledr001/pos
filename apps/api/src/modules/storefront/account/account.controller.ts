@@ -1,6 +1,8 @@
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query, Res } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
+import type { Response } from "express";
 import { z } from "zod";
+import { sendPdf } from "../../../common/http/send-pdf.js";
 import { zodPipe } from "../../../common/pipes/zod-validation.pipe.js";
 import { RequireShopper, StorefrontRoute } from "../context/storefront.guard.js";
 import { AccountService } from "./account.service.js";
@@ -68,6 +70,11 @@ export class AccountController {
   @Get("orders/:id")
   order(@Param("id", ParseUUIDPipe) id: string) {
     return this.account.order(id);
+  }
+
+  @Get("orders/:id/invoice.pdf")
+  async invoice(@Param("id", ParseUUIDPipe) id: string, @Res() res: Response): Promise<void> {
+    sendPdf(res, await this.account.invoicePdf(id));
   }
 
   @Post("orders/:id/reorder")

@@ -4,6 +4,7 @@ import { AppError, calculateLine, ERROR_CODES, Money } from "@devsfleet/shared-u
 import { Injectable } from "@nestjs/common";
 import { RequestContext } from "../../../common/context/request-context.js";
 import { TenantDatabase } from "../../../database/tenant-database.service.js";
+import { SalesService } from "../../sales/sales.service.js";
 import { moneyView } from "../pricing/money-view.js";
 import { toWire } from "../wire.js";
 
@@ -19,7 +20,10 @@ const PAGE_SIZE = 20;
  */
 @Injectable()
 export class WebOrdersService {
-  constructor(private readonly db: TenantDatabase) {}
+  constructor(
+    private readonly db: TenantDatabase,
+    private readonly sales: SalesService,
+  ) {}
 
   /** A guest's order, by the unguessable token in their confirmation email. */
   async track(token: string) {
@@ -39,6 +43,46 @@ export class WebOrdersService {
       // The same answer for "not yours" as for "does not exist".
       if (!web) throw new AppError(ERROR_CODES.NOT_FOUND, "We could not find that order.");
       return this.view(tx, web.orderId);
+    });
+  }
+
+  /** The tax invoice behind a guest's tracking link. */
+  async trackedInvoicePdf(token: string) {
+    const web = await this.db.run((tx) =>
+      tx.query.webOrders.findFirst({ where: (t, { eq: e }) => e(t.trackingToken, token), columns: { orderId: true } }),
+    );
+    if (!web) throw new AppError(ERROR_CODES.NOT_FOUND, "We could not find that order.");
+    return this.invoicePdf(web.orderId);
+  }
+
+  async accountInvoicePdf(accountId: string, orderId: string) {
+    const web = await this.db.run((tx) =>
+      tx.query.webOrders.findFirst({
+        where: (t, { and: a, eq: e }) => a(e(t.orderId, orderId), e(t.accountId, accountId)),
+        columns: { orderId: true },
+      }),
+    );
+    if (!web) throw new AppError(ERROR_CODES.NOT_FOUND, "We could not find that order.");
+    return this.invoicePdf(web.orderId);
+  }
+
+  /**
+   * The same document the counter prints, rendered by `SalesService` — the
+   * sale is the tax invoice, so there is no second layout to drift from it.
+   * Picks the sale `view` reports as the invoice, so the number on the page
+   * and the file downloaded are always the same one.
+   */
+  private async invoicePdf(orderId: string) {
+    const sale = await this.db.run((tx) => this.invoiceSale(tx, orderId));
+    if (!sale) throw new AppError(ERROR_CODES.NOT_FOUND, "This order has no tax invoice yet.");
+    return this.sales.invoicePdf(sale.id);
+  }
+
+  private invoiceSale(tx: Transaction, orderId: string) {
+    return tx.query.sales.findFirst({
+      where: (t, { eq: e }) => e(t.orderId, orderId),
+      columns: { id: true, saleNumber: true, createdAt: true },
+      orderBy: (t, { asc }) => asc(t.createdAt),
     });
   }
 
@@ -152,11 +196,7 @@ export class WebOrdersService {
             columns: { name: true, address: true, phone: true },
           })
         : null,
-      tx.query.sales.findFirst({
-        where: (t, { eq: e }) => e(t.orderId, orderId),
-        columns: { saleNumber: true, createdAt: true },
-        orderBy: (t, { asc }) => asc(t.createdAt),
-      }),
+      this.invoiceSale(tx, orderId),
     ]);
 
     const packagingUnitIds = [...new Set(items.map((i) => i.unitId).filter((id): id is string => !!id))];

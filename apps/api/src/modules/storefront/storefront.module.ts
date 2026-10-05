@@ -33,6 +33,7 @@ import { StorefrontGuard } from "./context/storefront.guard.js";
 import { StorefrontResolver } from "./context/storefront-resolver.service.js";
 import { WebOrdersController } from "./orders/web-orders.controller.js";
 import { WebOrdersService } from "./orders/web-orders.service.js";
+import { SalesModule } from "../sales/sales.module.js";
 import { PaymentExpiryService } from "./payments/payment-expiry.service.js";
 import { DevPaymentsController, StripeWebhookController } from "./payments/payments.controller.js";
 import { StorefrontPaymentsService } from "./payments/payments.service.js";
@@ -52,7 +53,7 @@ import { RevalidationService } from "./revalidation/revalidation.service.js";
  * with its permission, scoped to the staff member's own tenant.
  */
 @Module({
-  imports: [PricingModule, OrdersModule],
+  imports: [PricingModule, OrdersModule, SalesModule],
   controllers: [
     StorefrontCatalogController,
     StorefrontContentController,

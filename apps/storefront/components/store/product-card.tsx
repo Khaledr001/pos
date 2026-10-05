@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { PriceTag } from "@/components/ui/price-tag";
 import { ProductImage } from "@/components/ui/product-image";
+import { cn } from "@/lib/cn";
 import { displayName } from "@/lib/format";
 
 export function ProductCard({ product, priority }: { product: Card; priority?: boolean }) {
@@ -33,9 +34,9 @@ export function ProductCard({ product, priority }: { product: Card; priority?: b
   );
 }
 
-export function ProductGrid({ products, priorityCount = 0 }: { products: Card[]; priorityCount?: number }) {
+export function ProductGrid({ products, priorityCount = 0, className }: { products: Card[]; priorityCount?: number; className?: string }) {
   return (
-    <ul className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
+    <ul className={cn("grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4", className)}>
       {products.map((p, i) => (
         <li key={p.id} className="flex">
           <div className="w-full">

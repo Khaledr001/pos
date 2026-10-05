@@ -3,6 +3,7 @@ import type { Response } from "express";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Audited, RequirePermissions } from "../../common/decorators/index.js";
 import { zodPipe } from "../../common/pipes/zod-validation.pipe.js";
+import { sendPdf } from "../../common/http/send-pdf.js";
 import { SalesService } from "./sales.service.js";
 import {
   CreateReturnSchema,
@@ -39,21 +40,7 @@ export class SalesController {
     @Param("id", ParseUUIDPipe) id: string,
     @Res() res: Response,
   ): Promise<void> {
-    const { filename, body } = await this.sales.invoicePdf(id);
-
-    /**
-     * Written straight to the response, which is why `@Res()` is here: the
-     * global TransformInterceptor wraps every returned value in the JSON
-     * ApiSuccess envelope, and a PDF wrapped in JSON is not a PDF. Taking the
-     * response object puts this handler in library-specific mode, so Nest
-     * leaves the body alone.
-     *
-     * `attachment` rather than `inline`: the request is "download the bill".
-     */
-    res.setHeader("content-type", "application/pdf");
-    res.setHeader("content-disposition", `attachment; filename="${filename}"`);
-    res.setHeader("content-length", String(body.length));
-    res.end(body);
+    sendPdf(res, await this.sales.invoicePdf(id));
   }
 
   @Get(":id")

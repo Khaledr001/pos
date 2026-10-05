@@ -80,7 +80,10 @@ are checked against the resolved one.
 - **Hand-over** (Delivered / Collected on the order desk) fulfils the POS
   order through `OrdersService.fulfill`, which goes through `SalesService`.
   That creates the sale, the tax invoice and the stock movement, under the
-  staff member who handed it over. Card orders settle as `card`; cash on
+  staff member who handed it over. The shopper downloads that same invoice from the
+  tracking page (`/orders/track/<token>/invoice.pdf`) or their account
+  (`/me/orders/<id>/invoice.pdf`); it is rendered by `SalesService.invoicePdf`,
+  the document the counter prints. Card orders settle as `card`; cash on
   delivery records how the money came in (cash into a till, card at the
   counter, or the courier's bank transfer).
 
@@ -185,8 +188,6 @@ the types the website renders, so a change on either side fails the build.
 - **No shopper notifications.** Order confirmation, dispatch and ready-for-
   pickup emails and WhatsApp messages are not sent yet. The timeline is
   visible on the tracking page and the account area.
-- **No tax invoice download for shoppers.** The invoice exists, as the POS sale,
-  once an order is handed over. Staff can print it from Sales.
 - **Fixed-amount coupons** are refused online (see Money above).
 - **Tabby / Tamara** are not integrated.
 - **Courier APIs** are not integrated; staff add the tracking number by hand.
