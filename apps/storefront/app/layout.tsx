@@ -36,7 +36,8 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en-AE" className={`${barlow.variable} ${barlowCondensed.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col">{children}</body>
+      {/* Browser extensions (Grammarly, password managers) stamp attributes onto <body> before React hydrates. */}
+      <body className="min-h-full flex flex-col" suppressHydrationWarning>{children}</body>
     </html>
   );
 }

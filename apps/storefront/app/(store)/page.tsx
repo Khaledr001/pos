@@ -67,7 +67,9 @@ export default async function HomePage() {
                 "Plumbing, electrical, sanitary ware and tools from brands you trust — delivered across the UAE or ready for pickup."}
             </p>
             <Suspense>
-              <SearchBox className="mt-7 max-w-xl" />
+              <div data-hero-search className="mt-7 max-w-xl">
+                <SearchBox />
+              </div>
             </Suspense>
             {popular.length > 0 && (
               <div className="mt-4 flex flex-wrap items-center gap-2">
