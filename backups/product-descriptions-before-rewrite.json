@@ -1,0 +1,2675 @@
+[
+ {
+  "id": "90fec463-bbc3-494e-aa9c-d4be3ad041b9",
+  "name": "LN Key small",
+  "sku": "SKU-000003",
+  "brand": "saffron",
+  "category": "Allen Keys",
+  "parent_category": "Hand Tools",
+  "old_description": "Placed in middle front of tools galary"
+ },
+ {
+  "id": "bce0c444-6aa8-4ccd-961c-8b7d263b15be",
+  "name": "m10 fix bolt",
+  "sku": "SKU-000033",
+  "brand": "others",
+  "category": "Anchor Bolts",
+  "parent_category": "Screws, Bolts & Fixings",
+  "old_description": "30 pcs per box"
+ },
+ {
+  "id": "db3448ac-2bec-4b46-a101-f37a7c119b58",
+  "name": "m12 fix bolt",
+  "sku": "SKU-000034",
+  "brand": "others",
+  "category": "Anchor Bolts",
+  "parent_category": "Screws, Bolts & Fixings",
+  "old_description": "16 pcs per box"
+ },
+ {
+  "id": "ba8f6e03-12b5-4db3-97dd-2d3efbd976ab",
+  "name": "m6 fix bolt",
+  "sku": "SKU-000031",
+  "brand": "others",
+  "category": "Anchor Bolts",
+  "parent_category": "Screws, Bolts & Fixings",
+  "old_description": "100 pcs per box"
+ },
+ {
+  "id": "ed94ce91-0994-4238-b042-cc042d6b2ab0",
+  "name": "m8 fix bolt",
+  "sku": "SKU-000032",
+  "brand": "others",
+  "category": "Anchor Bolts",
+  "parent_category": "Screws, Bolts & Fixings",
+  "old_description": "50 pcs per box"
+ },
+ {
+  "id": "526f71a0-8dfb-4c76-bfd0-e84480f3dbc6",
+  "name": "hkk angle grinder",
+  "sku": "hk-hag01-115",
+  "brand": "grinder",
+  "category": "Angle Grinders",
+  "parent_category": "Power Tools",
+  "old_description": null
+ },
+ {
+  "id": "2e24cc4f-9330-4756-9723-f138ee3a7b8e",
+  "name": "alva brass angle valve 1/2 x 1/2",
+  "sku": "SKU-000226",
+  "brand": "alva",
+  "category": "Angle Valves",
+  "parent_category": "Plumbing",
+  "old_description": null
+ },
+ {
+  "id": "9b369e4d-fb21-436e-a993-5e0e6a2b3340",
+  "name": "alva ss angle valve 1/2 x 1/2",
+  "sku": "SKU-000227",
+  "brand": "alva",
+  "category": "Angle Valves",
+  "parent_category": "Plumbing",
+  "old_description": null
+ },
+ {
+  "id": "f7b6275e-e1ce-4cc0-8236-5fe5a9d47123",
+  "name": "amestar brass angle valve 1/2 x 1/2",
+  "sku": "as-av010",
+  "brand": "amestar",
+  "category": "Angle Valves",
+  "parent_category": "Plumbing",
+  "old_description": null
+ },
+ {
+  "id": "88989122-9ce3-418d-a501-48a6239ac5b8",
+  "name": "aquabella brass angle valve 1/2 x 1/2",
+  "sku": "SKU-000228",
+  "brand": "aquabella",
+  "category": "Angle Valves",
+  "parent_category": "Plumbing",
+  "old_description": null
+ },
+ {
+  "id": "5890891b-49f3-43f7-972b-48abf5307230",
+  "name": "bango brass angle valve 1/2 x 1/2",
+  "sku": "av01",
+  "brand": "bango",
+  "category": "Angle Valves",
+  "parent_category": "Plumbing",
+  "old_description": null
+ },
+ {
+  "id": "e589c309-ebe1-412c-a024-2579d339a88b",
+  "name": "cab italiano brass angle valve 1/2 x 1/2",
+  "sku": "SKU-000229",
+  "brand": "cab italiano",
+  "category": "Angle Valves",
+  "parent_category": "Plumbing",
+  "old_description": null
+ },
+ {
+  "id": "41db2ff9-7961-46bb-a4d3-484aa6674eb3",
+  "name": "dezone brass angle valve 1/2 x 1/2",
+  "sku": "dz-200",
+  "brand": "dezone",
+  "category": "Angle Valves",
+  "parent_category": "Plumbing",
+  "old_description": null
+ },
+ {
+  "id": "fef8096f-462c-4823-bcf5-6072e732f40c",
+  "name": "fudex brass angle valve 1/2 x 1/2",
+  "sku": "SKU-000230",
+  "brand": "fudex",
+  "category": "Angle Valves",
+  "parent_category": "Plumbing",
+  "old_description": null
+ },
+ {
+  "id": "6e0e0425-3b4d-468c-8ab2-999ecf11d58d",
+  "name": "italia brass double angle valve",
+  "sku": "it-6262",
+  "brand": "italia",
+  "category": "Angle Valves",
+  "parent_category": "Plumbing",
+  "old_description": null
+ },
+ {
+  "id": "2d0567fe-9dc0-49f7-b636-fb1215823c1c",
+  "name": "modi angle valve 1/2 x 1/2",
+  "sku": "md-hwsa6707",
+  "brand": "modi",
+  "category": "Angle Valves",
+  "parent_category": "Plumbing",
+  "old_description": null
+ },
+ {
+  "id": "287b67c0-56d8-4eee-a570-cc9b5be984e6",
+  "name": "wash basin hook 10mm",
+  "sku": "SKU-000218",
+  "brand": "osco",
+  "category": "Basin Hooks",
+  "parent_category": "Bathroom Accessories",
+  "old_description": null
+ },
+ {
+  "id": "dd769469-5a03-4063-9b69-d049ad3310fc",
+  "name": "artflo basin mixer yf-1901",
+  "sku": "yf-1901",
+  "brand": "artflo",
+  "category": "Basin Mixers",
+  "parent_category": "Taps & Mixers",
+  "old_description": "Placed in right shelf"
+ },
+ {
+  "id": "351ace04-bb69-4e67-9cea-655a3a8b5fa8",
+  "name": "elsa basin mixer fa-86",
+  "sku": "fa-86",
+  "brand": "elsa",
+  "category": "Basin Mixers",
+  "parent_category": "Taps & Mixers",
+  "old_description": "Placed in right shelf"
+ },
+ {
+  "id": "f4d54a46-a1e5-479f-8f33-0940e74746f3",
+  "name": "golden coast single basin mixer",
+  "sku": "SKU-000224",
+  "brand": "golden coast",
+  "category": "Basin Mixers",
+  "parent_category": "Taps & Mixers",
+  "old_description": null
+ },
+ {
+  "id": "627e8ead-0393-42eb-89a5-2ca8876842ad",
+  "name": "italia single lever basin mixer fk-001",
+  "sku": "fk-001",
+  "brand": "italia",
+  "category": "Basin Mixers",
+  "parent_category": "Taps & Mixers",
+  "old_description": "Placed in right shelf"
+ },
+ {
+  "id": "3789f967-9351-4fdf-9b44-d5e361ef60a1",
+  "name": "italia single lever basin mixer hk-001",
+  "sku": "hk-001",
+  "brand": "italia",
+  "category": "Basin Mixers",
+  "parent_category": "Taps & Mixers",
+  "old_description": "Placed in right shelf"
+ },
+ {
+  "id": "e3d77d26-a04f-4609-85d3-b00fe25df78e",
+  "name": "modi basin mixer md-hwsa61012",
+  "sku": "md-hwsa61012",
+  "brand": "modi",
+  "category": "Basin Mixers",
+  "parent_category": "Taps & Mixers",
+  "old_description": "Placed in right shelf"
+ },
+ {
+  "id": "55e8f041-ea2e-4724-b6a9-234d470de494",
+  "name": "modi single basin mixer",
+  "sku": "SKU-000222",
+  "brand": "modi",
+  "category": "Basin Mixers",
+  "parent_category": "Taps & Mixers",
+  "old_description": null
+ },
+ {
+  "id": "a211468f-2e35-4d84-ab25-c502d1c01bd0",
+  "name": "novex single lever basin mixer nsbf-g703",
+  "sku": "nsbf-g703",
+  "brand": "novex",
+  "category": "Basin Mixers",
+  "parent_category": "Taps & Mixers",
+  "old_description": "Placed in right shelf"
+ },
+ {
+  "id": "d34ecc4b-ede4-40c5-9a8f-dbfe348ff2c9",
+  "name": "italia long body bib tap",
+  "sku": "SKU-000225",
+  "brand": "italia",
+  "category": "Bib Taps",
+  "parent_category": "Taps & Mixers",
+  "old_description": null
+ },
+ {
+  "id": "2a5e46ef-e5dd-4a2d-8725-4806d1164339",
+  "name": "italia two way bib tap",
+  "sku": "SKU-000223",
+  "brand": "italia",
+  "category": "Bib Taps",
+  "parent_category": "Taps & Mixers",
+  "old_description": null
+ },
+ {
+  "id": "b79dd8a5-886d-4b5e-ab00-980581cfc0ab",
+  "name": "10mm cable clip - kl star",
+  "sku": "SKU-000161",
+  "brand": "kl star",
+  "category": "Cable Clips",
+  "parent_category": "Cable Accessories",
+  "old_description": "Placed in behind the chair"
+ },
+ {
+  "id": "bf73beda-8e35-4b5a-803a-608940e5f47a",
+  "name": "6mm cable clip - kl star",
+  "sku": "SKU-000158",
+  "brand": "kl star",
+  "category": "Cable Clips",
+  "parent_category": "Cable Accessories",
+  "old_description": "Placed in behind the chair"
+ },
+ {
+  "id": "d2d62fff-243a-40f6-84bb-126bdda9c253",
+  "name": "7mm cable clip - kl star",
+  "sku": "SKU-000159",
+  "brand": "kl star",
+  "category": "Cable Clips",
+  "parent_category": "Cable Accessories",
+  "old_description": "Placed in behind the chair"
+ },
+ {
+  "id": "7f0b8a66-a7de-4ca3-8c5d-c2aff7be4dff",
+  "name": "8mm cable clip - kl star",
+  "sku": "SKU-000160",
+  "brand": "kl star",
+  "category": "Cable Clips",
+  "parent_category": "Cable Accessories",
+  "old_description": "Placed in behind the chair"
+ },
+ {
+  "id": "28a1175c-4c6a-4ef2-9288-1ad08783149f",
+  "name": "cable cutter 6\"",
+  "sku": "SKU-000048",
+  "brand": "sola",
+  "category": "Cable Cutters",
+  "parent_category": "Hand Tools",
+  "old_description": "Placed in tools galary"
+ },
+ {
+  "id": "28005697-6a01-4aa5-bc1d-d2151b59c34d",
+  "name": "cable cutter 8\"",
+  "sku": "SKU-000049",
+  "brand": "sola",
+  "category": "Cable Cutters",
+  "parent_category": "Hand Tools",
+  "old_description": "Placed in tools galary"
+ },
+ {
+  "id": "731f700a-711a-4bd8-a3e0-3fb85f0415d7",
+  "name": "snowlite cable gland pg11",
+  "sku": "SKU-000212",
+  "brand": "snowlite",
+  "category": "Cable Glands",
+  "parent_category": "Cable Accessories",
+  "old_description": null
+ },
+ {
+  "id": "1220bc45-f2c7-43e6-b9b9-0b4cea1c22f2",
+  "name": "snowlite cable gland pg13.5",
+  "sku": "SKU-000211",
+  "brand": "snowlite",
+  "category": "Cable Glands",
+  "parent_category": "Cable Accessories",
+  "old_description": null
+ },
+ {
+  "id": "f3ccd9cd-3ba8-4d5b-9baf-d0ca9f2883e2",
+  "name": "havy duty cable reel 25mtr 3c x 1.25sqmm - kl star",
+  "sku": "SKU-000112",
+  "brand": "kl star",
+  "category": "Cable Reels",
+  "parent_category": "Wires & Cables",
+  "old_description": "Placed in top of the middle galary"
+ },
+ {
+  "id": "91d11420-2a2b-4db2-a8b3-263b46176e13",
+  "name": "airex 56\" ceiling fan white xcf56",
+  "sku": "xcf56",
+  "brand": "airex",
+  "category": "Ceiling Fans",
+  "parent_category": "Fans & Ventilation",
+  "old_description": "Placed in top of the right shelf"
+ },
+ {
+  "id": "3bd03e9b-1a03-4db0-b0a7-6930a6b325f9",
+  "name": "elexa 56\" ceiling fan white",
+  "sku": "SKU-000129",
+  "brand": "elexa",
+  "category": "Ceiling Fans",
+  "parent_category": "Fans & Ventilation",
+  "old_description": "Placed in top of the right shelf"
+ },
+ {
+  "id": "a1ba86f6-f41b-41e7-b28d-14c5d2dacaa7",
+  "name": "khaleegia 56\" ceiling fan white",
+  "sku": "SKU-000130",
+  "brand": "khaleegia",
+  "category": "Ceiling Fans",
+  "parent_category": "Fans & Ventilation",
+  "old_description": "Placed in top of the right shelf"
+ },
+ {
+  "id": "9c0c3d22-dc26-4d8c-97dc-960f51234b64",
+  "name": "khaleegia 60 X 60 ceiling fan",
+  "sku": "SKU-000097",
+  "brand": "khaleegia",
+  "category": "Ceiling Fans",
+  "parent_category": "Fans & Ventilation",
+  "old_description": "Placed in top of the right shelf"
+ },
+ {
+  "id": "60420c0f-ac4b-447b-b5fd-d7e358328e9a",
+  "name": "khind 56\" ceiling fan white",
+  "sku": "SKU-000131",
+  "brand": "khind",
+  "category": "Ceiling Fans",
+  "parent_category": "Fans & Ventilation",
+  "old_description": "Placed in top of the right shelf"
+ },
+ {
+  "id": "018f2631-8333-403f-b976-a4a91fe275a8",
+  "name": "modi 56\" ceiling fan white",
+  "sku": "md-hwf2004",
+  "brand": "modi",
+  "category": "Ceiling Fans",
+  "parent_category": "Fans & Ventilation",
+  "old_description": "Placed in top of the right shelf"
+ },
+ {
+  "id": "b644b63a-3f50-4771-8077-f98c571f088f",
+  "name": "modi 60X60 ceiling fan",
+  "sku": "md-hwf2002",
+  "brand": "modi",
+  "category": "Ceiling Fans",
+  "parent_category": "Fans & Ventilation",
+  "old_description": "Placed in top of the right shelf"
+ },
+ {
+  "id": "d306547a-3fff-4ab0-b159-91c9c3f930e3",
+  "name": "roska 56\" ceiling fan white",
+  "sku": "RCF-30",
+  "brand": "roska",
+  "category": "Ceiling Fans",
+  "parent_category": "Fans & Ventilation",
+  "old_description": "Placed in top of the right shelf"
+ },
+ {
+  "id": "3d4b32de-cf35-4665-8628-dab222835f3a",
+  "name": "chalk line",
+  "sku": "SKU-000083",
+  "brand": "others",
+  "category": "Chalk Lines",
+  "parent_category": "Hand Tools",
+  "old_description": null
+ },
+ {
+  "id": "153e608c-0b58-4840-bf84-c941e13bf9fa",
+  "name": "hager bracker 10A",
+  "sku": "SKU-000182",
+  "brand": "hager",
+  "category": "Circuit Breakers",
+  "parent_category": "Circuit Breakers & Isolators",
+  "old_description": "Placed in top of the chair"
+ },
+ {
+  "id": "0e0fa630-63b3-4f7e-91ff-9b47911f95d5",
+  "name": "hager bracker 20A",
+  "sku": "SKU-000183",
+  "brand": "hager",
+  "category": "Circuit Breakers",
+  "parent_category": "Circuit Breakers & Isolators",
+  "old_description": "Placed in top of the chair"
+ },
+ {
+  "id": "9e6562bc-95fd-4e6b-95c3-ee2b5bee65a8",
+  "name": "hager bracker 30A",
+  "sku": "SKU-000184",
+  "brand": "hager",
+  "category": "Circuit Breakers",
+  "parent_category": "Circuit Breakers & Isolators",
+  "old_description": "Placed in top of the chair"
+ },
+ {
+  "id": "77dd64e9-7919-4e6e-88ac-50fe4df14f97",
+  "name": "Atlantic Cleaning Acid 1 Gln",
+  "sku": "SKU-000244",
+  "brand": "al saqr",
+  "category": "Cleaning Acids",
+  "parent_category": "Cleaning & Drain Care",
+  "old_description": null
+ },
+ {
+  "id": "c0ea7051-9a20-4f62-90cc-d0f4cf8e4bd9",
+  "name": "1\" cp pipe",
+  "sku": "SKU-000113",
+  "brand": "al zafeer building materials llc",
+  "category": "Conduit Pipes",
+  "parent_category": "Trunking & Conduit",
+  "old_description": "Placed in pipe galary"
+ },
+ {
+  "id": "7d04ef2e-5c09-4c82-962e-1ceb256dec5a",
+  "name": "3 X 4\" cp pipe",
+  "sku": "SKU-000114",
+  "brand": "al zafeer building materials llc",
+  "category": "Conduit Pipes",
+  "parent_category": "Trunking & Conduit",
+  "old_description": "Placed ini pipe galary"
+ },
+ {
+  "id": "1c12da5c-7941-48e6-a2b1-127a37595bc6",
+  "name": "asmako contact adhesive 250g",
+  "sku": "SKU-000046",
+  "brand": "asmako",
+  "category": "Contact Adhesives",
+  "parent_category": "Adhesives & Sealants",
+  "old_description": null
+ },
+ {
+  "id": "7282640d-acab-4ef2-ba87-4fa43a1d535a",
+  "name": "asmako contact adhesive 600g",
+  "sku": "SKU-000047",
+  "brand": "asmako",
+  "category": "Contact Adhesives",
+  "parent_category": "Adhesives & Sealants",
+  "old_description": null
+ },
+ {
+  "id": "e0e09dfb-9dad-48a7-8026-6b34b9048736",
+  "name": "bison kit",
+  "sku": "SKU-000045",
+  "brand": "bison",
+  "category": "Contact Adhesives",
+  "parent_category": "Adhesives & Sealants",
+  "old_description": null
+ },
+ {
+  "id": "0e85f814-ef0b-4b37-b193-0bd8bb96ba22",
+  "name": "single curtain bracket",
+  "sku": "SKU-000051",
+  "brand": "others",
+  "category": "Curtain Brackets",
+  "parent_category": "Brackets & Mounts",
+  "old_description": "Placed in middle rack"
+ },
+ {
+  "id": "b40ec949-8881-421e-b2fb-dd847581b19e",
+  "name": "hkk cutting disk 4.5\" x 1mm",
+  "sku": "SKU-000074",
+  "brand": "hkk",
+  "category": "Cutting Discs",
+  "parent_category": "Drill Bits & Cutting Discs",
+  "old_description": null
+ },
+ {
+  "id": "cb63ca50-3594-4cf8-8fd1-f0c582a86ca3",
+  "name": "ceramic 4.5\" diamond saw blade with flang",
+  "sku": "SKU-000028",
+  "brand": "osco",
+  "category": "Diamond Saw Blades",
+  "parent_category": "Drill Bits & Cutting Discs",
+  "old_description": "Placed in tools galary"
+ },
+ {
+  "id": "eb7b65ee-da36-444e-bfa1-2e35cfdd8b8d",
+  "name": "bellucci door handle set",
+  "sku": "SKU-000061",
+  "brand": "bellucci",
+  "category": "Door Handles",
+  "parent_category": "Door & Cabinet Hardware",
+  "old_description": null
+ },
+ {
+  "id": "61280694-db6c-4cca-9999-c5b60c87d51b",
+  "name": "lvy grip tape 2m",
+  "sku": "SKU-000069",
+  "brand": "lvy",
+  "category": "Double-Sided Tapes",
+  "parent_category": "Adhesives & Sealants",
+  "old_description": null
+ },
+ {
+  "id": "3eced1f9-b038-4be8-a65f-eb2f2482d98e",
+  "name": "max 30w led down/cob light-6000k",
+  "sku": "SKU-000124",
+  "brand": "max",
+  "category": "Downlights",
+  "parent_category": "Lighting",
+  "old_description": "Placed in right side of the door"
+ },
+ {
+  "id": "9f0dce75-fffc-43eb-891b-9fc3f761ce5b",
+  "name": "navigate 30w led down/cob light-3000k",
+  "sku": "SKU-000125",
+  "brand": "navigate",
+  "category": "Downlights",
+  "parent_category": "Lighting",
+  "old_description": "Placed in right side of the door"
+ },
+ {
+  "id": "fa4c9fb2-269e-41aa-9d4b-fdd0dd608bc5",
+  "name": "Atlantic Drainage Opener Acid 1.5 KG",
+  "sku": "SKU-000246",
+  "brand": "al saqr",
+  "category": "Drain Openers",
+  "parent_category": "Cleaning & Drain Care",
+  "old_description": null
+ },
+ {
+  "id": "7230867a-9ed4-4096-b6ed-357f1604b0d2",
+  "name": "Atlantic Drainage Opener Acid 5 KG",
+  "sku": "SKU-000245",
+  "brand": "al saqr",
+  "category": "Drain Openers",
+  "parent_category": "Cleaning & Drain Care",
+  "old_description": null
+ },
+ {
+  "id": "5fdd04a5-2ac9-4505-8fe4-833baf41c4a9",
+  "name": "Atlantic Drainage Opener crystals 500grm",
+  "sku": "SKU-000247",
+  "brand": "aqua",
+  "category": "Drain Openers",
+  "parent_category": "Cleaning & Drain Care",
+  "old_description": null
+ },
+ {
+  "id": "a093edfe-4995-4461-8ece-bb253ed9efdc",
+  "name": "milano ball bearing slides",
+  "sku": "SKU-000058",
+  "brand": "milano",
+  "category": "Drawer Slides",
+  "parent_category": "Door & Cabinet Hardware",
+  "old_description": null
+ },
+ {
+  "id": "a9670a48-ef1e-47d8-a77a-74ffc5029326",
+  "name": "dewalt drill",
+  "sku": "SKU-000180",
+  "brand": "dewalt",
+  "category": "Drills & Drivers",
+  "parent_category": "Power Tools",
+  "old_description": null
+ },
+ {
+  "id": "1ce8f8ec-fb00-4898-aedb-13092b26d9e1",
+  "name": "stanley cordless li-lon drill driver / tighter machine 18V",
+  "sku": "scd29s2k",
+  "brand": "Stanley",
+  "category": "Drills & Drivers",
+  "parent_category": "Power Tools",
+  "old_description": null
+ },
+ {
+  "id": "d7af6653-481a-4be5-b479-f52a85e38ae6",
+  "name": "ear plug",
+  "sku": "SKU-000077",
+  "brand": "others",
+  "category": "Ear Plugs",
+  "parent_category": "Safety Wear",
+  "old_description": null
+ },
+ {
+  "id": "1ea7bfb1-927c-4138-a56b-5596d1d90609",
+  "name": "Ducab 3-Core 2.5mm\u00b2 Flexible Copper Cable",
+  "sku": "EL-CBL-3CX25",
+  "brand": "Ducab",
+  "category": "Electrical",
+  "parent_category": null,
+  "old_description": null
+ },
+ {
+  "id": "86015cb8-b1da-427c-a0d3-a07dc1925413",
+  "name": "Schneider Electric Vivace 1-Gang 1-Way Switch",
+  "sku": "EL-SW-SCH-1G",
+  "brand": "Schneider Electric",
+  "category": "Electrical",
+  "parent_category": null,
+  "old_description": null
+ },
+ {
+  "id": "554a68e3-4145-45d9-aca9-262b8d4b0197",
+  "name": "8\" exhaust fan square - RR",
+  "sku": "SKU-000111",
+  "brand": "RR",
+  "category": "Exhaust Fans",
+  "parent_category": "Fans & Ventilation",
+  "old_description": "Placed in middle of the front galary"
+ },
+ {
+  "id": "83d0f209-3267-4093-babe-b01dead98015",
+  "name": "admore 12\" exhaust fan metal body w/net",
+  "sku": "SKU-000145",
+  "brand": "admore",
+  "category": "Exhaust Fans",
+  "parent_category": "Fans & Ventilation",
+  "old_description": "Placed in middle of the front galary"
+ },
+ {
+  "id": "f8a05f93-c5e7-45ea-8bdc-d9e0443b2e0e",
+  "name": "admore 6\" exhaust fan for glass",
+  "sku": "SKU-000147",
+  "brand": "admore",
+  "category": "Exhaust Fans",
+  "parent_category": "Fans & Ventilation",
+  "old_description": "Placed in middle of the front galary"
+ },
+ {
+  "id": "d5663bc5-cb17-47b9-8e68-eae2676640a6",
+  "name": "admore 8\" exhaust fan for glass",
+  "sku": "SKU-000148",
+  "brand": "admore",
+  "category": "Exhaust Fans",
+  "parent_category": "Fans & Ventilation",
+  "old_description": "Placed in middle of the front galary"
+ },
+ {
+  "id": "d0fc307b-d50d-4b2a-bdd7-c7f4f0a39a01",
+  "name": "admore 8\" exhaust fan metal body w/net",
+  "sku": "SKU-000146",
+  "brand": "admore",
+  "category": "Exhaust Fans",
+  "parent_category": "Fans & Ventilation",
+  "old_description": "Placed in middle of the front galary"
+ },
+ {
+  "id": "41d8b895-b139-4665-80fa-611175b999ba",
+  "name": "modi 6\" exhaust fan",
+  "sku": "SKU-000109",
+  "brand": "modi",
+  "category": "Exhaust Fans",
+  "parent_category": "Fans & Ventilation",
+  "old_description": "Placed in top of the door and bottom of the right shelf"
+ },
+ {
+  "id": "017e966c-c4b4-4e35-bb90-1a1de6b5b4b9",
+  "name": "modi 6\" square exhaust fan",
+  "sku": "SKU-000143",
+  "brand": "modi",
+  "category": "Exhaust Fans",
+  "parent_category": "Fans & Ventilation",
+  "old_description": null
+ },
+ {
+  "id": "419eb3cf-08c1-4a58-ae0d-b4184209a82b",
+  "name": "modi 8\" exhaust fan md-hwf10125r8a",
+  "sku": "md-hwf10125r8a",
+  "brand": "modi",
+  "category": "Exhaust Fans",
+  "parent_category": "Fans & Ventilation",
+  "old_description": "Placed in top of the door and bottom of the right shelf"
+ },
+ {
+  "id": "3af024b9-4f9e-4c20-b1b1-690b5d4c8b5c",
+  "name": "modi 8\" square exhaust fan",
+  "sku": "SKU-000144",
+  "brand": "modi",
+  "category": "Exhaust Fans",
+  "parent_category": "Fans & Ventilation",
+  "old_description": null
+ },
+ {
+  "id": "20756edf-0de8-4e43-a634-650607f384c6",
+  "name": "3 layer tower extension",
+  "sku": "SKU-000101",
+  "brand": "modi",
+  "category": "Extension Sockets",
+  "parent_category": "Switches & Sockets",
+  "old_description": "Placed in top of the cash"
+ },
+ {
+  "id": "06ed87ec-dd99-4154-bf33-72d41d3ccab9",
+  "name": "4 layer tower extension",
+  "sku": "SKU-000100",
+  "brand": "modi",
+  "category": "Extension Sockets",
+  "parent_category": "Switches & Sockets",
+  "old_description": "Placed in top of the door"
+ },
+ {
+  "id": "85922c0d-1f65-4ee8-85e8-9c9fadb55111",
+  "name": "4W 3M extension - saffron",
+  "sku": "SKU-000141",
+  "brand": "saffron",
+  "category": "Extension Sockets",
+  "parent_category": "Switches & Sockets",
+  "old_description": "Placed in bottom of the tools galary"
+ },
+ {
+  "id": "63077f2c-06a7-4f73-805d-c6639c0f9678",
+  "name": "admore 13A 4G 3M extension non universal",
+  "sku": "SKU-000138",
+  "brand": "admore",
+  "category": "Extension Sockets",
+  "parent_category": "Switches & Sockets",
+  "old_description": "Placed in bottom of the tools galary"
+ },
+ {
+  "id": "925e2b94-f65c-4a07-9f6a-b195b0f952df",
+  "name": "admore 13A 4G 5M extension non universal",
+  "sku": "SKU-000139",
+  "brand": "admore",
+  "category": "Extension Sockets",
+  "parent_category": "Switches & Sockets",
+  "old_description": "Placed in bottom of the tools galary"
+ },
+ {
+  "id": "ab94f5f6-9139-4b5e-bb94-75106ac67421",
+  "name": "admore 13A 4G 5M extension round non universal",
+  "sku": "SKU-000137",
+  "brand": "admore",
+  "category": "Extension Sockets",
+  "parent_category": "Switches & Sockets",
+  "old_description": "Placed in bottom of the tools galary"
+ },
+ {
+  "id": "2a381cc1-f1d7-4cfc-bbb6-55dabdcea54e",
+  "name": "admore 13A 6G 5M extension universal",
+  "sku": "SKU-000140",
+  "brand": "admore",
+  "category": "Extension Sockets",
+  "parent_category": "Switches & Sockets",
+  "old_description": "Placed in bottom of the tools galary"
+ },
+ {
+  "id": "e0f70fa2-d836-4758-9cca-f3df276e0026",
+  "name": "kl star 4W 3M extension uni",
+  "sku": "SKU-000142",
+  "brand": "kl star",
+  "category": "Extension Sockets",
+  "parent_category": "Switches & Sockets",
+  "old_description": "Placed in bottom of the tools galary"
+ },
+ {
+  "id": "0522396e-9190-4677-a24e-8c410bbc2d61",
+  "name": "Jotun Jotashield Extreme Exterior Matt",
+  "sku": "PNT-JOT-JOTASH",
+  "brand": "Jotun",
+  "category": "Exterior Paints",
+  "parent_category": null,
+  "old_description": null
+ },
+ {
+  "id": "5a4f7ee3-7ae6-470f-a3c2-48153ea80684",
+  "name": "kl star 2C 1sqmm flaxible cable",
+  "sku": "SKU-000176",
+  "brand": "kl star",
+  "category": "Flexible Cables",
+  "parent_category": "Wires & Cables",
+  "old_description": null
+ },
+ {
+  "id": "d5f29a76-a2a1-46c3-8107-2cab678b27b2",
+  "name": "kl start 3C x 1.5sqmm flaxible cable",
+  "sku": "SKU-000174",
+  "brand": "kl star",
+  "category": "Flexible Cables",
+  "parent_category": "Wires & Cables",
+  "old_description": null
+ },
+ {
+  "id": "6a0cc2ec-ff83-418f-99f9-6ffe993000d0",
+  "name": "kl start 3C x 4sqmm flaxible cable",
+  "sku": "SKU-000175",
+  "brand": "kl star",
+  "category": "Flexible Cables",
+  "parent_category": "Wires & Cables",
+  "old_description": null
+ },
+ {
+  "id": "0ca9bd87-7a51-4789-952e-3694db50b430",
+  "name": "mogen 2C x 0.25sqmm cable - 100mtr",
+  "sku": "SKU-000178",
+  "brand": "mogen",
+  "category": "Flexible Cables",
+  "parent_category": "Wires & Cables",
+  "old_description": null
+ },
+ {
+  "id": "08522960-6991-4031-95ab-79d77e33919a",
+  "name": "richi 3C x 2.5sqmm flaxible cable",
+  "sku": "SKU-000177",
+  "brand": "richi",
+  "category": "Flexible Cables",
+  "parent_category": "Wires & Cables",
+  "old_description": null
+ },
+ {
+  "id": "2a446c0f-8c11-4c06-81f0-6d983616a304",
+  "name": "roska 3C x 1.5sqmm flaxible cable",
+  "sku": "SKU-000172",
+  "brand": "roska",
+  "category": "Flexible Cables",
+  "parent_category": "Wires & Cables",
+  "old_description": null
+ },
+ {
+  "id": "7f972898-5749-449c-9319-05de9f3957ca",
+  "name": "roska 3C x 4sqmm flaxible cable",
+  "sku": "SKU-000173",
+  "brand": "roska",
+  "category": "Flexible Cables",
+  "parent_category": "Wires & Cables",
+  "old_description": null
+ },
+ {
+  "id": "5f46b7c9-de54-4de5-a249-1fb8746c2190",
+  "name": "rr 2C x .75sqmm cable",
+  "sku": "SKU-000166",
+  "brand": "RR",
+  "category": "Flexible Cables",
+  "parent_category": "Wires & Cables",
+  "old_description": null
+ },
+ {
+  "id": "4b304d0c-934e-4000-93c2-511410d6e7d4",
+  "name": "rr 3C x 1.5sqmm flaxible cable",
+  "sku": "SKU-000167",
+  "brand": "RR",
+  "category": "Flexible Cables",
+  "parent_category": "Wires & Cables",
+  "old_description": null
+ },
+ {
+  "id": "a1baf748-d0af-4a48-8776-fd1c8dad5705",
+  "name": "rr 3C x 2.5sqmm flaxible cable",
+  "sku": "SKU-000168",
+  "brand": "RR",
+  "category": "Flexible Cables",
+  "parent_category": "Wires & Cables",
+  "old_description": null
+ },
+ {
+  "id": "7e13cfb3-b460-4688-935c-4890f1554ead",
+  "name": "rr 3C x 4sqmm flaxible cable",
+  "sku": "SKU-000169",
+  "brand": "RR",
+  "category": "Flexible Cables",
+  "parent_category": "Wires & Cables",
+  "old_description": null
+ },
+ {
+  "id": "ec27f957-ecf1-4210-bca8-1065d70187a5",
+  "name": "rr 3C x 6sqmm flaxible cable",
+  "sku": "SKU-000170",
+  "brand": "RR",
+  "category": "Flexible Cables",
+  "parent_category": "Wires & Cables",
+  "old_description": null
+ },
+ {
+  "id": "5cec94b4-8c9d-43a5-8139-abecec5ac827",
+  "name": "rr 5C x 6sqmm flaxible cable",
+  "sku": "SKU-000171",
+  "brand": "RR",
+  "category": "Flexible Cables",
+  "parent_category": "Wires & Cables",
+  "old_description": null
+ },
+ {
+  "id": "11a43386-bded-4c45-b54d-a6852e74a7d7",
+  "name": "ks star 3-mtr float switch",
+  "sku": "SKU-000135",
+  "brand": "kl star",
+  "category": "Float Switches",
+  "parent_category": "Pump & Motor Controls",
+  "old_description": "Placed in with sola lock"
+ },
+ {
+  "id": "93ef22c3-b6cc-4cc3-9f80-e62546f707e9",
+  "name": "ks star 5-mtr float switch",
+  "sku": "SKU-000136",
+  "brand": "kl star",
+  "category": "Float Switches",
+  "parent_category": "Pump & Motor Controls",
+  "old_description": "Placed in with sola lock"
+ },
+ {
+  "id": "6bf47906-2d87-4e8e-8b4a-f6ad4d55be17",
+  "name": "400w led flood light",
+  "sku": "SKU-000108",
+  "brand": "al nour",
+  "category": "Flood Lights",
+  "parent_category": "Lighting",
+  "old_description": "Placed in top of the door"
+ },
+ {
+  "id": "8b98d887-add8-41ae-9a3f-fdbf887dfcd1",
+  "name": "hifi 50w led flood light",
+  "sku": "SKU-000106",
+  "brand": "hi fi light",
+  "category": "Flood Lights",
+  "parent_category": "Lighting",
+  "old_description": "Placed in top of the door"
+ },
+ {
+  "id": "aef63e3e-2619-4743-b86b-c25af4b0e976",
+  "name": "rosy 100w led flood light",
+  "sku": "SKU-000107",
+  "brand": "rosy light",
+  "category": "Flood Lights",
+  "parent_category": "Lighting",
+  "old_description": "Placed in right shelf"
+ },
+ {
+  "id": "53f9c4e1-4afb-476e-8924-0fb83fc51c53",
+  "name": "italia pvc floor strainer",
+  "sku": "SKU-000233",
+  "brand": "italia",
+  "category": "Floor Drains",
+  "parent_category": "Bathroom Accessories",
+  "old_description": null
+ },
+ {
+  "id": "899c0233-4d3b-47a6-8770-d9b06c4637c5",
+  "name": "verrali pvc floor strainer",
+  "sku": "SKU-000234",
+  "brand": "verrali",
+  "category": "Floor Drains",
+  "parent_category": "Bathroom Accessories",
+  "old_description": null
+ },
+ {
+  "id": "522644da-78fe-490f-8908-cf8b5fca51da",
+  "name": "veto 1ft t5 fluroresent lamp",
+  "sku": "SKU-000199",
+  "brand": "veto",
+  "category": "Fluorescent Lamps",
+  "parent_category": "Lighting",
+  "old_description": null
+ },
+ {
+  "id": "cac15131-6355-400f-beae-4befb743dcb9",
+  "name": "foot valve strainer 2.5\"",
+  "sku": "SKU-000248",
+  "brand": "others",
+  "category": "Foot Valves",
+  "parent_category": "Plumbing",
+  "old_description": null
+ },
+ {
+  "id": "efa95441-4451-4755-8b3c-af5655978299",
+  "name": "zhongdai glass spacer 12x25",
+  "sku": "SKU-000072",
+  "brand": "zhongdai",
+  "category": "Glass Spacers",
+  "parent_category": "Brackets & Mounts",
+  "old_description": null
+ },
+ {
+  "id": "140f4941-e27e-4e71-be59-2f017c5d9df3",
+  "name": "zhongdai glass spacer 19x30",
+  "sku": "SKU-000071",
+  "brand": "zhongdai",
+  "category": "Glass Spacers",
+  "parent_category": "Brackets & Mounts",
+  "old_description": null
+ },
+ {
+  "id": "df7cbb95-b21e-43b8-bb19-8cf16aa50c16",
+  "name": "hss haxo blade",
+  "sku": "SKU-000067",
+  "brand": "hss",
+  "category": "Hacksaw Blades",
+  "parent_category": "Hand Tools",
+  "old_description": "Left side of the chair"
+ },
+ {
+  "id": "a8d40215-0721-49ee-88b8-c1a1402c73ea",
+  "name": "haxo frame 12\"",
+  "sku": "SKU-000066",
+  "brand": "denacet",
+  "category": "Hacksaw Frames",
+  "parent_category": "Hand Tools",
+  "old_description": "Bottom side of the right shelf"
+ },
+ {
+  "id": "0ffe16db-1059-4428-b10a-7334f840d3d1",
+  "name": "dooe care 72-mm hangle-lock set",
+  "sku": "SKU-000059",
+  "brand": "dore care",
+  "category": "Handle Locks",
+  "parent_category": "Door & Cabinet Hardware",
+  "old_description": "Placed in with streap light"
+ },
+ {
+  "id": "f8422135-c824-4fed-9cae-d2fdff8f1a4a",
+  "name": "euro mortice lock set",
+  "sku": "SKU-000062",
+  "brand": "euro",
+  "category": "Handle Locks",
+  "parent_category": "Door & Cabinet Hardware",
+  "old_description": "Placed in right side of the cash at right shelf"
+ },
+ {
+  "id": "9849520e-7061-4ad8-9a8b-ef6c10c2f31f",
+  "name": "sola door handle-lock set",
+  "sku": "SKU-000060",
+  "brand": "sola",
+  "category": "Handle Locks",
+  "parent_category": "Door & Cabinet Hardware",
+  "old_description": null
+ },
+ {
+  "id": "035e5833-1d80-4c49-8f9b-270ca810af78",
+  "name": "Stanley FatMax 18V Cordless Hammer Drill",
+  "sku": "TL-STN-DRL",
+  "brand": "Stanley",
+  "category": "Hardware & Tools",
+  "parent_category": null,
+  "old_description": null
+ },
+ {
+  "id": "99796911-f2f4-4f27-826c-d2c756f23f91",
+  "name": "stanley heat gun 1800w",
+  "sku": "SKU-000179",
+  "brand": "Stanley",
+  "category": "Heat Guns",
+  "parent_category": "Power Tools",
+  "old_description": null
+ },
+ {
+  "id": "cda5592b-70aa-4396-abac-4e1247c994b5",
+  "name": "high pressure nipple socket 2.5\"",
+  "sku": "SKU-000249",
+  "brand": "others",
+  "category": "High-Pressure Fittings",
+  "parent_category": "Plumbing",
+  "old_description": null
+ },
+ {
+  "id": "f44e42d0-2270-4b71-9b27-9777e29b097e",
+  "name": "robust ms hinges 2\"",
+  "sku": "SKU-000054",
+  "brand": "robust",
+  "category": "Hinges",
+  "parent_category": "Door & Cabinet Hardware",
+  "old_description": null
+ },
+ {
+  "id": "c3b7457a-5508-4f52-981c-bb96e36e08ce",
+  "name": "robust ms hinges 3\"",
+  "sku": "SKU-000055",
+  "brand": "robust",
+  "category": "Hinges",
+  "parent_category": "Door & Cabinet Hardware",
+  "old_description": null
+ },
+ {
+  "id": "0747e71d-4c44-49ad-b60f-0c9228ecee76",
+  "name": "robust ms hinges 4\"",
+  "sku": "SKU-000056",
+  "brand": "robust",
+  "category": "Hinges",
+  "parent_category": "Door & Cabinet Hardware",
+  "old_description": null
+ },
+ {
+  "id": "57264e89-97ac-46c5-b3ad-cc864efe4f86",
+  "name": "Romex ss hinges 4\"",
+  "sku": "SKU-000057",
+  "brand": "romex",
+  "category": "Hinges",
+  "parent_category": "Door & Cabinet Hardware",
+  "old_description": null
+ },
+ {
+  "id": "fff12493-1a54-44ea-90da-d9d049c85a32",
+  "name": "dimond holsa cutter 40mm",
+  "sku": "SKU-000087",
+  "brand": "others",
+  "category": "Hole Saws",
+  "parent_category": "Drill Bits & Cutting Discs",
+  "old_description": null
+ },
+ {
+  "id": "b05cc2d9-5398-44df-abe1-b440b4b2b0d2",
+  "name": "big hook 10mm",
+  "sku": "SKU-000038",
+  "brand": "osco",
+  "category": "Hooks",
+  "parent_category": "Screws, Bolts & Fixings",
+  "old_description": "20 pcs per box"
+ },
+ {
+  "id": "62058a77-0248-4289-9a00-9a773994796a",
+  "name": "big hook 8mm",
+  "sku": "SKU-000037",
+  "brand": "osco",
+  "category": "Hooks",
+  "parent_category": "Screws, Bolts & Fixings",
+  "old_description": "30 pcs per box"
+ },
+ {
+  "id": "4efb8168-57f1-40e7-acfe-80b4ec48ddca",
+  "name": "file hook 1\" ring",
+  "sku": "SKU-000039",
+  "brand": "others",
+  "category": "Hooks",
+  "parent_category": "Screws, Bolts & Fixings",
+  "old_description": null
+ },
+ {
+  "id": "da671c73-e3e1-4b7c-9b35-2871cd5711c4",
+  "name": "hss yellow steel drill bit 3mm",
+  "sku": "SKU-000064",
+  "brand": "hss",
+  "category": "HSS Drill Bits",
+  "parent_category": "Drill Bits & Cutting Discs",
+  "old_description": "Left side of chair"
+ },
+ {
+  "id": "8ec9466c-c76a-48e9-8a0c-da231a855ce0",
+  "name": "hss yellow steel drill bit 8mm",
+  "sku": "SKU-000065",
+  "brand": "hss",
+  "category": "HSS Drill Bits",
+  "parent_category": "Drill Bits & Cutting Discs",
+  "old_description": "Left side of chair"
+ },
+ {
+  "id": "a8585595-b0e2-4e92-ae71-d6ff081d8f4e",
+  "name": "industrial male plug 3 x 16A",
+  "sku": "SKU-000201",
+  "brand": "others",
+  "category": "Industrial Plugs",
+  "parent_category": "Switches & Sockets",
+  "old_description": null
+ },
+ {
+  "id": "e5e01988-a43d-4580-9140-b82b97f9bd06",
+  "name": "industrial female socket 3 x 16A",
+  "sku": "SKU-000202",
+  "brand": "others",
+  "category": "Industrial Sockets",
+  "parent_category": "Switches & Sockets",
+  "old_description": null
+ },
+ {
+  "id": "13996fd0-8ad3-470a-920b-45099b38fdb4",
+  "name": "y industrial female socket 3 x 16A",
+  "sku": "SKU-000200",
+  "brand": "others",
+  "category": "Industrial Sockets",
+  "parent_category": "Switches & Sockets",
+  "old_description": null
+ },
+ {
+  "id": "0afa58be-f567-4db0-997b-ab9e0675e48d",
+  "name": "eurospring 2m washing machine inlet hose",
+  "sku": "SKU-000237",
+  "brand": "eurospring",
+  "category": "Inlet Hoses",
+  "parent_category": "Plumbing",
+  "old_description": null
+ },
+ {
+  "id": "03aae109-ce49-454c-9565-8cbe5f91fae2",
+  "name": "italia 2m washing machine inlet hose",
+  "sku": "SKU-000236",
+  "brand": "italia",
+  "category": "Inlet Hoses",
+  "parent_category": "Plumbing",
+  "old_description": null
+ },
+ {
+  "id": "631f8121-13c6-4338-8006-f3edbe1d1fa4",
+  "name": "khind Insect killer 1ft",
+  "sku": "SKU-000099",
+  "brand": "khind",
+  "category": "Insect Killers",
+  "parent_category": "Pest Control",
+  "old_description": "Placed in top of the door"
+ },
+ {
+  "id": "058bd312-0d8f-43c0-b2e8-e15138734ca7",
+  "name": "khind Insect killer 2ft x 20w",
+  "sku": "ik7202",
+  "brand": "khind",
+  "category": "Insect Killers",
+  "parent_category": "Pest Control",
+  "old_description": "Placed in top of the right shelf"
+ },
+ {
+  "id": "3ab48ae9-352f-4982-a6d4-21a61aa13e94",
+  "name": "roska Insect killer 2ft",
+  "sku": "SKU-000098",
+  "brand": "roska",
+  "category": "Insect Killers",
+  "parent_category": "Pest Control",
+  "old_description": "Placed in top of the door and top of the right shelf"
+ },
+ {
+  "id": "e52921d8-c7d5-4f33-a429-c371d51dac77",
+  "name": "insect killer tube rod - T8 - 15w klstar",
+  "sku": "SKU-000156",
+  "brand": "kl star",
+  "category": "Insect Killer Tubes",
+  "parent_category": "Pest Control",
+  "old_description": "Placed in to of the shower mixer"
+ },
+ {
+  "id": "2e0aba0c-e8e8-4299-9aee-a83e22909000",
+  "name": "kl star insect killer tube rod - T8 - 20w",
+  "sku": "SKU-000157",
+  "brand": "kl star",
+  "category": "Insect Killer Tubes",
+  "parent_category": "Pest Control",
+  "old_description": "Placed in to of the shower mixer"
+ },
+ {
+  "id": "5795654f-66f9-4c16-abf2-4093a81d495d",
+  "name": "Jotun Fenomastic Pure Colours Matt Interior Base",
+  "sku": "PNT-JOT-FENO-18L",
+  "brand": "Jotun",
+  "category": "Interior Paints",
+  "parent_category": null,
+  "old_description": null
+ },
+ {
+  "id": "1529007c-8b79-48d6-9831-b20989f36824",
+  "name": "hager isolator 40A 2P",
+  "sku": "SKU-000185",
+  "brand": "hager",
+  "category": "Isolators",
+  "parent_category": "Circuit Breakers & Isolators",
+  "old_description": "Placed in top of the chair"
+ },
+ {
+  "id": "1637d355-e91e-429c-a333-c3223eab5f7d",
+  "name": "hager isolator 40A 3P",
+  "sku": "SKU-000186",
+  "brand": "hager",
+  "category": "Isolators",
+  "parent_category": "Circuit Breakers & Isolators",
+  "old_description": "Placed in top of the chair"
+ },
+ {
+  "id": "a6f530a1-ff98-4b29-849b-e10db719d5ff",
+  "name": "hager isolator 40A 4P",
+  "sku": "SKU-000187",
+  "brand": "hager",
+  "category": "Isolators",
+  "parent_category": "Circuit Breakers & Isolators",
+  "old_description": "Placed in top of the chair"
+ },
+ {
+  "id": "e77e3743-dccb-491d-a052-862b4688b789",
+  "name": "hager isolator 63A 2P",
+  "sku": "SKU-000188",
+  "brand": "hager",
+  "category": "Isolators",
+  "parent_category": "Circuit Breakers & Isolators",
+  "old_description": "Placed in top of the chair"
+ },
+ {
+  "id": "ae98ba6e-1906-4b25-bd0d-e2d7b7214eee",
+  "name": "hager isolator 63A 3P",
+  "sku": "SKU-000189",
+  "brand": "hager",
+  "category": "Isolators",
+  "parent_category": "Circuit Breakers & Isolators",
+  "old_description": "Placed in top of the chair"
+ },
+ {
+  "id": "dab79387-4455-461f-ba10-50550ae099c8",
+  "name": "hager isolator 63A 4P",
+  "sku": "SKU-000190",
+  "brand": "hager",
+  "category": "Isolators",
+  "parent_category": "Circuit Breakers & Isolators",
+  "old_description": "Placed in top of the chair"
+ },
+ {
+  "id": "7dc39aee-3280-4222-aa06-185d43b72e35",
+  "name": "kl star w/p isolator 35A 1P",
+  "sku": "SKU-000191",
+  "brand": "kl star",
+  "category": "Isolators",
+  "parent_category": "Circuit Breakers & Isolators",
+  "old_description": "Placed in top of the chair"
+ },
+ {
+  "id": "e694af3d-1239-4189-a604-9d549ea30ae8",
+  "name": "kl star w/p isolator 63A 1P",
+  "sku": "SKU-000192",
+  "brand": "kl star",
+  "category": "Isolators",
+  "parent_category": "Circuit Breakers & Isolators",
+  "old_description": "Placed in top of the chair"
+ },
+ {
+  "id": "7999c777-2c3c-419c-84da-53fffd948ae8",
+  "name": "admore led batten 2ft 40w white",
+  "sku": "SKU-000217",
+  "brand": "admore",
+  "category": "LED Battens",
+  "parent_category": "Lighting",
+  "old_description": null
+ },
+ {
+  "id": "e224cf0c-d7a0-4c06-85c9-362b63558190",
+  "name": "max led cup light 8w warm-white",
+  "sku": "SKU-000216",
+  "brand": "max",
+  "category": "LED Cup Lights",
+  "parent_category": "Lighting",
+  "old_description": null
+ },
+ {
+  "id": "c2a4c9dc-b319-4023-922b-b02c0fba526c",
+  "name": "max led cup light 8w white",
+  "sku": "SKU-000215",
+  "brand": "max",
+  "category": "LED Cup Lights",
+  "parent_category": "Lighting",
+  "old_description": null
+ },
+ {
+  "id": "c7cbc529-a5e8-435b-a014-cbe9b985c42e",
+  "name": "mogen 12v 100w power supply economy",
+  "sku": "SKU-000198",
+  "brand": "mogen",
+  "category": "LED Drivers & Power Supplies",
+  "parent_category": "Lighting",
+  "old_description": "Placed in right side of chair"
+ },
+ {
+  "id": "225bc2c7-1537-4efc-bcf5-a2facab29a26",
+  "name": "mogen 12v 200w power supply economy",
+  "sku": "SKU-000197",
+  "brand": "mogen",
+  "category": "LED Drivers & Power Supplies",
+  "parent_category": "Lighting",
+  "old_description": "Placed in right side of chair"
+ },
+ {
+  "id": "880dfabb-4c54-43c4-bd50-35156c1e45a5",
+  "name": "mogen 12v 300w power supply economy",
+  "sku": "SKU-000196",
+  "brand": "mogen",
+  "category": "LED Drivers & Power Supplies",
+  "parent_category": "Lighting",
+  "old_description": "Placed in right side of chair"
+ },
+ {
+  "id": "a1f36411-0fa5-42ca-9751-d7580e58660a",
+  "name": "mogen 12v 400w power supply economy",
+  "sku": "SKU-000194",
+  "brand": "mogen",
+  "category": "LED Drivers & Power Supplies",
+  "parent_category": "Lighting",
+  "old_description": "Placed in right side of chair"
+ },
+ {
+  "id": "a83c845f-5297-4f34-a3fc-95b2d2918970",
+  "name": "mogen 12v 400w rainproof power supply",
+  "sku": "SKU-000195",
+  "brand": "mogen",
+  "category": "LED Drivers & Power Supplies",
+  "parent_category": "Lighting",
+  "old_description": "Placed in right side of chair"
+ },
+ {
+  "id": "0d2393a4-4a23-4ca1-85e4-2a1c5b3761e9",
+  "name": "adnext 24w frameless panel light",
+  "sku": "SKU-000120",
+  "brand": "adnext",
+  "category": "LED Panel Lights",
+  "parent_category": "Lighting",
+  "old_description": "Placed in right shelf"
+ },
+ {
+  "id": "aa2da293-76d3-4f2c-b773-c2c1f22bd0ac",
+  "name": "king on 24w frameless panel light",
+  "sku": "SKU-000119",
+  "brand": "king on",
+  "category": "LED Panel Lights",
+  "parent_category": "Lighting",
+  "old_description": "Placed in right shelf"
+ },
+ {
+  "id": "e389a525-138d-42d4-8424-0ef5a9d77810",
+  "name": "max 20w led panel light-wh",
+  "sku": "SKU-000122",
+  "brand": "max",
+  "category": "LED Panel Lights",
+  "parent_category": "Lighting",
+  "old_description": "Placed in right side of the door"
+ },
+ {
+  "id": "316ce0b1-4fe7-46bb-82f4-bfc6b2f2651e",
+  "name": "max 20w led panel light-wh-surface",
+  "sku": "SKU-000123",
+  "brand": "max",
+  "category": "LED Panel Lights",
+  "parent_category": "Lighting",
+  "old_description": "Placed in right side of the door"
+ },
+ {
+  "id": "2a3fe102-1ff7-4f0d-a64a-435c3a72578c",
+  "name": "roska 20w led panel light wh",
+  "sku": "SKU-000121",
+  "brand": "roska",
+  "category": "LED Panel Lights",
+  "parent_category": "Lighting",
+  "old_description": "Placed in top of the door"
+ },
+ {
+  "id": "680f9d63-81ed-449b-9035-5e745e5902a5",
+  "name": "roska 45w sensore panel light",
+  "sku": "SKU-000118",
+  "brand": "roska",
+  "category": "LED Panel Lights",
+  "parent_category": "Lighting",
+  "old_description": "Placed in top of the door"
+ },
+ {
+  "id": "ff21e768-f9c9-4761-84c2-60d0456f1da7",
+  "name": "modi 40mtr led strip light rgb",
+  "sku": "SKU-000208",
+  "brand": "modi",
+  "category": "LED Strip Lights",
+  "parent_category": "Lighting",
+  "old_description": null
+ },
+ {
+  "id": "3b383e19-3f65-42a8-9644-03768829c904",
+  "name": "modi 40mtr led strip light white",
+  "sku": "SKU-000207",
+  "brand": "modi",
+  "category": "LED Strip Lights",
+  "parent_category": "Lighting",
+  "old_description": null
+ },
+ {
+  "id": "9f39a18c-5ed9-4872-9eba-84e58bd3bd5d",
+  "name": "modi 50mtr led strip light rgb",
+  "sku": "SKU-000206",
+  "brand": "modi",
+  "category": "LED Strip Lights",
+  "parent_category": "Lighting",
+  "old_description": null
+ },
+ {
+  "id": "e6006b15-e4f3-4a6d-815d-18a63bd23fd7",
+  "name": "modi 50mtr led strip light white",
+  "sku": "SKU-000205",
+  "brand": "modi",
+  "category": "LED Strip Lights",
+  "parent_category": "Lighting",
+  "old_description": null
+ },
+ {
+  "id": "5a09fce7-1119-454b-a76c-edf91ea187bd",
+  "name": "30w led tube",
+  "sku": "SKU-000117",
+  "brand": "modi",
+  "category": "LED Tubes",
+  "parent_category": "Lighting",
+  "old_description": "Placed in top of the cash"
+ },
+ {
+  "id": "e9fe2d51-413d-41d8-b900-1b5b82dd91af",
+  "name": "perfect permanent marker",
+  "sku": "SKU-000070",
+  "brand": "perfect",
+  "category": "Markers",
+  "parent_category": "Hand Tools",
+  "old_description": null
+ },
+ {
+  "id": "5b2ec082-79ab-4047-94ab-e83a1ea4b344",
+  "name": "asmako bond mdf kit",
+  "sku": "SKU-000044",
+  "brand": "asmako",
+  "category": "MDF & Wood Adhesives",
+  "parent_category": "Adhesives & Sealants",
+  "old_description": null
+ },
+ {
+  "id": "96877cca-816e-485c-922c-c9029f3a5c83",
+  "name": "novex measuring tape 3m",
+  "sku": "SKU-000080",
+  "brand": "novex",
+  "category": "Measuring Tapes",
+  "parent_category": "Hand Tools",
+  "old_description": null
+ },
+ {
+  "id": "4460f04d-2759-4f4a-be6c-ba05187a8df4",
+  "name": "novex measuring tape 5m",
+  "sku": "SKU-000081",
+  "brand": "novex",
+  "category": "Measuring Tapes",
+  "parent_category": "Hand Tools",
+  "old_description": null
+ },
+ {
+  "id": "c64fa1fb-8098-4e7d-af77-4376f957ff53",
+  "name": "Grohe Euphoria Shower System 260 with Thermostat",
+  "sku": "SAN-GRO-EUPH",
+  "brand": "Grohe",
+  "category": "Mixers & Taps",
+  "parent_category": null,
+  "old_description": null
+ },
+ {
+  "id": "892e3ad5-442b-457d-8f80-a1147038adf1",
+  "name": "admore infrared motion sensor",
+  "sku": "a-ms1",
+  "brand": "admore",
+  "category": "Motion Sensors",
+  "parent_category": "Switches & Sockets",
+  "old_description": null
+ },
+ {
+  "id": "20a7f34f-5c1c-432d-954c-c97513a6ed4e",
+  "name": "d&l 55-uf capacitor",
+  "sku": "SKU-000193",
+  "brand": "d&l",
+  "category": "Motor Capacitors",
+  "parent_category": "Pump & Motor Controls",
+  "old_description": "Placed in left side of the chair"
+ },
+ {
+  "id": "eae14ad4-59ff-4cd2-85bf-93a09d724e12",
+  "name": "Net pvc couting 5m",
+  "sku": "SKU-000053",
+  "brand": "others",
+  "category": "Nets",
+  "parent_category": "Building Materials",
+  "old_description": "Placed in pipe galary"
+ },
+ {
+  "id": "d92e359d-bfa0-4dd3-8acf-acae41445302",
+  "name": "khind 16\" orbit fan",
+  "sku": "SKU-000092",
+  "brand": "khind",
+  "category": "Orbit Fans",
+  "parent_category": "Fans & Ventilation",
+  "old_description": "Placed in top-left of the door"
+ },
+ {
+  "id": "3cd68ecd-1183-4e02-9d8f-63cf0ff9b948",
+  "name": "modi 16\" orbit fan",
+  "sku": "SKU-000093",
+  "brand": "modi",
+  "category": "Orbit Fans",
+  "parent_category": "Fans & Ventilation",
+  "old_description": "Placed in top-left of the door"
+ },
+ {
+  "id": "b4b8fecd-60d5-4037-85ed-9819ee45b4ca",
+  "name": "italia 2m washing machine outlet hose",
+  "sku": "SKU-000235",
+  "brand": "italia",
+  "category": "Outlet Hoses",
+  "parent_category": "Plumbing",
+  "old_description": null
+ },
+ {
+  "id": "e3af740c-afb7-4b3d-be91-43bfb78aabfe",
+  "name": "30MM lock - crane",
+  "sku": "SKU-000001",
+  "brand": "saffron",
+  "category": "Padlocks",
+  "parent_category": "Door & Cabinet Hardware",
+  "old_description": "Placed in top of the rack"
+ },
+ {
+  "id": "8278ce47-c29f-47a3-9912-4faa170943c6",
+  "name": "50MM lock - crane",
+  "sku": "SKU-000002",
+  "brand": "saffron",
+  "category": "Padlocks",
+  "parent_category": "Door & Cabinet Hardware",
+  "old_description": "Placed in top of the rack"
+ },
+ {
+  "id": "a1535b30-87c0-47ed-a6eb-9de8b27f7af2",
+  "name": "asmako paint remover",
+  "sku": "SKU-000089",
+  "brand": "asmako",
+  "category": "Paint Removers",
+  "parent_category": "Paints & Painting Supplies",
+  "old_description": null
+ },
+ {
+  "id": "b7a3153c-7441-4c80-a9dc-29e71a1795a5",
+  "name": "1\" pipe bracket staight",
+  "sku": "SKU-000115",
+  "brand": "al zafeer building materials llc",
+  "category": "Pipe Brackets",
+  "parent_category": "Trunking & Conduit",
+  "old_description": null
+ },
+ {
+  "id": "b7982ac3-84b9-4aee-974b-119ec2f9f429",
+  "name": "3 X 4\" pipe bracket stright",
+  "sku": "SKU-000116",
+  "brand": "al zafeer building materials llc",
+  "category": "Pipe Brackets",
+  "parent_category": "Trunking & Conduit",
+  "old_description": null
+ },
+ {
+  "id": "f6a50c74-d4f6-4b15-b7ed-94b6494866ac",
+  "name": "1/2\" brass nipple",
+  "sku": "SKU-000240",
+  "brand": "others",
+  "category": "Pipe Nipples",
+  "parent_category": "Plumbing",
+  "old_description": null
+ },
+ {
+  "id": "f5931491-41fb-4e8b-b297-93681c803782",
+  "name": "1/2\" cp nipple",
+  "sku": "SKU-000239",
+  "brand": "others",
+  "category": "Pipe Nipples",
+  "parent_category": "Plumbing",
+  "old_description": null
+ },
+ {
+  "id": "3aa3d172-7f62-4cbb-962f-666e4fcfb7b7",
+  "name": "Pipe Wrench 18\"",
+  "sku": "SKU-000082",
+  "brand": "others",
+  "category": "Pipe Wrenches",
+  "parent_category": "Hand Tools",
+  "old_description": null
+ },
+ {
+  "id": "07c9546a-0836-4e0b-bb13-8c3f05ed7006",
+  "name": "novex combination plier 8\"",
+  "sku": "SKU-000079",
+  "brand": "novex",
+  "category": "Pliers",
+  "parent_category": "Hand Tools",
+  "old_description": null
+ },
+ {
+  "id": "9263e44a-b25a-4d2d-abcb-152c0ef7cc0b",
+  "name": "15A top plug admore",
+  "sku": "SKU-000132",
+  "brand": "admore",
+  "category": "Plug Tops",
+  "parent_category": "Switches & Sockets",
+  "old_description": "Placed in behind the chair"
+ },
+ {
+  "id": "205b9b1b-0c03-472c-9852-d5bc19c2d57c",
+  "name": "kl star 13A top plug black",
+  "sku": "SKU-000134",
+  "brand": "kl star",
+  "category": "Plug Tops",
+  "parent_category": "Switches & Sockets",
+  "old_description": "Placed in behind the chair"
+ },
+ {
+  "id": "64fcdd1d-5a24-4afa-b444-edab7a5c9d08",
+  "name": "kl star 13A top plug white",
+  "sku": "SKU-000133",
+  "brand": "kl star",
+  "category": "Plug Tops",
+  "parent_category": "Switches & Sockets",
+  "old_description": "Placed in behind the chair"
+ },
+ {
+  "id": "420255a8-e1dc-4c9e-9131-c0498115686a",
+  "name": "PVC 90\u00b0 High Pressure Elbow Fitting",
+  "sku": "PVC-ELB-90",
+  "brand": null,
+  "category": "Plumbing",
+  "parent_category": null,
+  "old_description": null
+ },
+ {
+  "id": "51395750-6f50-4e1d-b179-b6b5d1ded621",
+  "name": "Polythene sheet 200",
+  "sku": "SKU-000063",
+  "brand": "others",
+  "category": "Polythene Sheets",
+  "parent_category": "Building Materials",
+  "old_description": null
+ },
+ {
+  "id": "527c5e1a-fa96-4179-b08c-75694adaf2bf",
+  "name": "novex ppr cutter 42mm",
+  "sku": "SKU-000078",
+  "brand": "novex",
+  "category": "PPR Pipe Cutters",
+  "parent_category": "Hand Tools",
+  "old_description": null
+ },
+ {
+  "id": "39c26c2b-85d6-473a-a73b-0e0ae93fa335",
+  "name": "boss pp-r heat machine 20-63",
+  "sku": "SKU-000214",
+  "brand": "boss",
+  "category": "PPR Welding Machines",
+  "parent_category": "Power Tools",
+  "old_description": null
+ },
+ {
+  "id": "79a5a5e2-65bc-42b4-9f42-853973a3ce95",
+  "name": "dlc pp-r heat machine 20-63",
+  "sku": "SKU-000213",
+  "brand": "dlc",
+  "category": "PPR Welding Machines",
+  "parent_category": "Power Tools",
+  "old_description": null
+ },
+ {
+  "id": "d59bd814-43cd-4a33-bd46-39b478c21bb1",
+  "name": "modi vertical pressure controller",
+  "sku": "SKU-000102",
+  "brand": "modi",
+  "category": "Pressure Controllers",
+  "parent_category": "Pump & Motor Controls",
+  "old_description": "Placed in top of the door"
+ },
+ {
+  "id": "8793c838-8e3f-4bf4-aca6-e08fd1d778c8",
+  "name": "onyx vertical pressure controller",
+  "sku": "SKU-000103",
+  "brand": "onyx",
+  "category": "Pressure Controllers",
+  "parent_category": "Pump & Motor Controls",
+  "old_description": "Placed in top of the door"
+ },
+ {
+  "id": "f0c53ca7-f667-4c01-a535-6d3c8399486f",
+  "name": "optonica horizontal pressure controller",
+  "sku": "SKU-000104",
+  "brand": "optonica",
+  "category": "Pressure Controllers",
+  "parent_category": "Pump & Motor Controls",
+  "old_description": "Placed in top of the door"
+ },
+ {
+  "id": "902cdcfa-583c-4896-87e5-416c3867d40d",
+  "name": "snowlite pvc box 3x3",
+  "sku": "SKU-000209",
+  "brand": "snowlite",
+  "category": "PVC Junction Boxes",
+  "parent_category": "Trunking & Conduit",
+  "old_description": null
+ },
+ {
+  "id": "53be999a-46c0-4e15-af5c-8d334e69d188",
+  "name": "snowlite pvc box 3x6",
+  "sku": "SKU-000210",
+  "brand": "snowlite",
+  "category": "PVC Junction Boxes",
+  "parent_category": "Trunking & Conduit",
+  "old_description": null
+ },
+ {
+  "id": "6275cf0a-0366-4d2a-88d2-48691e75809e",
+  "name": "pvc pipe white 3/4\" X 4mtr",
+  "sku": "SKU-000241",
+  "brand": "others",
+  "category": "PVC Pipes",
+  "parent_category": "Plumbing",
+  "old_description": null
+ },
+ {
+  "id": "78ae5262-7060-40ff-9ebd-a709164d9993",
+  "name": "admore pvc trunking 16 X 16 adhesive",
+  "sku": "SKU-000154",
+  "brand": "admore",
+  "category": "PVC Trunking",
+  "parent_category": "Trunking & Conduit",
+  "old_description": "Placed in pipe galary"
+ },
+ {
+  "id": "13d58621-0660-4d46-b700-9dc5d0c899e9",
+  "name": "admore pvc trunking 26 X 16 adhesive",
+  "sku": "SKU-000153",
+  "brand": "admore",
+  "category": "PVC Trunking",
+  "parent_category": "Trunking & Conduit",
+  "old_description": "Placed in pipe galary"
+ },
+ {
+  "id": "b7617f18-b40a-4c53-b64c-17c67779b7b8",
+  "name": "pvc trunking 16X16 - pacific",
+  "sku": "SKU-000150",
+  "brand": "pacific",
+  "category": "PVC Trunking",
+  "parent_category": "Trunking & Conduit",
+  "old_description": "Placed in pipe galary"
+ },
+ {
+  "id": "d804dedf-6284-4a1f-903c-a073e1285db3",
+  "name": "pvc trunking 25X16 - pacific",
+  "sku": "SKU-000149",
+  "brand": "pacific",
+  "category": "PVC Trunking",
+  "parent_category": "Trunking & Conduit",
+  "old_description": "Placed in pipe galary"
+ },
+ {
+  "id": "4502ee8f-d282-4d67-b17e-449c1eaf51bf",
+  "name": "sayonara pvc trunking 16 X 16 adhesive",
+  "sku": "SKU-000152",
+  "brand": "marvel",
+  "category": "PVC Trunking",
+  "parent_category": "Trunking & Conduit",
+  "old_description": "Placed in pipe galary"
+ },
+ {
+  "id": "0bbf7f6f-e5b8-48b6-b457-50d94791efaf",
+  "name": "sayonara pvc trunking 25 X 16 adhesive",
+  "sku": "SKU-000151",
+  "brand": "marvel",
+  "category": "PVC Trunking",
+  "parent_category": "Trunking & Conduit",
+  "old_description": "Placed in pipe galary"
+ },
+ {
+  "id": "68c4c271-ba2f-4ba2-8a0c-7f0646272c7c",
+  "name": "sayonara pvc trunking 25 x 40 adhesive",
+  "sku": "SKU-000155",
+  "brand": "admore",
+  "category": "PVC Trunking",
+  "parent_category": "Trunking & Conduit",
+  "old_description": "Placed in pipe galary"
+ },
+ {
+  "id": "31a54b3d-5820-4360-876a-d96cb12f5bfc",
+  "name": "ieko 32w ring light - daylight",
+  "sku": "SKU-000128",
+  "brand": "ieko",
+  "category": "Ring Lights",
+  "parent_category": "Lighting",
+  "old_description": "Placed in middle of the front shelf"
+ },
+ {
+  "id": "85c55e6a-92b6-48e6-9da3-49383fc4af9a",
+  "name": "voltex safety glass clear",
+  "sku": "SKU-000075",
+  "brand": "voltex",
+  "category": "Safety Glasses",
+  "parent_category": "Safety Wear",
+  "old_description": null
+ },
+ {
+  "id": "1d07a77b-27bd-45a4-aa8e-0885410e4aba",
+  "name": "safety jacket",
+  "sku": "SKU-000076",
+  "brand": "others",
+  "category": "Safety Jackets",
+  "parent_category": "Safety Wear",
+  "old_description": null
+ },
+ {
+  "id": "dc1b15e1-f7fc-4542-a71a-f46d53fb817f",
+  "name": "screwdriver set 6 pcs",
+  "sku": "SKU-000004",
+  "brand": "saffron",
+  "category": "Screwdrivers",
+  "parent_category": "Hand Tools",
+  "old_description": "Placed in middle front of tools galary"
+ },
+ {
+  "id": "d81739ad-c9b3-441c-b7d4-d78e3b5bbb22",
+  "name": "youmei pocket screwdriver set + cutter + blade",
+  "sku": "SKU-000068",
+  "brand": "youmei",
+  "category": "Screwdrivers",
+  "parent_category": "Hand Tools",
+  "old_description": null
+ },
+ {
+  "id": "6fa0005d-212c-4284-b21d-bcd51d3718ee",
+  "name": "osco 1.25\" black screw 850g",
+  "sku": "SKU-000006",
+  "brand": "osco",
+  "category": "Screws",
+  "parent_category": "Screws, Bolts & Fixings",
+  "old_description": "Placed in bottom right shelf"
+ },
+ {
+  "id": "14471903-ed5b-4f14-9448-eb1fb9b10250",
+  "name": "osco 2\" black screw 1kg",
+  "sku": "SKU-000005",
+  "brand": "osco",
+  "category": "Screws",
+  "parent_category": "Screws, Bolts & Fixings",
+  "old_description": "Placed in bottom right shelf"
+ },
+ {
+  "id": "0ae46c65-0efa-4c46-bba6-1c05c39a0282",
+  "name": "xuanfeng 1/2\" black screw",
+  "sku": "SKU-000015",
+  "brand": "xuanfeng",
+  "category": "Screws",
+  "parent_category": "Screws, Bolts & Fixings",
+  "old_description": "Placed in bottom right shelf"
+ },
+ {
+  "id": "b5ae8391-a0e8-4ee1-800f-5ec44fc83dc4",
+  "name": "xuanfeng 1.5\" black screw",
+  "sku": "SKU-000018",
+  "brand": "xuanfeng",
+  "category": "Screws",
+  "parent_category": "Screws, Bolts & Fixings",
+  "old_description": "Placed in bottom right shelf"
+ },
+ {
+  "id": "63dcda44-d909-4dce-8df2-1f8e5a374196",
+  "name": "xuanfeng 1\" black screw",
+  "sku": "SKU-000017",
+  "brand": "xuanfeng",
+  "category": "Screws",
+  "parent_category": "Screws, Bolts & Fixings",
+  "old_description": "Placed in bottom right shelf"
+ },
+ {
+  "id": "0cb0099b-ad71-4966-ad00-eaf40de709b5",
+  "name": "xuanfeng 2.5\" black screw",
+  "sku": "SKU-000020",
+  "brand": "xuanfeng",
+  "category": "Screws",
+  "parent_category": "Screws, Bolts & Fixings",
+  "old_description": "Placed in bottom right shelf"
+ },
+ {
+  "id": "6c6d57a1-2016-463b-8573-0c5edad92afb",
+  "name": "xuanfeng 2\" black screw",
+  "sku": "SKU-000019",
+  "brand": "xuanfeng",
+  "category": "Screws",
+  "parent_category": "Screws, Bolts & Fixings",
+  "old_description": "Placed in bottom right shelf"
+ },
+ {
+  "id": "a7e2e1f1-236e-49ce-ab36-202b1bec2614",
+  "name": "xuanfeng 3/4\" black screw",
+  "sku": "SKU-000016",
+  "brand": "xuanfeng",
+  "category": "Screws",
+  "parent_category": "Screws, Bolts & Fixings",
+  "old_description": "Placed in bottom right shelf"
+ },
+ {
+  "id": "8a5888aa-357d-481e-97ea-b4b2b45dddd8",
+  "name": "xuanfeng 3\" black screw",
+  "sku": "SKU-000021",
+  "brand": "xuanfeng",
+  "category": "Screws",
+  "parent_category": "Screws, Bolts & Fixings",
+  "old_description": "Placed in bottom right shelf"
+ },
+ {
+  "id": "644c23d6-d389-41e5-908e-4cc218b18e3d",
+  "name": "xuanfeng 4\" black screw",
+  "sku": "SKU-000022",
+  "brand": "xuanfeng",
+  "category": "Screws",
+  "parent_category": "Screws, Bolts & Fixings",
+  "old_description": "Placed in bottom right shelf"
+ },
+ {
+  "id": "86c45e99-ed89-47d6-bf16-d79bc429f55c",
+  "name": "zara 1/2\" black screw",
+  "sku": "SKU-000007",
+  "brand": "zara",
+  "category": "Screws",
+  "parent_category": "Screws, Bolts & Fixings",
+  "old_description": "Placed in bottom right shelf"
+ },
+ {
+  "id": "935d9dcc-ccab-4208-8670-db4393b6244f",
+  "name": "zara 1.5\" black screw",
+  "sku": "SKU-000010",
+  "brand": "zara",
+  "category": "Screws",
+  "parent_category": "Screws, Bolts & Fixings",
+  "old_description": "Placed in bottom right shelf"
+ },
+ {
+  "id": "3faf7fc8-d384-4b48-b87d-e83675d20a33",
+  "name": "zara 1\" black screw",
+  "sku": "SKU-000009",
+  "brand": "zara",
+  "category": "Screws",
+  "parent_category": "Screws, Bolts & Fixings",
+  "old_description": "Placed in bottom right shelf"
+ },
+ {
+  "id": "c763af48-e38c-4345-92a7-a97f3fc6128e",
+  "name": "zara 2.5\" black screw",
+  "sku": "SKU-000012",
+  "brand": "zara",
+  "category": "Screws",
+  "parent_category": "Screws, Bolts & Fixings",
+  "old_description": "Placed in bottom right shelf"
+ },
+ {
+  "id": "4afad908-ee02-4e12-8adf-3e9c3796e137",
+  "name": "zara 2\" black screw",
+  "sku": "SKU-000011",
+  "brand": "zara",
+  "category": "Screws",
+  "parent_category": "Screws, Bolts & Fixings",
+  "old_description": "Placed in bottom right shelf"
+ },
+ {
+  "id": "ca1f289e-ab9e-401e-88ae-7a3568fb03b9",
+  "name": "zara 3/4\" black screw",
+  "sku": "SKU-000008",
+  "brand": "zara",
+  "category": "Screws",
+  "parent_category": "Screws, Bolts & Fixings",
+  "old_description": "Placed in bottom right shelf"
+ },
+ {
+  "id": "51e342a3-62df-4f6e-aea3-131543f33e5c",
+  "name": "zara 3\" black screw",
+  "sku": "SKU-000013",
+  "brand": "zara",
+  "category": "Screws",
+  "parent_category": "Screws, Bolts & Fixings",
+  "old_description": "Placed in bottom right shelf"
+ },
+ {
+  "id": "b5bcd9d4-1691-49bb-9668-fb346a1a3338",
+  "name": "zara 4\" black screw",
+  "sku": "SKU-000014",
+  "brand": "zara",
+  "category": "Screws",
+  "parent_category": "Screws, Bolts & Fixings",
+  "old_description": "Placed in bottom right shelf"
+ },
+ {
+  "id": "fa4aa5e4-257f-4f1d-8014-029c93fadd09",
+  "name": "alam self drilling screws 3.5 X 11mm 500pcs",
+  "sku": "SKU-000023",
+  "brand": "alam",
+  "category": "Self-Drilling Screws",
+  "parent_category": "Screws, Bolts & Fixings",
+  "old_description": "Placed in bottom left shelf"
+ },
+ {
+  "id": "18c4680a-7cd9-4458-8974-1998a7b2595e",
+  "name": "handeman 1\" self drilling screw",
+  "sku": "SKU-000024",
+  "brand": "haneman",
+  "category": "Self-Drilling Screws",
+  "parent_category": "Screws, Bolts & Fixings",
+  "old_description": "Placed in bottom left shelf"
+ },
+ {
+  "id": "0668f7fc-bf0d-464a-8008-45a63a89c936",
+  "name": "modi shattaf head white",
+  "sku": "SKU-000220",
+  "brand": "modi",
+  "category": "Shattaf Sets",
+  "parent_category": "Showers & Shattafs",
+  "old_description": null
+ },
+ {
+  "id": "a20fdcfb-a755-4415-8c71-8552acdee9d2",
+  "name": "modi shattaf set white",
+  "sku": "SKU-000219",
+  "brand": "modi",
+  "category": "Shattaf Sets",
+  "parent_category": "Showers & Shattafs",
+  "old_description": null
+ },
+ {
+  "id": "7fc16376-dd9e-4671-b433-1062adbeb87f",
+  "name": "shelf bracket white - 9X12\"",
+  "sku": "SKU-000050",
+  "brand": "zara",
+  "category": "Shelf Brackets",
+  "parent_category": "Brackets & Mounts",
+  "old_description": "Placed in bottom of the tools galary"
+ },
+ {
+  "id": "dfce4b2b-fe84-4e05-8991-fd6c9b915d81",
+  "name": "modi shower haed",
+  "sku": "md-hws7009",
+  "brand": "modi",
+  "category": "Shower Heads",
+  "parent_category": "Showers & Shattafs",
+  "old_description": null
+ },
+ {
+  "id": "c2e2c2ef-7721-4090-8b9a-ed4c3c0f65f8",
+  "name": "elsa shower pipe",
+  "sku": "SKU-000221",
+  "brand": "elsa",
+  "category": "Shower Hoses",
+  "parent_category": "Showers & Shattafs",
+  "old_description": null
+ },
+ {
+  "id": "8815bd89-f859-457e-a109-c96f02398ef7",
+  "name": "bosni shower mixer ac-02",
+  "sku": "ac-02",
+  "brand": "bosni",
+  "category": "Shower Mixers",
+  "parent_category": "Showers & Shattafs",
+  "old_description": "Placed in right shelf"
+ },
+ {
+  "id": "5a806489-9ae5-42b6-945d-af6523de972b",
+  "name": "elsa shower mixer fc-16",
+  "sku": "fc-16",
+  "brand": "elsa",
+  "category": "Shower Mixers",
+  "parent_category": "Showers & Shattafs",
+  "old_description": "Placed in right shelf"
+ },
+ {
+  "id": "b4409735-e06b-4585-b7da-e62ffc571dbd",
+  "name": "italia shower mixer md-003",
+  "sku": "md-003",
+  "brand": "italia",
+  "category": "Shower Mixers",
+  "parent_category": "Showers & Shattafs",
+  "old_description": "Placed in right shelf"
+ },
+ {
+  "id": "bc625d42-7e76-4ab1-9e81-e6d2c6399fb3",
+  "name": "jisun shower mixer js6612",
+  "sku": "js6612",
+  "brand": "jisun",
+  "category": "Shower Mixers",
+  "parent_category": "Showers & Shattafs",
+  "old_description": "Placed in right shelf"
+ },
+ {
+  "id": "899ae13d-25ea-4629-9c67-be71e4dc4bb8",
+  "name": "modi shower mixer md-hwsa61020",
+  "sku": "md-hwsa61020",
+  "brand": "modi",
+  "category": "Shower Mixers",
+  "parent_category": "Showers & Shattafs",
+  "old_description": "Placed in right shelf"
+ },
+ {
+  "id": "ce6ee9ea-5d58-4515-98f7-1bfe1542f8dd",
+  "name": "novex shower mixer nsbf-g704",
+  "sku": "nsbf-g704",
+  "brand": "novex",
+  "category": "Shower Mixers",
+  "parent_category": "Showers & Shattafs",
+  "old_description": "Placed in right shelf"
+ },
+ {
+  "id": "5bf527a5-d5fc-44eb-92c8-9a83153f787b",
+  "name": "rak kludi shower mixer rak10003-21",
+  "sku": "rak10003-21",
+  "brand": "rak",
+  "category": "Shower Mixers",
+  "parent_category": "Showers & Shattafs",
+  "old_description": "Placed in right shelf"
+ },
+ {
+  "id": "9eefbed1-ad4d-4aad-ac9b-989c8af53113",
+  "name": "tredex shower mixer f23000c",
+  "sku": "f23000c",
+  "brand": "tredex",
+  "category": "Shower Mixers",
+  "parent_category": "Showers & Shattafs",
+  "old_description": "Placed in right shelf"
+ },
+ {
+  "id": "1d3ca4dc-fac7-466f-888d-38b88e1ab865",
+  "name": "alva shower set vital series",
+  "sku": "SKU-000238",
+  "brand": "alva",
+  "category": "Shower Sets",
+  "parent_category": "Showers & Shattafs",
+  "old_description": null
+ },
+ {
+  "id": "39622e55-a1ec-4cf9-83bc-1f5b491ee122",
+  "name": "osco silicon gun orange thin 9\"",
+  "sku": "SKU-000040",
+  "brand": "osco",
+  "category": "Silicone Guns",
+  "parent_category": "Adhesives & Sealants",
+  "old_description": null
+ },
+ {
+  "id": "e71923dd-507f-4a4b-8cf6-b1115626449f",
+  "name": "vironi silicon gun orange thin 9\"",
+  "sku": "SKU-000041",
+  "brand": "vironi",
+  "category": "Silicone Guns",
+  "parent_category": "Adhesives & Sealants",
+  "old_description": null
+ },
+ {
+  "id": "66729d78-a005-4d10-a512-b105aed347a3",
+  "name": "akwa clear silicon",
+  "sku": "SKU-000043",
+  "brand": "akwa",
+  "category": "Silicone Sealants",
+  "parent_category": "Adhesives & Sealants",
+  "old_description": null
+ },
+ {
+  "id": "8c39eaf7-6808-47de-b19d-ee270271f76a",
+  "name": "asmako clear silicon",
+  "sku": "SKU-000042",
+  "brand": "asmako",
+  "category": "Silicone Sealants",
+  "parent_category": "Adhesives & Sealants",
+  "old_description": null
+ },
+ {
+  "id": "7c795937-f3be-4e1a-857b-febfdd76aa9c",
+  "name": "end wire",
+  "sku": "SKU-000162",
+  "brand": "faisal nawaz elect. ware tr.",
+  "category": "Single-Core Wires",
+  "parent_category": "Wires & Cables",
+  "old_description": "Placed in behind the chair"
+ },
+ {
+  "id": "29bee806-eabc-4c04-a4eb-a86f2f622e5b",
+  "name": "rr 1C x 1.5sqmm cable",
+  "sku": "SKU-000163",
+  "brand": "RR",
+  "category": "Single-Core Wires",
+  "parent_category": "Wires & Cables",
+  "old_description": null
+ },
+ {
+  "id": "cf5aac70-123b-48bc-af58-493bd7dd204d",
+  "name": "rr 1C x 2.5sqmm cable",
+  "sku": "SKU-000164",
+  "brand": "RR",
+  "category": "Single-Core Wires",
+  "parent_category": "Wires & Cables",
+  "old_description": null
+ },
+ {
+  "id": "109c8837-cd12-4f05-a26b-8a27cb00a092",
+  "name": "rr 1C x 4sqmm cable",
+  "sku": "SKU-000165",
+  "brand": "RR",
+  "category": "Single-Core Wires",
+  "parent_category": "Wires & Cables",
+  "old_description": null
+ },
+ {
+  "id": "f67e7452-059b-466f-8e9f-0cade90a9a59",
+  "name": "italia single faucet",
+  "sku": "kk-004",
+  "brand": "italia",
+  "category": "Single Taps",
+  "parent_category": "Taps & Mixers",
+  "old_description": null
+ },
+ {
+  "id": "79e93ce3-be99-4296-8165-28e73ddffd35",
+  "name": "milano eco jone single tap basin down",
+  "sku": "SKU-000243",
+  "brand": "milano",
+  "category": "Sink Mixers",
+  "parent_category": "Taps & Mixers",
+  "old_description": null
+ },
+ {
+  "id": "c501fb88-5f52-483a-b3a8-813e396a3c93",
+  "name": "milano eco jone single tap sink wall",
+  "sku": "SKU-000242",
+  "brand": "milano",
+  "category": "Sink Mixers",
+  "parent_category": "Taps & Mixers",
+  "old_description": null
+ },
+ {
+  "id": "c17382cc-b436-4968-a534-58255667e382",
+  "name": "10mm Open End Head Socket Combination Spanner",
+  "sku": "SKU-000084",
+  "brand": "others",
+  "category": "Spanners",
+  "parent_category": "Hand Tools",
+  "old_description": null
+ },
+ {
+  "id": "1acd85d2-00f3-4306-9231-4aee98c86cbe",
+  "name": "22mm Open End Head Socket Combination Spanner",
+  "sku": "SKU-000085",
+  "brand": "others",
+  "category": "Spanners",
+  "parent_category": "Hand Tools",
+  "old_description": null
+ },
+ {
+  "id": "5abdbeb8-891a-47f9-958b-4e68e5a5b81a",
+  "name": "24mm Open End Head Socket Combination Spanner",
+  "sku": "SKU-000086",
+  "brand": "others",
+  "category": "Spanners",
+  "parent_category": "Hand Tools",
+  "old_description": null
+ },
+ {
+  "id": "81660fac-1dd8-4925-96b2-55da90dd4eff",
+  "name": "np acrylic spray paints black matt",
+  "sku": "SKU-000250",
+  "brand": "National Paints",
+  "category": "Spray Paints",
+  "parent_category": "Paints & Painting Supplies",
+  "old_description": null
+ },
+ {
+  "id": "9e0006d7-9b4c-45e0-a4b4-59fc61145041",
+  "name": "khaleegia 18\" metal stand fan",
+  "sku": "SKU-000096",
+  "brand": "khaleegia",
+  "category": "Stand Fans",
+  "parent_category": "Fans & Ventilation",
+  "old_description": "Placed in top-right of the door"
+ },
+ {
+  "id": "c93f5bfc-0c5b-48fd-b44a-16595a61d161",
+  "name": "atc 1\" steel nails - 25pcs",
+  "sku": "SKU-000025",
+  "brand": "atc",
+  "category": "Steel Nails",
+  "parent_category": "Screws, Bolts & Fixings",
+  "old_description": "Placed in bottom left shelf"
+ },
+ {
+  "id": "756ce138-b729-4d85-80e1-c4b0d2b8d25a",
+  "name": "asmako sticker & label remover",
+  "sku": "SKU-000088",
+  "brand": "asmako",
+  "category": "Sticker Removers",
+  "parent_category": "Cleaning & Drain Care",
+  "old_description": null
+ },
+ {
+  "id": "f1ec510f-b1ca-4cf0-b8b1-0116cf42c99c",
+  "name": "admore 13A 1G switch socket white",
+  "sku": "SKU-000203",
+  "brand": "admore",
+  "category": "Switch Sockets",
+  "parent_category": "Switches & Sockets",
+  "old_description": "10 pcs in a box"
+ },
+ {
+  "id": "9606291d-a5be-44dc-b79c-c412654383fc",
+  "name": "admore 13A 2G switch socket white",
+  "sku": "SKU-000204",
+  "brand": "admore",
+  "category": "Switch Sockets",
+  "parent_category": "Switches & Sockets",
+  "old_description": "5 pcs in a box"
+ },
+ {
+  "id": "0c5560a1-9d68-4737-a2a7-960fd923dfa6",
+  "name": "national thinner 1g",
+  "sku": "SKU-000252",
+  "brand": "National Paints",
+  "category": "Thinners",
+  "parent_category": "Paints & Painting Supplies",
+  "old_description": null
+ },
+ {
+  "id": "eb5b4419-6960-4594-bbd4-aae410cc2b35",
+  "name": "national thinner 1l",
+  "sku": "SKU-000251",
+  "brand": "National Paints",
+  "category": "Thinners",
+  "parent_category": "Paints & Painting Supplies",
+  "old_description": null
+ },
+ {
+  "id": "cc7946c5-4c33-4149-a7bb-58b7fa1c3368",
+  "name": "tuf-fix 10 x 100 mm through bolts white",
+  "sku": "SKU-000036",
+  "brand": "tuf-fix",
+  "category": "Through Bolts",
+  "parent_category": "Screws, Bolts & Fixings",
+  "old_description": "50 pcs per box"
+ },
+ {
+  "id": "df52e7f8-92dc-4ff3-9dfb-b759235dc5a5",
+  "name": "tuf-fix 10 x 120 mm through bolts white",
+  "sku": "SKU-000035",
+  "brand": "tuf-fix",
+  "category": "Through Bolts",
+  "parent_category": "Screws, Bolts & Fixings",
+  "old_description": "50 pcs per box"
+ },
+ {
+  "id": "953a2b9b-4d05-4789-ab28-3ae304440115",
+  "name": "Dewalt tiles cutter 4.5\"",
+  "sku": "SKU-000052",
+  "brand": "dewalt",
+  "category": "Tile Cutters",
+  "parent_category": "Hand Tools",
+  "old_description": "Placed in top of the tools galary"
+ },
+ {
+  "id": "ae2f1237-09be-4bec-9152-7068154846ea",
+  "name": "artflo seat cover",
+  "sku": "SKU-000231",
+  "brand": "artflo",
+  "category": "Toilet Seat Covers",
+  "parent_category": "Bathroom Accessories",
+  "old_description": null
+ },
+ {
+  "id": "0e31f93c-8dd0-4e81-b778-fca05ddca57d",
+  "name": "eurospring seat cover",
+  "sku": "SKU-000232",
+  "brand": "eurospring",
+  "category": "Toilet Seat Covers",
+  "parent_category": "Bathroom Accessories",
+  "old_description": null
+ },
+ {
+  "id": "1a46af7d-578b-457e-8183-2e7dc91c2180",
+  "name": "esnceo led 30W track light",
+  "sku": "es-zc-gd30",
+  "brand": "esnceo",
+  "category": "Track Lights",
+  "parent_category": "Lighting",
+  "old_description": "Placed in top of the right shelf in middle"
+ },
+ {
+  "id": "8c5fe278-bc8f-45e9-8bf8-fe728baecf6d",
+  "name": "modi led 20W track light",
+  "sku": "md-tl4520",
+  "brand": "modi",
+  "category": "Track Lights",
+  "parent_category": "Lighting",
+  "old_description": "Placed in top of the right shelf in middle"
+ },
+ {
+  "id": "84aa9cf2-b023-4086-9de9-6f1c79dedabb",
+  "name": "modi led 30W track light",
+  "sku": "md-tl4530",
+  "brand": "modi",
+  "category": "Track Lights",
+  "parent_category": "Lighting",
+  "old_description": "Placed in top of the right shelf in middle"
+ },
+ {
+  "id": "68b037be-dde7-4a6f-9df0-a25eac07c467",
+  "name": "modi led 50W track light",
+  "sku": "md-tl4550",
+  "brand": "modi",
+  "category": "Track Lights",
+  "parent_category": "Lighting",
+  "old_description": "Placed in top of the right shelf in middle"
+ },
+ {
+  "id": "a963c71b-0b10-4351-9c5d-231a016f9717",
+  "name": "tv stand 26-47\"",
+  "sku": "SKU-000105",
+  "brand": "others",
+  "category": "TV Wall Mounts",
+  "parent_category": "Brackets & Mounts",
+  "old_description": "Placed in top of the door"
+ },
+ {
+  "id": "a041729f-2783-46db-b5cd-ea9d1c650ef3",
+  "name": "synthetic undercoat 800white",
+  "sku": "SKU-000253",
+  "brand": "National Paints",
+  "category": "Undercoats",
+  "parent_category": "Paints & Painting Supplies",
+  "old_description": null
+ },
+ {
+  "id": "e9ea8768-c6a8-43b2-abde-b796ece0c8a1",
+  "name": "osco unifix 10mm 50pcs",
+  "sku": "SKU-000027",
+  "brand": "jumbo",
+  "category": "Unifix Plugs",
+  "parent_category": "Screws, Bolts & Fixings",
+  "old_description": "Placed in bottom right shelf"
+ },
+ {
+  "id": "817be03d-e6e7-4bb4-a6f7-f13c7db89b40",
+  "name": "osco unifix 8mm 100pcs",
+  "sku": "SKU-000026",
+  "brand": "jumbo",
+  "category": "Unifix Plugs",
+  "parent_category": "Screws, Bolts & Fixings",
+  "old_description": "Placed in bottom right shelf"
+ },
+ {
+  "id": "fa7f42e8-7b2b-4fb1-9f47-8bfa34df62ba",
+  "name": "olfa L1 knife",
+  "sku": "SKU-000029",
+  "brand": "olfa",
+  "category": "Utility Knives",
+  "parent_category": "Hand Tools",
+  "old_description": null
+ },
+ {
+  "id": "1403ba35-d6b9-4bcf-97bd-c799a2f2dab5",
+  "name": "max 120w dust-proof bracket 12x120 cm clear-6000k",
+  "sku": "SKU-000126",
+  "brand": "max",
+  "category": "Wall & Bracket Lights",
+  "parent_category": "Lighting",
+  "old_description": "Placed in top of the cash"
+ },
+ {
+  "id": "e3b1fab3-9a89-4324-baf3-1239e298294c",
+  "name": "max 60w dust-proof bracket 6x120 cm clear-6000k",
+  "sku": "SKU-000127",
+  "brand": "max",
+  "category": "Wall & Bracket Lights",
+  "parent_category": "Lighting",
+  "old_description": "Placed in top of the cash"
+ },
+ {
+  "id": "f148a120-b3b4-4823-b649-a13e5e55c37d",
+  "name": "khaleegia 16\" wall fan",
+  "sku": "SKU-000095",
+  "brand": "khaleegia",
+  "category": "Wall Fans",
+  "parent_category": "Fans & Ventilation",
+  "old_description": "Placed in top-right of the door"
+ },
+ {
+  "id": "45fdf8bc-c364-4e58-a183-2c47c0c5de98",
+  "name": "khaleegia 18\" wall fan",
+  "sku": "SKU-000090",
+  "brand": "khaleegia",
+  "category": "Wall Fans",
+  "parent_category": "Fans & Ventilation",
+  "old_description": "Placed in top of the door"
+ },
+ {
+  "id": "3d9597d0-fc8e-4683-945f-1c0e61d0d780",
+  "name": "modi 16\" wall fan",
+  "sku": "SKU-000091",
+  "brand": "modi",
+  "category": "Wall Fans",
+  "parent_category": "Fans & Ventilation",
+  "old_description": "Placed in top-left of the door"
+ },
+ {
+  "id": "899d53dd-b6d3-4169-b256-50e51ca2b756",
+  "name": "roska 16\" wall fan",
+  "sku": "SKU-000094",
+  "brand": "roska",
+  "category": "Wall Fans",
+  "parent_category": "Fans & Ventilation",
+  "old_description": "Placed in top-left of the door"
+ },
+ {
+  "id": "858248d8-9419-482c-a570-8613e40b2149",
+  "name": "stucco filler all purpose putty 3.6 ltr",
+  "sku": "SKU-000254",
+  "brand": "National Paints",
+  "category": "Wall Fillers & Putty",
+  "parent_category": "Paints & Painting Supplies",
+  "old_description": null
+ },
+ {
+  "id": "616732d3-d82b-4c35-9602-64770de3a4c6",
+  "name": "clarke wall plug 6mm",
+  "sku": "SKU-000030",
+  "brand": "clarke",
+  "category": "Wall Plugs",
+  "parent_category": "Screws, Bolts & Fixings",
+  "old_description": null
+ },
+ {
+  "id": "911f9451-5d22-40dc-83e9-93246254896d",
+  "name": "Ariston PRO1 R 50L Electric Water Heater",
+  "sku": "SAN-ARS-WTR-50L",
+  "brand": "Ariston",
+  "category": "Water Heaters",
+  "parent_category": null,
+  "old_description": null
+ },
+ {
+  "id": "48f74c77-531f-4547-ac6a-a9dd28a51c8d",
+  "name": "welding machine dongcheng mma250e",
+  "sku": "SKU-000181",
+  "brand": "dongcheng",
+  "category": "Welding Machines",
+  "parent_category": "Power Tools",
+  "old_description": null
+ },
+ {
+  "id": "575dd359-c6a5-4baa-a1cb-4bd7e18b80a2",
+  "name": "wood cutter - boss",
+  "sku": "SKU-000110",
+  "brand": "boss",
+  "category": "Wood Cutters",
+  "parent_category": "Power Tools",
+  "old_description": "Placed in top of the top-right shelf"
+ },
+ {
+  "id": "27c4f1fc-d94b-4338-a22c-69c469d59293",
+  "name": "cotton hand gloves 1 pair",
+  "sku": "SKU-000073",
+  "brand": "others",
+  "category": "Work Gloves",
+  "parent_category": "Safety Wear",
+  "old_description": null
+ },
+ {
+  "id": "06d7ce14-6e7c-4166-93f6-93a7180dfba9",
+  "name": "Delivery",
+  "sku": "WEB-DELIVERY",
+  "brand": null,
+  "category": null,
+  "parent_category": null,
+  "old_description": null
+ }
+]

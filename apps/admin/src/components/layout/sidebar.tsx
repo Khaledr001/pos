@@ -42,6 +42,7 @@ import {
   Briefcase,
   FileSignature,
   BellRing,
+  Image as ImageIcon,
 } from "lucide-react";
 import { hasPermission, type Permission } from "@devsfleet/shared-types";
 import { useAuth } from "@/lib/auth-context";
@@ -190,6 +191,7 @@ const NAV_SECTIONS: NavSection[] = [
         permission: "product:read",
         children: [
           { label: "Products List", href: "/products", icon: Package, permission: "product:read" },
+          { label: "Image Review", href: "/products/image-review", icon: ImageIcon, permission: "product:read" },
           { label: "Categories", href: "/categories", icon: FolderTree, permission: "product:read" },
           { label: "Brands", href: "/brands", icon: Tag, permission: "product:read" },
           { label: "Units of Measure", href: "/units", icon: Ruler, permission: "product:read" },

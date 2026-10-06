@@ -176,6 +176,9 @@ export const UploadProductImageSchema = z.object({
   variantId: z.string().uuid().optional(),
   isPrimary: zQueryBoolean(false),
   altText: z.string().trim().max(255).optional(),
+  /** Attribution — where the photo came from. Set by the candidate approval and the supplier-pack importer. */
+  source: z.string().trim().min(1).max(255).optional(),
+  sourceUrl: z.string().trim().min(1).max(1000).optional(),
 });
 export type UploadProductImageDto = z.infer<typeof UploadProductImageSchema>;
 

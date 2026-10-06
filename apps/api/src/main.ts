@@ -3,6 +3,7 @@ import "reflect-metadata";
 import { Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { NestFactory } from "@nestjs/core";
+import type { NestExpressApplication } from "@nestjs/platform-express";
 import { IoAdapter } from "@nestjs/platform-socket.io";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import compression from "compression";
@@ -10,9 +11,10 @@ import helmet from "helmet";
 import { Logger as PinoLogger } from "nestjs-pino";
 import { AppModule } from "./app.module.js";
 import type { Env } from "./config/env.js";
+import { StorageService } from "./modules/storage/storage.service.js";
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     // Buffer boot-time logs until pino is wired, so nothing is lost or
     // printed in a second format.
     bufferLogs: true,
@@ -35,6 +37,10 @@ async function bootstrap(): Promise<void> {
   app.useWebSocketAdapter(new IoAdapter(app));
 
   const config = app.get(ConfigService<Env, true>);
+  // Development without Docker: uploaded files live in a folder and are served from here.
+  if (config.get("STORAGE_DRIVER", { infer: true }) === "local") {
+    app.useStaticAssets(app.get(StorageService).localDir, { prefix: "/uploads" });
+  }
   const port = config.get("API_PORT", { infer: true });
   const prefix = config.get("API_PREFIX", { infer: true });
   const isProd = config.get("NODE_ENV", { infer: true }) === "production";

@@ -21,6 +21,7 @@ const config: NextConfig = {
     // Product images are served from MinIO.
     remotePatterns: [
       { protocol: "http", hostname: "localhost", port: "9000" },
+      { protocol: "http", hostname: "localhost", port: "3001" },
       { protocol: "https", hostname: "**.devsfleet.com" },
     ],
   },
@@ -53,32 +54,43 @@ const config: NextConfig = {
      * is only added to the dev policy below.
      */
     const wsOrigin = apiOrigin.replace(/^http/, "ws");
-    const csp = [
+    const policy = (imgSrc: string) => [
       "default-src 'self'",
       `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ""} https://static.cloudflareinsights.com`,
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
-      "img-src 'self' data: blob: http://localhost:9000 https://*.devsfleet.com",
+      `img-src ${imgSrc}`,
       `connect-src 'self' ${apiOrigin} ${wsOrigin}${dev ? " ws: http://localhost:*" : ""} https://cloudflareinsights.com`,
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
       "object-src 'none'",
     ].join("; ");
+    const csp = policy("'self' data: blob: http://localhost:9000 http://localhost:3001 https://*.devsfleet.com");
+    // The image review screen previews candidate photos hosted on other sites,
+    // so it alone may load images from any https origin. Images cannot run code.
+    const reviewCsp = policy("'self' data: blob: http://localhost:9000 http://localhost:3001 https://*.devsfleet.com https:");
 
+    const common = [
+      { key: "X-Content-Type-Options", value: "nosniff" },
+      { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+      { key: "X-Frame-Options", value: "DENY" },
+      {
+        key: "Permissions-Policy",
+        value: "camera=(), microphone=(), geolocation=(), interest-cohort=()",
+      },
+    ];
+
+    // Two rules that never overlap: two Content-Security-Policy headers on one
+    // response are both enforced, so the stricter would still block the previews.
     return [
       {
-        source: "/:path*",
-        headers: [
-          { key: "Content-Security-Policy", value: csp },
-          { key: "X-Content-Type-Options", value: "nosniff" },
-          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-          { key: "X-Frame-Options", value: "DENY" },
-          {
-            key: "Permissions-Policy",
-            value: "camera=(), microphone=(), geolocation=(), interest-cohort=()",
-          },
-        ],
+        source: "/products/image-review",
+        headers: [{ key: "Content-Security-Policy", value: reviewCsp }, ...common],
+      },
+      {
+        source: "/((?!products/image-review$).*)",
+        headers: [{ key: "Content-Security-Policy", value: csp }, ...common],
       },
     ];
   },

@@ -91,13 +91,19 @@ export const envSchema = z.object({
   // ---------------------------------------------------------------------------
   // Object storage
   // ---------------------------------------------------------------------------
-  S3_ENDPOINT: z.string().url(),
+  /** `local` writes into STORAGE_LOCAL_DIR and serves it at /uploads, so development needs no Docker. */
+  STORAGE_DRIVER: z.enum(["s3", "local"]).default("s3"),
+  STORAGE_LOCAL_DIR: z.string().default("../../uploads"),
+  /** Where browsers fetch local files from. Defaults to this API's own /uploads. */
+  STORAGE_LOCAL_PUBLIC_URL: z.string().url().optional(),
+  // Required only when STORAGE_DRIVER=s3; StorageService checks at boot.
+  S3_ENDPOINT: z.string().url().optional(),
   S3_REGION: z.string().default("us-east-1"),
-  S3_ACCESS_KEY: z.string(),
-  S3_SECRET_KEY: z.string(),
-  S3_BUCKET: z.string(),
+  S3_ACCESS_KEY: z.string().optional(),
+  S3_SECRET_KEY: z.string().optional(),
+  S3_BUCKET: z.string().optional(),
   S3_FORCE_PATH_STYLE: bool.default(true),
-  S3_PUBLIC_URL: z.string().url(),
+  S3_PUBLIC_URL: z.string().url().optional(),
 
   // ---------------------------------------------------------------------------
   // WhatsApp (Phase 4 — optional until then)

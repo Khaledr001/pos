@@ -83,6 +83,16 @@ export const ERROR_CODES = {
   SKU_ALREADY_EXISTS: "SKU_ALREADY_EXISTS",
   BARCODE_ALREADY_EXISTS: "BARCODE_ALREADY_EXISTS",
   DUPLICATE_IMAGE: "DUPLICATE_IMAGE",
+  /** Object storage (S3/MinIO) did not answer: not running, wrong endpoint or bad credentials. */
+  STORAGE_UNAVAILABLE: "STORAGE_UNAVAILABLE",
+  /** The remote photo could not be downloaded (DNS, TLS, timeout, non-200, too many redirects). */
+  IMAGE_FETCH_FAILED: "IMAGE_FETCH_FAILED",
+  /** The remote photo exceeds the download cap. */
+  IMAGE_TOO_LARGE: "IMAGE_TOO_LARGE",
+  /** The remote file is not a JPEG, PNG or WebP — by header or by magic bytes. */
+  IMAGE_TYPE_UNSUPPORTED: "IMAGE_TYPE_UNSUPPORTED",
+  /** The URL points somewhere the server must never fetch (non-https, private network, credentials in URL). */
+  IMAGE_URL_BLOCKED: "IMAGE_URL_BLOCKED",
 
   // pricing
   NO_PRICE_FOR_PRODUCT: "NO_PRICE_FOR_PRODUCT",

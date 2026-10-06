@@ -1,4 +1,4 @@
-import type { AttributeType, SerialNumberStatus } from "@devsfleet/shared-types";
+import type { AttributeType, ImageCandidateStatus, SerialNumberStatus } from "@devsfleet/shared-types";
 import { relations, sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
@@ -9,6 +9,7 @@ import {
   jsonb,
   pgTable,
   text,
+  timestamp,
   uniqueIndex,
   uuid,
   varchar,
@@ -431,6 +432,10 @@ export const productImages = pgTable(
     height: integer(),
     mimeType: varchar({ length: 50 }),
     altText: varchar({ length: 255 }),
+    /** Where the photo came from: a site name, "Supplier pack: Modi", "Upload". Attribution, not control flow. */
+    source: varchar({ length: 255 }),
+    /** The page it was found on, when it came from the web. */
+    sourceUrl: varchar({ length: 1000 }),
     sortOrder: integer().notNull().default(0),
     isPrimary: boolean().notNull().default(false),
     ...timestamps(),
@@ -443,6 +448,46 @@ export const productImages = pgTable(
     uniqueIndex("uq_product_images_primary")
       .on(t.productId)
       .where(sql`is_primary = true`),
+  ],
+);
+
+/**
+ * Photos found on the web for a product, awaiting a human decision.
+ *
+ * Nothing here is ever shown to shoppers: `image_url` points at a third
+ * party's server. Approving a candidate downloads it through the same upload
+ * path as a hand-uploaded photo (`product_images`, checksum-deduplicated) and
+ * only then does it exist for the storefront. The unique key makes a finder
+ * re-run idempotent — the same URL for the same product is one row.
+ */
+export const productImageCandidates = pgTable(
+  "product_image_candidates",
+  {
+    id: primaryId(),
+    ...tenantScope(),
+    productId: uuid()
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    imageUrl: varchar({ length: 2000 }).notNull(),
+    thumbnailUrl: varchar({ length: 2000 }),
+    sourcePageUrl: varchar({ length: 2000 }).notNull(),
+    sourceDomain: varchar({ length: 255 }).notNull(),
+    title: varchar({ length: 500 }),
+    width: integer(),
+    height: integer(),
+    /** 0-100, higher is likelier right. Only orders the review screen. */
+    matchScore: integer().notNull().default(0),
+    /** The search query that surfaced it, so a reviewer can judge the match. */
+    query: varchar({ length: 500 }),
+    status: varchar({ length: 10 }).$type<ImageCandidateStatus>().notNull().default("pending"),
+    reviewedBy: uuid(),
+    reviewedAt: timestamp({ withTimezone: true, mode: "date" }),
+    ...timestamps(),
+  },
+  (t) => [
+    uniqueIndex("uq_image_candidates_product_url").on(t.tenantId, t.productId, t.imageUrl),
+    index("idx_image_candidates_product_status").on(t.productId, t.status),
+    check("ck_image_candidates_score", sql`match_score BETWEEN 0 AND 100`),
   ],
 );
 

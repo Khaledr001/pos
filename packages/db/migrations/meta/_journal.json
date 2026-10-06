@@ -29,6 +29,13 @@
       "when": 1791206198923,
       "tag": "0003_stock_alerts_and_quotes",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791274915103,
+      "tag": "0004_product_image_candidates",
+      "breakpoints": true
     }
   ]
 }

@@ -17,7 +17,15 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "**" },
       { protocol: "http", hostname: "localhost" },
       { protocol: "http", hostname: "127.0.0.1" },
+      // Without a port a pattern only matches the default one, and the local
+      // API (STORAGE_DRIVER=local) serves its uploads from :3001.
+      { protocol: "http", hostname: "localhost", port: "3001" },
+      { protocol: "http", hostname: "127.0.0.1", port: "3001" },
     ],
+    // The optimiser refuses to fetch from private addresses (SSRF protection),
+    // which includes the local API. Development only; production images come
+    // from a public storage host.
+    dangerouslyAllowLocalIP: process.env.NODE_ENV !== "production",
   },
   // The browser only ever talks to this origin; the platform API sits behind
   // it, so its httpOnly cookies are first-party and there is no CORS. The

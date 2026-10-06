@@ -299,6 +299,10 @@ export type SyncEntity = (typeof SYNC_ENTITIES)[number];
 export const SERIAL_NUMBER_STATUSES = asConst(["available", "sold", "returned", "damaged"]);
 export type SerialNumberStatus = (typeof SERIAL_NUMBER_STATUSES)[number];
 
+/** Review state of a web-found photo candidate. Nothing is published until `approved`. */
+export const IMAGE_CANDIDATE_STATUSES = ["pending", "approved", "rejected"] as const;
+export type ImageCandidateStatus = (typeof IMAGE_CANDIDATE_STATUSES)[number];
+
 export const LOYALTY_TYPES = asConst(["earned", "redeemed"]);
 export type LoyaltyType = (typeof LOYALTY_TYPES)[number];
 

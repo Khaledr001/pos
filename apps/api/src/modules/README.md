@@ -31,6 +31,7 @@ Copying its shape is what keeps twenty modules looking like one codebase.
 | `brands` | 1 | ✅ done | Brand CRUD |
 | `units` | 1 | ✅ done | Units and packaging conversions |
 | `products` | 1 | ✅ done | CRUD, full-text + trigram search, barcode lookup, images, per-variant packagings |
+| `product-image-candidates` | — | ✅ done | Web-found product photos awaiting human review: bulk submit (finder CLI), list, approve (SSRF-guarded download into the normal image upload path), reject. See docs/PRODUCT-IMAGES.md. |
 | `pricing` | 1 | ✅ done | Price lists, per-variant/per-list prices (with history), negotiated customer prices, bulk update — all through `price:read`/`price:write`. `PriceResolverService` now lives here as the one shared provider, imported by orders/products/quotations/sales rather than re-declared in each. |
 | `customers` | 1 | ✅ done | CRUD, credit settlement, loyalty ledger |
 | `inventory` | 2 | ✅ done | Per-branch stock, the append-only ledger, adjustments |

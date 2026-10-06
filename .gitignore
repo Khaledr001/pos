@@ -11,6 +11,9 @@ out/
 release/
 *.tsbuildinfo
 
+# locally stored uploads (STORAGE_DRIVER=local)
+uploads/
+
 # env
 .env
 .env.local
@@ -62,3 +65,7 @@ deploy/backups/
 .agent/mcp_config.json
 
 graphify-out/*
+
+# image tools
+.cache/
+image-pack-report/

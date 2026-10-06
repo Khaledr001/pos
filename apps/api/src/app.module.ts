@@ -28,6 +28,7 @@ import { TenantsModule } from "./modules/tenants/tenants.module.js";
 import { CashRegisterModule } from "./modules/cash-register/cash-register.module.js";
 import { CatalogModule } from "./modules/catalog/catalog.module.js";
 import { InventoryModule } from "./modules/inventory/inventory.module.js";
+import { ProductImageCandidatesModule } from "./modules/product-image-candidates/product-image-candidates.module.js";
 import { ProductsModule } from "./modules/products/products.module.js";
 import { PricingModule } from "./modules/pricing/pricing.module.js";
 import { DayCloseModule } from "./modules/day-close/day-close.module.js";
@@ -150,6 +151,7 @@ import { StorefrontModule } from "./modules/storefront/storefront.module.js";
     AuditModule,
     BranchesModule,
     ProductsModule,
+    ProductImageCandidatesModule,
     PricingModule,
     CatalogModule,
     InventoryModule,

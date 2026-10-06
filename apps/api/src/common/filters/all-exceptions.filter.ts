@@ -259,6 +259,16 @@ export class AllExceptionsFilter implements ExceptionFilter {
       case ERROR_CODES.LLM_NOT_CONFIGURED:
         // 503: a dependency isn't set up, not a malformed request.
         return HttpStatus.SERVICE_UNAVAILABLE;
+      case ERROR_CODES.STORAGE_UNAVAILABLE:
+        return HttpStatus.SERVICE_UNAVAILABLE;
+      case ERROR_CODES.IMAGE_FETCH_FAILED:
+        return HttpStatus.BAD_GATEWAY;
+      case ERROR_CODES.IMAGE_TOO_LARGE:
+        return HttpStatus.PAYLOAD_TOO_LARGE;
+      case ERROR_CODES.IMAGE_TYPE_UNSUPPORTED:
+        return HttpStatus.UNSUPPORTED_MEDIA_TYPE;
+      case ERROR_CODES.IMAGE_URL_BLOCKED:
+        return HttpStatus.UNPROCESSABLE_ENTITY;
       case ERROR_CODES.LLM_REQUEST_FAILED:
         // 502: we were configured correctly; the upstream provider failed.
         return HttpStatus.BAD_GATEWAY;

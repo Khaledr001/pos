@@ -28,7 +28,7 @@ const ALLOWED_IMAGE_MIME_TYPES: Record<string, string> = {
   "image/png": "png",
   "image/webp": "webp",
 };
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 /**
  * The catalogue.
@@ -707,7 +707,7 @@ export class ProductsService {
     productId: string,
     file: Express.Multer.File,
     dto: UploadProductImageDto,
-  ): Promise<unknown> {
+  ): Promise<typeof schema.productImages.$inferSelect> {
     const tenantId = RequestContext.requireTenantId();
 
     const extension = ALLOWED_IMAGE_MIME_TYPES[file.mimetype];
@@ -773,6 +773,8 @@ export class ProductsService {
           sizeBytes: file.size,
           mimeType: file.mimetype,
           ...(dto.altText ? { altText: dto.altText } : {}),
+          ...(dto.source ? { source: dto.source } : {}),
+          ...(dto.sourceUrl ? { sourceUrl: dto.sourceUrl } : {}),
           isPrimary,
         })
         .returning();
@@ -781,6 +783,7 @@ export class ProductsService {
         await tx.update(schema.products).set({ imageUrl: url }).where(eq(schema.products.id, productId));
       }
 
+      if (!image) throw new Error("insert returned no row");
       return image;
     });
   }
