@@ -78,6 +78,29 @@ export const WEB_ORDER_STATUSES = asConst([
 ]);
 export type WebOrderStatus = (typeof WEB_ORDER_STATUSES)[number];
 
+/**
+ * A shopper's "tell me when it is back" request. `notified` means the alert
+ * fired (the product came back in stock); whether a message actually left is
+ * `delivered_at` on the row, which stays null until a transport sends one.
+ */
+export const STOCK_ALERT_STATUSES = asConst(["pending", "notified", "cancelled"]);
+export type StockAlertStatus = (typeof STOCK_ALERT_STATUSES)[number];
+
+/**
+ * A trade buyer's request for a price. `requested` carries list prices as an
+ * estimate; staff move it to `quoted` with their own prices and a validity
+ * date, and only from `quoted` can the shopper accept or decline.
+ */
+export const WEB_QUOTE_STATUSES = asConst([
+  "requested",
+  "quoted",
+  "accepted",
+  "declined",
+  "expired",
+  "converted",
+]);
+export type WebQuoteStatus = (typeof WEB_QUOTE_STATUSES)[number];
+
 /** Courier pricing for one emirate. Amounts are decimal strings, VAT-exclusive. */
 export interface ShippingRate {
   emirate: Emirate;

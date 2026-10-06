@@ -22,6 +22,13 @@
       "when": 1790850715892,
       "tag": "0002_storefront_payments",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791206198923,
+      "tag": "0003_stock_alerts_and_quotes",
+      "breakpoints": true
     }
   ]
 }

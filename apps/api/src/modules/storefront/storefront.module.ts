@@ -38,7 +38,15 @@ import { PaymentExpiryService } from "./payments/payment-expiry.service.js";
 import { DevPaymentsController, StripeWebhookController } from "./payments/payments.controller.js";
 import { StorefrontPaymentsService } from "./payments/payments.service.js";
 import { StorefrontPricing } from "./pricing/storefront-pricing.service.js";
+import { QuotesAdminController } from "./admin/quotes-admin.controller.js";
+import { StockAlertsAdminController } from "./admin/stock-alerts-admin.controller.js";
+import { QuotesController } from "./quotes/quotes.controller.js";
+import { QuotesAdminService } from "./quotes/quotes-admin.service.js";
+import { QuotesService } from "./quotes/quotes.service.js";
 import { RevalidationService } from "./revalidation/revalidation.service.js";
+import { StockAlertSweepService } from "./stock-alerts/stock-alert-sweep.service.js";
+import { StockAlertsController } from "./stock-alerts/stock-alerts.controller.js";
+import { StockAlertsService } from "./stock-alerts/stock-alerts.service.js";
 
 /**
  * The online store, as a channel on the platform's own catalogue, prices,
@@ -65,12 +73,16 @@ import { RevalidationService } from "./revalidation/revalidation.service.js";
     StripeWebhookController,
     DevPaymentsController,
     DomainCheckController,
+    StockAlertsController,
+    QuotesController,
     // Staff side — ordinary JWT + permission routes under /storefront-admin.
     OrderDeskController,
     ListingsAdminController,
     ContentAdminController,
     TradeAdminController,
     SettingsAdminController,
+    QuotesAdminController,
+    StockAlertsAdminController,
   ],
   providers: [
     StorefrontResolver,
@@ -94,6 +106,10 @@ import { RevalidationService } from "./revalidation/revalidation.service.js";
     ContentAdminService,
     TradeAdminService,
     SettingsAdminService,
+    StockAlertsService,
+    StockAlertSweepService,
+    QuotesService,
+    QuotesAdminService,
   ],
   exports: [StorefrontResolver, WebOrdersService],
 })

@@ -50,6 +50,8 @@ are checked against the resolved one.
 | `shopper_accounts`, `shopper_sessions`, `shopper_addresses`, `shopper_lists` | Shopper login (each backed by a `customers` row), rotating refresh tokens, addresses, wishlists |
 | `carts`, `cart_items`, `coupons` | Variant + unit + quantity; never a price |
 | `web_orders`, `web_order_events`, `web_payments`, `web_shipments` | The shopper's side of an `orders` row: contact, delivery, payment, timeline |
+| `stock_alert_subscriptions` | "Notify me when it's back": variant, lowercased email, optional phone, status `pending` / `notified` / `cancelled`, unsubscribe token |
+| `web_quotes`, `web_quote_items` | A trade buyer's request for a price, snapshotted like an order; staff-set `quoted_unit_price` per line |
 | `storefront_payment_accounts` | The tenant's own Stripe account |
 
 `categories` and `brands` gained `description`/SEO/`is_featured` columns.
@@ -112,6 +114,56 @@ are checked against the resolved one.
   stock released, after the payment window (45 min) plus 15 min.
 - `STOREFRONT_DEV_PAYMENTS=true` sends card checkouts to a test page with
   "Pay" and "Decline". The API refuses to boot with it in production.
+
+## Back-in-stock alerts
+
+- A sold-out option on the product page shows a form (guest or signed in).
+  `POST /storefront/stock-alerts` is public, throttled (5/min), Zod-validated and
+  has a hidden honeypot field. It answers `{ subscribed: true }` whether the
+  address is new, already waiting, or a bot's honeypot hit, so it cannot be used
+  to find out who asked about what. Unique on (tenant, variant, lowercased email):
+  a repeat is the same row, and re-subscribing after an alert fired starts a new wait.
+  `POST /storefront/stock-alerts/unsubscribe/:token` cancels by the row's token.
+- `StockAlertSweepService` runs every 5 minutes (modelled on `PaymentExpiryService`; there
+  is no "stock arrived" event to hook, only low-stock crossings). For each tenant
+  with pending rows it asks `StorefrontCatalogService.availability` — the
+  same answer the product page gives (free stock less the safety buffer, at the branches
+  shown online) — and claims the rows whose variant is no longer sold out with one
+  conditional update, so two API instances fire each subscription once.
+- **Nothing is sent to the shopper.** There is no email transport in the platform, and the
+  WhatsApp service can only send free text to a conversation with an open 24-hour
+  window (templates are not built). The sweep records `status = notified`,
+  `notified_at`, and leaves `delivered_at` null; a transport belongs at the end of
+  `StockAlertsService.fireForTenant`.
+- Staff: `GET /storefront-admin/stock-alerts` (`product:read`), pending subscribers
+  per product, most wanted first. Admin → Online Store → Stock Alerts.
+
+## Trade quotes
+
+Cart → "Request a quote" (signed-in shoppers; any account, trade-approved or not,
+because a quote is a request, and the prices are staff's) → staff price it → the shopper
+accepts or declines from `/account/quotes`.
+
+- `POST /storefront/quotes` takes the contact details and, optionally, explicit
+  `lines` — by default it quotes the current cart. **The client never sends a price:**
+  lines are priced server-side through the cart's own ladder (the shopper's trade list
+  if they have one) and snapshotted (name, SKU, VAT rate, quantity, unit price, currency, tax
+  mode). `clientId` makes the submit idempotent. Number: `QT-WEB-<year>-<seq>`, from the
+  same `next_document_number` sequences as the till's quotations, with its own `WEB` counter.
+- While `requested` the figures are a list-price **estimate**. Staff price every line
+  (`POST /storefront-admin/quotes/:id/price`: `quoted_unit_price` per line, an optional
+  document discount %, validity date, internal notes), which moves the quote to
+  `quoted` and recomputes the totals through `calculateDocument`. Pricing below list, or a
+  document discount, needs `sale:discount` and stays within the staff member's discount
+  ceiling (`DISCOUNT_EXCEEDS_LIMIT`). Staff can also decline a request or lapse a sent quote.
+- Shopper `accept` / `decline` work only from `quoted` and in date, as one conditional
+  update (`QUOTE_INVALID_STATUS` / `QUOTE_EXPIRED` otherwise). A `quoted` quote past
+  `valid_until` reads as `expired` everywhere, with no job needed.
+- **Accepting does not create an order or fill the cart.** The cart holds no price and
+  an order reserves stock and takes payment, which are the checkout's. Accepting
+  records the decision; staff raise the order from the order desk and `converted_order_id` is
+  where it is linked. Routes: `order:read` / `order:write`; pricing and closing are audited.
+- No shopper or staff notification is sent when a quote is requested or priced (see Known gaps).
 
 ## Caching and refresh
 
@@ -186,7 +238,8 @@ the types the website renders, so a change on either side fails the build.
 ## Known gaps
 
 - **No shopper notifications.** Order confirmation, dispatch and ready-for-
-  pickup emails and WhatsApp messages are not sent yet. The timeline is
+  pickup emails and WhatsApp messages are not sent yet. The same goes for
+  back-in-stock alerts (recorded, not sent) and for quote requested / quoted. The timeline is
   visible on the tracking page and the account area.
 - **Fixed-amount coupons** are refused online (see Money above).
 - **Tabby / Tamara** are not integrated.

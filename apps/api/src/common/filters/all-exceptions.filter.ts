@@ -251,6 +251,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
       case ERROR_CODES.SALE_ALREADY_RETURNED:
       case ERROR_CODES.CANNOT_RETURN_A_RETURN:
       case ERROR_CODES.PRICE_CHANGED:
+      case ERROR_CODES.QUOTE_INVALID_STATUS:
+      case ERROR_CODES.QUOTE_EXPIRED:
         return HttpStatus.CONFLICT;
       case ERROR_CODES.VALIDATION_FAILED:
         return HttpStatus.BAD_REQUEST;

@@ -13,6 +13,7 @@ import { QtyInput } from "@/components/ui/qty-input";
 import { errorMessage } from "@/lib/api-browser";
 import { displayName, uomShort } from "@/lib/format";
 import { useCart, useCartActions } from "@/lib/hooks/store";
+import { QuoteRequest } from "./quote-request";
 
 function Line({ item }: { item: CartItem }) {
   const { update, remove } = useCartActions();
@@ -200,6 +201,7 @@ export function CartPage() {
             Go to checkout
           </ButtonLink>
           {blocking.length > 0 && <p className="text-sm text-signal">Change or remove the items marked above to continue.</p>}
+          <QuoteRequest itemCount={cart.items.length} />
           <p className="text-sm text-steel">Tax invoice with our TRN included. Add your company TRN at checkout.</p>
         </aside>
       </div>

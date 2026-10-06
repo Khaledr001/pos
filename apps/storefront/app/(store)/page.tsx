@@ -10,13 +10,18 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { Suspense, type ReactNode } from "react";
+import { JsonLd } from "@/components/store/json-ld";
 import { ProductGrid } from "@/components/store/product-card";
+import { RecentlyViewed } from "@/components/store/recently-viewed";
+import { HomeSkeleton } from "@/components/store/skeletons";
 import { SearchBox } from "@/components/store/search-box";
 import { ButtonLink } from "@/components/ui/button";
 import { cached, publicApi, tags } from "@/lib/api-server";
 import { getStore } from "@/lib/data";
 import { departmentIcon } from "@/lib/department-icon";
 import { busiestFirst, displayName, whatsappLink } from "@/lib/format";
+import { absoluteUrl } from "@/lib/seo";
+import { siteOrigin } from "@/lib/site";
 
 /** Department tiles before "All departments"; with that tile the grid fills 2, 3, 4 and 6 columns evenly. */
 const HOME_DEPARTMENTS = 11;
@@ -32,10 +37,20 @@ function wholeRows(products: ProductCard[]): ProductCard[] {
     : products.slice(0, products.length - (products.length % 4));
 }
 
-export default async function HomePage() {
-  const [home, store] = await Promise.all([
+/** The page's own fetches stream behind this boundary, so the skeleton shows only for the home route. */
+export default function HomePage() {
+  return (
+    <Suspense fallback={<HomeSkeleton />}>
+      <HomeContent />
+    </Suspense>
+  );
+}
+
+async function HomeContent() {
+  const [home, store, site] = await Promise.all([
     publicApi.get<HomeData>("/content/home", cached([tags.home, tags.catalog], 600)),
     getStore(),
+    siteOrigin(),
   ]);
   const lead = home.hero[0];
   const promo = home.strip[0];
@@ -49,6 +64,31 @@ export default async function HomePage() {
 
   return (
     <>
+      <JsonLd
+        data={[
+          {
+            "@context": "https://schema.org",
+            "@type": "Organization",
+            name: store.name,
+            legalName: store.legalName || undefined,
+            url: site,
+            logo: store.logoUrl ? absoluteUrl(site, store.logoUrl) : undefined,
+            email: store.email || undefined,
+            telephone: store.phone || undefined,
+          },
+          {
+            "@context": "https://schema.org",
+            "@type": "WebSite",
+            name: store.name,
+            url: site,
+            potentialAction: {
+              "@type": "SearchAction",
+              target: { "@type": "EntryPoint", urlTemplate: `${site}/search?q={search_term_string}` },
+              "query-input": "required name=search_term_string",
+            },
+          },
+        ]}
+      />
       {/* The search is the hero: trade buyers come looking for a specific part. */}
       <section className="blueprint bg-ink text-white">
         <div className="mx-auto grid max-w-7xl gap-10 px-4 py-10 sm:py-14 lg:grid-cols-[1.4fr_1fr] lg:items-center lg:py-16">
@@ -298,6 +338,8 @@ export default async function HomePage() {
             <ProductGrid products={newArrivals} className="lg:grid-cols-4" />
           </section>
         )}
+
+        <RecentlyViewed className="mt-14" />
       </div>
     </>
   );

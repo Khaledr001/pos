@@ -5,16 +5,21 @@ import { permanentRedirect } from "next/navigation";
 import { Breadcrumbs } from "@/components/store/listing";
 import { Markdown } from "@/components/store/markdown";
 import { getPage } from "@/lib/content";
+import { getStore } from "@/lib/data";
 import { formatDate } from "@/lib/format";
+import { socialMeta } from "@/lib/seo";
 
 export async function generateMetadata({ params }: PageProps<"/blog/[slug]">): Promise<Metadata> {
   const { slug } = await params;
-  const page = await getPage(slug);
+  const [page, store] = await Promise.all([getPage(slug), getStore()]);
+  const title = page.seoTitle ?? page.title;
+  const description = page.seoDescription ?? page.excerpt;
+  const meta = socialMeta({ title, description, path: `/blog/${slug}`, image: page.coverImageUrl, type: "article", siteName: store.name });
   return {
-    title: page.seoTitle ?? page.title,
-    description: page.seoDescription ?? page.excerpt ?? undefined,
-    alternates: { canonical: `/blog/${slug}` },
-    openGraph: { type: "article", title: page.title, images: page.coverImageUrl ? [page.coverImageUrl] : undefined },
+    title,
+    description: description ?? undefined,
+    ...meta,
+    openGraph: { ...meta.openGraph, type: "article", publishedTime: page.publishedAt ?? undefined, modifiedTime: page.updatedAt },
   };
 }
 

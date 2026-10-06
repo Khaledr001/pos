@@ -509,3 +509,73 @@ export interface StoreInfo {
   currency: string;
   cod: { enabled: boolean; max: string; maxFils: number };
 }
+
+// ── back-in-stock alerts ──
+
+export interface StockAlertInput {
+  variantId: string;
+  email: string;
+  /** UAE number, optional. */
+  phone?: string;
+  /** Honeypot: a real form leaves it empty. */
+  website?: string;
+}
+
+// ── quotes ──
+
+export type QuoteStatus = 'REQUESTED' | 'QUOTED' | 'ACCEPTED' | 'DECLINED' | 'EXPIRED' | 'CONVERTED';
+
+export interface QuoteLine {
+  id: string;
+  variantId: string;
+  sku: string;
+  name: string;
+  variantName: string | null;
+  uom: string;
+  quantity: number;
+  /** VAT-inclusive. A list-price estimate until `priced`, staff's price after. */
+  unitPrice: Money;
+  lineTotal: Money;
+  priced: boolean;
+}
+
+export interface QuoteSummary {
+  id: string;
+  number: string;
+  status: QuoteStatus;
+  /** True while staff have not priced it: every figure is a list-price estimate. */
+  estimate: boolean;
+  requestedAt: string;
+  validUntil: string | null;
+  itemCount: number;
+  total: Money;
+}
+
+export interface QuoteView {
+  id: string;
+  number: string;
+  status: QuoteStatus;
+  estimate: boolean;
+  requestedAt: string;
+  quotedAt: string | null;
+  validUntil: string | null;
+  respondedAt: string | null;
+  contactName: string;
+  contactEmail: string;
+  contactPhone: string;
+  companyName: string | null;
+  notes: string | null;
+  itemCount: number;
+  lines: QuoteLine[];
+  totals: { subtotalNet: Money; discountNet: Money; vat: Money; total: Money };
+}
+
+export interface CreateQuoteInput {
+  /** Minted once per submission and resent on retry. */
+  clientId: string;
+  contact: { fullName: string; email: string; phone: string };
+  companyName?: string;
+  notes?: string;
+  /** Omit to quote the current cart. Prices are never sent. */
+  lines?: { variantId: string; uom?: string; quantity: number }[];
+}

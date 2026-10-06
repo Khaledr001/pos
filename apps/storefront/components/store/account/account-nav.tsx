@@ -10,6 +10,7 @@ import { useMe, useSessionChanged } from "@/lib/hooks/store";
 const LINKS = [
   { href: "/account", label: "Overview" },
   { href: "/account/orders", label: "Orders" },
+  { href: "/account/quotes", label: "Quotes" },
   { href: "/account/addresses", label: "Addresses" },
   { href: "/account/lists", label: "Lists" },
   { href: "/account/profile", label: "Profile and company" },

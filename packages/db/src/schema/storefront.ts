@@ -5,12 +5,14 @@ import type {
   DeliveryMethod,
   Emirate,
   ProductLinkKind,
+  StockAlertStatus,
   StorefrontPageKind,
   StorefrontSettings,
   TradeStatus,
   WebOrderStatus,
   WebPaymentMethod,
   WebPaymentStatus,
+  WebQuoteStatus,
 } from "@devsfleet/shared-types";
 import { relations, sql } from "drizzle-orm";
 import {
@@ -30,7 +32,7 @@ import { users } from "./auth.js";
 import { productVariants, products, units } from "./catalog.js";
 import { customers } from "./partners.js";
 import { orders } from "./sales.js";
-import { activeFlag, money, primaryId, quantity, timestamps } from "./_shared.js";
+import { activeFlag, money, percent, primaryId, quantity, timestamps } from "./_shared.js";
 import { branches, tenantScope } from "./tenants.js";
 
 /**
@@ -564,6 +566,145 @@ export const storefrontPaymentAccounts = pgTable(
 );
 
 // -----------------------------------------------------------------------------
+// Back-in-stock alerts
+// -----------------------------------------------------------------------------
+
+/**
+ * "Tell me when this is back." Variant-level, because stock is: a shopper
+ * waiting for the 20 mm elbow is not waiting for the 25 mm one.
+ *
+ * Unique on (tenant, variant, email) with the email stored lowercase, so a
+ * repeated tap is the same row and the endpoint can answer identically whether
+ * or not the address was already here — nothing to enumerate.
+ */
+export const stockAlertSubscriptions = pgTable(
+  "stock_alert_subscriptions",
+  {
+    id: primaryId(),
+    ...tenantScope(),
+    productId: uuid()
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    variantId: uuid()
+      .notNull()
+      .references(() => productVariants.id, { onDelete: "cascade" }),
+    /** Stored lowercase. */
+    email: varchar({ length: 255 }).notNull(),
+    phone: varchar({ length: 20 }),
+    accountId: uuid().references(() => shopperAccounts.id, { onDelete: "set null" }),
+    status: varchar({ length: 10 }).$type<StockAlertStatus>().notNull().default("pending"),
+    /** When the product came back and the alert fired. */
+    notifiedAt: timestamp({ withTimezone: true, mode: "date" }),
+    /** When a message actually reached the shopper. Null until a transport exists to send one. */
+    deliveredAt: timestamp({ withTimezone: true, mode: "date" }),
+    /** Unguessable. The one-click unsubscribe link carries only this. */
+    unsubscribeToken: uuid().notNull().defaultRandom(),
+    ...timestamps(),
+  },
+  (t) => [
+    uniqueIndex("uq_stock_alerts_variant_email").on(t.tenantId, t.variantId, t.email),
+    uniqueIndex("uq_stock_alerts_token").on(t.unsubscribeToken),
+    index("idx_stock_alerts_pending").on(t.tenantId, t.status, t.productId),
+    check("ck_stock_alerts_email_lowercase", sql`email = lower(email)`),
+  ],
+);
+
+// -----------------------------------------------------------------------------
+// Quotes (trade)
+// -----------------------------------------------------------------------------
+
+/**
+ * A request for a price, from a cart. A document, so it snapshots what it
+ * needs (rule 5): the lines below carry the product's name, SKU, VAT rate and
+ * the price as they were. Renaming a product or moving its VAT must not
+ * rewrite a quote a contractor is about to accept.
+ *
+ * Totals are the document's, from calculateDocument. While `requested` they
+ * are an ESTIMATE at list price; staff pricing the lines replaces them.
+ *
+ * Accepting a quote does not place an order: stock reservation and payment
+ * are the checkout's job. `convertedOrderId` is where staff link the order
+ * they raise from an accepted quote.
+ */
+export const webQuotes = pgTable(
+  "web_quotes",
+  {
+    id: primaryId(),
+    ...tenantScope(),
+    /** QT-WEB-2026-000012 — a label, not an identifier. */
+    number: varchar({ length: 30 }).notNull(),
+    accountId: uuid().references(() => shopperAccounts.id, { onDelete: "set null" }),
+    /** Minted by the browser per submission; a retry returns the quote already created. */
+    clientId: uuid().notNull(),
+    status: varchar({ length: 10 }).$type<WebQuoteStatus>().notNull().default("requested"),
+    contactName: varchar({ length: 255 }).notNull(),
+    contactEmail: varchar({ length: 255 }).notNull(),
+    contactPhone: varchar({ length: 20 }).notNull(),
+    companyName: varchar({ length: 255 }),
+    /** What the shopper wrote. */
+    notes: text(),
+    /** Visible to staff only. */
+    staffNotes: text(),
+    currency: varchar({ length: 3 }).notNull(),
+    /** Snapshot: how this document's unit prices relate to VAT. */
+    taxMode: varchar({ length: 10 }).notNull(),
+    /** Staff may give one document-level percentage off. */
+    discountPercent: percent().notNull().default("0"),
+    subtotal: money().notNull().default("0"),
+    discountAmount: money().notNull().default("0"),
+    taxAmount: money().notNull().default("0"),
+    total: money().notNull().default("0"),
+    requestedAt: timestamp({ withTimezone: true, mode: "date" }).notNull().default(sql`now()`),
+    quotedAt: timestamp({ withTimezone: true, mode: "date" }),
+    quotedBy: uuid().references(() => users.id, { onDelete: "set null" }),
+    validUntil: timestamp({ withTimezone: true, mode: "date" }),
+    /** When the shopper accepted or declined. */
+    respondedAt: timestamp({ withTimezone: true, mode: "date" }),
+    convertedOrderId: uuid().references(() => orders.id, { onDelete: "set null" }),
+    ...timestamps(),
+  },
+  (t) => [
+    uniqueIndex("uq_web_quotes_tenant_number").on(t.tenantId, t.number),
+    uniqueIndex("uq_web_quotes_client").on(t.tenantId, t.clientId),
+    index("idx_web_quotes_account").on(t.accountId, t.createdAt),
+    index("idx_web_quotes_status").on(t.tenantId, t.status, t.createdAt),
+  ],
+);
+
+export const webQuoteItems = pgTable(
+  "web_quote_items",
+  {
+    id: primaryId(),
+    ...tenantScope(),
+    quoteId: uuid()
+      .notNull()
+      .references(() => webQuotes.id, { onDelete: "cascade" }),
+    variantId: uuid()
+      .notNull()
+      .references(() => productVariants.id, { onDelete: "restrict" }),
+    unitId: uuid()
+      .notNull()
+      .references(() => units.id, { onDelete: "restrict" }),
+    sortOrder: integer().notNull().default(0),
+    productName: varchar({ length: 255 }).notNull(),
+    variantName: varchar({ length: 255 }),
+    productSku: varchar({ length: 100 }).notNull(),
+    uom: varchar({ length: 20 }).notNull(),
+    taxPercent: percent().notNull(),
+    quantity: quantity().notNull(),
+    /** The list price when it was requested, in the document's tax mode. An estimate. */
+    unitPrice: money().notNull(),
+    /** Set by staff. Null until the line is priced; the shopper can never write it. */
+    quotedUnitPrice: money(),
+    ...timestamps(),
+  },
+  (t) => [
+    index("idx_web_quote_items_quote").on(t.quoteId, t.sortOrder),
+    check("ck_web_quote_items_quantity_positive", sql`quantity > 0`),
+  ],
+);
+
+// -----------------------------------------------------------------------------
 // Relations
 // -----------------------------------------------------------------------------
 
@@ -615,6 +756,14 @@ export const webPaymentsRelations = relations(webPayments, ({ one }) => ({
   order: one(webOrders, { fields: [webPayments.orderId], references: [webOrders.orderId] }),
 }));
 
+export const webQuotesRelations = relations(webQuotes, ({ many }) => ({
+  items: many(webQuoteItems),
+}));
+
+export const webQuoteItemsRelations = relations(webQuoteItems, ({ one }) => ({
+  quote: one(webQuotes, { fields: [webQuoteItems.quoteId], references: [webQuotes.id] }),
+}));
+
 export const webShipmentsRelations = relations(webShipments, ({ one }) => ({
   order: one(webOrders, { fields: [webShipments.orderId], references: [webOrders.orderId] }),
 }));
@@ -633,4 +782,7 @@ export type CartItem = typeof cartItems.$inferSelect;
 export type Coupon = typeof coupons.$inferSelect;
 export type WebOrder = typeof webOrders.$inferSelect;
 export type WebPayment = typeof webPayments.$inferSelect;
+export type StockAlertSubscription = typeof stockAlertSubscriptions.$inferSelect;
+export type WebQuote = typeof webQuotes.$inferSelect;
+export type WebQuoteItem = typeof webQuoteItems.$inferSelect;
 export type StorefrontPaymentAccount = typeof storefrontPaymentAccounts.$inferSelect;

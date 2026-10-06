@@ -3,14 +3,21 @@ import { FileText } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { CompareToggle } from "@/components/store/compare/compare-toggle";
+import { JsonLd } from "@/components/store/json-ld";
 import { crumbsFrom, Breadcrumbs } from "@/components/store/listing";
 import { Markdown } from "@/components/store/markdown";
 import { BuyBox } from "@/components/store/product/buy-box";
 import { Gallery } from "@/components/store/product/gallery";
+import { TrackView } from "@/components/store/product/track-view";
+import { RecentlyViewed } from "@/components/store/recently-viewed";
 import { ProductGrid } from "@/components/store/product-card";
 import { cached, publicApi, tags } from "@/lib/api-server";
-import { siteOrigin } from "@/lib/site";
+import { getStore } from "@/lib/data";
 import { displayName } from "@/lib/format";
+import { savedFromDetail } from "@/lib/product-summary";
+import { absoluteUrl, breadcrumbLd, socialMeta } from "@/lib/seo";
+import { siteOrigin } from "@/lib/site";
 
 async function getProduct(slug: string) {
   try {
@@ -23,51 +30,60 @@ async function getProduct(slug: string) {
 
 export async function generateMetadata({ params }: PageProps<"/product/[slug]">): Promise<Metadata> {
   const { slug } = await params;
-  const p = await getProduct(slug);
+  const [p, store] = await Promise.all([getProduct(slug), getStore()]);
+  const title = p.seoTitle ?? displayName(p.name);
+  const description = p.seoDescription ?? p.description?.slice(0, 160);
+  return { title, description, ...socialMeta({ title, description, path: `/product/${slug}`, image: p.images[0]?.url, siteName: store.name }) };
+}
+
+function offerLd(v: ProductDetail["variants"][number], currency: string, url: string) {
+  const price = v.units[0]?.price.unit;
+  if (!price) return undefined;
   return {
-    title: p.seoTitle ?? displayName(p.name),
-    description: p.seoDescription ?? p.description?.slice(0, 160) ?? undefined,
-    alternates: { canonical: `/product/${slug}` },
-    openGraph: { title: p.name, images: p.images[0] ? [p.images[0].url] : undefined },
+    "@type": "Offer",
+    url,
+    priceCurrency: currency,
+    // The API's decimal string, passed through untouched.
+    price: price.amount,
+    availability: v.availability.label === "OUT_OF_STOCK" ? "https://schema.org/OutOfStock" : "https://schema.org/InStock",
   };
 }
 
-function jsonLd(p: ProductDetail, site: string) {
+function productLd(p: ProductDetail, site: string, currency: string) {
+  const url = `${site}/product/${p.slug}`;
+  const images = p.images.map((i) => absoluteUrl(site, i.url));
+  const brand = p.brand ? { "@type": "Brand", name: p.brand.name } : undefined;
+  const base = { "@context": "https://schema.org", name: p.name, description: p.description ?? undefined, image: images.length ? images : undefined, brand, url };
+  if (p.variants.length === 1) {
+    const v = p.variants[0];
+    return { ...base, "@type": "Product", sku: v.sku, offers: offerLd(v, currency, url) };
+  }
   return {
-    "@context": "https://schema.org",
+    ...base,
     "@type": "ProductGroup",
-    name: p.name,
-    description: p.description ?? undefined,
-    brand: p.brand ? { "@type": "Brand", name: p.brand.name } : undefined,
-    url: `${site}/product/${p.slug}`,
+    productGroupID: p.slug,
     hasVariant: p.variants.map((v) => ({
       "@type": "Product",
       sku: v.sku,
       name: `${p.name} ${v.name}`,
-      image: p.images[0]?.url ? (p.images[0].url.startsWith("http") ? p.images[0].url : `${site}${p.images[0].url}`) : undefined,
-      offers: v.units[0]
-        ? {
-            "@type": "Offer",
-            priceCurrency: "AED",
-            price: v.units[0].price.unit.amount,
-            availability: v.availability.label === "OUT_OF_STOCK" ? "https://schema.org/OutOfStock" : "https://schema.org/InStock",
-          }
-        : undefined,
+      image: images.length ? images : undefined,
+      brand,
+      offers: offerLd(v, currency, url),
     })),
   };
 }
 
 export default async function ProductPage({ params }: PageProps<"/product/[slug]">) {
   const { slug } = await params;
-  const [product, site] = await Promise.all([getProduct(slug), siteOrigin()]);
+  const [product, site, store] = await Promise.all([getProduct(slug), siteOrigin(), getStore()]);
+  const crumbs = [...crumbsFrom(product.breadcrumbs), { href: `/product/${slug}`, label: displayName(product.name) }];
+  const saved = savedFromDetail(product);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd(product, site)).replace(/</g, "\\u003c") }}
-      />
-      <Breadcrumbs items={[...crumbsFrom(product.breadcrumbs), { href: `/product/${slug}`, label: displayName(product.name) }]} />
+      <JsonLd data={[productLd(product, site, store.currency), breadcrumbLd(site, crumbs)]} />
+      <TrackView product={saved} />
+      <Breadcrumbs items={crumbs} />
 
       <div className="mt-4 grid gap-8 lg:grid-cols-2">
         <Gallery images={product.images} name={displayName(product.name)} brand={product.brand ? displayName(product.brand.name) : undefined} />
@@ -80,6 +96,7 @@ export default async function ProductPage({ params }: PageProps<"/product/[slug]
           <h1 className="mt-1 text-3xl sm:text-4xl">{displayName(product.name)}</h1>
           <div className="mt-5">
             <BuyBox product={product} />
+            <CompareToggle product={saved} className="mt-2 -ml-2" />
           </div>
         </div>
       </div>
@@ -142,6 +159,7 @@ export default async function ProductPage({ params }: PageProps<"/product/[slug]
           <ProductGrid products={product.related} />
         </section>
       )}
+      <RecentlyViewed excludeSlug={slug} className="mt-12" />
     </div>
   );
 }

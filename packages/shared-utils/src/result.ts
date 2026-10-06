@@ -135,6 +135,10 @@ export const ERROR_CODES = {
   CHECKOUT_UNAVAILABLE: "CHECKOUT_UNAVAILABLE",
   COUPON_INVALID: "COUPON_INVALID",
   PAYMENT_FAILED: "PAYMENT_FAILED",
+  /** A quote action the quote's current status does not allow (accept a declined one, price a converted one). */
+  QUOTE_INVALID_STATUS: "QUOTE_INVALID_STATUS",
+  /** The quote's validity date has passed; ask for a fresh one. */
+  QUOTE_EXPIRED: "QUOTE_EXPIRED",
 
   // generic
   VALIDATION_FAILED: "VALIDATION_FAILED",

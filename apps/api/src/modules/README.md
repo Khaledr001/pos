@@ -48,7 +48,7 @@ Copying its shape is what keeps twenty modules looking like one codebase.
 | `day-close` | 3 | ✅ done | Per-branch daily reconciliation, frozen at close |
 | `expenses` | 3 | ✅ done | Out-of-pocket spending, cash vs non-cash |
 | `payments` | 3 | ⬜ todo | Split tender, credit settlement, refunds |
-| `storefront` | — | ✅ done | The online store as a sales channel (D20, docs/STOREFRONT.md): host → tenant resolution, catalogue, shopper accounts, cart, checkout into a POS order, per-tenant Stripe, order desk (`/storefront-admin`), cache revalidation. Shopper notifications are not built. |
+| `storefront` | — | ✅ done | The online store as a sales channel (D20, docs/STOREFRONT.md): host → tenant resolution, catalogue, shopper accounts, cart, checkout into a POS order, per-tenant Stripe, order desk (`/storefront-admin`), cache revalidation, back-in-stock alerts (`stock-alerts/`), trade quotes (`quotes/`). Shopper notifications are not built: alerts are recorded, never sent. |
 | `whatsapp` | 4 | ⬜ todo | Meta Cloud API webhook, send/receive, templates |
 | `ai` | 4 | 🟡 partial | `LlmService` — a DeepSeek chat-completion client with tool-calling and cost tracking (D19). No controller, no tool implementations, no conversation state; nothing calls it yet. |
 | `quotations` | 5 | ✅ done | Quote at snapshotted prices, convert to a sale |

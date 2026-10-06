@@ -569,7 +569,7 @@ export class CartService {
    * the variant's sellable packagings. Anything else is refused rather than
    * guessed — a wrong conversion factor is a wrong price and a wrong stock hold.
    */
-  private async unitFor(tx: Transaction, variantId: string, uom?: string, unitId?: string) {
+  async unitFor(tx: Transaction, variantId: string, uom?: string, unitId?: string) {
     const variant = await tx.query.productVariants.findFirst({
       where: (t, { and: a, eq: e, isNull: n }) => a(e(t.id, variantId), e(t.isActive, true), n(t.deletedAt)),
       with: { product: { with: { unit: true } }, packagings: { with: { unit: true } } },

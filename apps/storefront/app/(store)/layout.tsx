@@ -1,5 +1,6 @@
 import { Providers } from "@/components/providers";
 import { Analytics } from "@/components/store/analytics";
+import { CompareTray } from "@/components/store/compare/compare-tray";
 import { Footer } from "@/components/store/footer";
 import { Header } from "@/components/store/header";
 import { WhatsAppButton } from "@/components/store/whatsapp-button";
@@ -24,6 +25,7 @@ export default async function StoreLayout({ children }: LayoutProps<"/">) {
       </main>
       <Footer />
       <WhatsAppButton />
+      <CompareTray />
       <Analytics />
     </Providers>
   );

@@ -16,6 +16,7 @@ import { cn } from "@/lib/cn";
 import { formatQty, uomCount, uomShort } from "@/lib/format";
 import { useCartActions, useMe } from "@/lib/hooks/store";
 import { SaveToList } from "./save-to-list";
+import { StockAlertForm } from "./stock-alert-form";
 import { TileCalculator } from "./tile-calculator";
 
 const AXIS_LABELS: Record<string, string> = { size: "Size", colour: "Colour", finish: "Finish", capacity: "Capacity", wattage: "Wattage", rating: "Rating", poles: "Poles" };
@@ -208,6 +209,8 @@ export function BuyBox({ product }: { product: ProductDetail }) {
           )}
           <FormError message={error} />
         </div>
+
+        {out && <StockAlertForm key={variant.id} variantId={variant.id} productName={product.name} />}
 
         <ul className="mt-4 space-y-2 border-t border-galv pt-4 text-[15px]">
           <li className="flex gap-2">

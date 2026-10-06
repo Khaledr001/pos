@@ -5,6 +5,8 @@ import { PriceTag } from "@/components/ui/price-tag";
 import { ProductImage } from "@/components/ui/product-image";
 import { cn } from "@/lib/cn";
 import { displayName } from "@/lib/format";
+import { savedFromCard } from "@/lib/product-summary";
+import { CompareToggle } from "./compare/compare-toggle";
 
 export function ProductCard({ product, priority }: { product: Card; priority?: boolean }) {
   return (
@@ -28,6 +30,7 @@ export function ProductCard({ product, priority }: { product: Card; priority?: b
             {product.pickupOnly && <Badge tone="neutral">Store pickup only</Badge>}
             {product.variantCount > 1 && <Badge tone="neutral">{product.variantCount} options</Badge>}
           </div>
+          <CompareToggle product={savedFromCard(product)} className="-ml-2 mt-1" />
         </div>
       </div>
     </article>

@@ -10,6 +10,8 @@ import type { CartService } from '../../../apps/api/src/modules/storefront/cart/
 import type { StorefrontCatalogService } from '../../../apps/api/src/modules/storefront/catalog/storefront-catalog.service.js';
 import type { CheckoutService } from '../../../apps/api/src/modules/storefront/checkout/checkout.service.js';
 import type { StorefrontContentService } from '../../../apps/api/src/modules/storefront/content/storefront-content.service.js';
+import type { QuotesService } from '../../../apps/api/src/modules/storefront/quotes/quotes.service.js';
+import type { StockAlertsService } from '../../../apps/api/src/modules/storefront/stock-alerts/stock-alerts.service.js';
 import type { WebOrdersService } from '../../../apps/api/src/modules/storefront/orders/web-orders.service.js';
 import type * as C from '../src/index.ts';
 
@@ -47,6 +49,12 @@ export type Contract = [
   Check<Out<AccountService['lists']>, C.ProjectListSummary[]>,
   Check<Out<AccountService['list']>, C.ProjectListDetail>,
   Check<Out<AccountService['reorder']>, C.AddedToCart>,
+  // quotes & stock alerts
+  Check<Out<QuotesService['create']>, C.QuoteView>,
+  Check<Out<QuotesService['get']>, C.QuoteView>,
+  Check<Out<QuotesService['accept']>, C.QuoteView>,
+  Check<Out<QuotesService['list']>, C.Paged<C.QuoteSummary>>,
+  Check<Out<StockAlertsService['subscribe']>, { subscribed: true }>,
   // content
   Check<Out<StorefrontContentService['home']>, C.HomeData>,
   Check<Out<StorefrontContentService['page']>, C.Page>,

@@ -42,6 +42,8 @@ const ROUTE_PERMISSIONS: Array<[string, Permission]> = [
   // Order matters: the first matching prefix wins, so the online store's
   // specific screens come before its overview.
   ["/online-store/orders", "order:read"],
+  ["/online-store/quotes", "order:read"],
+  ["/online-store/stock-alerts", "product:read"],
   ["/online-store/trade", "customer:read"],
   ["/online-store", "storefront:read"],
 ];

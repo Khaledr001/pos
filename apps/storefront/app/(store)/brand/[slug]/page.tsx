@@ -4,7 +4,9 @@ import { notFound } from "next/navigation";
 import { Listing } from "@/components/store/listing";
 import { cached, publicApi, tags } from "@/lib/api-server";
 import { apiQuery, parseListing } from "@/lib/listing";
+import { getStore } from "@/lib/data";
 import { displayName } from "@/lib/format";
+import { socialMeta } from "@/lib/seo";
 
 async function getBrand(slug: string) {
   try {
@@ -17,8 +19,9 @@ async function getBrand(slug: string) {
 
 export async function generateMetadata({ params }: PageProps<"/brand/[slug]">): Promise<Metadata> {
   const { slug } = await params;
-  const b = await getBrand(slug);
-  return { title: `${displayName(b.name)} products`, description: b.description ?? undefined, alternates: { canonical: `/brand/${slug}` } };
+  const [b, store] = await Promise.all([getBrand(slug), getStore()]);
+  const title = `${displayName(b.name)} products`;
+  return { title, description: b.description ?? undefined, ...socialMeta({ title, description: b.description, path: `/brand/${slug}`, image: b.logoUrl, siteName: store.name }) };
 }
 
 export default async function BrandPage({ params, searchParams }: PageProps<"/brand/[slug]">) {

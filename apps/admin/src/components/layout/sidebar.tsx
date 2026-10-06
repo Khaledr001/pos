@@ -40,6 +40,8 @@ import {
   Globe,
   TicketPercent,
   Briefcase,
+  FileSignature,
+  BellRing,
 } from "lucide-react";
 import { hasPermission, type Permission } from "@devsfleet/shared-types";
 import { useAuth } from "@/lib/auth-context";
@@ -169,6 +171,8 @@ const NAV_SECTIONS: NavSection[] = [
           { label: "Website Listings", href: "/online-store/listings", icon: Package, permission: "storefront:read" },
           { label: "Pages & Banners", href: "/online-store/content", icon: FileText, permission: "storefront:read" },
           { label: "Promo Codes", href: "/online-store/coupons", icon: TicketPercent, permission: "storefront:read" },
+          { label: "Quotes", href: "/online-store/quotes", icon: FileSignature, permission: "order:read" },
+          { label: "Stock Alerts", href: "/online-store/stock-alerts", icon: BellRing, permission: "product:read" },
           { label: "Trade Applications", href: "/online-store/trade", icon: Briefcase, permission: "customer:read" },
           { label: "Store Settings", href: "/online-store", icon: Settings, permission: "storefront:read" },
         ],

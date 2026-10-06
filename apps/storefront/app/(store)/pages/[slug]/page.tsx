@@ -3,15 +3,19 @@ import { permanentRedirect } from "next/navigation";
 import { Breadcrumbs } from "@/components/store/listing";
 import { Markdown } from "@/components/store/markdown";
 import { getPage } from "@/lib/content";
+import { getStore } from "@/lib/data";
 import { formatDate } from "@/lib/format";
+import { socialMeta } from "@/lib/seo";
 
 export async function generateMetadata({ params }: PageProps<"/pages/[slug]">): Promise<Metadata> {
   const { slug } = await params;
-  const page = await getPage(slug);
+  const [page, store] = await Promise.all([getPage(slug), getStore()]);
+  const title = page.seoTitle ?? page.title;
+  const description = page.seoDescription ?? page.excerpt;
   return {
-    title: page.seoTitle ?? page.title,
-    description: page.seoDescription ?? page.excerpt ?? undefined,
-    alternates: { canonical: page.kind === "blog" ? `/blog/${slug}` : `/pages/${slug}` },
+    title,
+    description: description ?? undefined,
+    ...socialMeta({ title, description, path: page.kind === "blog" ? `/blog/${slug}` : `/pages/${slug}`, image: page.coverImageUrl, siteName: store.name }),
   };
 }
 
