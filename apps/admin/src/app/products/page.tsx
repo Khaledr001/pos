@@ -221,6 +221,99 @@ function NewUnitDialog({
   );
 }
 
+// ── Create a new category inline ────────────────────────────────────────────
+
+function NewCategoryDialog({
+  accessToken,
+  categories,
+  onCreated,
+}: {
+  accessToken?: string;
+  /** Flattened tree, for choosing a parent. */
+  categories: { id: string; label: string }[];
+  onCreated: (category: { id: string; name: string }) => void | Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [parentId, setParentId] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    // The dialog sits inside the product form; without this the submit would bubble up and save the product.
+    e.preventDefault();
+    e.stopPropagation();
+    setSubmitting(true);
+    setError(null);
+    try {
+      const created = await api.post<{ id: string; name: string }>(
+        "/categories",
+        { name: name.trim(), parentId: parentId || null },
+        { accessToken },
+      );
+      await onCreated(created);
+      setOpen(false);
+      setName("");
+      setParentId("");
+    } catch (err: any) {
+      setError(err?.message || "Failed to create the category.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => { setError(null); setOpen(true); }}
+        className="text-[11px] font-medium text-primary hover:underline cursor-pointer"
+      >
+        + New category
+      </button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>New Category</DialogTitle>
+            <DialogDescription>It is selected for this product as soon as it is created.</DialogDescription>
+          </DialogHeader>
+
+          {error && (
+            <div className="flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+              <AlertCircle className="h-4 w-4 shrink-0" /><span>{error}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-foreground mb-1.5">Name *</label>
+              <Input required maxLength={255} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Padlocks" autoFocus />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-foreground mb-1.5">Parent category</label>
+              <Select value={parentId || "none"} onValueChange={(val) => setParentId(val === "none" ? "" : val)}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="— Top level —" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— Top level —</SelectItem>
+                  {categories.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={submitting || !name.trim()}>{submitting ? "Creating…" : "Create category"}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 // ── Flatten category tree for a <select> ────────────────────────────────────
 
 function flattenCategories(cats: Category[], depth = 0): { id: string; label: string }[] {
@@ -322,6 +415,12 @@ export default function ProductsPage() {
       setLoading(false);
     }
   }, [tokens, search, page]);
+
+  const reloadCategories = useCallback(async () => {
+    if (!tokens?.accessToken) return;
+    const tree = await api.get<Category[]>("/categories", { accessToken: tokens.accessToken });
+    setCategories(flattenCategories(tree ?? []));
+  }, [tokens?.accessToken]);
 
   // ── Fetch lookups ───────────────────────────────────────────────────────
 
@@ -702,7 +801,14 @@ export default function ProductsPage() {
                   </Select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-foreground mb-1.5">Category</label>
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <label className="block text-xs font-medium text-foreground">Category</label>
+                    <NewCategoryDialog
+                      accessToken={tokens?.accessToken}
+                      categories={categories}
+                      onCreated={async (c) => { await reloadCategories(); setFCategoryId(c.id); }}
+                    />
+                  </div>
                   <Select value={fCategoryId || "none"} onValueChange={(val) => setFCategoryId(val === "none" ? "" : val)}>
                     <SelectTrigger className="h-9 text-xs">
                       <SelectValue placeholder="— No category —" />
@@ -789,6 +895,7 @@ export default function ProductsPage() {
         categories={categories}
         brands={brands}
         accessToken={tokens?.accessToken}
+        onCategoryCreated={reloadCategories}
         onClose={() => setEditingProduct(null)}
         onSaved={() => {
           setActionSuccess("Product updated.");
@@ -846,6 +953,7 @@ function EditProductDialog({
   categories,
   brands,
   accessToken,
+  onCategoryCreated,
   onClose,
   onSaved,
 }: {
@@ -853,6 +961,8 @@ function EditProductDialog({
   categories: { id: string; label: string }[];
   brands: Brand[];
   accessToken?: string;
+  /** Re-fetch the category list after one is created from inside the form. */
+  onCategoryCreated: () => Promise<void>;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -998,7 +1108,14 @@ function EditProductDialog({
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
               <div>
-                <label className="block text-xs font-medium text-foreground mb-1.5">Category</label>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <label className="block text-xs font-medium text-foreground">Category</label>
+                  <NewCategoryDialog
+                    accessToken={accessToken}
+                    categories={categories}
+                    onCreated={async (c) => { await onCategoryCreated(); setFCategoryId(c.id); }}
+                  />
+                </div>
                 <Select value={fCategoryId || "none"} onValueChange={(val) => setFCategoryId(val === "none" ? "" : val)}>
                   <SelectTrigger className="h-9 text-xs">
                     <SelectValue placeholder="— None —" />

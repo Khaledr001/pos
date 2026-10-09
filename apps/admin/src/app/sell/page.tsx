@@ -27,6 +27,8 @@ import {
 } from "lucide-react";
 import {
   DEFAULT_TENANT_SETTINGS,
+  hasPermission,
+  type Permission,
   type PaymentMethod,
   type TaxMode,
 } from "@devsfleet/shared-types";
@@ -1402,6 +1404,7 @@ export default function SellPage() {
         }}
         accessToken={accessToken}
         currency={currency}
+        canCreate={hasPermission((user?.permissions ?? []) as Permission[], "customer:write")}
       />
 
       <ReceiptDialog
@@ -1949,14 +1952,69 @@ function CustomerPicker({
   onPick,
   accessToken,
   currency,
+  canCreate,
 }: {
   open: boolean;
   onClose: () => void;
   onPick: (customer: Customer) => void;
   accessToken: string | undefined;
   currency: string;
+  /** Hides "New customer" for staff the server would refuse anyway. The server is the control. */
+  canCreate: boolean;
 }) {
   const [term, setTerm] = useState("");
+  const [creating, setCreating] = useState(false);
+  const emptyForm = {
+    name: "", company: "", phone: "", whatsappPhone: "", email: "", trn: "", address: "",
+    type: "retail" as "retail" | "wholesale" | "vip", creditLimit: "0", paymentTermDays: "0", notes: "",
+  };
+  const [form, setForm] = useState(emptyForm);
+  const setField = (key: keyof typeof emptyForm) => (value: string) => setForm((f) => ({ ...f, [key]: value }));
+  const [saving, setSaving] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  function startCreating() {
+    // What was typed to search is usually the name or number of the person who turned out to be new.
+    const typed = term.trim();
+    const looksLikePhone = /^[+\d][\d\s-]{5,}$/.test(typed);
+    setForm({ ...emptyForm, name: looksLikePhone ? "" : typed, phone: looksLikePhone ? typed : "" });
+    setCreateError(null);
+    setCreating(true);
+  }
+
+  async function createCustomer(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setCreateError(null);
+    try {
+      const created = await api.post<{ id: string }>(
+        "/customers",
+        {
+          name: form.name.trim(),
+          company: form.company.trim() || undefined,
+          phone: form.phone.trim() || undefined,
+          whatsappPhone: form.whatsappPhone.trim() || undefined,
+          email: form.email.trim() || undefined,
+          trn: form.trn.trim() || undefined,
+          address: form.address.trim() || undefined,
+          type: form.type,
+          creditLimit: Number.parseFloat(form.creditLimit) || 0,
+          paymentTermDays: Number.parseInt(form.paymentTermDays, 10) || 0,
+          notes: form.notes.trim() || undefined,
+        },
+        { accessToken },
+      );
+      // Read it back so the sale holds the same shape the picker's list gives it, credit fields included.
+      const customer = await api.get<Customer>(`/customers/${created.id}`, { accessToken });
+      setCreating(false);
+      setTerm("");
+      onPick(customer);
+    } catch (err: any) {
+      setCreateError(err?.message || "Could not create the customer.");
+    } finally {
+      setSaving(false);
+    }
+  }
   const [rows, setRows] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -1986,15 +2044,104 @@ function CustomerPicker({
   }, [open, term, accessToken]);
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
-      <DialogContent className="sm:max-w-md">
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) {
+          setCreating(false);
+          onClose();
+        }
+      }}
+    >
+      <DialogContent className={creating ? "sm:max-w-2xl" : "sm:max-w-md"}>
         <DialogHeader>
-          <DialogTitle>Attach a customer</DialogTitle>
+          <DialogTitle>{creating ? "New customer" : "Attach a customer"}</DialogTitle>
           <DialogDescription>
-            Needed for anything left unpaid, and for loyalty and contract pricing.
+            {creating
+              ? "Saved to your customer list and attached to this sale."
+              : "Needed for anything left unpaid, and for loyalty and contract pricing."}
           </DialogDescription>
         </DialogHeader>
 
+        {creating ? (
+          <form onSubmit={createCustomer} className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
+            {createError && (
+              <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+                {createError}
+              </div>
+            )}
+            <div className="space-y-3 rounded-xl border border-border p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Contact information</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label htmlFor="nc-name" className="mb-1.5 block text-xs font-medium text-foreground">Full name *</label>
+                <Input id="nc-name" required value={form.name} onChange={(e) => setField("name")(e.target.value)} maxLength={255} autoFocus />
+              </div>
+              <div>
+                <label htmlFor="nc-company" className="mb-1.5 block text-xs font-medium text-foreground">Company</label>
+                <Input id="nc-company" value={form.company} onChange={(e) => setField("company")(e.target.value)} maxLength={255} />
+              </div>
+              <div>
+                <label htmlFor="nc-phone" className="mb-1.5 block text-xs font-medium text-foreground">Phone</label>
+                <Input id="nc-phone" value={form.phone} onChange={(e) => setField("phone")(e.target.value)} type="tel" inputMode="tel" maxLength={20} placeholder="+971 50 123 4567" />
+              </div>
+              <div>
+                <label htmlFor="nc-whatsapp" className="mb-1.5 block text-xs font-medium text-foreground">WhatsApp number</label>
+                <Input id="nc-whatsapp" value={form.whatsappPhone} onChange={(e) => setField("whatsappPhone")(e.target.value)} type="tel" inputMode="tel" maxLength={20} placeholder="+971 50 123 4567" />
+              </div>
+              <div>
+                <label htmlFor="nc-email" className="mb-1.5 block text-xs font-medium text-foreground">Email</label>
+                <Input id="nc-email" value={form.email} onChange={(e) => setField("email")(e.target.value)} type="email" maxLength={255} />
+              </div>
+              <div>
+                <label htmlFor="nc-trn" className="mb-1.5 block text-xs font-medium text-foreground">TRN (tax registration number)</label>
+                <Input id="nc-trn" value={form.trn} onChange={(e) => setField("trn")(e.target.value)} maxLength={20} className="font-mono" />
+              </div>
+              </div>
+              <div>
+                <label htmlFor="nc-address" className="mb-1.5 block text-xs font-medium text-foreground">Address</label>
+                <Input id="nc-address" maxLength={1000} value={form.address} onChange={(e) => setField("address")(e.target.value)} />
+              </div>
+            </div>
+
+            <div className="space-y-3 rounded-xl border border-border p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Business terms</p>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div>
+                  <label htmlFor="nc-type" className="mb-1.5 block text-xs font-medium text-foreground">Customer type</label>
+                  <select
+                    id="nc-type"
+                    value={form.type}
+                    onChange={(e) => setForm((f) => ({ ...f, type: e.target.value as "retail" | "wholesale" | "vip" }))}
+                    className="h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm"
+                  >
+                    <option value="retail">Retail</option>
+                    <option value="wholesale">Wholesale</option>
+                    <option value="vip">VIP</option>
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="nc-credit" className="mb-1.5 block text-xs font-medium text-foreground">Credit limit ({currency})</label>
+                  <Input id="nc-credit" type="number" min="0" step="100" value={form.creditLimit} onChange={(e) => setField("creditLimit")(e.target.value)} className="font-mono" />
+                </div>
+                <div>
+                  <label htmlFor="nc-terms" className="mb-1.5 block text-xs font-medium text-foreground">Payment terms (days)</label>
+                  <Input id="nc-terms" type="number" min="0" max="365" step="1" value={form.paymentTermDays} onChange={(e) => setField("paymentTermDays")(e.target.value)} className="font-mono" />
+                </div>
+              </div>
+              <div>
+                <label htmlFor="nc-notes" className="mb-1.5 block text-xs font-medium text-foreground">Internal notes</label>
+                <Input id="nc-notes" maxLength={1000} value={form.notes} onChange={(e) => setField("notes")(e.target.value)} placeholder="Any special instructions or notes…" />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setCreating(false)}>Back</Button>
+              <Button type="submit" disabled={saving || !form.name.trim()}>{saving ? "Saving…" : "Save and attach"}</Button>
+            </DialogFooter>
+          </form>
+        ) : (
+        <>
         <Input
           value={term}
           onChange={(e) => setTerm(e.target.value)}
@@ -2039,10 +2186,17 @@ function CustomerPicker({
         </ul>
 
         <DialogFooter>
+          {canCreate && (
+            <Button variant="secondary" onClick={startCreating}>
+              <UserRound className="h-4 w-4" /> New customer
+            </Button>
+          )}
           <Button variant="outline" onClick={onClose}>
             Close
           </Button>
         </DialogFooter>
+        </>
+        )}
       </DialogContent>
     </Dialog>
   );
