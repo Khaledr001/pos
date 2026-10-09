@@ -13,6 +13,7 @@ import {
   Loader2,
   Minus,
   Package,
+  Pause,
   Plus,
   Printer,
   Receipt,
@@ -32,7 +33,19 @@ import {
 import { Money, calculateDocument } from "@devsfleet/shared-utils";
 import { api, apiDownload, printBlob, saveBlob } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
+import {
+  addHeldCart,
+  heldCartsKey,
+  parseHeldCarts,
+  reconcileHeldLines,
+  removeHeldCart,
+  serializeHeldCarts,
+  type HeldCart,
+  type HeldUnit,
+  type HeldVariant,
+} from "@/lib/held-carts";
 import { cn } from "@/lib/utils";
+import { HeldCartsDialog, type ResumeMode } from "./held-carts-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -329,6 +342,17 @@ export default function SellPage() {
    * second one — the same protection the terminals get from their outbox.
    */
   const localIdRef = useRef<string | null>(null);
+
+  // ── Held (parked) carts ────────────────────────────────────────────────────
+
+  const [held, setHeld] = useState<HeldCart[]>([]);
+  const [heldOpen, setHeldOpen] = useState(false);
+  const [resuming, setResuming] = useState(false);
+  /** Non-error feedback: what changed when a parked cart was brought back. */
+  const [notices, setNotices] = useState<string[]>([]);
+
+  const heldKey =
+    user?.tenantId && user.id && branchId ? heldCartsKey(user.tenantId, user.id, branchId) : null;
 
   // ── Tenant settings + branches ─────────────────────────────────────────────
 
@@ -680,6 +704,217 @@ export default function SellPage() {
   const canCheckout =
     Boolean(branchId) && lines.length > 0 && !invalidQuantities && Money.isPositive(totals.total);
 
+  // ── Held carts ─────────────────────────────────────────────────────────────
+
+  /**
+   * Every mutation re-reads storage first. Another tab on the same branch can
+   * park or resume at any moment, and writing back this tab's remembered list
+   * would silently undo what it did.
+   */
+  function readHeld(): HeldCart[] {
+    if (!heldKey) return [];
+    try {
+      return parseHeldCarts(localStorage.getItem(heldKey));
+    } catch {
+      return [];
+    }
+  }
+
+  function writeHeld(next: HeldCart[]): boolean {
+    if (!heldKey) return false;
+    try {
+      localStorage.setItem(heldKey, serializeHeldCarts(next));
+    } catch {
+      setError("Held carts could not be saved — browser storage is full or blocked.");
+      return false;
+    }
+    setHeld(next);
+    return true;
+  }
+
+  useEffect(() => {
+    setHeld(readHeld());
+    if (!heldKey) return;
+    // `storage` fires only in OTHER tabs, which is exactly the sync wanted.
+    function onStorage(event: StorageEvent) {
+      if (event.key === heldKey || event.key === null) setHeld(readHeld());
+    }
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [heldKey]);
+
+  /** The live cart as a parkable record — its own clientId travels with it. */
+  function snapshotCart(): HeldCart {
+    return {
+      id: crypto.randomUUID(),
+      heldAt: new Date().toISOString(),
+      clientId: localIdRef.current ?? crypto.randomUUID(),
+      branchId,
+      customer,
+      lines: lines.map((l) => ({
+        variant: l.variant,
+        quantity: l.quantity,
+        unit: l.unit,
+        unitPrice: l.unitPrice,
+        discountPercent: l.discountPercent,
+      })),
+      documentDiscount,
+      notes,
+      total: Money.toDecimalString(totals.total, 2),
+    };
+  }
+
+  function holdCart() {
+    if (!heldKey || lines.length === 0) return;
+    setError(null);
+    const result = addHeldCart(readHeld(), snapshotCart());
+    if (!result.ok) {
+      setError(
+        result.reason === "full"
+          ? "Held carts are full. Resume or delete one before holding another."
+          : "There is nothing in the cart to hold.",
+      );
+      return;
+    }
+    if (!writeHeld(result.carts)) return;
+    // resetCart drops localIdRef, so the next cart mints its own key and a
+    // retry of the parked sale can never be mistaken for it.
+    resetCart();
+    setNotices(["Cart held. Find it under Held carts."]);
+    searchRef.current?.focus();
+  }
+
+  /**
+   * Bring a parked cart back, re-checked against the catalogue as it is now.
+   *
+   * Nothing local is touched until every lookup has answered: if prices cannot
+   * be re-read, the cart stays parked and the live cart stays as it was,
+   * rather than resuming on numbers nobody has verified.
+   */
+  async function resumeHeld(target: HeldCart, mode: ResumeMode) {
+    if (!accessToken || !branchId || resuming) return;
+    setResuming(true);
+    setError(null);
+    try {
+      const fresh = new Map<string, HeldVariant>();
+      const freshUnits = new Map<string, HeldUnit[]>();
+      const variantIds = [...new Set(target.lines.map((l) => l.variant.id))];
+
+      const lookups = await Promise.allSettled([
+        ...target.lines
+          .filter((l, i, all) => all.findIndex((x) => x.variant.id === l.variant.id) === i)
+          .map(async (l) => {
+            const rows = await api.get<SearchVariant[]>("/products/search", {
+              accessToken,
+              query: {
+                q: l.variant.sku,
+                branchId,
+                limit: 50,
+                ...(target.customer ? { customerId: target.customer.id } : {}),
+              },
+            });
+            const match = (rows ?? []).find((r) => r.id === l.variant.id);
+            if (match) fresh.set(match.id, match);
+          }),
+        ...target.lines
+          .filter((l) => l.unit)
+          .map(async (l) => {
+            const rows = await api.get<VariantUnit[]>(
+              `/products/variants/${l.variant.id}/units`,
+              { accessToken },
+            );
+            freshUnits.set(
+              l.variant.id,
+              (rows ?? []).filter((u) => u.isSellable),
+            );
+          }),
+      ]);
+      if (lookups.some((r) => r.status === "rejected")) {
+        setError("Could not re-check prices and stock, so the cart was not resumed. Try again.");
+        return;
+      }
+
+      let customerNow: Customer | null = target.customer;
+      if (target.customer) {
+        try {
+          customerNow = await api.get<Customer>(`/customers/${target.customer.id}`, {
+            accessToken,
+          });
+        } catch {
+          // Keep the parked snapshot; the server enforces credit at checkout.
+        }
+      }
+
+      const { lines: kept, notices: changes } = reconcileHeldLines(
+        target.lines,
+        fresh,
+        freshUnits,
+        listPriceFor,
+        (a, b) => Money.toMinor(a || "0") === Money.toMinor(b || "0"),
+      );
+
+      // Re-read, because another tab may have resumed or deleted it meanwhile.
+      const stored = readHeld();
+      if (!stored.some((c) => c.id === target.id)) {
+        setError("That held cart is gone — it was resumed or deleted in another tab.");
+        return;
+      }
+      let next = removeHeldCart(stored, target.id);
+      if (mode === "park-current" && lines.length > 0) {
+        // Swapping one for one cannot overflow the cap, but check anyway.
+        const parked = addHeldCart(next, snapshotCart());
+        if (!parked.ok) {
+          setError("Could not hold the current cart. Delete a held cart first.");
+          return;
+        }
+        next = parked.carts;
+      }
+      if (!writeHeld(next)) return;
+
+      localIdRef.current = kept.length > 0 ? target.clientId : null;
+      setLines(kept.map((l) => ({ ...l, key: crypto.randomUUID() })));
+      setCustomer(customerNow);
+      setDocumentDiscount(target.documentDiscount);
+      setNotes(target.notes);
+      setQuery("");
+      for (const l of kept) void loadUnits(l.variant.id);
+
+      setNotices(
+        kept.length === 0
+          ? [...changes, "No items from that cart could be resumed."]
+          : changes.length > 0
+            ? changes
+            : ["Cart resumed. Prices and stock are unchanged."],
+      );
+      setHeldOpen(false);
+    } finally {
+      setResuming(false);
+    }
+  }
+
+  function deleteHeld(target: HeldCart) {
+    writeHeld(removeHeldCart(readHeld(), target.id));
+  }
+
+  // F8 parks the cart, or opens the list when the counter is empty — the same
+  // reading the POS gives it. Refs keep the one window listener current.
+  const hotkeyRef = useRef<() => void>(() => {});
+  hotkeyRef.current = () => {
+    if (!branchId || paymentOpen || customerPickerOpen || receipt || heldOpen) return;
+    if (lines.length === 0) setHeldOpen(true);
+    else holdCart();
+  };
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== "F8" || event.repeat) return;
+      event.preventDefault();
+      hotkeyRef.current();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   // ── Commit ─────────────────────────────────────────────────────────────────
 
   const [committing, setCommitting] = useState(false);
@@ -773,13 +1008,40 @@ export default function SellPage() {
         {/* Branch — the one decision this page will not make for you. Parked
             in the header rather than a card of its own: it is set once and
             then only glanced at, so it earns a corner, not a row. */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <BranchMenu
             branches={branches}
             branchId={branchId}
             cartHasLines={lines.length > 0}
             onChoose={chooseBranch}
           />
+
+          {branchId && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={lines.length === 0 || !heldKey}
+                onClick={holdCart}
+                title="Park this cart and clear the counter (F8)"
+              >
+                <Pause className="size-3.5" />
+                Hold
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!heldKey}
+                onClick={() => setHeldOpen(true)}
+                aria-label={`Held carts, ${held.length} on hold`}
+              >
+                Held carts
+                <Badge variant={held.length > 0 ? "default" : "secondary"} className="px-1.5 py-0">
+                  {held.length}
+                </Badge>
+              </Button>
+            </>
+          )}
 
           {lines.length > 0 && (
             <Button variant="outline" size="sm" onClick={resetCart}>
@@ -802,6 +1064,28 @@ export default function SellPage() {
             onClick={() => setError(null)}
             aria-label="Dismiss"
             className="cursor-pointer rounded p-0.5 hover:bg-destructive/10"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
+      )}
+
+      {notices.length > 0 && (
+        <div
+          role="status"
+          className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400"
+        >
+          <AlertCircle className="mt-0.5 size-4 shrink-0" />
+          <ul className="flex-1 space-y-0.5">
+            {notices.map((n) => (
+              <li key={n}>{n}</li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            onClick={() => setNotices([])}
+            aria-label="Dismiss"
+            className="cursor-pointer rounded p-0.5 hover:bg-amber-500/10"
           >
             <X className="size-3.5" />
           </button>
@@ -1095,6 +1379,18 @@ export default function SellPage() {
            banner on the page behind is covered by this very dialog. */
         error={error}
         onConfirm={commit}
+      />
+
+      <HeldCartsDialog
+        open={heldOpen}
+        onOpenChange={setHeldOpen}
+        carts={held}
+        liveCartHasLines={lines.length > 0}
+        busy={resuming}
+        error={error}
+        formatTotal={(c) => money(Money.toMinor(c.total), currency)}
+        onResume={(c, mode) => void resumeHeld(c, mode)}
+        onDelete={deleteHeld}
       />
 
       <CustomerPicker
