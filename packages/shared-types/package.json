@@ -15,8 +15,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "dev": "tsc -p tsconfig.json --watch",
+    "build": "node init && tsc -p tsconfig.json",
+    "dev": "node init && tsc -p tsconfig.json --watch",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "clean": "rm -rf dist .turbo *.tsbuildinfo",
     "test": "vitest run --passWithNoTests"
