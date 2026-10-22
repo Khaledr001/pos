@@ -8,6 +8,13 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { api, apiDownload, printBlob } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
+import { formatMoney } from "@/lib/format";
+import { useTenantSettings } from "@/lib/tenant-settings";
+import { readListResult, useListData, useListQuery } from "@/lib/use-list-query";
+import {
+  SortableTh, Table, TableBody, TableContainer, TableEmpty, TableHead,
+  TablePagination, TableSearch, Th, numericCell,
+} from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -99,42 +106,42 @@ const STATUSES = ["draft", "sent", "confirmed", "converted", "expired", "cancell
 export default function QuotationsPage() {
   const { tokens } = useAuth();
 
-  const [rows, setRows] = useState<QuotationRow[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
+  const currency = useTenantSettings().currency.base;
+
   const PAGE_SIZE = 50;
+  const list = useListQuery({ sortBy: "createdAt", sortOrder: "desc", filters: { status: "" } });
+  const { q, page, sortBy, sortOrder } = list;
+  const status = list.filters.status;
 
-  const [status, setStatus] = useState<string>("");
-  const [search, setSearch] = useState("");
+  const loadRows = useCallback(
+    async (signal: AbortSignal) =>
+      readListResult<QuotationRow>(
+        await api.get<unknown>("/quotations", {
+          accessToken: tokens?.accessToken,
+          signal,
+          query: {
+            q: q.trim() || undefined,
+            page,
+            pageSize: PAGE_SIZE,
+            sortBy,
+            sortOrder,
+            ...(status ? { status } : {}),
+          },
+        }),
+      ),
+    [tokens?.accessToken, q, page, sortBy, sortOrder, status],
+  );
+  const { items: rows, total, loading, initialLoading, error: loadError, reload: fetchRows } =
+    useListData(loadRows, list.ready);
 
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setError] = useState<string | null>(null);
+  const error = actionError ?? loadError;
   const [success, setSuccess] = useState<string | null>(null);
 
   const [selected, setSelected] = useState<QuotationDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-
-  const fetchRows = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await api.get<{ items: QuotationRow[]; total: number }>("/quotations", {
-        accessToken: tokens?.accessToken,
-        query: { page, pageSize: PAGE_SIZE, ...(status ? { status } : {}) },
-      });
-      setRows(res?.items ?? []);
-      setTotal(res?.total ?? 0);
-    } catch (err: any) {
-      setError(err?.message || "Failed to load quotations.");
-    } finally {
-      setLoading(false);
-    }
-  }, [tokens, page, status]);
-
-  useEffect(() => { fetchRows(); }, [fetchRows]);
-  useEffect(() => { setPage(1); }, [status]);
 
   const openQuotation = useCallback(async (id: string) => {
     setDetailLoading(true);
@@ -182,7 +189,7 @@ export default function QuotationsPage() {
         });
         setSuccess(label);
         setSelected(null);
-        await fetchRows();
+        fetchRows();
       } catch (err: any) {
         setError(err?.message || `Could not ${label.toLowerCase()}.`);
       } finally {
@@ -191,15 +198,6 @@ export default function QuotationsPage() {
     },
     [tokens, fetchRows],
   );
-
-  const filtered = rows.filter((r) => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return (
-      r.quotationNumber.toLowerCase().includes(q) ||
-      (r.customerName ?? "").toLowerCase().includes(q)
-    );
-  });
 
   const fmtDate = (iso?: string | null) => {
     if (!iso) return "—";
@@ -221,7 +219,7 @@ export default function QuotationsPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <Button variant="outline" size="sm" onClick={fetchRows} disabled={loading}>
+          <Button variant="outline" size="sm" onClick={() => { setError(null); fetchRows(); }} disabled={loading}>
             <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
             Refresh
           </Button>
@@ -246,17 +244,15 @@ export default function QuotationsPage() {
       )}
 
       <div className="flex flex-col gap-3 sm:flex-row">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by quote number or customer..."
-            className="pl-10 h-10 bg-secondary/30"
-          />
-        </div>
-        <Select value={status || "all"} onValueChange={(val) => setStatus(val === "all" ? "" : val)}>
-          <SelectTrigger className="h-10 sm:w-48 text-xs">
+        <TableSearch
+          value={list.search}
+          onChange={list.setSearch}
+          label="Search quotations"
+          placeholder="Search by quote number or customer..."
+          className="flex-1"
+        />
+        <Select value={status || "all"} onValueChange={(val) => list.setFilter("status", val === "all" ? "" : val)}>
+          <SelectTrigger className="h-10 sm:w-48 text-xs" aria-label="Filter by status">
             <SelectValue placeholder="All statuses" />
           </SelectTrigger>
           <SelectContent>
@@ -271,119 +267,104 @@ export default function QuotationsPage() {
       </div>
 
       <Card className="overflow-hidden">
-        {loading ? (
-          <div className="py-16 text-center text-sm text-muted-foreground">
-            <div className="h-6 w-6 mx-auto mb-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-            Loading quotations...
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="py-16 text-center">
-            <FileText className="mx-auto h-12 w-12 text-muted-foreground/30" />
-            <h3 className="mt-4 text-sm font-semibold text-foreground">No quotations found</h3>
-            <p className="mt-1.5 text-xs text-muted-foreground">
-              {search || status
-                ? "Nothing matches this filter."
-                : "Raise one here, or from a POS terminal with F7."}
-            </p>
-          </div>
-        ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="border-b border-border bg-secondary/50 text-muted-foreground">
-                  <tr>
-                    <th className="px-4 py-3.5 font-medium">Quote #</th>
-                    <th className="px-4 py-3.5 font-medium">Customer</th>
-                    <th className="px-4 py-3.5 font-medium">Raised</th>
-                    <th className="px-4 py-3.5 font-medium">Valid until</th>
-                    <th className="px-4 py-3.5 text-right font-medium">Total</th>
-                    <th className="px-4 py-3.5 text-center font-medium">Status</th>
-                    <th className="px-4 py-3.5 text-right font-medium">Print</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {filtered.map((row) => (
-                    <tr
-                      key={row.id}
-                      onClick={() => void openQuotation(row.id)}
-                      tabIndex={0}
-                      role="button"
-                      aria-label={`Open quotation ${row.quotationNumber}`}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          void openQuotation(row.id);
-                        }
+        <TableContainer>
+          <Table>
+            <TableHead>
+              <tr>
+                <SortableTh column="quotationNumber" sortBy={sortBy} sortOrder={sortOrder} onSort={list.toggleSort}>Quote #</SortableTh>
+                <Th>Customer</Th>
+                <SortableTh column="createdAt" sortBy={sortBy} sortOrder={sortOrder} onSort={list.toggleSort} firstOrder="desc">Raised</SortableTh>
+                <SortableTh column="validUntil" sortBy={sortBy} sortOrder={sortOrder} onSort={list.toggleSort}>Valid until</SortableTh>
+                <SortableTh column="total" sortBy={sortBy} sortOrder={sortOrder} onSort={list.toggleSort} firstOrder="desc" align="right">Total ({currency})</SortableTh>
+                <Th align="center">Status</Th>
+                <Th align="right"><span className="sr-only">Actions</span></Th>
+              </tr>
+            </TableHead>
+            <TableBody
+              columns={7}
+              loading={initialLoading}
+              empty={
+                <TableEmpty
+                  columns={7}
+                  icon={FileText}
+                  title="No quotations found"
+                  description={
+                    list.q || status
+                      ? "Nothing matches this filter."
+                      : "Raise one here, or from a POS terminal with F7."
+                  }
+                />
+              }
+            >
+              {rows.map((row) => (
+                <tr
+                  key={row.id}
+                  onClick={() => void openQuotation(row.id)}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`Open quotation ${row.quotationNumber}`}
+                  onKeyDown={(e) => {
+                    if (e.target !== e.currentTarget) return;
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      void openQuotation(row.id);
+                    }
+                  }}
+                  className={cn(
+                    "cursor-pointer hover:bg-secondary/30 transition-colors focus:bg-secondary/40 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                    loading && "opacity-60",
+                  )}
+                >
+                  <td className="px-4 py-3.5 font-mono font-bold text-primary whitespace-nowrap">
+                    <span className="underline decoration-dotted underline-offset-2">
+                      {row.quotationNumber}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3.5 font-medium text-foreground max-w-50 truncate" title={row.customerName ?? undefined}>
+                    {row.customerName ?? "—"}
+                  </td>
+                  <td className="px-4 py-3.5 text-muted-foreground whitespace-nowrap tabular-nums">
+                    {fmtDate(row.createdAt)}
+                  </td>
+                  <td className="px-4 py-3.5 whitespace-nowrap tabular-nums">
+                    <span className={cn(row.expired && "text-destructive")}>
+                      {fmtDate(row.validUntil)}
+                    </span>
+                    {/* Expiry is what makes a quote a promise with an end;
+                        worth flagging even when the status has not caught up. */}
+                    {row.expired && row.status !== "converted" && (
+                      <Badge variant="destructive" className="ml-2 text-[10px]">expired</Badge>
+                    )}
+                  </td>
+                  <td className={cn("px-4 py-3.5 font-bold text-foreground", numericCell)}>
+                    {formatMoney(row.total)}
+                  </td>
+                  <td className="px-4 py-3.5 text-center">
+                    <Badge variant={STATUS_VARIANT[row.status] ?? "secondary"}>{row.status}</Badge>
+                  </td>
+                  <td className="px-4 py-3.5 text-right">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        // Otherwise the row's own click opens the dialog too.
+                        e.stopPropagation();
+                        void printQuotation(row);
                       }}
-                      className="cursor-pointer hover:bg-secondary/30 transition-colors focus:bg-secondary/40 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      disabled={busy === `pdf:${row.id}`}
+                      aria-label={`Print quotation ${row.quotationNumber}`}
+                      className="gap-1.5"
                     >
-                      <td className="px-4 py-3.5 font-mono font-bold text-primary whitespace-nowrap">
-                        <span className="underline decoration-dotted underline-offset-2">
-                          {row.quotationNumber}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3.5 font-medium text-foreground max-w-50 truncate">
-                        {row.customerName ?? "—"}
-                      </td>
-                      <td className="px-4 py-3.5 text-muted-foreground whitespace-nowrap">
-                        {fmtDate(row.createdAt)}
-                      </td>
-                      <td className="px-4 py-3.5 whitespace-nowrap">
-                        <span className={cn(row.expired && "text-destructive")}>
-                          {fmtDate(row.validUntil)}
-                        </span>
-                        {/* Expiry is what makes a quote a promise with an end;
-                            worth flagging even when the status has not caught up. */}
-                        {row.expired && row.status !== "converted" && (
-                          <Badge variant="destructive" className="ml-2 text-[10px]">expired</Badge>
-                        )}
-                      </td>
-                      <td className="px-4 py-3.5 text-right font-mono font-bold text-foreground">
-                        {parseFloat(row.total).toFixed(2)}
-                      </td>
-                      <td className="px-4 py-3.5 text-center">
-                        <Badge variant={STATUS_VARIANT[row.status] ?? "secondary"}>{row.status}</Badge>
-                      </td>
-                      <td className="px-4 py-3.5 text-right">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={(e) => {
-                            // Otherwise the row's own click opens the dialog too.
-                            e.stopPropagation();
-                            void printQuotation(row);
-                          }}
-                          disabled={busy === `pdf:${row.id}`}
-                          aria-label={`Print quotation ${row.quotationNumber}`}
-                          className="gap-1.5"
-                        >
-                          <Printer className="h-3.5 w-3.5" />
-                          {busy === `pdf:${row.id}` ? "…" : "Print"}
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {total > PAGE_SIZE && (
-              <div className="flex items-center justify-between border-t border-border px-4 py-3">
-                <span className="text-xs text-muted-foreground">
-                  Page {page} · {total} total
-                </span>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>
-                    Previous
-                  </Button>
-                  <Button variant="outline" size="sm" disabled={page * PAGE_SIZE >= total} onClick={() => setPage((p) => p + 1)}>
-                    Next
-                  </Button>
-                </div>
-              </div>
-            )}
-          </>
-        )}
+                      <Printer className="h-3.5 w-3.5" />
+                      {busy === `pdf:${row.id}` ? "…" : "Print"}
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+        <TablePagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={list.setPage} noun="quotations" />
       </Card>
 
       <QuotationDetailDialog
@@ -427,6 +408,7 @@ function QuotationDetailDialog({
   onAct: (id: string, path: string, label: string, body?: unknown) => void;
 }) {
   const q = quotation;
+  const taxLabel = useTenantSettings().tax.label;
   /**
    * What can still be done to it. A converted quote is finished — offering
    * "convert" again would either double-bill the customer or fail, and
@@ -489,12 +471,12 @@ function QuotationDetailDialog({
                         </div>
                       </td>
                       <td className="px-3 py-2 text-right font-mono">{item.quantity}</td>
-                      <td className="px-3 py-2 text-right font-mono">{parseFloat(item.unitPrice).toFixed(2)}</td>
+                      <td className="px-3 py-2 text-right font-mono tabular-nums">{formatMoney(item.unitPrice)}</td>
                       <td className="px-3 py-2 text-right font-mono text-muted-foreground">
                         {Number(item.discountPercent)}%
                       </td>
                       <td className="px-3 py-2 text-right font-mono font-semibold">
-                        {parseFloat(item.total).toFixed(2)}
+                        {formatMoney(item.total)}
                       </td>
                     </tr>
                   ))}
@@ -509,11 +491,11 @@ function QuotationDetailDialog({
           {Number(q?.discountAmount ?? "0") > 0 && (
             <TotalsRow label="Discount" value={`-${q?.discountAmount}`} currency={q?.currency} />
           )}
-          <TotalsRow label="VAT" value={q?.taxAmount} currency={q?.currency} />
+          <TotalsRow label={taxLabel} value={q?.taxAmount} currency={q?.currency} />
           <div className="flex justify-between border-t border-border pt-1.5 text-sm font-bold text-foreground">
             <span>Total</span>
             <span className="font-mono">
-              {q?.currency} {q ? parseFloat(q.total).toFixed(2) : "0.00"}
+              {formatMoney(q?.total ?? "0", { currency: q?.currency })}
             </span>
           </div>
         </div>
@@ -589,10 +571,8 @@ function TotalsRow({ label, value, currency }: { label: string; value?: string; 
   return (
     <div className="flex justify-between text-muted-foreground">
       <span>{label}</span>
-      <span className="font-mono">
-        {value === undefined || value === null
-          ? "—"
-          : `${currency ?? ""} ${parseFloat(value).toFixed(2)}`}
+      <span className="font-mono tabular-nums">
+        {formatMoney(value, { currency })}
       </span>
     </div>
   );

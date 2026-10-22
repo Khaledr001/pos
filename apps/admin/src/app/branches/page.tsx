@@ -4,7 +4,6 @@ import React, { useEffect, useState } from "react";
 import {
   GitBranch,
   Plus,
-  Search,
   MapPin,
   Phone,
   Mail,
@@ -21,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { TableSearch } from "@/components/ui/data-table";
 import {
   Dialog,
   DialogContent,
@@ -64,32 +64,16 @@ export default function BranchesPage() {
     try {
       const res = await api.get<{ items: Branch[] }>("/branches", {
         accessToken: tokens?.accessToken,
-        query: { includeInactive: true },
+        // Every branch in one page — the search below filters what is loaded,
+        // so a branch past the default page of 25 could never be found.
+        query: { includeInactive: true, limit: 200 },
       });
       setBranches(res.items || []);
-    } catch {
-      setBranches([
-        {
-          id: "branch-1",
-          name: "Sharjah Main Branch & Central Warehouse",
-          code: "SHJ",
-          address: "Industrial Area 4, Sharjah, UAE",
-          phone: "+971 6 534 1122",
-          email: "sharjah@devsfleet.com",
-          isActive: true,
-          createdAt: new Date().toISOString(),
-        },
-        {
-          id: "branch-2",
-          name: "Dubai Deira Hardware & Electrical Store",
-          code: "DXB",
-          address: "Al Nakhal Road, Deira, Dubai, UAE",
-          phone: "+971 4 223 8899",
-          email: "dubai@devsfleet.com",
-          isActive: true,
-          createdAt: new Date().toISOString(),
-        },
-      ]);
+    } catch (err: any) {
+      // Never stand-in rows: two invented branches on a failed request looked
+      // exactly like real data, and a manager could act on them.
+      setBranches([]);
+      setActionError(err?.message || "Failed to load branches.");
     } finally {
       setLoading(false);
     }
@@ -137,11 +121,12 @@ export default function BranchesPage() {
     }
   };
 
+  const term = search.trim().toLowerCase();
   const filteredBranches = branches.filter(
     (b) =>
-      b.name.toLowerCase().includes(search.toLowerCase()) ||
-      b.code.toLowerCase().includes(search.toLowerCase()) ||
-      b.address?.toLowerCase().includes(search.toLowerCase()),
+      b.name.toLowerCase().includes(term) ||
+      b.code.toLowerCase().includes(term) ||
+      b.address?.toLowerCase().includes(term),
   );
 
   return (
@@ -209,22 +194,19 @@ export default function BranchesPage() {
       )}
 
       {/* ── Search ── */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by branch name, code (DXB, SHJ), or city..."
-          className="pl-10 h-10 bg-secondary/30"
-        />
-      </div>
+      <TableSearch
+        value={search}
+        onChange={setSearch}
+        label="Search branches"
+        placeholder="Search by branch name, code (DXB, SHJ), or city..."
+      />
 
       {/* ── Branch Cards ── */}
-      {loading ? (
-        <div className="py-16 text-center text-sm text-muted-foreground">
-          <div className="h-6 w-6 mx-auto mb-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-          Loading branches from API...
+      {loading && branches.length === 0 ? (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3" aria-busy="true">
+          {Array.from({ length: 3 }, (_, i) => (
+            <div key={i} aria-hidden="true" className="h-48 animate-pulse rounded-xl border border-border bg-secondary/40 motion-reduce:animate-none" />
+          ))}
         </div>
       ) : filteredBranches.length === 0 ? (
         <Card className="border-dashed">

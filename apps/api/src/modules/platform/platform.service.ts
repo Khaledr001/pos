@@ -32,6 +32,7 @@ import { ConfigService } from "@nestjs/config";
 import bcrypt from "bcryptjs";
 import type { Env } from "../../config/env.js";
 import { RequestContext } from "../../common/context/request-context.js";
+import { containsPattern } from "../../common/db/list-query.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import { AuthService } from "../auth/auth.service.js";
 import { RESERVED_SLUGS } from "../tenants/dto.js";
@@ -155,14 +156,13 @@ export class PlatformService {
   }
 
   async listTenants(query: ListTenantsDto): Promise<Paginated<unknown>> {
-    const { page, limit, q, planId, status } = query;
+    const { page, limit, planId, status, sortBy, sortOrder } = query;
     const offset = (page - 1) * limit;
+    const term = containsPattern(query.q);
 
     const where = and(
       isNull(schema.tenants.deletedAt),
-      q
-        ? or(ilike(schema.tenants.name, `%${q}%`), ilike(schema.tenants.slug, `%${q}%`))
-        : undefined,
+      term ? or(ilike(schema.tenants.name, term), ilike(schema.tenants.slug, term)) : undefined,
       planId ? eq(schema.tenants.planId, planId) : undefined,
       status === "active"
         ? eq(schema.tenants.isActive, true)
@@ -199,7 +199,10 @@ export class PlatformService {
           })
           .from(schema.tenants)
           .where(where)
-          .orderBy(desc(schema.tenants.createdAt))
+          .orderBy(
+            sortOrder === "asc" ? asc(schema.tenants[sortBy]) : desc(schema.tenants[sortBy]),
+            desc(schema.tenants.id),
+          )
           .limit(limit)
           .offset(offset),
         tx.select({ v: count() }).from(schema.tenants).where(where),

@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { useTenantSettings } from "@/lib/tenant-settings";
 import { Field, Loading, Notice, PageHeader, errorText, humanize, selectClass, textareaClass } from "./shared";
 
 const EMIRATES = ["ABU_DHABI", "DUBAI", "SHARJAH", "AJMAN", "UMM_AL_QUWAIN", "RAS_AL_KHAIMAH", "FUJAIRAH"];
@@ -69,6 +70,7 @@ export default function OnlineStorePage() {
   const maySettings = usePermission("settings:write");
   const auth = { accessToken: tokens?.accessToken };
 
+  const taxLabel = useTenantSettings().tax.label;
   const [overview, setOverview] = useState<Overview | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [draft, setDraft] = useState<Settings | null>(null);
@@ -256,7 +258,7 @@ export default function OnlineStorePage() {
             <h2 className="text-sm font-semibold">Checkout</h2>
             <div className="grid gap-4 md:grid-cols-4">
               <label className="flex items-center gap-2 text-xs font-medium"><input type="checkbox" className="h-4 w-4" checked={draft.checkout.cod.enabled} onChange={(e) => setDraft({ ...draft, checkout: { ...draft.checkout, cod: { ...draft.checkout.cod, enabled: e.target.checked } } })} /> Cash on delivery</label>
-              <Field label="Cash on delivery up to (incl. VAT)"><Input inputMode="decimal" value={draft.checkout.cod.maxTotal} onChange={(e) => setDraft({ ...draft, checkout: { ...draft.checkout, cod: { ...draft.checkout.cod, maxTotal: e.target.value } } })} /></Field>
+              <Field label={`Cash on delivery up to (incl. ${taxLabel})`}><Input inputMode="decimal" value={draft.checkout.cod.maxTotal} onChange={(e) => setDraft({ ...draft, checkout: { ...draft.checkout, cod: { ...draft.checkout.cod, maxTotal: e.target.value } } })} /></Field>
               <Field label="Stock held back from the website" hint="Units per branch the counter keeps, so both cannot sell the last one."><Input type="number" min={0} value={draft.checkout.stockSafetyBuffer} onChange={(e) => setDraft({ ...draft, checkout: { ...draft.checkout, stockSafetyBuffer: Number(e.target.value) } })} /></Field>
               <Field label="Courier orders ship from">
                 <select className={selectClass} value={draft.checkout.fulfilmentBranchId ?? ""} onChange={(e) => setDraft({ ...draft, checkout: { ...draft.checkout, fulfilmentBranchId: e.target.value || null } })}>
@@ -293,21 +295,21 @@ export default function OnlineStorePage() {
           </Card>
 
           <Card className="space-y-3 p-5">
-            <h2 className="text-sm font-semibold">Courier rates (net of VAT)</h2>
+            <h2 className="text-sm font-semibold">Courier rates (net of {taxLabel})</h2>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="text-muted-foreground"><tr><th className="py-2">Emirate</th><th>Delivers</th><th>Base fee</th><th>Up to kg</th><th>Per extra kg</th><th>Free over</th><th>Max kg</th><th>Days</th></tr></thead>
+                <thead className="text-muted-foreground"><tr><th scope="col" className="py-2">Emirate</th><th scope="col">Delivers</th><th scope="col">Base fee</th><th scope="col">Up to kg</th><th scope="col">Per extra kg</th><th scope="col">Free over</th><th scope="col">Max kg</th><th scope="col">Days</th></tr></thead>
                 <tbody>
                   {draft.shipping.rates.map((r) => (
                     <tr key={r.emirate}>
                       <td className="py-1.5 pr-2">{humanize(r.emirate)}</td>
-                      <td><input type="checkbox" className="h-4 w-4" checked={r.active} onChange={(e) => setRate(r.emirate, { active: e.target.checked })} /></td>
-                      <td className="pr-2"><Input className="h-8 w-20" value={r.baseFee} onChange={(e) => setRate(r.emirate, { baseFee: e.target.value })} /></td>
-                      <td className="pr-2"><Input className="h-8 w-16" type="number" value={r.baseWeightKg} onChange={(e) => setRate(r.emirate, { baseWeightKg: Number(e.target.value) })} /></td>
-                      <td className="pr-2"><Input className="h-8 w-20" value={r.perKgFee} onChange={(e) => setRate(r.emirate, { perKgFee: e.target.value })} /></td>
-                      <td className="pr-2"><Input className="h-8 w-24" value={r.freeOver ?? ""} placeholder="Never" onChange={(e) => setRate(r.emirate, { freeOver: e.target.value || null })} /></td>
-                      <td className="pr-2"><Input className="h-8 w-16" type="number" value={r.maxWeightKg} onChange={(e) => setRate(r.emirate, { maxWeightKg: Number(e.target.value) })} /></td>
-                      <td><Input className="h-8 w-14" type="number" value={r.etaDays} onChange={(e) => setRate(r.emirate, { etaDays: Number(e.target.value) })} /></td>
+                      <td><input aria-label={`${humanize(r.emirate)} delivers`} type="checkbox" className="h-4 w-4" checked={r.active} onChange={(e) => setRate(r.emirate, { active: e.target.checked })} /></td>
+                      <td className="pr-2"><Input aria-label={`${humanize(r.emirate)} base fee`} className="h-8 w-20" value={r.baseFee} onChange={(e) => setRate(r.emirate, { baseFee: e.target.value })} /></td>
+                      <td className="pr-2"><Input aria-label={`${humanize(r.emirate)} weight included (kg)`} className="h-8 w-16" type="number" value={r.baseWeightKg} onChange={(e) => setRate(r.emirate, { baseWeightKg: Number(e.target.value) })} /></td>
+                      <td className="pr-2"><Input aria-label={`${humanize(r.emirate)} fee per extra kg`} className="h-8 w-20" value={r.perKgFee} onChange={(e) => setRate(r.emirate, { perKgFee: e.target.value })} /></td>
+                      <td className="pr-2"><Input aria-label={`${humanize(r.emirate)} free delivery over`} className="h-8 w-24" value={r.freeOver ?? ""} placeholder="Never" onChange={(e) => setRate(r.emirate, { freeOver: e.target.value || null })} /></td>
+                      <td className="pr-2"><Input aria-label={`${humanize(r.emirate)} max weight (kg)`} className="h-8 w-16" type="number" value={r.maxWeightKg} onChange={(e) => setRate(r.emirate, { maxWeightKg: Number(e.target.value) })} /></td>
+                      <td><Input aria-label={`${humanize(r.emirate)} delivery days`} className="h-8 w-14" type="number" value={r.etaDays} onChange={(e) => setRate(r.emirate, { etaDays: Number(e.target.value) })} /></td>
                     </tr>
                   ))}
                 </tbody>
@@ -325,22 +327,22 @@ export default function OnlineStorePage() {
               <Field label="Closes"><Input type="time" value={draft.pickup.closesAt} onChange={(e) => setDraft({ ...draft, pickup: { ...draft.pickup, closesAt: e.target.value } })} /></Field>
             </div>
             <table className="w-full text-left text-xs">
-              <thead className="text-muted-foreground"><tr><th className="py-2">Branch</th><th>Shown</th><th>Emirate</th><th>Pickup</th></tr></thead>
+              <thead className="text-muted-foreground"><tr><th scope="col" className="py-2">Branch</th><th scope="col">Shown</th><th scope="col">Emirate</th><th scope="col">Pickup</th></tr></thead>
               <tbody>
                 {branches.map((b) => {
                   const online = shown.get(b.id);
                   return (
                     <tr key={b.id}>
                       <td className="py-1.5">{b.name} <span className="font-mono text-muted-foreground">{b.code}</span></td>
-                      <td><input type="checkbox" className="h-4 w-4" checked={!!online} onChange={(e) => setBranch(b.id, e.target.checked ? {} : null)} /></td>
+                      <td><input type="checkbox" aria-label={`Show ${b.name} on the website`} className="h-4 w-4" checked={!!online} onChange={(e) => setBranch(b.id, e.target.checked ? {} : null)} /></td>
                       <td>
                         {online && (
-                          <select className={`${selectClass} h-8 w-40`} value={online.emirate} onChange={(e) => setBranch(b.id, { emirate: e.target.value })}>
+                          <select aria-label={`${b.name} emirate`} className={`${selectClass} h-8 w-40`} value={online.emirate} onChange={(e) => setBranch(b.id, { emirate: e.target.value })}>
                             {EMIRATES.map((em) => <option key={em} value={em}>{humanize(em)}</option>)}
                           </select>
                         )}
                       </td>
-                      <td>{online && <input type="checkbox" className="h-4 w-4" checked={online.pickupEnabled} onChange={(e) => setBranch(b.id, { pickupEnabled: e.target.checked })} />}</td>
+                      <td>{online && <input type="checkbox" aria-label={`${b.name} offers pickup`} className="h-4 w-4" checked={online.pickupEnabled} onChange={(e) => setBranch(b.id, { pickupEnabled: e.target.checked })} />}</td>
                     </tr>
                   );
                 })}

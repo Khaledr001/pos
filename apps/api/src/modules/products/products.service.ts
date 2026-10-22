@@ -136,9 +136,12 @@ export class ProductsService {
           .from(schema.products)
           .leftJoin(schema.categories, eq(schema.products.categoryId, schema.categories.id))
           .leftJoin(schema.brands, eq(schema.products.brandId, schema.brands.id))
-          .innerJoin(schema.units, eq(schema.products.unitId, schema.units.id))
+          // Left, not inner: a product whose unit this tenant cannot see (an
+          // import that linked another tenant's unit) was counted in `total`
+          // but dropped from the rows — a search said "11 results" and showed none.
+          .leftJoin(schema.units, eq(schema.products.unitId, schema.units.id))
           .where(where)
-          .orderBy(sortOrder === "asc" ? asc(column) : desc(column))
+          .orderBy(sortOrder === "asc" ? asc(column) : desc(column), desc(schema.products.id))
           .limit(limit)
           .offset(offset),
         tx.select({ value: count() }).from(schema.products).where(where),

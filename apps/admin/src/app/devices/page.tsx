@@ -11,6 +11,10 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
+  SortableTh, Table, TableBody, TableContainer, TableEmpty, TableHead, Th,
+} from "@/components/ui/data-table";
+import type { SortOrder } from "@/lib/use-list-query";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -51,6 +55,7 @@ export default function DevicesPage() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
+  const [nameOrder, setNameOrder] = useState<SortOrder>("asc");
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
 
@@ -133,6 +138,10 @@ export default function DevicesPage() {
     }
   };
 
+  const sortedDevices = [...devices].sort((a, b) =>
+    nameOrder === "asc" ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name),
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
@@ -168,61 +177,57 @@ export default function DevicesPage() {
       )}
 
       <Card className="overflow-hidden">
-        {loading ? (
-          <div className="py-16 text-center text-sm text-muted-foreground">
-            <div className="h-6 w-6 mx-auto mb-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-            Loading terminals...
-          </div>
-        ) : devices.length === 0 ? (
-          <div className="py-16 text-center">
-            <Tablet className="mx-auto h-12 w-12 text-muted-foreground/30" />
-            <h3 className="mt-4 text-sm font-semibold text-foreground">No terminals registered</h3>
-            <p className="mt-1.5 text-xs text-muted-foreground">
-              Register the first one to let a till sign in and sync.
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="border-b border-border bg-secondary/50 text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3.5 font-medium">Name</th>
-                  <th className="px-4 py-3.5 font-medium">Branch</th>
-                  <th className="px-4 py-3.5 font-medium">App Version</th>
-                  <th className="px-4 py-3.5 font-medium">Last Seen</th>
-                  <th className="px-4 py-3.5 text-center font-medium">Status</th>
-                  <th className="px-4 py-3.5 text-right font-medium">Actions</th>
+        <TableContainer>
+          <Table>
+            <TableHead>
+              <tr>
+                <SortableTh column="name" sortBy="name" sortOrder={nameOrder} onSort={() => setNameOrder((o) => (o === "asc" ? "desc" : "asc"))}>Name</SortableTh>
+                <Th>Branch</Th>
+                <Th>App Version</Th>
+                <Th>Last Seen</Th>
+                <Th align="center">Status</Th>
+                <Th align="right">Actions</Th>
+              </tr>
+            </TableHead>
+            <TableBody
+              columns={6}
+              loading={loading && devices.length === 0}
+              empty={
+                <TableEmpty
+                  columns={6}
+                  icon={Tablet}
+                  title="No terminals registered"
+                  description="Register the first one to let a till sign in and sync."
+                />
+              }
+            >
+              {sortedDevices.map((device) => (
+                <tr key={device.id} className="hover:bg-secondary/30 transition-colors">
+                  <td className="px-4 py-3.5 font-semibold text-foreground">{device.name}</td>
+                  <td className="px-4 py-3.5 text-muted-foreground">{branchName(device.branchId)}</td>
+                  <td className="px-4 py-3.5 font-mono text-[11px] text-muted-foreground">
+                    {device.appVersion ?? "—"}
+                  </td>
+                  <td className="px-4 py-3.5 text-muted-foreground">
+                    <span className="inline-flex items-center gap-1">
+                      <Clock className="h-3 w-3" /> {timeAgo(device.lastSeenAt)}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3.5 text-center">
+                    <Badge variant={device.isActive ? "success" : "secondary"}>
+                      {device.isActive ? "Active" : "Deactivated"}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3.5 text-right">
+                    <Button variant="outline" size="sm" onClick={() => toggleActive(device)}>
+                      {device.isActive ? "Deactivate" : "Reactivate"}
+                    </Button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {devices.map((device) => (
-                  <tr key={device.id} className="hover:bg-secondary/30 transition-colors">
-                    <td className="px-4 py-3.5 font-semibold text-foreground">{device.name}</td>
-                    <td className="px-4 py-3.5 text-muted-foreground">{branchName(device.branchId)}</td>
-                    <td className="px-4 py-3.5 font-mono text-[11px] text-muted-foreground">
-                      {device.appVersion ?? "—"}
-                    </td>
-                    <td className="px-4 py-3.5 text-muted-foreground">
-                      <span className="inline-flex items-center gap-1">
-                        <Clock className="h-3 w-3" /> {timeAgo(device.lastSeenAt)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3.5 text-center">
-                      <Badge variant={device.isActive ? "success" : "secondary"}>
-                        {device.isActive ? "Active" : "Deactivated"}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3.5 text-right">
-                      <Button variant="outline" size="sm" onClick={() => toggleActive(device)}>
-                        {device.isActive ? "Deactivate" : "Reactivate"}
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
       </Card>
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>

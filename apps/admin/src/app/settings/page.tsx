@@ -6,6 +6,7 @@ import type { TenantSettings } from "@devsfleet/shared-types";
 import { DEFAULT_TENANT_SETTINGS } from "@devsfleet/shared-types";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api-client";
+import { invalidateTenantSettings } from "@/lib/tenant-settings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -110,6 +111,7 @@ export default function SettingsPage() {
         },
         { accessToken: tokens?.accessToken },
       );
+      invalidateTenantSettings();
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err: any) {

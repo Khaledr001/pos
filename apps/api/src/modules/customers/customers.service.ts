@@ -1,9 +1,10 @@
-import { and, count, desc, eq, ilike, isNull, or, schema, sql } from "@devsfleet/db";
+import { and, asc, count, desc, eq, ilike, isNull, or, schema, sql } from "@devsfleet/db";
 import type { Customer } from "@devsfleet/db";
 import { AppError, ERROR_CODES, Money } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
 import { requireBranchId } from "../../common/context/branch-scope.js";
 import { RequestContext } from "../../common/context/request-context.js";
+import { containsPattern } from "../../common/db/list-query.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import type {
   AdjustLoyaltyDto,
@@ -304,7 +305,7 @@ export class CustomersService {
 
   async list(query: ListCustomersDto): Promise<{ items: Customer[]; total: number }> {
     return this.db.run(async (tx) => {
-      const term = query.q ? `%${query.q}%` : null;
+      const term = containsPattern(query.q);
       const where = and(
         isNull(schema.customers.deletedAt),
         query.includeInactive ? undefined : eq(schema.customers.isActive, true),
@@ -326,7 +327,12 @@ export class CustomersService {
         .select()
         .from(schema.customers)
         .where(where)
-        .orderBy(desc(schema.customers.createdAt))
+        .orderBy(
+          query.sortOrder === "asc"
+            ? asc(schema.customers[query.sortBy])
+            : desc(schema.customers[query.sortBy]),
+          desc(schema.customers.id),
+        )
         .limit(query.pageSize)
         .offset((query.page - 1) * query.pageSize);
 

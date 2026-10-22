@@ -1,8 +1,9 @@
-import { and, count, desc, eq, ilike, or, schema, type Transaction } from "@devsfleet/db";
+import { and, asc, count, desc, eq, ilike, or, schema, type Transaction } from "@devsfleet/db";
 import type { WebOrderStatus } from "@devsfleet/shared-types";
 import { AppError, ERROR_CODES, Money } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
 import { RequestContext } from "../../../common/context/request-context.js";
+import { containsPattern } from "../../../common/db/list-query.js";
 import { TenantDatabase } from "../../../database/tenant-database.service.js";
 import { OrdersService } from "../../orders/orders.service.js";
 import { StorefrontResolver } from "../context/storefront-resolver.service.js";
@@ -34,7 +35,7 @@ export class OrderDeskService {
   async list(dto: ListWebOrdersDto) {
     return this.withStorefront(() =>
       this.db.run(async (tx) => {
-        const search = dto.q ? `%${dto.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%` : null;
+        const search = containsPattern(dto.q);
         const where = and(
           dto.status ? eq(schema.webOrders.status, dto.status) : undefined,
           search
@@ -46,6 +47,11 @@ export class OrderDeskService {
               )
             : undefined,
         );
+        const sortColumn = {
+          createdAt: schema.webOrders.createdAt,
+          orderNumber: schema.orders.orderNumber,
+          total: schema.orders.total,
+        }[dto.sortBy];
         const [total] = await tx
           .select({ value: count() })
           .from(schema.webOrders)
@@ -70,7 +76,10 @@ export class OrderDeskService {
           .innerJoin(schema.orders, eq(schema.webOrders.orderId, schema.orders.id))
           .innerJoin(schema.branches, eq(schema.orders.branchId, schema.branches.id))
           .where(where)
-          .orderBy(desc(schema.webOrders.createdAt))
+          .orderBy(
+            dto.sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn),
+            desc(schema.webOrders.orderId),
+          )
           .limit(dto.pageSize)
           .offset((dto.page - 1) * dto.pageSize);
 

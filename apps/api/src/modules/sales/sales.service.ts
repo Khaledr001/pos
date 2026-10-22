@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, schema, sql } from "@devsfleet/db";
+import { and, asc, count, desc, eq, ilike, inArray, or, schema, sql } from "@devsfleet/db";
 import {
   hasPermission,
   resolveTenantSettings,
@@ -14,6 +14,7 @@ import {
 } from "@devsfleet/shared-utils";
 import { Injectable, Logger } from "@nestjs/common";
 import { assertBranchInScope, branchScope } from "../../common/context/branch-scope.js";
+import { containsPattern } from "../../common/db/list-query.js";
 import { RequestContext } from "../../common/context/request-context.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import { StockService } from "../inventory/stock.service.js";
@@ -24,7 +25,7 @@ import {
 import { OverrideGrantsService } from "../auth/override-grants.service.js";
 import { SerialsService } from "../serials/serials.service.js";
 import { renderInvoicePdf } from "./invoice-pdf.js";
-import type { CreateReturnDto, CreateSaleDto, VoidSaleDto } from "./dto.js";
+import type { CreateReturnDto, CreateSaleDto, ListSalesDto, VoidSaleDto } from "./dto.js";
 
 /**
  * Creating a sale — the most consequential write in the system.
@@ -1287,15 +1288,9 @@ export class SalesService {
     return { filename: `${sale.saleNumber}.pdf`, body };
   }
 
-  async list(query: {
-    page: number;
-    limit: number;
-    branchId?: string;
-    customerId?: string;
-    from?: string;
-    to?: string;
-  }): Promise<unknown> {
+  async list(query: ListSalesDto): Promise<unknown> {
     const offset = (query.page - 1) * query.limit;
+    const term = containsPattern(query.q);
 
     if (query.branchId) assertBranchInScope(query.branchId);
 
@@ -1311,31 +1306,81 @@ export class SalesService {
         query.customerId ? eq(schema.sales.customerId, query.customerId) : undefined,
         query.from ? sql`${schema.sales.occurredAt} >= ${query.from}::date` : undefined,
         query.to ? sql`${schema.sales.occurredAt} < (${query.to}::date + 1)` : undefined,
+        term
+          ? or(
+              ilike(schema.sales.saleNumber, term),
+              ilike(schema.customers.name, term),
+              ilike(schema.branches.name, term),
+              ilike(schema.branches.code, term),
+            )
+          : undefined,
       );
+
+      const sortColumn = {
+        occurredAt: schema.sales.occurredAt,
+        saleNumber: schema.sales.saleNumber,
+        total: schema.sales.total,
+      }[query.sortBy];
+
+      // Same joins as the page itself: the search reaches into customer and
+      // branch names, so a count without them would count the wrong rows.
+      const [counted] = await tx
+        .select({ value: count() })
+        .from(schema.sales)
+        .innerJoin(schema.branches, eq(schema.sales.branchId, schema.branches.id))
+        .leftJoin(schema.customers, eq(schema.sales.customerId, schema.customers.id))
+        .where(where);
+      const total = counted?.value ?? 0;
 
       const items = await tx
         .select({
           id: schema.sales.id,
           saleNumber: schema.sales.saleNumber,
           occurredAt: schema.sales.occurredAt,
+          subtotal: schema.sales.subtotal,
+          taxAmount: schema.sales.taxAmount,
           total: schema.sales.total,
           paidAmount: schema.sales.paidAmount,
           dueAmount: schema.sales.dueAmount,
           status: schema.sales.status,
           branchName: schema.branches.name,
+          branchCode: schema.branches.code,
           customerName: schema.customers.name,
           cashierName: schema.users.name,
+          // Distinct tender types, so the list can say "split" without
+          // shipping every payment row for every sale on the page.
+          paymentMethods: sql<string[]>`coalesce((
+            select array_agg(distinct ${schema.payments.method})
+            from ${schema.payments}
+            where ${schema.payments.saleId} = ${schema.sales.id}
+          ), '{}')`,
         })
         .from(schema.sales)
         .innerJoin(schema.branches, eq(schema.sales.branchId, schema.branches.id))
         .leftJoin(schema.customers, eq(schema.sales.customerId, schema.customers.id))
         .leftJoin(schema.users, eq(schema.sales.createdBy, schema.users.id))
         .where(where)
-        .orderBy(desc(schema.sales.occurredAt))
+        .orderBy(
+          query.sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn),
+          // A tiebreak, or two sales at the same instant swap places between
+          // pages and one of them is never seen.
+          desc(schema.sales.id),
+        )
         .limit(query.limit)
         .offset(offset);
 
-      return { items, meta: { page: query.page, limit: query.limit } };
+      const totalPages = Math.max(1, Math.ceil(total / query.limit));
+      return {
+        items,
+        meta: {
+          page: query.page,
+          limit: query.limit,
+          total,
+          totalPages,
+          hasNext: query.page < totalPages,
+          hasPrev: query.page > 1,
+        },
+      };
     });
   }
 }

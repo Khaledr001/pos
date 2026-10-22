@@ -4,7 +4,6 @@ import React, { useEffect, useState, useCallback } from "react";
 import {
   UserCheck,
   Plus,
-  Search,
   RefreshCw,
   X,
   AlertCircle,
@@ -17,6 +16,11 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
+import { readListResult, useListData, useListQuery } from "@/lib/use-list-query";
+import {
+  SortableTh, Table, TableBody, TableContainer, TableEmpty, TableHead,
+  TablePagination, TableSearch, Th,
+} from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -52,11 +56,6 @@ interface StaffUser {
   createdAt: string;
 }
 
-interface UsersResponse {
-  items: StaffUser[];
-  total: number;
-}
-
 interface Branch {
   id: string;
   name: string;
@@ -72,14 +71,11 @@ interface Role {
 export default function UsersPage() {
   const { tokens, user: currentUser } = useAuth();
 
-  const [users, setUsers] = useState<StaffUser[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
   const PAGE_SIZE = 50;
+  const list = useListQuery({ sortBy: "name", sortOrder: "asc" });
+  const { q, page, sortBy, sortOrder } = list;
 
   // Dialog & actions
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -112,54 +108,41 @@ export default function UsersPage() {
     [roles],
   );
 
-  const fetchUsers = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [usersRes, branchRes, rolesRes] = await Promise.allSettled([
-        api.get<UsersResponse>("/users", {
+  const loadUsers = useCallback(
+    async (signal: AbortSignal) =>
+      readListResult<StaffUser>(
+        await api.get<unknown>("/users", {
           accessToken: tokens?.accessToken,
-          query: {
-            q: search || undefined,
-            page,
-            limit: PAGE_SIZE,
-            includeInactive: false,
-          },
+          signal,
+          query: { q: q.trim() || undefined, page, limit: PAGE_SIZE, includeInactive: false, sortBy, sortOrder },
         }),
-        api.get<{ items: Branch[] }>("/branches", {
-          accessToken: tokens?.accessToken,
-        }),
-        api.get<Role[]>("/roles", { accessToken: tokens?.accessToken }),
-      ]);
+      ),
+    [tokens?.accessToken, q, page, sortBy, sortOrder],
+  );
+  const {
+    items: users, total, loading, initialLoading, error: loadError, reload: fetchUsers,
+  } = useListData(loadUsers, list.ready);
 
-      if (usersRes.status === "fulfilled") {
-        const val = usersRes.value as any;
-        const list = Array.isArray(val) ? val : (val?.items ?? []);
-        setUsers(list);
-        setTotal(val?.meta?.total ?? val?.total ?? list.length);
-      }
+  // Lookups for the role/branch columns and the create form. Loaded once —
+  // they used to be refetched on every keystroke of the search box.
+  useEffect(() => {
+    void Promise.allSettled([
+      api.get<{ items: Branch[] } | Branch[]>("/branches", { accessToken: tokens?.accessToken }),
+      api.get<Role[]>("/roles", { accessToken: tokens?.accessToken }),
+    ]).then(([branchRes, rolesRes]) => {
       if (branchRes.status === "fulfilled") {
-        const val = branchRes.value as any;
-        const list = Array.isArray(val) ? val : (val?.items ?? []);
-        setBranches(list);
+        const val = branchRes.value;
+        setBranches(Array.isArray(val) ? val : (val?.items ?? []));
       }
       if (rolesRes.status === "fulfilled") {
-        const list = rolesRes.value ?? [];
-        setRoles(list);
-        if (list.length > 0) {
-          setFRoleId((current) => current || list.find((r) => r.name === "cashier")?.id || list[0]!.id);
+        const roleList = rolesRes.value ?? [];
+        setRoles(roleList);
+        if (roleList.length > 0) {
+          setFRoleId((current) => current || roleList.find((r) => r.name === "cashier")?.id || roleList[0]!.id);
         }
       }
-    } catch (err: any) {
-      console.error("Failed to load staff list:", err);
-      setActionError(err?.message || "Failed to load staff list.");
-    } finally {
-      setLoading(false);
-    }
-  }, [tokens, search, page]);
-
-  useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers]);
+    });
+  }, [tokens?.accessToken]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -253,7 +236,7 @@ export default function UsersPage() {
             <CheckCircle2 className="h-4 w-4" />
             <span>{actionSuccess}</span>
           </div>
-          <button onClick={() => setActionSuccess(null)} className="cursor-pointer">
+          <button onClick={() => setActionSuccess(null)} className="cursor-pointer" aria-label="Dismiss">
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -264,104 +247,104 @@ export default function UsersPage() {
             <AlertCircle className="h-4 w-4" />
             <span>{actionError}</span>
           </div>
-          <button onClick={() => setActionError(null)} className="cursor-pointer">
+          <button onClick={() => setActionError(null)} className="cursor-pointer" aria-label="Dismiss">
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
       )}
+      {loadError && (
+        <div className="flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+          <AlertCircle className="h-4 w-4" />
+          <span>{loadError}</span>
+        </div>
+      )}
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search staff by name or email address..."
-          className="pl-10 h-10 bg-secondary/30"
-        />
-      </div>
+      <TableSearch
+        value={list.search}
+        onChange={list.setSearch}
+        label="Search staff"
+        placeholder="Search staff by name or email address..."
+      />
 
       {/* Table */}
       <Card className="overflow-hidden">
-        {loading ? (
-          <div className="py-16 text-center text-sm text-muted-foreground">
-            <div className="h-6 w-6 mx-auto mb-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-            Loading staff accounts...
-          </div>
-        ) : users.length === 0 ? (
-          <div className="py-16 text-center">
-            <UserCheck className="mx-auto h-12 w-12 text-muted-foreground/30" />
-            <h3 className="mt-4 text-sm font-semibold text-foreground">No staff members found</h3>
-            <p className="mt-1.5 text-xs text-muted-foreground">
-              {search ? "No staff match your search query." : "Add store cashiers or managers."}
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="border-b border-border bg-secondary/50 text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3.5 font-medium">User Profile</th>
-                  <th className="px-4 py-3.5 font-medium">Role</th>
-                  <th className="px-4 py-3.5 font-medium">Branch Assignment</th>
-                  <th className="px-4 py-3.5 font-medium">Discount Limit</th>
-                  <th className="px-4 py-3.5 font-medium">Refund / Cost Access</th>
-                  <th className="px-4 py-3.5 text-center font-medium">Status</th>
-                  <th className="px-4 py-3.5 text-right font-medium">Actions</th>
+        <TableContainer>
+          <Table>
+            <TableHead>
+              <tr>
+                <SortableTh column="name" sortBy={sortBy} sortOrder={sortOrder} onSort={list.toggleSort}>User Profile</SortableTh>
+                <Th>Role</Th>
+                <Th>Branch Assignment</Th>
+                <Th>Discount Limit</Th>
+                <Th>Refund / Cost Access</Th>
+                <Th align="center">Status</Th>
+                <Th align="right"><span className="sr-only">Actions</span></Th>
+              </tr>
+            </TableHead>
+            <TableBody
+              columns={7}
+              loading={initialLoading}
+              empty={
+                <TableEmpty
+                  columns={7}
+                  icon={UserCheck}
+                  title="No staff members found"
+                  description={q ? "No staff match your search query." : "Add store cashiers or managers."}
+                />
+              }
+            >
+              {users.map((u) => (
+                <tr key={u.id} className={cn("hover:bg-secondary/30 transition-colors", loading && "opacity-60")}>
+                  <td className="px-4 py-3.5">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-bold">
+                          {u.name.slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="font-semibold text-foreground">{u.name}</p>
+                        <p className="text-[11px] text-muted-foreground font-mono">{u.email}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <Badge variant="outline" className="text-[10px] capitalize">{roleName(u.roleId)}</Badge>
+                  </td>
+                  <td className="px-4 py-3.5 text-muted-foreground">
+                    {getBranchName(u.branchId)}
+                  </td>
+                  <td className="px-4 py-3.5 font-mono tabular-nums font-medium text-foreground">
+                    Max {u.maxDiscountPercent ?? 0}%
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <div className="flex items-center gap-2 text-[10px]">
+                      {u.canApproveRefund && <Badge variant="secondary">Refunds</Badge>}
+                      {u.canViewCost && <Badge variant="outline">Cost Visible</Badge>}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3.5 text-center">
+                    <Badge variant={u.isActive ? "success" : "secondary"}>
+                      {u.isActive ? "Active" : "Disabled"}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3.5 text-right">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDeactivate(u.id, u.name)}
+                      aria-label={`Deactivate ${u.name}`}
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {users.map((u) => (
-                  <tr key={u.id} className="hover:bg-secondary/30 transition-colors">
-                    <td className="px-4 py-3.5">
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-8 w-8">
-                          <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-bold">
-                            {u.name.slice(0, 2).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="font-semibold text-foreground">{u.name}</p>
-                          <p className="text-[11px] text-muted-foreground font-mono">{u.email}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <Badge variant="outline" className="text-[10px] capitalize">{roleName(u.roleId)}</Badge>
-                    </td>
-                    <td className="px-4 py-3.5 text-muted-foreground">
-                      {getBranchName(u.branchId)}
-                    </td>
-                    <td className="px-4 py-3.5 font-mono font-medium text-foreground">
-                      Max {u.maxDiscountPercent ?? 0}%
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <div className="flex items-center gap-2 text-[10px]">
-                        {u.canApproveRefund && <Badge variant="secondary">Refunds</Badge>}
-                        {u.canViewCost && <Badge variant="outline">Cost Visible</Badge>}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3.5 text-center">
-                      <Badge variant={u.isActive ? "success" : "secondary"}>
-                        {u.isActive ? "Active" : "Disabled"}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3.5 text-right">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDeactivate(u.id, u.name)}
-                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+        <TablePagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={list.setPage} noun="accounts" />
       </Card>
 
       {/* Add Staff Member Dialog */}

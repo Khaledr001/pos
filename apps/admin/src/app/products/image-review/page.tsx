@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
-  ArrowLeft, Check, ExternalLink, ImageOff, Loader2, RefreshCw, Search, SkipForward, X, XCircle,
+  ArrowLeft, Check, ExternalLink, ImageOff, Loader2, RefreshCw, SkipForward, X, XCircle,
 } from "lucide-react";
 import { hasPermission, type Permission } from "@devsfleet/shared-types";
 import { useAuth } from "@/lib/auth-context";
@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
+import { TableSearch } from "@/components/ui/data-table";
 import { Loading, Notice, PageHeader, errorText, selectClass } from "../../online-store/shared";
 
 interface Candidate {
@@ -135,8 +135,12 @@ export default function ImageReviewPage() {
     }
   }, [auth]);
 
+  // Only the newest request may fill the list. A new search on page 3 sends
+  // page 3 and then page 1 of it; whichever answered last used to win.
+  const loadSeq = useRef(0);
   const load = useCallback(async () => {
     if (!auth.accessToken) return;
+    const seq = ++loadSeq.current;
     setLoading(true);
     setLoadError(null);
     try {
@@ -147,15 +151,16 @@ export default function ImageReviewPage() {
           q: q || undefined, categoryId: categoryId || undefined, brandId: brandId || undefined,
         },
       });
+      if (seq !== loadSeq.current) return;
       setItems([...rows]);
       setTotal(rows.meta?.total ?? rows.length);
       setTotalPages(rows.meta?.totalPages ?? 1);
       setSelectedId((current) => (rows.some((r) => r.productId === current) ? current : (rows[0]?.productId ?? null)));
       setActiveCandidate(0);
     } catch (err) {
-      setLoadError(errorText(err, "Failed to load products to review."));
+      if (seq === loadSeq.current) setLoadError(errorText(err, "Failed to load products to review."));
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
   }, [auth, page, q, categoryId, brandId, onlyWithoutImage]);
 
@@ -355,10 +360,7 @@ export default function ImageReviewPage() {
       <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
         <Card className="flex max-h-[calc(100vh-15rem)] min-h-[24rem] flex-col overflow-hidden">
           <div className="space-y-2 border-b border-border p-3">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name or SKU" aria-label="Search products" className="h-9 pl-8 text-xs" />
-            </div>
+            <TableSearch value={search} onChange={setSearch} placeholder="Search name or SKU" label="Search products" />
             <div className="grid grid-cols-2 gap-2">
               <select aria-label="Category" className={selectClass} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
                 <option value="">All categories</option>

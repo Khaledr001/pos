@@ -1,5 +1,6 @@
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, PLAN_IDS, PLANS } from "@devsfleet/shared-types";
 import { z } from "zod";
+import { sortSchema } from "../../common/db/list-query.js";
 import { UpdateTenantSettingsSchema } from "../tenants/dto.js";
 
 export const ListTenantsSchema = z.object({
@@ -8,6 +9,7 @@ export const ListTenantsSchema = z.object({
   q: z.string().trim().max(255).optional(),
   planId: z.enum(PLAN_IDS).optional(),
   status: z.enum(["active", "suspended"]).optional(),
+  ...sortSchema(["createdAt", "name"], { sortBy: "createdAt", sortOrder: "desc" }),
 });
 export type ListTenantsDto = z.infer<typeof ListTenantsSchema>;
 

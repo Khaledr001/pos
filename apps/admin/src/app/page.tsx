@@ -290,7 +290,7 @@ export default function DashboardPage() {
                 {loadingBranches ? (
                   <div className="py-8 text-center text-xs text-muted-foreground">
                     <div className="h-5 w-5 mx-auto mb-2 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-                    Loading branches from API...
+                    Loading branches…
                   </div>
                 ) : branches.length === 0 ? (
                   <div className="py-8 text-center text-xs text-muted-foreground">

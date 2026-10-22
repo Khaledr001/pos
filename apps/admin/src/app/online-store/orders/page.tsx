@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
-import { Globe, RefreshCw, Search, Truck, Store, Undo2 } from "lucide-react";
+import React, { useCallback, useState } from "react";
+import { Globe, RefreshCw, Truck, Store, Undo2 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api-client";
 import { usePermission } from "@/lib/require-auth";
@@ -10,7 +10,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Field, Loading, Notice, PageHeader, StatusBadge, errorText, humanize, money, selectClass } from "../shared";
+import {
+  SortableTh, Table, TableBody, TableContainer, TableEmpty, TableHead,
+  TablePagination, TableSearch, Th, numericCell,
+} from "@/components/ui/data-table";
+import { formatMoney } from "@/lib/format";
+import { useTenantSettings } from "@/lib/tenant-settings";
+import { readListResult, useListData, useListQuery } from "@/lib/use-list-query";
+import { Field, Notice, PageHeader, StatusBadge, errorText, humanize, selectClass } from "../shared";
 
 interface WebOrderRow {
   id: string;
@@ -62,13 +69,10 @@ export default function OnlineOrdersPage() {
   const mayWrite = usePermission("order:write");
   const mayRefund = usePermission("payment:write");
 
-  const [rows, setRows] = useState<WebOrderRow[]>([]);
+  const settings = useTenantSettings();
+  const currency = settings.currency.base;
+  const taxLabel = settings.tax.label;
   const [counts, setCounts] = useState<Record<string, number>>({});
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [status, setStatus] = useState("");
-  const [q, setQ] = useState("");
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -83,28 +87,26 @@ export default function OnlineOrdersPage() {
   const PAGE_SIZE = 25;
   const auth = { accessToken: tokens?.accessToken };
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await api.get<{ items: WebOrderRow[]; total: number; countsByStatus: Record<string, number> }>("/storefront-admin/orders", {
-        ...auth,
-        query: { page, pageSize: PAGE_SIZE, ...(status ? { status } : {}), ...(q.trim() ? { q: q.trim() } : {}) },
-      });
-      setRows(res.items);
-      setTotal(res.total);
-      setCounts(res.countsByStatus);
-    } catch (err) {
-      setError(errorText(err, "Failed to load online orders."));
-    } finally {
-      setLoading(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tokens, page, status, q]);
+  const list = useListQuery({ sortBy: "createdAt", sortOrder: "desc", filters: { status: "" } });
+  const { q, page, sortBy, sortOrder } = list;
+  const status = list.filters.status;
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const loadOrders = useCallback(
+    async (signal: AbortSignal) => {
+      const res = await api.get<{ items: WebOrderRow[]; total: number; countsByStatus: Record<string, number> }>(
+        "/storefront-admin/orders",
+        {
+          accessToken: tokens?.accessToken,
+          signal,
+          query: { page, pageSize: PAGE_SIZE, status: status || undefined, q: q.trim() || undefined, sortBy, sortOrder },
+        },
+      );
+      setCounts(res.countsByStatus ?? {});
+      return readListResult<WebOrderRow>(res);
+    },
+    [tokens?.accessToken, page, status, q, sortBy, sortOrder],
+  );
+  const { items: rows, total, loading, initialLoading, error: loadError, reload: load } = useListData(loadOrders, list.ready);
 
   async function open(id: string) {
     setError(null);
@@ -184,24 +186,30 @@ export default function OnlineOrdersPage() {
     }
   }
 
-  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-
   return (
     <div className="space-y-6">
       <PageHeader title="Online Orders" description="Orders placed on your website. They hold stock like any other order and become a sale when handed over.">
-        <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
+        <Button variant="outline" size="sm" onClick={load} disabled={loading}>
           <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} /> Refresh
         </Button>
       </PageHeader>
 
       {success && <Notice kind="success" message={success} onClose={() => setSuccess(null)} />}
       {error && !selected && <Notice kind="error" message={error} onClose={() => setError(null)} />}
+      {loadError && (
+        <div role="alert" className="flex items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+          <span>{loadError}</span>
+          <Button variant="outline" size="sm" onClick={load}>Retry</Button>
+        </div>
+      )}
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by status">
         {FILTERS.map((f) => (
           <button
             key={f || "all"}
-            onClick={() => { setStatus(f); setPage(1); }}
+            type="button"
+            aria-pressed={status === f}
+            onClick={() => list.setFilter("status", f)}
             className={cn(
               "rounded-full border px-3 py-1 text-xs cursor-pointer transition-colors",
               status === f ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:text-foreground",
@@ -213,64 +221,79 @@ export default function OnlineOrdersPage() {
         ))}
       </div>
 
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-        <Input className="pl-8" placeholder="Order number, name, email or phone" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} />
-      </div>
+      <TableSearch
+        className="max-w-sm"
+        value={list.search}
+        onChange={list.setSearch}
+        label="Search online orders"
+        placeholder="Order number, name, email or phone"
+      />
 
       <Card className="overflow-hidden">
-        {loading ? (
-          <Loading label="Loading online orders..." />
-        ) : rows.length === 0 ? (
-          <div className="py-16 text-center">
-            <Globe className="mx-auto h-12 w-12 text-muted-foreground/30" />
-            <h3 className="mt-4 text-sm font-semibold text-foreground">No online orders {status ? `that are ${humanize(status).toLowerCase()}` : "yet"}</h3>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="border-b border-border bg-secondary/50 text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3.5 font-medium">Order</th>
-                  <th className="px-4 py-3.5 font-medium">Customer</th>
-                  <th className="px-4 py-3.5 font-medium">Delivery</th>
-                  <th className="px-4 py-3.5 font-medium">Payment</th>
-                  <th className="px-4 py-3.5 font-medium">Status</th>
-                  <th className="px-4 py-3.5 text-right font-medium">Total</th>
+        <TableContainer>
+          <Table>
+            <TableHead>
+              <tr>
+                <SortableTh column="orderNumber" sortBy={sortBy} sortOrder={sortOrder} onSort={list.toggleSort}>Order</SortableTh>
+                <Th>Customer</Th>
+                <Th>Delivery</Th>
+                <Th>Payment</Th>
+                <Th>Status</Th>
+                <SortableTh column="total" sortBy={sortBy} sortOrder={sortOrder} onSort={list.toggleSort} firstOrder="desc" align="right">Total ({currency})</SortableTh>
+              </tr>
+            </TableHead>
+            <TableBody
+              columns={6}
+              loading={initialLoading}
+              empty={
+                <TableEmpty
+                  columns={6}
+                  icon={Globe}
+                  title={q ? "No matching online orders" : `No online orders ${status ? `that are ${humanize(status).toLowerCase()}` : "yet"}`}
+                  description={q ? `Nothing matches "${q}".` : undefined}
+                />
+              }
+            >
+              {rows.map((r) => (
+                <tr
+                  key={r.id}
+                  onClick={() => void open(r.id)}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`Open order ${r.orderNumber}`}
+                  onKeyDown={(e) => {
+                    if (e.target !== e.currentTarget) return;
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      void open(r.id);
+                    }
+                  }}
+                  className={cn(
+                    "cursor-pointer hover:bg-secondary/30 transition-colors focus:bg-secondary/40 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                    loading && "opacity-60",
+                  )}
+                >
+                  <td className="px-4 py-3.5">
+                    <div className="font-mono font-medium text-foreground">{r.orderNumber}</div>
+                    <div className="text-muted-foreground tabular-nums">{new Date(r.placedAt ?? r.createdAt).toLocaleString("en-AE")}</div>
+                  </td>
+                  <td className="px-4 py-3.5"><div className="text-foreground">{r.contactName}</div><div className="text-muted-foreground">{r.contactPhone}</div></td>
+                  <td className="px-4 py-3.5">
+                    <span className="inline-flex items-center gap-1.5">
+                      {r.deliveryMethod === "PICKUP" ? <Store aria-hidden="true" className="h-3.5 w-3.5" /> : <Truck aria-hidden="true" className="h-3.5 w-3.5" />}
+                      {r.deliveryMethod === "PICKUP" ? `Pickup · ${r.branchName}` : "Courier"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3.5"><div>{humanize(r.paymentMethod)}</div><StatusBadge status={r.paymentStatus} /></td>
+                  <td className="px-4 py-3.5"><StatusBadge status={r.status} /></td>
+                  <td className={cn("px-4 py-3.5 font-medium text-foreground", numericCell)}>{formatMoney(r.total)}</td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {rows.map((r) => (
-                  <tr key={r.id} onClick={() => void open(r.id)} className="cursor-pointer hover:bg-secondary/30 transition-colors">
-                    <td className="px-4 py-3.5">
-                      <div className="font-mono font-medium text-foreground">{r.orderNumber}</div>
-                      <div className="text-muted-foreground">{new Date(r.placedAt ?? r.createdAt).toLocaleString("en-AE")}</div>
-                    </td>
-                    <td className="px-4 py-3.5"><div className="text-foreground">{r.contactName}</div><div className="text-muted-foreground">{r.contactPhone}</div></td>
-                    <td className="px-4 py-3.5">
-                      <span className="inline-flex items-center gap-1.5">
-                        {r.deliveryMethod === "PICKUP" ? <Store className="h-3.5 w-3.5" /> : <Truck className="h-3.5 w-3.5" />}
-                        {r.deliveryMethod === "PICKUP" ? `Pickup · ${r.branchName}` : "Courier"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3.5"><div>{humanize(r.paymentMethod)}</div><StatusBadge status={r.paymentStatus} /></td>
-                    <td className="px-4 py-3.5"><StatusBadge status={r.status} /></td>
-                    <td className="px-4 py-3.5 text-right font-medium text-foreground">{money(r.total)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+        <TablePagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={list.setPage} noun="orders" />
       </Card>
-
-      {pages > 1 && (
-        <div className="flex items-center justify-end gap-2 text-xs">
-          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
-          <span className="text-muted-foreground">Page {page} of {pages}</span>
-          <Button variant="outline" size="sm" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>Next</Button>
-        </div>
-      )}
 
       <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
         <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -327,7 +350,7 @@ export default function OnlineOrdersPage() {
                 <Row label="Subtotal (net)" value={selected.totals.subtotalNet.formatted} />
                 {selected.totals.discountNet.amount !== "0.00" && <Row label={`Discount${selected.couponCode ? ` (${selected.couponCode})` : ""}`} value={`− ${selected.totals.discountNet.formatted}`} />}
                 {selected.totals.shippingNet.amount !== "0.00" && <Row label="Delivery (net)" value={selected.totals.shippingNet.formatted} />}
-                <Row label="VAT" value={selected.totals.vat.formatted} />
+                <Row label={taxLabel} value={selected.totals.vat.formatted} />
                 <Row label="Total" value={selected.totals.total.formatted} strong />
                 {selected.invoice && <Row label="Tax invoice" value={selected.invoice.number} />}
               </div>
@@ -361,7 +384,7 @@ export default function OnlineOrdersPage() {
 
               {handover && (
                 <div className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
-                  <div className="text-xs font-semibold text-foreground">How was this {money(selected.totals.total.amount)} cash-on-delivery order paid?</div>
+                  <div className="text-xs font-semibold text-foreground">How was this {formatMoney(selected.totals.total.amount, { currency })} cash-on-delivery order paid?</div>
                   <div className="grid gap-3 sm:grid-cols-3">
                     <Field label="Method">
                       <select className={selectClass} value={payMethod} onChange={(e) => setPayMethod(e.target.value)}>

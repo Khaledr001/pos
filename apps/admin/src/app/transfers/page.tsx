@@ -15,6 +15,11 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
+import { readListResult, useListData, useListQuery } from "@/lib/use-list-query";
+import {
+  SortableTh, Table, TableBody, TableContainer, TableEmpty, TableHead,
+  TablePagination, TableSearch, Th,
+} from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -78,10 +83,10 @@ export default function TransfersPage() {
   const { tokens } = useAuth();
 
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [transfers, setTransfers] = useState<Transfer[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState("");
+  const PAGE_SIZE = 50;
+  const list = useListQuery({ sortBy: "createdAt", sortOrder: "desc", filters: { status: "" } });
+  const { q, page, sortBy, sortOrder } = list;
+  const statusFilter = list.filters.status;
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -96,27 +101,27 @@ export default function TransfersPage() {
     [branches],
   );
 
-  const fetchTransfers = useCallback(async () => {
-    setLoading(true);
-    setActionError(null);
-    try {
-      // The API's TransformInterceptor hoists a paginated { items, meta }
-      // response so `data` IS the items array directly, and discards meta —
-      // apiFetch only ever returns `data`. Matches every other paginated
-      // list in this admin app.
-      const res = await api.get<Transfer[]>("/transfers", {
-        accessToken: tokens?.accessToken,
-        query: { status: statusFilter || undefined, limit: 50 },
-      });
-      const list = Array.isArray(res) ? res : [];
-      setTransfers(list);
-      setTotal(list.length);
-    } catch (err: any) {
-      setActionError(err?.message || "Failed to load transfers from the API.");
-    } finally {
-      setLoading(false);
-    }
-  }, [tokens, statusFilter]);
+  const loadTransfers = useCallback(
+    async (signal: AbortSignal) =>
+      readListResult<Transfer>(
+        await api.get<unknown>("/transfers", {
+          accessToken: tokens?.accessToken,
+          signal,
+          query: {
+            q: q.trim() || undefined,
+            status: statusFilter || undefined,
+            page,
+            limit: PAGE_SIZE,
+            sortBy,
+            sortOrder,
+          },
+        }),
+      ),
+    [tokens?.accessToken, q, statusFilter, page, sortBy, sortOrder],
+  );
+  const {
+    items: transfers, total, loading, initialLoading, error: loadError, reload: fetchTransfers,
+  } = useListData(loadTransfers, list.ready);
 
   useEffect(() => {
     if (!tokens?.accessToken) return;
@@ -125,10 +130,6 @@ export default function TransfersPage() {
       .then((res) => setBranches((res as any)?.items ?? res ?? []))
       .catch(() => undefined);
   }, [tokens]);
-
-  useEffect(() => {
-    fetchTransfers();
-  }, [fetchTransfers]);
 
   const runAction = async (transfer: Transfer, action: "approve" | "ship" | "receive") => {
     setBusyId(transfer.id);
@@ -157,8 +158,8 @@ export default function TransfersPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <Select value={statusFilter || "all"} onValueChange={(val) => setStatusFilter(val === "all" ? "" : val)}>
-            <SelectTrigger className="w-37.5 h-9 text-xs">
+          <Select value={statusFilter || "all"} onValueChange={(val) => list.setFilter("status", val === "all" ? "" : val)}>
+            <SelectTrigger className="w-37.5 h-9 text-xs" aria-label="Filter by status">
               <SelectValue placeholder="All statuses" />
             </SelectTrigger>
             <SelectContent>
@@ -184,83 +185,98 @@ export default function TransfersPage() {
       {actionSuccess && (
         <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-600 dark:text-emerald-400">
           <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /><span>{actionSuccess}</span></div>
-          <button onClick={() => setActionSuccess(null)} className="cursor-pointer"><X className="h-3.5 w-3.5" /></button>
+          <button onClick={() => setActionSuccess(null)} className="cursor-pointer" aria-label="Dismiss"><X className="h-3.5 w-3.5" /></button>
         </div>
       )}
       {actionError && (
         <div className="flex items-center justify-between rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
           <div className="flex items-center gap-2"><AlertCircle className="h-4 w-4" /><span>{actionError}</span></div>
-          <button onClick={() => setActionError(null)} className="cursor-pointer"><X className="h-3.5 w-3.5" /></button>
+          <button onClick={() => setActionError(null)} className="cursor-pointer" aria-label="Dismiss"><X className="h-3.5 w-3.5" /></button>
+        </div>
+      )}
+      {loadError && (
+        <div className="flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+          <AlertCircle className="h-4 w-4" /><span>{loadError}</span>
         </div>
       )}
 
+      <TableSearch
+        value={list.search}
+        onChange={list.setSearch}
+        label="Search transfers"
+        placeholder="Search by transfer number or notes..."
+      />
+
       <Card className="overflow-hidden">
-        {loading ? (
-          <div className="py-16 text-center text-sm text-muted-foreground">
-            <div className="h-6 w-6 mx-auto mb-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-            Loading transfers...
-          </div>
-        ) : transfers.length === 0 ? (
-          <div className="py-16 text-center">
-            <Truck className="mx-auto h-12 w-12 text-muted-foreground/30" />
-            <h3 className="mt-4 text-sm font-semibold text-foreground">No transfers found</h3>
-            <p className="mt-1.5 text-xs text-muted-foreground">Request stock from another branch to get started.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="border-b border-border bg-secondary/50 text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3.5 font-medium">Transfer #</th>
-                  <th className="px-4 py-3.5 font-medium">Route</th>
-                  <th className="px-4 py-3.5 font-medium">Items</th>
-                  <th className="px-4 py-3.5 text-center font-medium">Status</th>
-                  <th className="px-4 py-3.5 text-right font-medium">Action</th>
+        <TableContainer>
+          <Table>
+            <TableHead>
+              <tr>
+                <SortableTh column="transferNumber" sortBy={sortBy} sortOrder={sortOrder} onSort={list.toggleSort}>Transfer #</SortableTh>
+                <Th>Route</Th>
+                <Th>Items</Th>
+                <SortableTh column="createdAt" sortBy={sortBy} sortOrder={sortOrder} onSort={list.toggleSort} firstOrder="desc">Requested</SortableTh>
+                <Th align="center">Status</Th>
+                <Th align="right"><span className="sr-only">Actions</span></Th>
+              </tr>
+            </TableHead>
+            <TableBody
+              columns={6}
+              loading={initialLoading}
+              empty={
+                <TableEmpty
+                  columns={6}
+                  icon={Truck}
+                  title="No transfers found"
+                  description={q || statusFilter ? "No transfers match your search or filter." : "Request stock from another branch to get started."}
+                />
+              }
+            >
+              {transfers.map((t) => (
+                <tr key={t.id} className={cn("hover:bg-secondary/30 transition-colors", loading && "opacity-60")}>
+                  <td className="px-4 py-3.5 font-mono font-bold text-primary whitespace-nowrap">{t.transferNumber}</td>
+                  <td className="px-4 py-3.5">
+                    <span className="inline-flex items-center gap-1.5 text-foreground">
+                      {branchLabel(t.fromBranchId)}
+                      <ArrowRight className="h-3 w-3 text-muted-foreground" aria-label="to" />
+                      {branchLabel(t.toBranchId)}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3.5 text-muted-foreground tabular-nums">
+                    {t.items.length} line{t.items.length === 1 ? "" : "s"}
+                  </td>
+                  <td className="px-4 py-3.5 text-muted-foreground whitespace-nowrap tabular-nums">
+                    {new Date(t.createdAt).toLocaleDateString(undefined, { dateStyle: "medium" })}
+                  </td>
+                  <td className="px-4 py-3.5 text-center">
+                    <Badge variant={STATUS_TONE[t.status]} className="text-[10px] capitalize">{t.status}</Badge>
+                  </td>
+                  <td className="px-4 py-3.5 text-right">
+                    {t.status === "requested" && (
+                      <Button size="sm" variant="outline" disabled={busyId === t.id} onClick={() => runAction(t, "approve")}>
+                        Approve
+                      </Button>
+                    )}
+                    {t.status === "approved" && (
+                      <Button size="sm" variant="outline" disabled={busyId === t.id} onClick={() => runAction(t, "ship")}>
+                        Ship
+                      </Button>
+                    )}
+                    {t.status === "shipped" && (
+                      <Button size="sm" variant="outline" disabled={busyId === t.id} onClick={() => runAction(t, "receive")}>
+                        Receive
+                      </Button>
+                    )}
+                    {(t.status === "received" || t.status === "cancelled") && (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {transfers.map((t) => (
-                  <tr key={t.id} className="hover:bg-secondary/30 transition-colors">
-                    <td className="px-4 py-3.5 font-mono font-bold text-primary">{t.transferNumber}</td>
-                    <td className="px-4 py-3.5">
-                      <span className="inline-flex items-center gap-1.5 text-foreground">
-                        {branchLabel(t.fromBranchId)}
-                        <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                        {branchLabel(t.toBranchId)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3.5 text-muted-foreground">
-                      {t.items.length} line{t.items.length === 1 ? "" : "s"}
-                    </td>
-                    <td className="px-4 py-3.5 text-center">
-                      <Badge variant={STATUS_TONE[t.status]} className="text-[10px] capitalize">{t.status}</Badge>
-                    </td>
-                    <td className="px-4 py-3.5 text-right">
-                      {t.status === "requested" && (
-                        <Button size="sm" variant="outline" disabled={busyId === t.id} onClick={() => runAction(t, "approve")}>
-                          Approve
-                        </Button>
-                      )}
-                      {t.status === "approved" && (
-                        <Button size="sm" variant="outline" disabled={busyId === t.id} onClick={() => runAction(t, "ship")}>
-                          Ship
-                        </Button>
-                      )}
-                      {t.status === "shipped" && (
-                        <Button size="sm" variant="outline" disabled={busyId === t.id} onClick={() => runAction(t, "receive")}>
-                          Receive
-                        </Button>
-                      )}
-                      {(t.status === "received" || t.status === "cancelled") && (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+        <TablePagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={list.setPage} noun="transfers" />
       </Card>
 
       <RequestTransferDialog

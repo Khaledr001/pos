@@ -1,4 +1,4 @@
-import { and, asc, count, eq, ilike, isNull, or, schema } from "@devsfleet/db";
+import { and, asc, count, desc, eq, ilike, isNull, or, schema } from "@devsfleet/db";
 import type { Paginated } from "@devsfleet/shared-types";
 import { AppError, ERROR_CODES } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
@@ -9,6 +9,7 @@ import {
   assertMayGrantPermissions,
 } from "../../common/context/authority.js";
 import { RequestContext } from "../../common/context/request-context.js";
+import { containsPattern } from "../../common/db/list-query.js";
 import { PlanLimitService } from "../../common/guards/plan-limit.service.js";
 import type { Env } from "../../config/env.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
@@ -59,17 +60,16 @@ export class UsersService {
   ) {}
 
   async list(query: ListUsersDto): Promise<Paginated<unknown>> {
-    const { page, limit, q, roleId, branchId, includeInactive } = query;
+    const { page, limit, roleId, branchId, includeInactive, sortBy, sortOrder } = query;
     const offset = (page - 1) * limit;
+    const term = containsPattern(query.q);
 
     const where = and(
       isNull(schema.users.deletedAt),
       includeInactive ? undefined : eq(schema.users.isActive, true),
       roleId ? eq(schema.users.roleId, roleId) : undefined,
       branchId ? eq(schema.users.branchId, branchId) : undefined,
-      q
-        ? or(ilike(schema.users.name, `%${q}%`), ilike(schema.users.email, `%${q}%`))
-        : undefined,
+      term ? or(ilike(schema.users.name, term), ilike(schema.users.email, term)) : undefined,
     );
 
     return this.db.run(async (tx) => {
@@ -79,7 +79,10 @@ export class UsersService {
           .from(schema.users)
           .innerJoin(schema.roles, eq(schema.users.roleId, schema.roles.id))
           .where(where)
-          .orderBy(asc(schema.users.name))
+          .orderBy(
+            sortOrder === "asc" ? asc(schema.users[sortBy]) : desc(schema.users[sortBy]),
+            asc(schema.users.id),
+          )
           .limit(limit)
           .offset(offset),
         tx.select({ value: count() }).from(schema.users).where(where),

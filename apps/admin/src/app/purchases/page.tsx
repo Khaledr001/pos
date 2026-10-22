@@ -17,6 +17,13 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
+import { formatMoney } from "@/lib/format";
+import { useTenantSettings } from "@/lib/tenant-settings";
+import { readListResult, useListData, useListQuery } from "@/lib/use-list-query";
+import {
+  SortableTh, Table, TableBody, TableContainer, TableEmpty, TableHead,
+  TablePagination, TableSearch, Th, numericCell,
+} from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -102,18 +109,20 @@ const STATUS_TONE: Record<POStatus, "secondary" | "warning" | "outline" | "succe
 };
 
 function money(value: string | null | undefined): string {
-  return Number(value ?? "0").toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return formatMoney(value ?? "0");
 }
 
 export default function PurchasesPage() {
   const { tokens } = useAuth();
 
-  const [orders, setOrders] = useState<PurchaseOrder[]>([]);
-  const [total, setTotal] = useState(0);
+  const currency = useTenantSettings().currency.base;
   const [branches, setBranches] = useState<Branch[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState("");
+
+  const PAGE_SIZE = 50;
+  const list = useListQuery({ sortBy: "createdAt", sortOrder: "desc", filters: { status: "" } });
+  const { q, page, sortBy, sortOrder } = list;
+  const statusFilter = list.filters.status;
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -121,37 +130,39 @@ export default function PurchasesPage() {
   const [creating, setCreating] = useState(false);
   const [receivingId, setReceivingId] = useState<string | null>(null);
 
-  const fetchOrders = useCallback(async () => {
-    setLoading(true);
-    setActionError(null);
-    try {
-      const res = await api.get<{ items: PurchaseOrder[]; total: number }>("/purchases", {
-        accessToken: tokens?.accessToken,
-        query: { status: statusFilter || undefined, pageSize: 50 },
-      });
-      setOrders(res.items ?? []);
-      setTotal(res.total ?? 0);
-    } catch (err: any) {
-      setActionError(err?.message || "Failed to load purchase orders from the API.");
-    } finally {
-      setLoading(false);
-    }
-  }, [tokens, statusFilter]);
+  const loadOrders = useCallback(
+    async (signal: AbortSignal) =>
+      readListResult<PurchaseOrder>(
+        await api.get<unknown>("/purchases", {
+          accessToken: tokens?.accessToken,
+          signal,
+          query: {
+            q: q.trim() || undefined,
+            status: statusFilter || undefined,
+            page,
+            pageSize: PAGE_SIZE,
+            sortBy,
+            sortOrder,
+          },
+        }),
+      ),
+    [tokens?.accessToken, q, statusFilter, page, sortBy, sortOrder],
+  );
+  const {
+    items: orders, total, loading, initialLoading, error: loadError, reload: fetchOrders,
+  } = useListData(loadOrders, list.ready);
 
   useEffect(() => {
     if (!tokens?.accessToken) return;
     Promise.allSettled([
       api.get<Branch[]>("/branches", { accessToken: tokens.accessToken }),
-      api.get<{ items: Supplier[] }>("/suppliers", { accessToken: tokens.accessToken }),
+      // The API's default page is 25; the order form's supplier picker needs them all.
+      api.get<{ items: Supplier[] }>("/suppliers", { accessToken: tokens.accessToken, query: { pageSize: 200, sortBy: "name", sortOrder: "asc" } }),
     ]).then(([branchRes, supplierRes]) => {
       if (branchRes.status === "fulfilled") setBranches((branchRes.value as any)?.items ?? branchRes.value ?? []);
       if (supplierRes.status === "fulfilled") setSuppliers((supplierRes.value as any)?.items ?? []);
     });
   }, [tokens]);
-
-  useEffect(() => {
-    fetchOrders();
-  }, [fetchOrders]);
 
   const runAction = async (order: PurchaseOrder, action: "send" | "cancel") => {
     setBusyId(order.id);
@@ -180,8 +191,8 @@ export default function PurchasesPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <Select value={statusFilter || "all"} onValueChange={(val) => setStatusFilter(val === "all" ? "" : val)}>
-            <SelectTrigger className="w-37.5 h-9 text-xs">
+          <Select value={statusFilter || "all"} onValueChange={(val) => list.setFilter("status", val === "all" ? "" : val)}>
+            <SelectTrigger className="w-37.5 h-9 text-xs" aria-label="Filter by status">
               <SelectValue placeholder="All statuses" />
             </SelectTrigger>
             <SelectContent>
@@ -207,74 +218,100 @@ export default function PurchasesPage() {
       {actionSuccess && (
         <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-600 dark:text-emerald-400">
           <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /><span>{actionSuccess}</span></div>
-          <button onClick={() => setActionSuccess(null)} className="cursor-pointer"><X className="h-3.5 w-3.5" /></button>
+          <button onClick={() => setActionSuccess(null)} className="cursor-pointer" aria-label="Dismiss"><X className="h-3.5 w-3.5" /></button>
         </div>
       )}
       {actionError && (
         <div className="flex items-center justify-between rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
           <div className="flex items-center gap-2"><AlertCircle className="h-4 w-4" /><span>{actionError}</span></div>
-          <button onClick={() => setActionError(null)} className="cursor-pointer"><X className="h-3.5 w-3.5" /></button>
+          <button onClick={() => setActionError(null)} className="cursor-pointer" aria-label="Dismiss"><X className="h-3.5 w-3.5" /></button>
+        </div>
+      )}
+      {loadError && (
+        <div className="flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+          <AlertCircle className="h-4 w-4" /><span>{loadError}</span>
         </div>
       )}
 
+      <TableSearch
+        value={list.search}
+        onChange={list.setSearch}
+        label="Search purchase orders"
+        placeholder="Search by PO number or supplier..."
+      />
+
       <Card className="overflow-hidden">
-        {loading ? (
-          <div className="py-16 text-center text-sm text-muted-foreground">
-            <div className="h-6 w-6 mx-auto mb-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-            Loading purchase orders...
-          </div>
-        ) : orders.length === 0 ? (
-          <div className="py-16 text-center">
-            <Package className="mx-auto h-12 w-12 text-muted-foreground/30" />
-            <h3 className="mt-4 text-sm font-semibold text-foreground">No purchase orders found</h3>
-            <p className="mt-1.5 text-xs text-muted-foreground">Order stock from a supplier to get started.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="border-b border-border bg-secondary/50 text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3.5 font-medium">PO #</th>
-                  <th className="px-4 py-3.5 font-medium">Supplier</th>
-                  <th className="px-4 py-3.5 text-right font-medium">Total</th>
-                  <th className="px-4 py-3.5 text-center font-medium">Status</th>
-                  <th className="px-4 py-3.5 text-right font-medium">Actions</th>
+        <TableContainer>
+          <Table>
+            <TableHead>
+              <tr>
+                <SortableTh column="poNumber" sortBy={sortBy} sortOrder={sortOrder} onSort={list.toggleSort}>PO #</SortableTh>
+                <Th>Supplier</Th>
+                <SortableTh column="createdAt" sortBy={sortBy} sortOrder={sortOrder} onSort={list.toggleSort} firstOrder="desc">Created</SortableTh>
+                <SortableTh column="expectedDate" sortBy={sortBy} sortOrder={sortOrder} onSort={list.toggleSort}>Expected</SortableTh>
+                <SortableTh column="total" sortBy={sortBy} sortOrder={sortOrder} onSort={list.toggleSort} firstOrder="desc" align="right">Total ({currency})</SortableTh>
+                <Th align="center">Status</Th>
+                <Th align="right"><span className="sr-only">Actions</span></Th>
+              </tr>
+            </TableHead>
+            <TableBody
+              columns={7}
+              loading={initialLoading}
+              empty={
+                <TableEmpty
+                  columns={7}
+                  icon={Package}
+                  title="No purchase orders found"
+                  description={q || statusFilter ? "No purchase orders match your search or filter." : "Order stock from a supplier to get started."}
+                />
+              }
+            >
+              {orders.map((o) => (
+                <tr key={o.id} className={cn("hover:bg-secondary/30 transition-colors", loading && "opacity-60")}>
+                  <td className="px-4 py-3.5 font-mono font-bold text-primary whitespace-nowrap">{o.poNumber}</td>
+                  <td className="px-4 py-3.5 text-foreground">{o.supplierName}</td>
+                  <td className="px-4 py-3.5 text-muted-foreground whitespace-nowrap tabular-nums">
+                    {new Date(o.createdAt).toLocaleDateString(undefined, { dateStyle: "medium" })}
+                  </td>
+                  <td className="px-4 py-3.5 text-muted-foreground whitespace-nowrap tabular-nums">
+                    {o.expectedDate ? new Date(o.expectedDate).toLocaleDateString(undefined, { dateStyle: "medium" }) : "—"}
+                  </td>
+                  <td className={cn("px-4 py-3.5 font-semibold", numericCell)}>{money(o.total)}</td>
+                  <td className="px-4 py-3.5 text-center">
+                    <Badge variant={STATUS_TONE[o.status]} className="text-[10px] capitalize">{o.status}</Badge>
+                  </td>
+                  <td className="px-4 py-3.5 text-right">
+                    <div className="flex items-center justify-end gap-1.5">
+                      {o.status === "draft" && (
+                        <Button size="sm" variant="outline" disabled={busyId === o.id} onClick={() => runAction(o, "send")}>
+                          <Send className="h-3 w-3" /> Send
+                        </Button>
+                      )}
+                      {(o.status === "draft" || o.status === "sent" || o.status === "partial") && (
+                        <Button size="sm" variant="outline" disabled={busyId === o.id} onClick={() => setReceivingId(o.id)}>
+                          <PackageCheck className="h-3 w-3" /> Receive
+                        </Button>
+                      )}
+                      {(o.status === "draft" || o.status === "sent") && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={busyId === o.id}
+                          onClick={() => runAction(o, "cancel")}
+                          aria-label={`Cancel ${o.poNumber}`}
+                          className="text-muted-foreground hover:text-destructive"
+                        >
+                          <Ban className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {orders.map((o) => (
-                  <tr key={o.id} className="hover:bg-secondary/30 transition-colors">
-                    <td className="px-4 py-3.5 font-mono font-bold text-primary">{o.poNumber}</td>
-                    <td className="px-4 py-3.5 text-foreground">{o.supplierName}</td>
-                    <td className="px-4 py-3.5 text-right font-mono font-semibold">AED {money(o.total)}</td>
-                    <td className="px-4 py-3.5 text-center">
-                      <Badge variant={STATUS_TONE[o.status]} className="text-[10px] capitalize">{o.status}</Badge>
-                    </td>
-                    <td className="px-4 py-3.5 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        {o.status === "draft" && (
-                          <Button size="sm" variant="outline" disabled={busyId === o.id} onClick={() => runAction(o, "send")}>
-                            <Send className="h-3 w-3" /> Send
-                          </Button>
-                        )}
-                        {(o.status === "draft" || o.status === "sent" || o.status === "partial") && (
-                          <Button size="sm" variant="outline" disabled={busyId === o.id} onClick={() => setReceivingId(o.id)}>
-                            <PackageCheck className="h-3 w-3" /> Receive
-                          </Button>
-                        )}
-                        {(o.status === "draft" || o.status === "sent") && (
-                          <Button size="sm" variant="ghost" disabled={busyId === o.id} onClick={() => runAction(o, "cancel")} className="text-muted-foreground hover:text-destructive">
-                            <Ban className="h-3 w-3" />
-                          </Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+        <TablePagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={list.setPage} noun="orders" />
       </Card>
 
       <CreateOrderDialog
@@ -613,6 +650,7 @@ function ReceiveDialog({
   onReceived: (message: string) => void;
 }) {
   const { tokens } = useAuth();
+  const currency = useTenantSettings().currency.base;
   const [order, setOrder] = useState<PODetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [lines, setLines] = useState<
@@ -751,7 +789,7 @@ function ReceiveDialog({
                     {/* Per BASE unit — per piece, not per box. Saying so
                         matters most on exactly the lines where they differ. */}
                     <p className="text-[10px] text-muted-foreground">Landed cost per base unit</p>
-                    <p className="font-mono font-semibold text-foreground">AED {money(item.landedUnitCost)}</p>
+                    <p className="font-mono font-semibold text-foreground">{currency} {money(item.landedUnitCost)}</p>
                   </div>
                 </div>
               ))}

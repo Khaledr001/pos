@@ -10,7 +10,13 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Field, Loading, Notice, PageHeader, errorText, money, selectClass } from "../shared";
+import {
+  Table, TableBody, TableContainer, TableEmpty, TableHead, Th, numericCell,
+} from "@/components/ui/data-table";
+import { formatMoney } from "@/lib/format";
+import { useTenantSettings } from "@/lib/tenant-settings";
+import { cn } from "@/lib/utils";
+import { Field, Notice, PageHeader, errorText, selectClass } from "../shared";
 
 interface Coupon {
   id: string;
@@ -33,6 +39,7 @@ export default function CouponsPage() {
   const mayDiscount = usePermission("sale:discount");
   const auth = { accessToken: tokens?.accessToken };
 
+  const settings = useTenantSettings();
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -104,33 +111,47 @@ export default function CouponsPage() {
       {error && !form && <Notice kind="error" message={error} onClose={() => setError(null)} />}
 
       <Card className="overflow-hidden">
-        {loading ? (
-          <Loading label="Loading promo codes..." />
-        ) : coupons.length === 0 ? (
-          <div className="py-16 text-center"><TicketPercent className="mx-auto h-12 w-12 text-muted-foreground/30" /><h3 className="mt-4 text-sm font-semibold">No promo codes yet</h3></div>
-        ) : (
-          <table className="w-full text-left text-xs">
-            <thead className="border-b border-border bg-secondary/50 text-muted-foreground">
-              <tr><th className="px-4 py-3.5 font-medium">Code</th><th className="px-4 py-3.5 font-medium">Gives</th><th className="px-4 py-3.5 font-medium">Minimum spend</th><th className="px-4 py-3.5 font-medium">Used</th><th className="px-4 py-3.5 font-medium">Valid until</th><th className="px-4 py-3.5 text-center font-medium">Active</th></tr>
-            </thead>
-            <tbody className="divide-y divide-border">
+        <TableContainer>
+          <Table>
+            <TableHead>
+              <tr>
+                <Th>Code</Th>
+                <Th>Gives</Th>
+                <Th align="right">Minimum spend (excl. {settings.tax.label})</Th>
+                <Th align="right">Used</Th>
+                <Th>Valid until</Th>
+                <Th align="center">Active</Th>
+              </tr>
+            </TableHead>
+            <TableBody
+              columns={6}
+              loading={loading}
+              empty={<TableEmpty columns={6} icon={TicketPercent} title="No promo codes yet" />}
+            >
               {coupons.map((c) => (
                 <tr key={c.id} className="hover:bg-secondary/30">
                   <td className="px-4 py-3.5 font-mono font-semibold text-foreground">{c.code}</td>
                   <td className="px-4 py-3.5">{c.type === "percent" ? `${Number(c.value)}% off` : c.type === "free_shipping" ? "Free delivery" : "Fixed amount (not usable online)"}</td>
-                  <td className="px-4 py-3.5">{c.minSubtotal === "0.0000" ? "—" : `${money(c.minSubtotal)} excl. VAT`}</td>
-                  <td className="px-4 py-3.5">{c.usedCount}{c.maxUses ? ` / ${c.maxUses}` : ""}</td>
-                  <td className="px-4 py-3.5">{c.validTo ? new Date(c.validTo).toLocaleDateString("en-AE") : "No end"}</td>
+                  <td className={cn("px-4 py-3.5", numericCell)}>{c.minSubtotal === "0.0000" ? "—" : formatMoney(c.minSubtotal, { currency: settings.currency.base })}</td>
+                  <td className={cn("px-4 py-3.5", numericCell)}>{c.usedCount}{c.maxUses ? ` / ${c.maxUses}` : ""}</td>
+                  <td className="px-4 py-3.5 tabular-nums">{c.validTo ? new Date(c.validTo).toLocaleDateString("en-AE") : "No end"}</td>
                   <td className="px-4 py-3.5 text-center">
-                    <button disabled={!mayWrite} onClick={() => void toggle(c)} className="cursor-pointer disabled:cursor-default">
+                    <button
+                      type="button"
+                      disabled={!mayWrite}
+                      onClick={() => void toggle(c)}
+                      aria-label={`${c.isActive ? "Turn off" : "Turn on"} ${c.code}`}
+                      aria-pressed={c.isActive}
+                      className="cursor-pointer rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
+                    >
                       <Badge variant={c.isActive ? "success" : "secondary"}>{c.isActive ? "On" : "Off"}</Badge>
                     </button>
                   </td>
                 </tr>
               ))}
-            </tbody>
-          </table>
-        )}
+            </TableBody>
+          </Table>
+        </TableContainer>
       </Card>
 
       <Dialog open={!!form} onOpenChange={(o) => !o && setForm(null)}>
@@ -156,7 +177,7 @@ export default function CouponsPage() {
                   {form.type === "percent" && <Field label="Percent off"><Input required inputMode="decimal" value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} /></Field>}
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Field label="Minimum spend (excl. VAT)"><Input inputMode="decimal" value={form.minSubtotal} onChange={(e) => setForm({ ...form, minSubtotal: e.target.value })} /></Field>
+                  <Field label={`Minimum spend (excl. ${settings.tax.label})`}><Input inputMode="decimal" value={form.minSubtotal} onChange={(e) => setForm({ ...form, minSubtotal: e.target.value })} /></Field>
                   <Field label="Total uses allowed"><Input inputMode="numeric" value={form.maxUses} onChange={(e) => setForm({ ...form, maxUses: e.target.value })} placeholder="Unlimited" /></Field>
                 </div>
                 <Field label="Valid until"><Input type="date" value={form.validTo} onChange={(e) => setForm({ ...form, validTo: e.target.value })} /></Field>

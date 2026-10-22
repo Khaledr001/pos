@@ -4,6 +4,7 @@ import { AppError, ERROR_CODES, Money } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import { assertBranchInScope } from "../../common/context/branch-scope.js";
+import { containsPattern } from "../../common/db/list-query.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import { StockService } from "./stock.service.js";
 import type {
@@ -35,25 +36,35 @@ export class InventoryService {
    * entire shelf is already promised to a confirmed order.
    */
   async listStock(query: ListStockDto): Promise<Paginated<unknown>> {
-    const { page, limit, q, branchId, categoryId, lowStockOnly } = query;
+    const { page, limit, q, branchId, categoryId, lowStockOnly, sortBy, sortOrder } = query;
     const offset = (page - 1) * limit;
     assertBranchInScope(branchId);
+    const term = containsPattern(q);
 
     const where = and(
       branchId ? eq(schema.inventory.branchId, branchId) : undefined,
       categoryId ? eq(schema.products.categoryId, categoryId) : undefined,
       isNull(schema.productVariants.deletedAt),
-      q
+      term
         ? or(
-            ilike(schema.products.name, `%${q}%`),
-            ilike(schema.productVariants.sku, `%${q}%`),
-            eq(schema.productVariants.barcode, q),
+            ilike(schema.products.name, term),
+            ilike(schema.productVariants.sku, term),
+            eq(schema.productVariants.barcode, q!.trim()),
           )
         : undefined,
       lowStockOnly
         ? sql`${schema.inventory.quantity} - ${schema.inventory.reservedQuantity} <= ${schema.productVariants.minStock}`
         : undefined,
     );
+
+    const available = sql`${schema.inventory.quantity} - ${schema.inventory.reservedQuantity}`;
+    const sortColumn = {
+      productName: schema.products.name,
+      sku: schema.productVariants.sku,
+      available,
+      branchName: schema.branches.name,
+    }[sortBy];
+    const direction = sortOrder === "asc" ? asc : desc;
 
     return this.db.run(async (tx) => {
       const [items, [totals]] = await Promise.all([
@@ -85,7 +96,13 @@ export class InventoryService {
           .innerJoin(schema.branches, eq(schema.inventory.branchId, schema.branches.id))
           .leftJoin(schema.categories, eq(schema.products.categoryId, schema.categories.id))
           .where(where)
-          .orderBy(asc(schema.products.name), asc(schema.productVariants.sortOrder))
+          .orderBy(
+            direction(sortColumn),
+            asc(schema.productVariants.sortOrder),
+            // Tiebreak: one variant held at two branches is two rows with
+            // the same name, and they must not swap places between pages.
+            asc(schema.inventory.id),
+          )
           .limit(limit)
           .offset(offset),
         tx

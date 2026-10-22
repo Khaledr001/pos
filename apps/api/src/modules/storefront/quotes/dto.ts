@@ -1,6 +1,7 @@
 import { WEB_QUOTE_STATUSES } from "@devsfleet/shared-types";
 import { Money } from "@devsfleet/shared-utils";
 import { z } from "zod";
+import { sortSchema } from "../../../common/db/list-query.js";
 import { uaePhone, wireEnum } from "../wire.js";
 
 export const CreateQuoteSchema = z.object({
@@ -41,6 +42,7 @@ const decimal = z
 export const ListQuotesSchema = z.object({
   status: wireEnum(WEB_QUOTE_STATUSES).optional(),
   q: z.string().trim().max(100).optional(),
+  ...sortSchema(["createdAt", "number"], { sortBy: "createdAt", sortOrder: "desc" }),
   page: z.coerce.number().int().min(1).max(10_000).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
 });

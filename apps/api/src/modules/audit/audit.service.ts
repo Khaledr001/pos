@@ -1,6 +1,7 @@
-import { and, count, desc, eq, gte, lte, schema } from "@devsfleet/db";
+import { and, asc, count, desc, eq, gte, ilike, lte, or, schema } from "@devsfleet/db";
 import { Injectable } from "@nestjs/common";
 import { assertBranchInScope } from "../../common/context/branch-scope.js";
+import { containsPattern } from "../../common/db/list-query.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import type { ListAuditLogDto } from "./dto.js";
 
@@ -19,6 +20,7 @@ export class AuditService {
 
   async list(query: ListAuditLogDto): Promise<{ items: unknown[]; total: number }> {
     if (query.branchId) assertBranchInScope(query.branchId);
+    const term = containsPattern(query.q);
 
     return this.db.run(async (tx) => {
       const where = and(
@@ -27,9 +29,21 @@ export class AuditService {
         query.entityType ? eq(schema.auditLog.entityType, query.entityType) : undefined,
         query.from ? gte(schema.auditLog.createdAt, new Date(`${query.from}T00:00:00Z`)) : undefined,
         query.to ? lte(schema.auditLog.createdAt, new Date(`${query.to}T23:59:59.999Z`)) : undefined,
+        term
+          ? or(
+              ilike(schema.auditLog.action, term),
+              ilike(schema.auditLog.entityType, term),
+              ilike(schema.users.name, term),
+            )
+          : undefined,
       );
 
-      const [total] = await tx.select({ value: count() }).from(schema.auditLog).where(where);
+      // Joined because the search reaches the user's name.
+      const [total] = await tx
+        .select({ value: count() })
+        .from(schema.auditLog)
+        .leftJoin(schema.users, eq(schema.auditLog.userId, schema.users.id))
+        .where(where);
 
       const items = await tx
         .select({
@@ -47,7 +61,10 @@ export class AuditService {
         .leftJoin(schema.users, eq(schema.auditLog.userId, schema.users.id))
         .leftJoin(schema.branches, eq(schema.auditLog.branchId, schema.branches.id))
         .where(where)
-        .orderBy(desc(schema.auditLog.createdAt))
+        .orderBy(
+          query.sortOrder === "asc" ? asc(schema.auditLog[query.sortBy]) : desc(schema.auditLog[query.sortBy]),
+          desc(schema.auditLog.id),
+        )
         .limit(query.pageSize)
         .offset((query.page - 1) * query.pageSize);
 

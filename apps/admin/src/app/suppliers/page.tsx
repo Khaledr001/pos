@@ -1,10 +1,9 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import {
   Truck,
   Plus,
-  Search,
   RefreshCw,
   X,
   AlertCircle,
@@ -18,6 +17,11 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
+import { readListResult, useListData, useListQuery } from "@/lib/use-list-query";
+import {
+  SortableTh, Table, TableBody, TableContainer, TableEmpty, TableHead,
+  TablePagination, TableSearch, Th,
+} from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -46,20 +50,27 @@ interface Supplier {
   createdAt: string;
 }
 
-interface SuppliersResponse {
-  items: Supplier[];
-  total: number;
-}
-
 export default function SuppliersPage() {
   const { tokens } = useAuth();
 
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
   const PAGE_SIZE = 50;
+  const list = useListQuery({ sortBy: "createdAt", sortOrder: "desc" });
+  const { q, page, sortBy, sortOrder } = list;
+
+  const loadSuppliers = useCallback(
+    async (signal: AbortSignal) =>
+      readListResult<Supplier>(
+        await api.get<unknown>("/suppliers", {
+          accessToken: tokens?.accessToken,
+          signal,
+          query: { q: q.trim() || undefined, page, pageSize: PAGE_SIZE, includeInactive: false, sortBy, sortOrder },
+        }),
+      ),
+    [tokens?.accessToken, q, page, sortBy, sortOrder],
+  );
+  const {
+    items: suppliers, total, loading, initialLoading, error: loadError, reload: fetchSuppliers,
+  } = useListData(loadSuppliers, list.ready);
 
   // Dialog & actions
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -77,35 +88,6 @@ export default function SuppliersPage() {
   const [fContactPerson, setFContactPerson] = useState("");
   const [fPaymentTerms, setFPaymentTerms] = useState("30");
   const [fNotes, setFNotes] = useState("");
-
-  const fetchSuppliers = useCallback(async () => {
-    setLoading(true);
-    setActionError(null);
-    try {
-      const res = await api.get<any>("/suppliers", {
-        accessToken: tokens?.accessToken,
-        query: {
-          q: search || undefined,
-          page,
-          pageSize: PAGE_SIZE,
-          includeInactive: false,
-        },
-      });
-      const list = Array.isArray(res) ? res : (res?.items ?? []);
-      const totalCount = res?.meta?.total ?? res?.total ?? list.length;
-      setSuppliers(list);
-      setTotal(totalCount);
-    } catch (err: any) {
-      console.error("Failed to load suppliers:", err);
-      setActionError(err?.message || "Failed to load suppliers.");
-    } finally {
-      setLoading(false);
-    }
-  }, [tokens, search, page]);
-
-  useEffect(() => {
-    fetchSuppliers();
-  }, [fetchSuppliers]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -191,7 +173,7 @@ export default function SuppliersPage() {
             <CheckCircle2 className="h-4 w-4" />
             <span>{actionSuccess}</span>
           </div>
-          <button onClick={() => setActionSuccess(null)} className="cursor-pointer">
+          <button onClick={() => setActionSuccess(null)} className="cursor-pointer" aria-label="Dismiss">
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -202,118 +184,100 @@ export default function SuppliersPage() {
             <AlertCircle className="h-4 w-4" />
             <span>{actionError}</span>
           </div>
-          <button onClick={() => setActionError(null)} className="cursor-pointer">
+          <button onClick={() => setActionError(null)} className="cursor-pointer" aria-label="Dismiss">
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
       )}
+      {loadError && (
+        <div className="flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+          <AlertCircle className="h-4 w-4" />
+          <span>{loadError}</span>
+        </div>
+      )}
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by supplier name, company, TRN, or mobile..."
-          className="pl-10 h-10 bg-secondary/30"
-        />
-      </div>
+      <TableSearch
+        value={list.search}
+        onChange={list.setSearch}
+        label="Search suppliers"
+        placeholder="Search by supplier name, company, TRN, or mobile..."
+      />
 
       {/* Table */}
       <Card className="overflow-hidden">
-        {loading ? (
-          <div className="py-16 text-center text-sm text-muted-foreground">
-            <div className="h-6 w-6 mx-auto mb-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-            Loading suppliers from API...
-          </div>
-        ) : suppliers.length === 0 ? (
-          <div className="py-16 text-center">
-            <Truck className="mx-auto h-12 w-12 text-muted-foreground/30" />
-            <h3 className="mt-4 text-sm font-semibold text-foreground">No suppliers found</h3>
-            <p className="mt-1.5 text-xs text-muted-foreground">
-              {search ? "No suppliers match your search query." : "Add your primary trade vendors to get started."}
-            </p>
-            {!search && (
-              <Button size="sm" onClick={() => setIsModalOpen(true)} className="mt-4">
-                <Plus className="h-3.5 w-3.5" /> Add Supplier
-              </Button>
-            )}
-          </div>
-        ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="border-b border-border bg-secondary/50 text-muted-foreground">
-                  <tr>
-                    <th className="px-4 py-3.5 font-medium">Supplier & Contact</th>
-                    <th className="px-4 py-3.5 font-medium">Company & TRN</th>
-                    <th className="px-4 py-3.5 font-medium">Location</th>
-                    <th className="px-4 py-3.5 text-right font-medium">Payment Terms</th>
-                    <th className="px-4 py-3.5 text-center font-medium">Status</th>
-                    <th className="px-4 py-3.5 text-right font-medium">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {suppliers.map((s) => (
-                    <tr key={s.id} className="hover:bg-secondary/30 transition-colors">
-                      <td className="px-4 py-3.5">
-                        <div className="flex flex-col">
-                          <span className="font-semibold text-foreground">{s.name}</span>
-                          <span className="text-[11px] text-muted-foreground font-mono">
-                            {s.phone ?? s.email ?? "No direct contact"}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <div className="flex flex-col">
-                          <span className="font-medium text-foreground">{s.company ?? "Individual Vendor"}</span>
-                          {s.trn && <span className="text-[10px] text-muted-foreground font-mono">TRN: {s.trn}</span>}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3.5 text-muted-foreground max-w-50 truncate">
-                        {s.address ?? "—"}
-                      </td>
-                      <td className="px-4 py-3.5 text-right font-mono font-medium text-foreground">
-                        {s.paymentTermDays === 0 ? "COD (Immediate)" : `${s.paymentTermDays} Days Credit`}
-                      </td>
-                      <td className="px-4 py-3.5 text-center">
-                        <Badge variant={s.isActive ? "success" : "secondary"}>
-                          {s.isActive ? "Active" : "Inactive"}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3.5 text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDelete(s.id, s.name)}
-                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {total > PAGE_SIZE && (
-              <div className="flex items-center justify-between border-t border-border px-4 py-3">
-                <span className="text-xs text-muted-foreground">
-                  Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, total)} of {total}
-                </span>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>
-                    Previous
-                  </Button>
-                  <Button variant="outline" size="sm" disabled={page * PAGE_SIZE >= total} onClick={() => setPage((p) => p + 1)}>
-                    Next
-                  </Button>
-                </div>
-              </div>
-            )}
-          </>
-        )}
+        <TableContainer>
+          <Table>
+            <TableHead>
+              <tr>
+                <SortableTh column="name" sortBy={sortBy} sortOrder={sortOrder} onSort={list.toggleSort}>Supplier & Contact</SortableTh>
+                <Th>Company & TRN</Th>
+                <Th>Location</Th>
+                <Th align="right">Payment Terms</Th>
+                <Th align="center">Status</Th>
+                <Th align="right"><span className="sr-only">Actions</span></Th>
+              </tr>
+            </TableHead>
+            <TableBody
+              columns={6}
+              loading={initialLoading}
+              empty={
+                <TableEmpty
+                  columns={6}
+                  icon={Truck}
+                  title="No suppliers found"
+                  description={q ? "No suppliers match your search query." : "Add your primary trade vendors to get started."}
+                  action={!q ? (
+                    <Button size="sm" onClick={() => setIsModalOpen(true)}>
+                      <Plus className="h-3.5 w-3.5" /> Add Supplier
+                    </Button>
+                  ) : undefined}
+                />
+              }
+            >
+              {suppliers.map((s) => (
+                <tr key={s.id} className={cn("hover:bg-secondary/30 transition-colors", loading && "opacity-60")}>
+                  <td className="px-4 py-3.5">
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-foreground">{s.name}</span>
+                      <span className="text-[11px] text-muted-foreground font-mono">
+                        {s.phone ?? s.email ?? "No direct contact"}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <div className="flex flex-col">
+                      <span className="font-medium text-foreground">{s.company ?? "Individual Vendor"}</span>
+                      {s.trn && <span className="text-[10px] text-muted-foreground font-mono">TRN: {s.trn}</span>}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3.5 text-muted-foreground max-w-50 truncate" title={s.address ?? undefined}>
+                    {s.address ?? "—"}
+                  </td>
+                  <td className="px-4 py-3.5 text-right font-mono tabular-nums font-medium text-foreground">
+                    {s.paymentTermDays === 0 ? "COD (Immediate)" : `${s.paymentTermDays} Days Credit`}
+                  </td>
+                  <td className="px-4 py-3.5 text-center">
+                    <Badge variant={s.isActive ? "success" : "secondary"}>
+                      {s.isActive ? "Active" : "Inactive"}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3.5 text-right">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDelete(s.id, s.name)}
+                      aria-label={`Remove supplier ${s.name}`}
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+        <TablePagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={list.setPage} noun="suppliers" />
       </Card>
 
       {/* Add Supplier Dialog */}

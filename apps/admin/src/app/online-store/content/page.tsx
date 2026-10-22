@@ -11,7 +11,10 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Field, Loading, Notice, PageHeader, errorText, humanize, selectClass, textareaClass } from "../shared";
+import {
+  Table, TableBody, TableContainer, TableEmpty, TableHead, Th, numericCell,
+} from "@/components/ui/data-table";
+import { Field, Notice, PageHeader, errorText, humanize, selectClass, textareaClass } from "../shared";
 
 interface PageRow {
   id: string;
@@ -175,10 +178,12 @@ export default function ContentPage() {
       {success && <Notice kind="success" message={success} onClose={() => setSuccess(null)} />}
       {error && !pageForm && !bannerForm && <Notice kind="error" message={error} onClose={() => setError(null)} />}
 
-      <div className="flex gap-2">
+      <div className="flex gap-2" role="group" aria-label="Content type">
         {(["pages", "banners"] as const).map((t) => (
           <button
             key={t}
+            type="button"
+            aria-pressed={tab === t}
             onClick={() => setTab(t)}
             className={cn("rounded-full border px-3 py-1 text-xs cursor-pointer", tab === t ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground")}
           >
@@ -188,17 +193,23 @@ export default function ContentPage() {
       </div>
 
       <Card className="overflow-hidden">
-        {loading ? (
-          <Loading label="Loading content..." />
-        ) : tab === "pages" ? (
-          pages.length === 0 ? (
-            <Empty icon={<FileText className="mx-auto h-12 w-12 text-muted-foreground/30" />} label="No pages yet" />
-          ) : (
-            <table className="w-full text-left text-xs">
-              <thead className="border-b border-border bg-secondary/50 text-muted-foreground">
-                <tr><th className="px-4 py-3.5 font-medium">Title</th><th className="px-4 py-3.5 font-medium">Address</th><th className="px-4 py-3.5 font-medium">Kind</th><th className="px-4 py-3.5 font-medium">Status</th><th /></tr>
-              </thead>
-              <tbody className="divide-y divide-border">
+        <TableContainer>
+          {tab === "pages" ? (
+            <Table>
+              <TableHead>
+                <tr>
+                  <Th>Title</Th>
+                  <Th>Address</Th>
+                  <Th>Kind</Th>
+                  <Th>Status</Th>
+                  <Th align="right"><span className="sr-only">Actions</span></Th>
+                </tr>
+              </TableHead>
+              <TableBody
+                columns={5}
+                loading={loading && pages.length === 0}
+                empty={<TableEmpty columns={5} icon={FileText} title="No pages yet" />}
+              >
                 {pages.map((p) => (
                   <tr key={p.id} className="hover:bg-secondary/30">
                     <td className="px-4 py-3.5 font-medium text-foreground">{p.title}</td>
@@ -206,33 +217,40 @@ export default function ContentPage() {
                     <td className="px-4 py-3.5">{p.kind === "blog" ? "Guide" : "Page"}</td>
                     <td className="px-4 py-3.5"><Badge variant={p.isPublished ? "success" : "secondary"}>{p.isPublished ? "Published" : "Draft"}</Badge></td>
                     <td className="px-4 py-3.5 text-right space-x-3">
-                      {mayWrite && <button className="cursor-pointer text-muted-foreground hover:text-foreground" onClick={() => void editPage(p.id)} aria-label="Edit"><Pencil className="h-3.5 w-3.5" /></button>}
-                      {mayWrite && <button className="cursor-pointer text-muted-foreground hover:text-destructive" onClick={() => void remove("pages", p.id, p.title)} aria-label="Delete"><Trash2 className="h-3.5 w-3.5" /></button>}
+                      {mayWrite && <button type="button" className="cursor-pointer text-muted-foreground hover:text-foreground" onClick={() => void editPage(p.id)} aria-label={`Edit ${p.title}`}><Pencil className="h-3.5 w-3.5" /></button>}
+                      {mayWrite && <button type="button" className="cursor-pointer text-muted-foreground hover:text-destructive" onClick={() => void remove("pages", p.id, p.title)} aria-label={`Delete ${p.title}`}><Trash2 className="h-3.5 w-3.5" /></button>}
                     </td>
                   </tr>
                 ))}
-              </tbody>
-            </table>
-          )
-        ) : banners.length === 0 ? (
-          <Empty icon={<ImageIcon className="mx-auto h-12 w-12 text-muted-foreground/30" />} label="No banners yet" />
-        ) : (
-          <table className="w-full text-left text-xs">
-            <thead className="border-b border-border bg-secondary/50 text-muted-foreground">
-              <tr><th className="px-4 py-3.5 font-medium">Banner</th><th className="px-4 py-3.5 font-medium">Where</th><th className="px-4 py-3.5 font-medium">Order</th><th className="px-4 py-3.5 font-medium">Status</th><th /></tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {banners.map((b) => (
-                <tr key={b.id} className="hover:bg-secondary/30">
-                  <td className="px-4 py-3.5"><div className="font-medium text-foreground">{b.title}</div><div className="text-muted-foreground">{b.subtitle}</div></td>
-                  <td className="px-4 py-3.5">{humanize(b.placement)}</td>
-                  <td className="px-4 py-3.5">{b.sortOrder}</td>
-                  <td className="px-4 py-3.5"><Badge variant={b.isActive ? "success" : "secondary"}>{b.isActive ? "Showing" : "Off"}</Badge></td>
-                  <td className="px-4 py-3.5 text-right space-x-3">
+              </TableBody>
+            </Table>
+          ) : (
+            <Table>
+              <TableHead>
+                <tr>
+                  <Th>Banner</Th>
+                  <Th>Where</Th>
+                  <Th align="right">Order</Th>
+                  <Th>Status</Th>
+                  <Th align="right"><span className="sr-only">Actions</span></Th>
+                </tr>
+              </TableHead>
+              <TableBody
+                columns={5}
+                loading={loading && banners.length === 0}
+                empty={<TableEmpty columns={5} icon={ImageIcon} title="No banners yet" />}
+              >
+                {banners.map((b) => (
+                  <tr key={b.id} className="hover:bg-secondary/30">
+                    <td className="px-4 py-3.5"><div className="font-medium text-foreground">{b.title}</div><div className="text-muted-foreground">{b.subtitle}</div></td>
+                    <td className="px-4 py-3.5">{humanize(b.placement)}</td>
+                    <td className={cn("px-4 py-3.5", numericCell)}>{b.sortOrder}</td>
+                    <td className="px-4 py-3.5"><Badge variant={b.isActive ? "success" : "secondary"}>{b.isActive ? "Showing" : "Off"}</Badge></td>
+                    <td className="px-4 py-3.5 text-right space-x-3">
                     {mayWrite && (
                       <button
                         className="cursor-pointer text-muted-foreground hover:text-foreground"
-                        aria-label="Edit"
+                        aria-label={`Edit ${b.title}`}
                         onClick={() =>
                           setBannerForm({
                             id: b.id,
@@ -250,13 +268,14 @@ export default function ContentPage() {
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
                     )}
-                    {mayWrite && <button className="cursor-pointer text-muted-foreground hover:text-destructive" onClick={() => void remove("banners", b.id, b.title)} aria-label="Delete"><Trash2 className="h-3.5 w-3.5" /></button>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+                    {mayWrite && <button className="cursor-pointer text-muted-foreground hover:text-destructive" onClick={() => void remove("banners", b.id, b.title)} aria-label={`Delete ${b.title}`}><Trash2 className="h-3.5 w-3.5" /></button>}
+                    </td>
+                  </tr>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </TableContainer>
       </Card>
 
       <Dialog open={!!pageForm} onOpenChange={(o) => !o && setPageForm(null)}>
@@ -339,15 +358,6 @@ export default function ContentPage() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
-
-function Empty({ icon, label }: { icon: React.ReactNode; label: string }) {
-  return (
-    <div className="py-16 text-center">
-      {icon}
-      <h3 className="mt-4 text-sm font-semibold text-foreground">{label}</h3>
     </div>
   );
 }

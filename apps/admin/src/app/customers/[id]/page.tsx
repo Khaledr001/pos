@@ -20,7 +20,6 @@ import {
   X,
   Plus,
   RefreshCw,
-  Search,
   ExternalLink,
   Copy,
   Check,
@@ -64,7 +63,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { timeAgo } from "@/lib/format";
+import { Money } from "@devsfleet/shared-utils";
+import { formatMoney as formatAmount, timeAgo } from "@/lib/format";
+import { useTenantSettings } from "@/lib/tenant-settings";
+import { TableContainer, TableHead, TableSearch } from "@/components/ui/data-table";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -184,12 +186,10 @@ const PAYMENT_ICONS: Record<string, React.ReactNode> = {
   credit: <CreditCard className="h-3.5 w-3.5 text-amber-500" />,
 };
 
-function formatMoney(amount?: string | number | null): string {
+/** Zero rather than a dash: on a statement an absent figure means nothing owed. */
+function formatMoney(amount?: string | number | bigint | null): string {
   if (amount === undefined || amount === null || amount === "") return "0.00";
-  const num = typeof amount === "string" ? parseFloat(amount) : amount;
-  return isNaN(num)
-    ? "0.00"
-    : num.toLocaleString("en-AE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return formatAmount(typeof amount === "bigint" ? Money.toDecimalString(amount) : amount);
 }
 
 function formatDate(iso?: string | null): string {
@@ -240,6 +240,9 @@ export default function ClientDetailPage() {
   const [branches, setBranches] = useState<Branch[]>([]);
 
   const [loading, setLoading] = useState(true);
+  const settings = useTenantSettings();
+  const currency = settings.currency.base;
+  const taxLabel = settings.tax.label;
   const [refreshing, setRefreshing] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -520,7 +523,7 @@ export default function ClientDetailPage() {
         { accessToken: tokens?.accessToken },
       );
 
-      setSuccessMsg(`Payment of AED ${formatMoney(amountNum)} recorded successfully.`);
+      setSuccessMsg(`Payment of ${currency} ${formatMoney(amountNum)} recorded successfully.`);
       setIsPaymentModalOpen(false);
       await loadCustomerData(true);
     } catch (err: any) {
@@ -647,9 +650,9 @@ export default function ClientDetailPage() {
     docNumber: string;
     description: string;
     branchName?: string;
-    debit: number; // Invoice increase owed
-    credit: number; // Payment decreases owed
-    runningBalance: number;
+    debit: bigint; // Invoice increase owed
+    credit: bigint; // Payment decreases owed
+    runningBalance: bigint;
     raw: any;
   }
 
@@ -661,15 +664,15 @@ export default function ClientDetailPage() {
       docNumber: string;
       description: string;
       branchName?: string;
-      debit: number;
-      credit: number;
+      debit: bigint;
+      credit: bigint;
       raw: any;
     }> = [];
 
     // Add Sales (Invoices)
     sales.forEach((s) => {
       if (s.status === "void") return; // exclude voided from balance
-      const totalNum = parseFloat(s.total || "0");
+      const totalNum = Money.toMinor(s.total || "0");
       list.push({
         id: `sale-${s.id}`,
         date: new Date(s.occurredAt || s.createdAt || Date.now()),
@@ -678,14 +681,14 @@ export default function ClientDetailPage() {
         description: `Tax Invoice (${s.status})`,
         branchName: s.branchName,
         debit: totalNum,
-        credit: 0,
+        credit: Money.ZERO,
         raw: s,
       });
     });
 
     // Add Customer Payments
     payments.forEach((p) => {
-      const amountNum = parseFloat(p.amount || "0");
+      const amountNum = Money.toMinor(p.amount || "0");
       list.push({
         id: `pay-${p.id}`,
         date: new Date(p.createdAt || Date.now()),
@@ -693,7 +696,7 @@ export default function ClientDetailPage() {
         docNumber: p.referenceNumber ? `Ref: ${p.referenceNumber}` : "Account Payment",
         description: `Settlement via ${p.method.replace("_", " ")}${p.notes ? ` - ${p.notes}` : ""}`,
         branchName: branches.find((b) => b.id === p.branchId)?.name,
-        debit: 0,
+        debit: Money.ZERO,
         credit: amountNum,
         raw: p,
       });
@@ -702,9 +705,11 @@ export default function ClientDetailPage() {
     // Sort ascending chronologically to compute running balance
     list.sort((a, b) => a.date.getTime() - b.date.getTime());
 
-    let currentBalance = 0;
+    // In Money, not floats: a running balance adds every row to the last, so
+    // float error accumulates down the statement instead of washing out.
+    let currentBalance = Money.ZERO;
     const computed: LedgerRow[] = list.map((item) => {
-      currentBalance = currentBalance + item.debit - item.credit;
+      currentBalance = Money.subtract(Money.add(currentBalance, item.debit), item.credit);
       return {
         id: item.id,
         date: item.date.toISOString(),
@@ -727,12 +732,12 @@ export default function ClientDetailPage() {
   const totalLifetimeInvoiced = useMemo(() => {
     return sales
       .filter((s) => s.status !== "void")
-      .reduce((sum, s) => sum + (parseFloat(s.total) || 0), 0);
+      .reduce((sum, s) => Money.add(sum, Money.toMinor(s.total || "0")), Money.ZERO);
   }, [sales]);
 
   // Total Lifetime Payments
   const totalLifetimePaid = useMemo(() => {
-    return payments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+    return payments.reduce((sum, p) => Money.add(sum, Money.toMinor(p.amount || "0")), Money.ZERO);
   }, [payments]);
 
   // Credit metrics
@@ -1002,7 +1007,7 @@ export default function ClientDetailPage() {
                     creditBalance > 0 ? "text-amber-500 dark:text-amber-400" : "text-emerald-500",
                   )}
                 >
-                  AED {formatMoney(creditBalance)}
+                  {currency} {formatMoney(creditBalance)}
                 </span>
                 <span className="text-[10px] text-muted-foreground block mt-0.5">
                   {creditBalance > 0 ? "Requires Settlement" : "Zero Outstanding Balance"}
@@ -1090,7 +1095,7 @@ export default function ClientDetailPage() {
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Credit Limit:</span>
                 <span className="font-mono font-medium text-foreground">
-                  AED {formatMoney(customer.creditLimit)}
+                  {currency} {formatMoney(customer.creditLimit)}
                 </span>
               </div>
               <div className="flex items-center justify-between">
@@ -1177,7 +1182,7 @@ export default function ClientDetailPage() {
             <Receipt className="h-4 w-4 text-amber-500" />
           </div>
           <p className="mt-2 text-2xl font-bold font-mono tracking-tight text-foreground">
-            AED {formatMoney(creditBalance)}
+            {currency} {formatMoney(creditBalance)}
           </p>
           <div className="mt-2 flex items-center justify-between text-[11px]">
             <span className="text-muted-foreground">
@@ -1200,7 +1205,7 @@ export default function ClientDetailPage() {
             <CreditCard className="h-4 w-4 text-primary" />
           </div>
           <p className="mt-2 text-2xl font-bold font-mono tracking-tight text-foreground">
-            AED {formatMoney(availableCredit)}
+            {currency} {formatMoney(availableCredit)}
           </p>
           <div className="mt-2">
             <div className="w-full h-1.5 rounded-full bg-secondary overflow-hidden">
@@ -1226,12 +1231,12 @@ export default function ClientDetailPage() {
             <TrendingUp className="h-4 w-4 text-emerald-500" />
           </div>
           <p className="mt-2 text-2xl font-bold font-mono tracking-tight text-foreground">
-            AED {formatMoney(totalLifetimeInvoiced)}
+            {currency} {formatMoney(totalLifetimeInvoiced)}
           </p>
           <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
             <span>{sales.length} total orders/bills</span>
             <span className="font-mono text-emerald-600 dark:text-emerald-400">
-              Paid: AED {formatMoney(totalLifetimePaid)}
+              Paid: {currency} {formatMoney(totalLifetimePaid)}
             </span>
           </div>
         </Card>
@@ -1341,15 +1346,13 @@ export default function ClientDetailPage() {
       {activeTab === "invoices" && (
         <Card className="overflow-hidden border-border">
           <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between border-b border-border bg-secondary/20">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search by invoice # or cashier..."
-                value={invoiceSearch}
-                onChange={(e) => setInvoiceSearch(e.target.value)}
-                className="pl-9 h-8 text-xs bg-background"
-              />
-            </div>
+            <TableSearch
+              value={invoiceSearch}
+              onChange={setInvoiceSearch}
+              label="Search this customer's invoices"
+              placeholder="Search by invoice # or cashier..."
+              className="flex-1 max-w-sm"
+            />
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">Status:</span>
               <Select value={invoiceStatusFilter} onValueChange={setInvoiceStatusFilter}>
@@ -1377,21 +1380,21 @@ export default function ClientDetailPage() {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <TableContainer>
               <table className="w-full text-left text-xs">
-                <thead className="border-b border-border bg-secondary/40 text-muted-foreground font-medium">
+                <TableHead className="font-medium">
                   <tr>
                     <th className="px-4 py-3">Invoice #</th>
                     <th className="px-4 py-3">Date & Time</th>
                     <th className="px-4 py-3">Branch</th>
                     <th className="px-4 py-3">Cashier</th>
-                    <th className="px-4 py-3 text-right">Total (AED)</th>
+                    <th className="px-4 py-3 text-right">Total ({currency})</th>
                     <th className="px-4 py-3 text-right">Paid</th>
                     <th className="px-4 py-3 text-right">Balance Due</th>
                     <th className="px-4 py-3 text-center">Status</th>
                     <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
-                </thead>
+                </TableHead>
                 <tbody className="divide-y divide-border">
                   {filteredSales.map((s) => {
                     const dueNum = parseFloat(s.dueAmount || "0");
@@ -1420,15 +1423,15 @@ export default function ClientDetailPage() {
                         <td className="px-4 py-3.5 text-muted-foreground font-mono">
                           {s.cashierName || "—"}
                         </td>
-                        <td className="px-4 py-3.5 text-right font-mono font-bold text-foreground">
+                        <td className="px-4 py-3.5 text-right font-mono tabular-nums font-bold text-foreground">
                           {formatMoney(totalNum)}
                         </td>
-                        <td className="px-4 py-3.5 text-right font-mono text-emerald-600 dark:text-emerald-400">
+                        <td className="px-4 py-3.5 text-right font-mono tabular-nums text-emerald-600 dark:text-emerald-400">
                           {formatMoney(paidNum)}
                         </td>
-                        <td className="px-4 py-3.5 text-right font-mono font-semibold">
+                        <td className="px-4 py-3.5 text-right font-mono tabular-nums font-semibold">
                           {dueNum > 0 ? (
-                            <span className="text-amber-500">AED {formatMoney(dueNum)}</span>
+                            <span className="text-amber-500">{currency} {formatMoney(dueNum)}</span>
                           ) : (
                             <span className="text-muted-foreground">0.00</span>
                           )}
@@ -1487,7 +1490,7 @@ export default function ClientDetailPage() {
                   })}
                 </tbody>
               </table>
-            </div>
+            </TableContainer>
           )}
         </Card>
       )}
@@ -1524,18 +1527,18 @@ export default function ClientDetailPage() {
               )}
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <TableContainer>
               <table className="w-full text-left text-xs">
-                <thead className="border-b border-border bg-secondary/40 text-muted-foreground font-medium">
+                <TableHead className="font-medium">
                   <tr>
                     <th className="px-4 py-3">Receipt / Ref #</th>
                     <th className="px-4 py-3">Date & Time</th>
                     <th className="px-4 py-3">Branch</th>
                     <th className="px-4 py-3">Payment Method</th>
-                    <th className="px-4 py-3 text-right">Amount (AED)</th>
+                    <th className="px-4 py-3 text-right">Amount ({currency})</th>
                     <th className="px-4 py-3">Notes / Narration</th>
                   </tr>
-                </thead>
+                </TableHead>
                 <tbody className="divide-y divide-border">
                   {payments.map((p) => {
                     const branch = branches.find((b) => b.id === p.branchId);
@@ -1554,8 +1557,8 @@ export default function ClientDetailPage() {
                             {p.method.replace("_", " ")}
                           </span>
                         </td>
-                        <td className="px-4 py-3.5 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                          AED {formatMoney(p.amount)}
+                        <td className="px-4 py-3.5 text-right font-mono tabular-nums font-bold text-emerald-600 dark:text-emerald-400">
+                          {currency} {formatMoney(p.amount)}
                         </td>
                         <td className="px-4 py-3.5 text-muted-foreground italic">
                           {p.notes || "—"}
@@ -1565,7 +1568,7 @@ export default function ClientDetailPage() {
                   })}
                 </tbody>
               </table>
-            </div>
+            </TableContainer>
           )}
         </Card>
       )}
@@ -1602,9 +1605,9 @@ export default function ClientDetailPage() {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <TableContainer>
               <table className="w-full text-left text-xs">
-                <thead className="border-b border-border bg-secondary/40 text-muted-foreground font-medium">
+                <TableHead className="font-medium">
                   <tr>
                     <th className="px-4 py-3">Date & Time</th>
                     <th className="px-4 py-3">Document / Ref</th>
@@ -1612,9 +1615,9 @@ export default function ClientDetailPage() {
                     <th className="px-4 py-3">Branch</th>
                     <th className="px-4 py-3 text-right">Debit (+) Invoiced</th>
                     <th className="px-4 py-3 text-right">Credit (-) Paid</th>
-                    <th className="px-4 py-3 text-right">Running Balance (AED)</th>
+                    <th className="px-4 py-3 text-right">Running Balance ({currency})</th>
                   </tr>
-                </thead>
+                </TableHead>
                 <tbody className="divide-y divide-border">
                   {statementLedger.map((row) => (
                     <tr
@@ -1644,20 +1647,20 @@ export default function ClientDetailPage() {
                       <td className="px-4 py-3 text-muted-foreground">
                         {row.branchName || "Main HQ"}
                       </td>
-                      <td className="px-4 py-3 text-right font-mono text-foreground font-medium">
-                        {row.debit > 0 ? `AED ${formatMoney(row.debit)}` : "—"}
+                      <td className="px-4 py-3 text-right font-mono tabular-nums text-foreground font-medium">
+                        {row.debit > 0n ? `${currency} ${formatMoney(row.debit)}` : "—"}
                       </td>
-                      <td className="px-4 py-3 text-right font-mono text-emerald-600 dark:text-emerald-400 font-medium">
-                        {row.credit > 0 ? `AED ${formatMoney(row.credit)}` : "—"}
+                      <td className="px-4 py-3 text-right font-mono tabular-nums text-emerald-600 dark:text-emerald-400 font-medium">
+                        {row.credit > 0n ? `${currency} ${formatMoney(row.credit)}` : "—"}
                       </td>
-                      <td className="px-4 py-3 text-right font-mono font-bold text-foreground">
-                        AED {formatMoney(row.runningBalance)}
+                      <td className="px-4 py-3 text-right font-mono tabular-nums font-bold text-foreground">
+                        {currency} {formatMoney(row.runningBalance)}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
+            </TableContainer>
           )}
         </Card>
       )}
@@ -1689,18 +1692,18 @@ export default function ClientDetailPage() {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <TableContainer>
               <table className="w-full text-left text-xs">
-                <thead className="border-b border-border bg-secondary/40 text-muted-foreground font-medium">
+                <TableHead className="font-medium">
                   <tr>
                     <th className="px-4 py-3">Quote #</th>
                     <th className="px-4 py-3">Date</th>
                     <th className="px-4 py-3">Valid Until</th>
-                    <th className="px-4 py-3 text-right">Total (AED)</th>
+                    <th className="px-4 py-3 text-right">Total ({currency})</th>
                     <th className="px-4 py-3 text-center">Status</th>
                     <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
-                </thead>
+                </TableHead>
                 <tbody className="divide-y divide-border">
                   {quotations.map((q) => (
                     <tr key={q.id} className="hover:bg-secondary/30 transition-colors">
@@ -1713,8 +1716,8 @@ export default function ClientDetailPage() {
                       <td className="px-4 py-3.5 text-muted-foreground whitespace-nowrap">
                         {q.expiresAt ? formatDate(q.expiresAt) : "—"}
                       </td>
-                      <td className="px-4 py-3.5 text-right font-mono font-bold text-foreground">
-                        AED {formatMoney(q.total)}
+                      <td className="px-4 py-3.5 text-right font-mono tabular-nums font-bold text-foreground">
+                        {currency} {formatMoney(q.total)}
                       </td>
                       <td className="px-4 py-3.5 text-center">
                         <Badge
@@ -1754,7 +1757,7 @@ export default function ClientDetailPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </TableContainer>
           )}
         </Card>
       )}
@@ -1786,9 +1789,9 @@ export default function ClientDetailPage() {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <TableContainer>
               <table className="w-full text-left text-xs">
-                <thead className="border-b border-border bg-secondary/40 text-muted-foreground font-medium">
+                <TableHead className="font-medium">
                   <tr>
                     <th className="px-4 py-3">Date & Time</th>
                     <th className="px-4 py-3">Action Type</th>
@@ -1796,7 +1799,7 @@ export default function ClientDetailPage() {
                     <th className="px-4 py-3">Reference / Source</th>
                     <th className="px-4 py-3">Notes & Reason</th>
                   </tr>
-                </thead>
+                </TableHead>
                 <tbody className="divide-y divide-border">
                   {loyaltyHistory.map((rec) => (
                     <tr key={rec.id} className="hover:bg-secondary/30 transition-colors">
@@ -1813,7 +1816,7 @@ export default function ClientDetailPage() {
                       </td>
                       <td
                         className={cn(
-                          "px-4 py-3.5 text-right font-mono font-bold text-sm",
+                          "px-4 py-3.5 text-right font-mono tabular-nums font-bold text-sm",
                           rec.points > 0 ? "text-emerald-500" : "text-amber-500",
                         )}
                       >
@@ -1829,7 +1832,7 @@ export default function ClientDetailPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </TableContainer>
           )}
         </Card>
       )}
@@ -1920,8 +1923,8 @@ export default function ClientDetailPage() {
                       <th className="px-3.5 py-2.5 text-right">Qty</th>
                       <th className="px-3.5 py-2.5 text-right">Unit Price</th>
                       <th className="px-3.5 py-2.5 text-right">Disc %</th>
-                      <th className="px-3.5 py-2.5 text-right">VAT %</th>
-                      <th className="px-3.5 py-2.5 text-right">Total (AED)</th>
+                      <th className="px-3.5 py-2.5 text-right">{taxLabel} %</th>
+                      <th className="px-3.5 py-2.5 text-right">Total ({currency})</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
@@ -1938,19 +1941,19 @@ export default function ClientDetailPage() {
                             SKU: {item.productSku}
                           </p>
                         </td>
-                        <td className="px-3.5 py-2.5 text-right font-mono font-medium">
+                        <td className="px-3.5 py-2.5 text-right font-mono tabular-nums font-medium">
                           {item.quantity}
                         </td>
-                        <td className="px-3.5 py-2.5 text-right font-mono text-muted-foreground">
+                        <td className="px-3.5 py-2.5 text-right font-mono tabular-nums text-muted-foreground">
                           {formatMoney(item.unitPrice)}
                         </td>
-                        <td className="px-3.5 py-2.5 text-right font-mono text-muted-foreground">
+                        <td className="px-3.5 py-2.5 text-right font-mono tabular-nums text-muted-foreground">
                           {item.discountPercent ? `${item.discountPercent}%` : "—"}
                         </td>
-                        <td className="px-3.5 py-2.5 text-right font-mono text-muted-foreground">
+                        <td className="px-3.5 py-2.5 text-right font-mono tabular-nums text-muted-foreground">
                           {item.taxPercent}%
                         </td>
-                        <td className="px-3.5 py-2.5 text-right font-mono font-bold text-foreground">
+                        <td className="px-3.5 py-2.5 text-right font-mono tabular-nums font-bold text-foreground">
                           {formatMoney(item.total)}
                         </td>
                       </tr>
@@ -1979,7 +1982,7 @@ export default function ClientDetailPage() {
                         {pm.method.replace("_", " ")}
                       </span>
                       <span className="font-mono font-medium text-foreground">
-                        AED {formatMoney(pm.amount)}
+                        {currency} {formatMoney(pm.amount)}
                       </span>
                     </div>
                   ))}
@@ -1995,37 +1998,37 @@ export default function ClientDetailPage() {
             {/* Totals Summary */}
             <div className="rounded-xl border border-border p-3.5 space-y-1.5 text-xs bg-secondary/10">
               <div className="flex justify-between text-muted-foreground">
-                <span>Subtotal (Excl. VAT):</span>
+                <span>Subtotal (Excl. {taxLabel}):</span>
                 <span className="font-mono font-medium text-foreground">
-                  AED {formatMoney(selectedSale?.subtotal)}
+                  {currency} {formatMoney(selectedSale?.subtotal)}
                 </span>
               </div>
               {selectedSale?.discountAmount && parseFloat(selectedSale.discountAmount) > 0 && (
                 <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
                   <span>Document Discount:</span>
-                  <span className="font-mono">-AED {formatMoney(selectedSale.discountAmount)}</span>
+                  <span className="font-mono">-{currency} {formatMoney(selectedSale.discountAmount)}</span>
                 </div>
               )}
               <div className="flex justify-between text-muted-foreground">
-                <span>VAT / Tax (5%):</span>
+                <span>{taxLabel}:</span>
                 <span className="font-mono font-medium text-foreground">
-                  AED {formatMoney(selectedSale?.taxAmount)}
+                  {currency} {formatMoney(selectedSale?.taxAmount)}
                 </span>
               </div>
               <div className="flex justify-between border-t border-border pt-2 text-sm font-bold text-foreground">
                 <span>Total Invoice Amount:</span>
-                <span className="font-mono text-base">AED {formatMoney(selectedSale?.total)}</span>
+                <span className="font-mono text-base">{currency} {formatMoney(selectedSale?.total)}</span>
               </div>
               <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
                 <span>Amount Paid:</span>
                 <span className="font-mono font-medium">
-                  AED {formatMoney(selectedSale?.paidAmount)}
+                  {currency} {formatMoney(selectedSale?.paidAmount)}
                 </span>
               </div>
               {selectedSale?.dueAmount && parseFloat(selectedSale.dueAmount) > 0 && (
                 <div className="flex justify-between text-amber-500 font-semibold border-t border-border pt-1">
                   <span>Balance Due:</span>
-                  <span className="font-mono">AED {formatMoney(selectedSale.dueAmount)}</span>
+                  <span className="font-mono">{currency} {formatMoney(selectedSale.dueAmount)}</span>
                 </div>
               )}
             </div>
@@ -2070,13 +2073,13 @@ export default function ClientDetailPage() {
             <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs">
               <span className="text-muted-foreground block">Total Outstanding Debt</span>
               <span className="text-xl font-bold font-mono text-amber-600 dark:text-amber-400">
-                AED {formatMoney(creditBalance)}
+                {currency} {formatMoney(creditBalance)}
               </span>
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-foreground mb-1">
-                Payment Amount (AED) *
+                Payment Amount ({currency}) *
               </label>
               <Input
                 type="number"
@@ -2098,7 +2101,7 @@ export default function ClientDetailPage() {
                     className="h-6 text-[11px] px-2"
                     onClick={() => setPayAmount(creditBalance.toFixed(2))}
                   >
-                    Full Balance (AED {formatMoney(creditBalance)})
+                    Full Balance ({currency} {formatMoney(creditBalance)})
                   </Button>
                   <Button
                     type="button"
@@ -2348,7 +2351,7 @@ export default function ClientDetailPage() {
           <form onSubmit={handleAdjustCredit} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-foreground mb-1">
-                Credit Limit (AED)
+                Credit Limit ({currency})
               </label>
               <Input
                 type="number"
@@ -2507,11 +2510,11 @@ export default function ClientDetailPage() {
                   Account Standing
                 </span>
                 <p className="text-2xl font-bold font-mono text-foreground mt-0.5">
-                  AED {formatMoney(creditBalance)}
+                  {currency} {formatMoney(creditBalance)}
                 </p>
-                <p className="text-muted-foreground">Credit Limit: AED {formatMoney(creditLimit)}</p>
+                <p className="text-muted-foreground">Credit Limit: {currency} {formatMoney(creditLimit)}</p>
                 <p className="text-muted-foreground">
-                  Available: AED {formatMoney(availableCredit)}
+                  Available: {currency} {formatMoney(availableCredit)}
                 </p>
               </div>
             </div>
@@ -2523,7 +2526,7 @@ export default function ClientDetailPage() {
                   Total Invoiced
                 </span>
                 <p className="text-sm font-bold font-mono text-foreground mt-1">
-                  AED {formatMoney(totalLifetimeInvoiced)}
+                  {currency} {formatMoney(totalLifetimeInvoiced)}
                 </p>
               </div>
               <div className="rounded-lg border border-border p-3">
@@ -2531,7 +2534,7 @@ export default function ClientDetailPage() {
                   Total Payments
                 </span>
                 <p className="text-sm font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-1">
-                  AED {formatMoney(totalLifetimePaid)}
+                  {currency} {formatMoney(totalLifetimePaid)}
                 </p>
               </div>
               <div className="rounded-lg border border-border p-3">
@@ -2539,7 +2542,7 @@ export default function ClientDetailPage() {
                   Net Balance Due
                 </span>
                 <p className="text-sm font-bold font-mono text-amber-500 mt-1">
-                  AED {formatMoney(creditBalance)}
+                  {currency} {formatMoney(creditBalance)}
                 </p>
               </div>
             </div>
@@ -2568,10 +2571,10 @@ export default function ClientDetailPage() {
                         {row.description}
                       </td>
                       <td className="px-3.5 py-2 text-right text-foreground">
-                        {row.debit > 0 ? formatMoney(row.debit) : "—"}
+                        {row.debit > 0n ? formatMoney(row.debit) : "—"}
                       </td>
                       <td className="px-3.5 py-2 text-right text-emerald-600 dark:text-emerald-400">
-                        {row.credit > 0 ? formatMoney(row.credit) : "—"}
+                        {row.credit > 0n ? formatMoney(row.credit) : "—"}
                       </td>
                       <td className="px-3.5 py-2 text-right font-bold text-foreground">
                         {formatMoney(row.runningBalance)}

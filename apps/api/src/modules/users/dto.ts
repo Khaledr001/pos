@@ -1,5 +1,6 @@
 import { DEFAULT_PAGE_SIZE, LOCALES, MAX_PAGE_SIZE } from "@devsfleet/shared-types";
 import { z } from "zod";
+import { sortSchema } from "../../common/db/list-query.js";
 import { zQueryBoolean } from "../../common/pipes/zod-validation.pipe.js";
 
 /**
@@ -95,5 +96,6 @@ export const ListUsersSchema = z.object({
   roleId: z.string().uuid().optional(),
   branchId: z.string().uuid().optional(),
   includeInactive: zQueryBoolean(false),
+  ...sortSchema(["name", "email", "createdAt"], { sortBy: "name", sortOrder: "asc" }),
 });
 export type ListUsersDto = z.infer<typeof ListUsersSchema>;

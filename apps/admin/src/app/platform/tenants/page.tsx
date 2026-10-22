@@ -1,10 +1,9 @@
 "use client";
 
-import React, { useEffect, useState, useTransition } from "react";
+import React, { useCallback, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   Building2,
-  Search,
   Filter,
   Plus,
   MoreVertical,
@@ -13,7 +12,6 @@ import {
   CheckCircle2,
   XCircle,
   AlertTriangle,
-  RefreshCw,
   ArrowRight,
   ExternalLink,
   Layers,
@@ -25,6 +23,12 @@ import {
   GitBranch,
 } from "lucide-react";
 import { api } from "@/lib/api-client";
+import { cn } from "@/lib/utils";
+import { readListResult, useListData, useListQuery } from "@/lib/use-list-query";
+import {
+  SortableTh, Table, TableBody, TableContainer, TableEmpty, TableHead,
+  TablePagination, TableSearch, Th,
+} from "@/components/ui/data-table";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -70,29 +74,39 @@ interface TenantItem {
   createdAt: string;
 }
 
-interface PaginatedTenants {
-  items: TenantItem[];
-  meta: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-    hasNext: boolean;
-    hasPrev: boolean;
-  };
-}
-
 export default function PlatformTenantsPage() {
   const { impersonateTenant } = useAuth();
-  const [data, setData] = useState<PaginatedTenants | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const PAGE_SIZE = 15;
+  const list = useListQuery({
+    sortBy: "createdAt",
+    sortOrder: "desc",
+    filters: { plan: "", status: "" },
+  });
+  const { q, page, sortBy, sortOrder } = list;
+  const selectedPlan = list.filters.plan;
+  const selectedStatus = list.filters.status;
 
-  // Filters
-  const [search, setSearch] = useState("");
-  const [selectedPlan, setSelectedPlan] = useState<string>("");
-  const [selectedStatus, setSelectedStatus] = useState<string>("");
-  const [page, setPage] = useState(1);
+  const loadTenants = useCallback(
+    async (signal: AbortSignal) =>
+      readListResult<TenantItem>(
+        await api.get<unknown>("/admin/tenants", {
+          signal,
+          query: {
+            page,
+            limit: PAGE_SIZE,
+            q: q.trim() || undefined,
+            planId: selectedPlan || undefined,
+            status: selectedStatus || undefined,
+            sortBy,
+            sortOrder,
+          },
+        }),
+      ),
+    [q, page, selectedPlan, selectedStatus, sortBy, sortOrder],
+  );
+  const {
+    items: tenants, total, loading, initialLoading, error, reload: fetchTenants,
+  } = useListData(loadTenants, list.ready);
 
   // Modals state
   const [provisionOpen, setProvisionOpen] = useState(false);
@@ -124,46 +138,6 @@ export default function PlatformTenantsPage() {
 
   const [impersonateLoading, setImpersonateLoading] = useState(false);
   const [impersonateReason, setImpersonateReason] = useState("");
-
-  const fetchTenants = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await api.get<any>("/admin/tenants", {
-        query: {
-          page,
-          limit: 15,
-          q: search.trim() || undefined,
-          planId: selectedPlan || undefined,
-          status: selectedStatus || undefined,
-        },
-      });
-      const items = Array.isArray(res) ? res : (res?.items ?? []);
-      const meta = res?.meta ?? {
-        page,
-        limit: 15,
-        total: items.length,
-        totalPages: Math.max(1, Math.ceil(items.length / 15)),
-        hasNext: false,
-        hasPrev: page > 1,
-      };
-      setData({ items, meta });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load tenants directory");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchTenants();
-  }, [page, selectedPlan, selectedStatus]);
-
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setPage(1);
-    fetchTenants();
-  };
 
   const handleSlugAutoFill = (name: string) => {
     const slug = name
@@ -265,7 +239,7 @@ export default function PlatformTenantsPage() {
               Tenants & Organizations
             </h1>
             <Badge variant="outline" className="text-xs">
-              {data?.meta?.total || 0} registered
+              {total} registered
             </Badge>
           </div>
           <p className="text-xs sm:text-sm text-muted-foreground mt-1">
@@ -285,28 +259,21 @@ export default function PlatformTenantsPage() {
       {/* ── Search & Filter Controls ── */}
       <Card className="border-border/60 shadow-2xs">
         <CardContent className="p-4">
-          <form
-            onSubmit={handleSearchSubmit}
-            className="flex flex-col md:flex-row items-stretch md:items-center gap-3"
-          >
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by business name, slug..."
-                className="pl-9 h-9 text-xs"
-              />
-            </div>
+          <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
+            <TableSearch
+              value={list.search}
+              onChange={list.setSearch}
+              label="Search businesses"
+              placeholder="Search by business name, slug..."
+              className="flex-1"
+            />
 
             <div className="flex flex-wrap items-center gap-2">
               <select
                 value={selectedPlan}
-                onChange={(e) => {
-                  setSelectedPlan(e.target.value);
-                  setPage(1);
-                }}
-                className="h-9 rounded-xl border border-input bg-background px-3 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                onChange={(e) => list.setFilter("plan", e.target.value)}
+                aria-label="Filter by plan"
+                className="h-10 rounded-xl border border-input bg-background px-3 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
               >
                 <option value="">All Subscription Plans</option>
                 {PLAN_IDS.map((p) => (
@@ -318,22 +285,16 @@ export default function PlatformTenantsPage() {
 
               <select
                 value={selectedStatus}
-                onChange={(e) => {
-                  setSelectedStatus(e.target.value);
-                  setPage(1);
-                }}
-                className="h-9 rounded-xl border border-input bg-background px-3 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                onChange={(e) => list.setFilter("status", e.target.value)}
+                aria-label="Filter by status"
+                className="h-10 rounded-xl border border-input bg-background px-3 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
               >
                 <option value="">All Statuses</option>
                 <option value="active">Active Only</option>
                 <option value="suspended">Suspended Only</option>
               </select>
-
-              <Button type="submit" size="sm" variant="secondary" className="h-9 text-xs">
-                Filter
-              </Button>
             </div>
-          </form>
+          </div>
         </CardContent>
       </Card>
 
@@ -346,32 +307,33 @@ export default function PlatformTenantsPage() {
 
       {/* ── Tenants Data Table ── */}
       <Card className="border-border/60 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="border-b border-border bg-muted/40 text-muted-foreground font-semibold">
-                <th className="py-3 px-4">Business / Tenant</th>
-                <th className="py-3 px-4">Slug / Domain</th>
-                <th className="py-3 px-4">Subscription Plan</th>
-                <th className="py-3 px-4">Status</th>
-                <th className="py-3 px-4">Branches & Users</th>
-                <th className="py-3 px-4">Created On</th>
-                <th className="py-3 px-4 text-right">Actions</th>
+        <TableContainer>
+          <Table>
+            <TableHead>
+              <tr>
+                <SortableTh column="name" sortBy={sortBy} sortOrder={sortOrder} onSort={list.toggleSort}>Business / Tenant</SortableTh>
+                <Th>Slug / Domain</Th>
+                <Th>Subscription Plan</Th>
+                <Th>Status</Th>
+                <Th>Branches & Users</Th>
+                <SortableTh column="createdAt" sortBy={sortBy} sortOrder={sortOrder} onSort={list.toggleSort} firstOrder="desc">Created On</SortableTh>
+                <Th align="right"><span className="sr-only">Actions</span></Th>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-border/50">
-              {loading ? (
-                <tr>
-                  <td colSpan={7} className="py-12 text-center text-muted-foreground">
-                    <div className="inline-flex items-center gap-2">
-                      <RefreshCw className="h-4 w-4 animate-spin text-primary" />
-                      <span>Loading organizations…</span>
-                    </div>
-                  </td>
-                </tr>
-              ) : data?.items && data.items.length > 0 ? (
-                data.items.map((tenant) => (
-                  <tr key={tenant.id} className="hover:bg-muted/20 transition-colors group">
+            </TableHead>
+            <TableBody
+              columns={7}
+              loading={initialLoading}
+              empty={
+                <TableEmpty
+                  columns={7}
+                  icon={Building2}
+                  title="No businesses found"
+                  description={q || selectedPlan || selectedStatus ? "No tenants match your search or filters." : "Provision the first business to get started."}
+                />
+              }
+            >
+                {tenants.map((tenant) => (
+                  <tr key={tenant.id} className={cn("hover:bg-muted/20 transition-colors group", loading && "opacity-60")}>
                     {/* Business Name */}
                     <td className="py-3.5 px-4 font-medium">
                       <Link
@@ -436,7 +398,7 @@ export default function PlatformTenantsPage() {
                     </td>
 
                     {/* Created At */}
-                    <td className="py-3.5 px-4 text-muted-foreground">
+                    <td className="py-3.5 px-4 text-muted-foreground whitespace-nowrap tabular-nums">
                       {new Date(tenant.createdAt).toLocaleDateString(undefined, {
                         year: "numeric",
                         month: "short",
@@ -448,7 +410,7 @@ export default function PlatformTenantsPage() {
                     <td className="py-3.5 px-4 text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg">
+                          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" aria-label={`Actions for ${tenant.name}`}>
                             <MoreVertical className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -510,47 +472,12 @@ export default function PlatformTenantsPage() {
                       </DropdownMenu>
                     </td>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={7} className="py-12 text-center text-muted-foreground">
-                    No tenants match your search query.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
 
-        {/* Pagination bar */}
-        {data && data?.meta?.totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-muted/20 text-xs">
-            <div className="text-muted-foreground">
-              Showing page <strong>{data?.meta?.page}</strong> of{" "}
-              <strong>{data?.meta?.totalPages}</strong> ({data?.meta?.total} total)
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={!data?.meta?.hasPrev}
-                className="h-8 text-xs"
-              >
-                Previous
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage((p) => p + 1)}
-                disabled={!data?.meta?.hasNext}
-                className="h-8 text-xs"
-              >
-                Next
-              </Button>
-            </div>
-          </div>
-        )}
+        <TablePagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={list.setPage} noun="businesses" />
       </Card>
 
       {/* ── Provision Tenant Dialog ── */}

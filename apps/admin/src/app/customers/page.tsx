@@ -1,11 +1,18 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Plus, RefreshCw, X, AlertCircle, CheckCircle2, Users, ChevronRight, Eye } from "lucide-react";
+import { Plus, RefreshCw, X, AlertCircle, CheckCircle2, Users, ChevronRight, Eye } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
+import { formatMoney } from "@/lib/format";
+import { useTenantSettings } from "@/lib/tenant-settings";
+import { readListResult, useListData, useListQuery } from "@/lib/use-list-query";
+import {
+  SortableTh, Table, TableBody, TableContainer, TableEmpty, TableHead,
+  TablePagination, TableSearch, Th, numericCell,
+} from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -39,13 +46,6 @@ interface Customer {
   whatsappPhone?: string;
 }
 
-interface CustomersPage {
-  items: Customer[];
-  total: number;
-  page: number;
-  pageSize: number;
-}
-
 const CUSTOMER_TYPES = ["retail", "wholesale", "vip"] as const;
 type CustomerType = typeof CUSTOMER_TYPES[number];
 
@@ -61,14 +61,35 @@ export default function CustomersPage() {
   const router = useRouter();
   const { tokens } = useAuth();
 
-  // List state
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState<CustomerType | "">("");
-  const [page, setPage] = useState(1);
+  const currency = useTenantSettings().currency.base;
+
   const PAGE_SIZE = 50;
+  const list = useListQuery({ sortBy: "createdAt", sortOrder: "desc", filters: { type: "" } });
+  const { q, page, sortBy, sortOrder } = list;
+  const typeFilter = list.filters.type as CustomerType | "";
+
+  const loadCustomers = useCallback(
+    async (signal: AbortSignal) =>
+      readListResult<Customer>(
+        await api.get<unknown>("/customers", {
+          accessToken: tokens?.accessToken,
+          signal,
+          query: {
+            q: q.trim() || undefined,
+            type: typeFilter || undefined,
+            page,
+            pageSize: PAGE_SIZE,
+            includeInactive: false,
+            sortBy,
+            sortOrder,
+          },
+        }),
+      ),
+    [tokens?.accessToken, q, typeFilter, page, sortBy, sortOrder],
+  );
+  const {
+    items: customers, total, loading, initialLoading, error: loadError, reload: fetchCustomers,
+  } = useListData(loadCustomers, list.ready);
 
   // Dialog
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -88,37 +109,6 @@ export default function CustomersPage() {
   const [fWhatsappPhone, setFWhatsappPhone] = useState("");
   const [fNotes, setFNotes] = useState("");
 
-  // ── Fetch ─────────────────────────────────────────────────────────────────
-
-  const fetchCustomers = useCallback(async () => {
-    setLoading(true);
-    setActionError(null);
-    try {
-      const res = await api.get<any>("/customers", {
-        accessToken: tokens?.accessToken,
-        query: {
-          q: search || undefined,
-          type: typeFilter || undefined,
-          page,
-          pageSize: PAGE_SIZE,
-          includeInactive: false,
-        },
-      });
-      const list = Array.isArray(res) ? res : (res?.items ?? []);
-      const totalCount = res?.meta?.total ?? res?.total ?? list.length;
-      setCustomers(list);
-      setTotal(totalCount);
-    } catch (err: any) {
-      console.error("Failed to load customers:", err);
-      setActionError(err?.message || "Failed to load customers.");
-    } finally {
-      setLoading(false);
-    }
-  }, [tokens, search, typeFilter, page]);
-
-  useEffect(() => { fetchCustomers(); }, [fetchCustomers]);
-  useEffect(() => { setPage(1); }, [search, typeFilter]);
-
   // ── Create ────────────────────────────────────────────────────────────────
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -136,7 +126,7 @@ export default function CustomersPage() {
           email: fEmail || undefined,
           trn: fTrn || undefined,
           type: fType,
-          creditLimit: parseFloat(fCreditLimit) || 0,
+          creditLimit: fCreditLimit.trim() || "0",
           paymentTermDays: parseInt(fPaymentTerms) || 0,
           whatsappPhone: fWhatsappPhone || undefined,
           notes: fNotes || undefined,
@@ -188,172 +178,175 @@ export default function CustomersPage() {
       {actionSuccess && (
         <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-600 dark:text-emerald-400">
           <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /><span>{actionSuccess}</span></div>
-          <button onClick={() => setActionSuccess(null)} className="cursor-pointer"><X className="h-3.5 w-3.5" /></button>
+          <button onClick={() => setActionSuccess(null)} className="cursor-pointer" aria-label="Dismiss"><X className="h-3.5 w-3.5" /></button>
         </div>
       )}
       {actionError && !isModalOpen && (
         <div className="flex items-center justify-between rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
           <div className="flex items-center gap-2"><AlertCircle className="h-4 w-4" /><span>{actionError}</span></div>
-          <button onClick={() => setActionError(null)} className="cursor-pointer"><X className="h-3.5 w-3.5" /></button>
+          <button onClick={() => setActionError(null)} className="cursor-pointer" aria-label="Dismiss"><X className="h-3.5 w-3.5" /></button>
+        </div>
+      )}
+      {loadError && (
+        <div className="flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+          <AlertCircle className="h-4 w-4" /><span>{loadError}</span>
         </div>
       )}
 
       {/* Filters */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5" role="group" aria-label="Customer type">
           {(["", ...CUSTOMER_TYPES] as const).map((t) => (
             <Button
               key={t}
               variant={typeFilter === t ? "default" : "outline"}
               size="sm"
-              onClick={() => setTypeFilter(t as CustomerType | "")}
+              aria-pressed={typeFilter === t}
+              onClick={() => list.setFilter("type", t)}
               className={cn("text-xs capitalize", typeFilter === t && "gradient-brand border-0")}
             >
               {t === "" ? "All" : t}
             </Button>
           ))}
         </div>
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name, company, phone..."
-            className="pl-10 h-10 bg-secondary/30"
-          />
-        </div>
+        <TableSearch
+          value={list.search}
+          onChange={list.setSearch}
+          label="Search customers"
+          placeholder="Search by name, company, phone..."
+          className="flex-1"
+        />
       </div>
 
       {/* Table */}
       <Card className="overflow-hidden">
-        {loading ? (
-          <div className="py-16 text-center text-sm text-muted-foreground">
-            <div className="h-6 w-6 mx-auto mb-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-            Loading customers from API...
-          </div>
-        ) : customers.length === 0 ? (
-          <div className="py-16 text-center">
-            <Users className="mx-auto h-12 w-12 text-muted-foreground/30" />
-            <h3 className="mt-4 text-sm font-semibold text-foreground">No customers found</h3>
-            <p className="mt-1.5 text-xs text-muted-foreground">
-              {search || typeFilter ? "No customers match your filters." : "Add your first customer to get started."}
-            </p>
-            {!search && !typeFilter && (
-              <Button size="sm" onClick={() => setIsModalOpen(true)} className="mt-4">
-                <Plus className="h-3.5 w-3.5" /> Add Customer
-              </Button>
-            )}
-          </div>
-        ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="border-b border-border bg-secondary/50 text-muted-foreground">
-                  <tr>
-                    <th className="px-4 py-3.5 font-medium">Customer & Contact</th>
-                    <th className="px-4 py-3.5 font-medium">Company & TRN</th>
-                    <th className="px-4 py-3.5 font-medium">Tier</th>
-                    <th className="px-4 py-3.5 text-right font-medium">Credit Limit (AED)</th>
-                    <th className="px-4 py-3.5 text-right font-medium">Outstanding (AED)</th>
-                    <th className="px-4 py-3.5 text-center font-medium">Usage</th>
-                    <th className="px-4 py-3.5 text-right font-medium">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {customers.map((c) => {
-                    const limit = parseFloat(c.creditLimit ?? "0") || 0;
-                    const balance = parseFloat(c.creditBalance ?? "0") || 0;
-                    const usagePct = limit > 0 ? Math.min((balance / limit) * 100, 100) : 0;
+        <TableContainer>
+          <Table>
+            <TableHead>
+              <tr>
+                <SortableTh column="name" sortBy={sortBy} sortOrder={sortOrder} onSort={list.toggleSort}>Customer & Contact</SortableTh>
+                <Th>Company & TRN</Th>
+                <Th>Tier</Th>
+                <SortableTh column="creditLimit" sortBy={sortBy} sortOrder={sortOrder} onSort={list.toggleSort} firstOrder="desc" align="right">Credit Limit ({currency})</SortableTh>
+                <SortableTh column="creditBalance" sortBy={sortBy} sortOrder={sortOrder} onSort={list.toggleSort} firstOrder="desc" align="right">Outstanding ({currency})</SortableTh>
+                <Th align="center">Usage</Th>
+                <Th align="right"><span className="sr-only">Actions</span></Th>
+              </tr>
+            </TableHead>
+            <TableBody
+              columns={7}
+              loading={initialLoading}
+              empty={
+                <TableEmpty
+                  columns={7}
+                  icon={Users}
+                  title="No customers found"
+                  description={q || typeFilter ? "No customers match your filters." : "Add your first customer to get started."}
+                  action={!q && !typeFilter ? (
+                    <Button size="sm" onClick={() => setIsModalOpen(true)}>
+                      <Plus className="h-3.5 w-3.5" /> Add Customer
+                    </Button>
+                  ) : undefined}
+                />
+              }
+            >
+              {customers.map((c) => {
+                // A ratio for the bar's width only — the amounts themselves are
+                // shown through formatMoney, never from these floats.
+                const limit = Number(c.creditLimit ?? "0") || 0;
+                const balance = Number(c.creditBalance ?? "0") || 0;
+                const usagePct = limit > 0 ? Math.min((balance / limit) * 100, 100) : 0;
+                const open = () => router.push(`/customers/${c.id}`);
 
-                    return (
-                      <tr
-                        key={c.id}
-                        onClick={() => router.push(`/customers/${c.id}`)}
-                        className="hover:bg-secondary/30 transition-colors cursor-pointer group"
+                return (
+                  <tr
+                    key={c.id}
+                    onClick={open}
+                    tabIndex={0}
+                    role="link"
+                    aria-label={`Open customer ${c.name}`}
+                    onKeyDown={(e) => {
+                      if (e.target !== e.currentTarget) return;
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        open();
+                      }
+                    }}
+                    className={cn(
+                      "hover:bg-secondary/30 transition-colors cursor-pointer group focus:bg-secondary/40 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                      loading && "opacity-60",
+                    )}
+                  >
+                    <td className="px-4 py-3.5">
+                      <div className="flex items-center gap-3">
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback className={cn("bg-linear-to-br text-white text-[10px] font-bold", TYPE_GRADIENT[c.type] ?? "from-slate-400 to-slate-600")}>
+                            {c.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="font-semibold text-foreground group-hover:text-primary transition-colors flex items-center gap-1">
+                            <span>{c.name}</span>
+                          </p>
+                          <p className="text-[11px] text-muted-foreground font-mono">{c.phone ?? c.email ?? "—"}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <div className="flex flex-col">
+                        <span className="font-medium text-foreground">{c.company ?? "—"}</span>
+                        {c.trn && <span className="text-[10px] text-muted-foreground font-mono">TRN: {c.trn}</span>}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <Badge
+                        variant={c.type === "wholesale" ? "default" : c.type === "vip" ? "warning" : "secondary"}
+                        className="text-[10px] capitalize"
                       >
-                        <td className="px-4 py-3.5">
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-8 w-8">
-                              <AvatarFallback className={cn("bg-linear-to-br text-white text-[10px] font-bold", TYPE_GRADIENT[c.type] ?? "from-slate-400 to-slate-600")}>
-                                {c.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <p className="font-semibold text-foreground group-hover:text-primary transition-colors flex items-center gap-1">
-                                <span>{c.name}</span>
-                              </p>
-                              <p className="text-[11px] text-muted-foreground font-mono">{c.phone ?? c.email ?? "—"}</p>
-                            </div>
+                        {c.type}
+                      </Badge>
+                    </td>
+                    <td className={cn("px-4 py-3.5 font-medium text-foreground", numericCell)}>
+                      {formatMoney(c.creditLimit ?? "0")}
+                    </td>
+                    <td className={cn("px-4 py-3.5 font-bold gradient-text", numericCell)}>
+                      {formatMoney(c.creditBalance ?? "0")}
+                    </td>
+                    <td className="px-4 py-3.5 text-center">
+                      {limit > 0 ? (
+                        <div className="flex items-center justify-center gap-2">
+                          <div className="w-20 h-2 rounded-full bg-border overflow-hidden" aria-hidden="true">
+                            <div
+                              className={cn("h-full rounded-full transition-all", usagePct > 80 ? "bg-red-500" : usagePct > 50 ? "bg-amber-500" : "bg-emerald-500")}
+                              style={{ width: `${usagePct}%` }}
+                            />
                           </div>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <div className="flex flex-col">
-                            <span className="font-medium text-foreground">{c.company ?? "—"}</span>
-                            {c.trn && <span className="text-[10px] text-muted-foreground font-mono">TRN: {c.trn}</span>}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <Badge
-                            variant={c.type === "wholesale" ? "default" : c.type === "vip" ? "warning" : "secondary"}
-                            className="text-[10px] capitalize"
-                          >
-                            {c.type}
-                          </Badge>
-                        </td>
-                        <td className="px-4 py-3.5 text-right font-mono font-medium text-foreground">
-                          {limit.toFixed(2)}
-                        </td>
-                        <td className="px-4 py-3.5 text-right font-mono font-bold gradient-text">
-                          {balance.toFixed(2)}
-                        </td>
-                        <td className="px-4 py-3.5 text-center">
-                          {limit > 0 ? (
-                            <div className="flex items-center justify-center gap-2">
-                              <div className="w-20 h-2 rounded-full bg-border overflow-hidden">
-                                <div
-                                  className={cn("h-full rounded-full transition-all", usagePct > 80 ? "bg-red-500" : usagePct > 50 ? "bg-amber-500" : "bg-emerald-500")}
-                                  style={{ width: `${usagePct}%` }}
-                                />
-                              </div>
-                              <span className="text-[10px] font-mono text-muted-foreground w-8">{Math.round(usagePct)}%</span>
-                            </div>
-                          ) : (
-                            <span className="text-[10px] text-muted-foreground">No credit</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => router.push(`/customers/${c.id}`)}
-                            className="h-8 text-xs text-muted-foreground hover:text-primary hover:bg-primary/10 gap-1"
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                            <span>Details</span>
-                            <ChevronRight className="h-3.5 w-3.5 opacity-60" />
-                          </Button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Pagination */}
-            {total > PAGE_SIZE && (
-              <div className="flex items-center justify-between border-t border-border px-4 py-3">
-                <span className="text-xs text-muted-foreground">
-                  Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, total)} of {total}
-                </span>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>Previous</Button>
-                  <Button variant="outline" size="sm" disabled={page * PAGE_SIZE >= total} onClick={() => setPage(p => p + 1)}>Next</Button>
-                </div>
-              </div>
-            )}
-          </>
-        )}
+                          <span className="text-[10px] font-mono tabular-nums text-muted-foreground w-8">{Math.round(usagePct)}%</span>
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-muted-foreground">No credit</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        tabIndex={-1}
+                        onClick={open}
+                        className="h-8 text-xs text-muted-foreground hover:text-primary hover:bg-primary/10 gap-1"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        <span>Details</span>
+                        <ChevronRight className="h-3.5 w-3.5 opacity-60" />
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
+        <TablePagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={list.setPage} noun="customers" />
       </Card>
 
       {/* Add Customer Dialog */}
@@ -427,7 +420,7 @@ export default function CustomersPage() {
                   </Select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-foreground mb-1.5">Credit Limit (AED)</label>
+                  <label className="block text-xs font-medium text-foreground mb-1.5">Credit Limit ({currency})</label>
                   <Input type="number" min="0" step="100" value={fCreditLimit} onChange={e => setFCreditLimit(e.target.value)} placeholder="0.00" className="font-mono" />
                 </div>
                 <div>

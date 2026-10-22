@@ -1,5 +1,6 @@
 import { DEFAULT_PAGE_SIZE, DOCUMENT_SOURCES, MAX_PAGE_SIZE, PAYMENT_METHODS } from "@devsfleet/shared-types";
 import { z } from "zod";
+import { sortSchema } from "../../common/db/list-query.js";
 
 const SaleLineSchema = z.object({
   variantId: z.string().uuid(),
@@ -151,5 +152,8 @@ export const ListSalesSchema = z.object({
   customerId: z.string().uuid().optional(),
   from: z.string().date().optional(),
   to: z.string().date().optional(),
+  /** Invoice number, customer name or branch name/code. */
+  q: z.string().trim().max(100).optional(),
+  ...sortSchema(["occurredAt", "saleNumber", "total"], { sortBy: "occurredAt", sortOrder: "desc" }),
 });
 export type ListSalesDto = z.infer<typeof ListSalesSchema>;

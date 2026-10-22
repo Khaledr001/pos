@@ -1,5 +1,6 @@
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, TRANSFER_STATUSES } from "@devsfleet/shared-types";
 import { z } from "zod";
+import { sortSchema } from "../../common/db/list-query.js";
 
 export const CreateTransferSchema = z
   .object({
@@ -30,6 +31,9 @@ export const ListTransfersSchema = z.object({
   branchId: z.string().uuid().optional(),
   /** Optional filter for specifically incoming or outgoing relative to the branchId */
   direction: z.enum(["incoming", "outgoing"]).optional(),
+  /** Transfer number or notes. */
+  q: z.string().trim().max(100).optional(),
+  ...sortSchema(["createdAt", "transferNumber"], { sortBy: "createdAt", sortOrder: "desc" }),
 });
 
 export type ListTransfersDto = z.infer<typeof ListTransfersSchema>;

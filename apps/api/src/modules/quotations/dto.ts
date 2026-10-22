@@ -1,5 +1,6 @@
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, QUOTATION_STATUSES } from "@devsfleet/shared-types";
 import { z } from "zod";
+import { sortSchema } from "../../common/db/list-query.js";
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a YYYY-MM-DD date");
 
@@ -34,6 +35,12 @@ export const ListQuotationsSchema = z.object({
   status: z.enum(QUOTATION_STATUSES).optional(),
   from: isoDate.optional(),
   to: isoDate.optional(),
+  /** Quotation number or customer name. */
+  q: z.string().trim().max(100).optional(),
+  ...sortSchema(["createdAt", "quotationNumber", "total", "validUntil"], {
+    sortBy: "createdAt",
+    sortOrder: "desc",
+  }),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
 });

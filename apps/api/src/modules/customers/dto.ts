@@ -1,6 +1,7 @@
 import { CUSTOMER_TYPES, DEFAULT_PAGE_SIZE, LOCALES, MAX_PAGE_SIZE, PAYMENT_METHODS } from "@devsfleet/shared-types";
 import { normalizePhone } from "@devsfleet/shared-utils";
 import { z } from "zod";
+import { sortSchema } from "../../common/db/list-query.js";
 import { zQueryBoolean } from "../../common/pipes/zod-validation.pipe.js";
 
 /**
@@ -64,6 +65,10 @@ export const ListCustomersSchema = z.object({
   /** Everyone currently over their credit limit — the collections view. */
   overLimitOnly: zQueryBoolean(false),
   includeInactive: zQueryBoolean(false),
+  ...sortSchema(["createdAt", "name", "creditLimit", "creditBalance"], {
+    sortBy: "createdAt",
+    sortOrder: "desc",
+  }),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
 });

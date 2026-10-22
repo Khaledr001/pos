@@ -32,6 +32,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
+  Table, TableBody, TableContainer, TableEmpty, TableHead, Th,
+} from "@/components/ui/data-table";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -559,23 +562,29 @@ export default function TenantDetailPage() {
 
       {activeTab === "branches" && (
         <Card className="border-border/60 shadow-xs overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-border bg-muted/40 text-muted-foreground font-semibold">
-                  <th className="py-3 px-4">Branch Name</th>
-                  <th className="py-3 px-4">Code</th>
-                  <th className="py-3 px-4">Contact</th>
-                  <th className="py-3 px-4">Address</th>
-                  <th className="py-3 px-4">Status</th>
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <tr>
+                <Th>Branch Name</Th>
+                <Th>Code</Th>
+                <Th>Contact</Th>
+                <Th>Address</Th>
+                <Th>Status</Th>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-border/50">
+              </TableHead>
+              <TableBody
+                columns={5}
+                loading={false}
+                empty={<TableEmpty columns={5} icon={GitBranch} title="No branches" />}
+              >
                 {tenant.branches.map((b) => (
                   <tr key={b.id} className="hover:bg-muted/20">
-                    <td className="py-3.5 px-4 font-bold text-foreground flex items-center gap-2">
-                      <GitBranch className="h-4 w-4 text-primary" />
-                      {b.name}
+                    <td className="py-3.5 px-4 font-bold text-foreground">
+                      <span className="flex items-center gap-2">
+                        <GitBranch className="h-4 w-4 text-primary" />
+                        {b.name}
+                      </span>
                     </td>
                     <td className="py-3.5 px-4 font-mono">{b.code}</td>
                     <td className="py-3.5 px-4 text-muted-foreground">
@@ -591,32 +600,38 @@ export default function TenantDetailPage() {
                     </td>
                   </tr>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </TableBody>
+            </Table>
+          </TableContainer>
         </Card>
       )}
 
       {activeTab === "users" && (
         <Card className="border-border/60 shadow-xs overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-border bg-muted/40 text-muted-foreground font-semibold">
-                  <th className="py-3 px-4">Staff Member</th>
-                  <th className="py-3 px-4">Email</th>
-                  <th className="py-3 px-4">Role</th>
-                  <th className="py-3 px-4">Assigned Branch</th>
-                  <th className="py-3 px-4">Last Login</th>
-                  <th className="py-3 px-4">Status</th>
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <tr>
+                <Th>Staff Member</Th>
+                <Th>Email</Th>
+                <Th>Role</Th>
+                <Th>Assigned Branch</Th>
+                <Th>Last Login</Th>
+                <Th>Status</Th>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-border/50">
+              </TableHead>
+              <TableBody
+                columns={6}
+                loading={false}
+                empty={<TableEmpty columns={6} icon={Users} title="No staff accounts" />}
+              >
                 {tenant.users.map((u) => (
                   <tr key={u.id} className="hover:bg-muted/20">
-                    <td className="py-3.5 px-4 font-bold text-foreground flex items-center gap-2">
-                      <Users className="h-4 w-4 text-indigo-500" />
-                      {u.name}
+                    <td className="py-3.5 px-4 font-bold text-foreground">
+                      <span className="flex items-center gap-2">
+                        <Users className="h-4 w-4 text-indigo-500" />
+                        {u.name}
+                      </span>
                     </td>
                     <td className="py-3.5 px-4 font-mono text-muted-foreground">{u.email || "—"}</td>
                     <td className="py-3.5 px-4">
@@ -637,25 +652,29 @@ export default function TenantDetailPage() {
                     </td>
                   </tr>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </TableBody>
+            </Table>
+          </TableContainer>
         </Card>
       )}
 
       {activeTab === "audit" && (
         <Card className="border-border/60 shadow-xs overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-border bg-muted/40 text-muted-foreground font-semibold">
-                  <th className="py-3 px-4">Action</th>
-                  <th className="py-3 px-4">Entity</th>
-                  <th className="py-3 px-4">Reason / Notes</th>
-                  <th className="py-3 px-4">Timestamp</th>
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <tr>
+                <Th>Action</Th>
+                <Th>Entity</Th>
+                <Th>Reason / Notes</Th>
+                <Th>Timestamp</Th>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-border/50">
+              </TableHead>
+              <TableBody
+                columns={4}
+                loading={false}
+                empty={<TableEmpty columns={4} icon={ScrollText} title="No audit entries" />}
+              >
                 {tenant.auditLogs.map((a) => (
                   <tr key={a.id} className="hover:bg-muted/20">
                     <td className="py-3 px-4 font-semibold capitalize text-foreground">
@@ -672,9 +691,9 @@ export default function TenantDetailPage() {
                     </td>
                   </tr>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </TableBody>
+            </Table>
+          </TableContainer>
         </Card>
       )}
 

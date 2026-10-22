@@ -5,11 +5,17 @@ import Link from "next/link";
 import {
   Package, Search, Plus, RefreshCw, X, AlertCircle, CheckCircle2, Boxes, Trash2,
   Pencil, Image as ImageIcon, Upload, Star, FileUp, Layers,
-  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
+import { formatMoney } from "@/lib/format";
+import { useTenantSettings } from "@/lib/tenant-settings";
+import { readListResult, useListData, useListQuery } from "@/lib/use-list-query";
+import {
+  SortableTh, Table, TableBody, TableContainer, TableEmpty, TableHead,
+  TablePagination, TableSearch, Th, numericCell,
+} from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -325,36 +331,17 @@ function flattenCategories(cats: Category[], depth = 0): { id: string; label: st
   return result;
 }
 
-// ── Page numbers with ellipsis, e.g. [1, "…", 4, 5, 6, "…", 42] ─────────────
-
-function paginationRange(current: number, total: number): (number | "ellipsis")[] {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-
-  const pages: (number | "ellipsis")[] = [1];
-  if (current > 3) pages.push("ellipsis");
-
-  for (let p = Math.max(2, current - 1); p <= Math.min(total - 1, current + 1); p++) {
-    pages.push(p);
-  }
-
-  if (current < total - 2) pages.push("ellipsis");
-  pages.push(total);
-  return pages;
-}
-
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function ProductsPage() {
   const { tokens } = useAuth();
 
+  const currency = useTenantSettings().currency.base;
+
   // List state
-  const [products, setProducts] = useState<Product[]>([]);
-  const [total, setTotal] = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
   const LIMIT = 50;
+  const list = useListQuery({ sortBy: "name", sortOrder: "asc" });
+  const { q, page, sortBy, sortOrder } = list;
 
   // Lookups
   const [units, setUnits] = useState<Unit[]>([]);
@@ -390,31 +377,20 @@ export default function ProductsPage() {
 
   // ── Fetch products ──────────────────────────────────────────────────────
 
-  const fetchProducts = useCallback(async () => {
-    setLoading(true);
-    setActionError(null);
-    try {
-      const res = await api.get<any>("/products", {
-        accessToken: tokens?.accessToken,
-        query: { q: search || undefined, page, limit: LIMIT, includeInactive: false },
-      });
-      const list = Array.isArray(res) ? res : (res?.items ?? []);
-      const totalCount = res?.meta?.total ?? res?.total ?? list.length;
-      const pageCount = res?.meta?.totalPages ?? Math.max(1, Math.ceil(totalCount / LIMIT));
-      setProducts(list);
-      setTotal(totalCount);
-      setTotalPages(pageCount);
-      // A filter can shrink the result set out from under whatever page the
-      // user was on (e.g. deleting the last row on the last page) — land them
-      // on the new last page instead of showing an empty table.
-      if (page > pageCount) setPage(pageCount);
-    } catch (err: any) {
-      console.error("Failed to fetch products:", err);
-      setActionError(err?.message || "Failed to load products from API.");
-    } finally {
-      setLoading(false);
-    }
-  }, [tokens, search, page]);
+  const loadProducts = useCallback(
+    async (signal: AbortSignal) =>
+      readListResult<Product>(
+        await api.get<unknown>("/products", {
+          accessToken: tokens?.accessToken,
+          signal,
+          query: { q: q.trim() || undefined, page, limit: LIMIT, sortBy, sortOrder, includeInactive: false },
+        }),
+      ),
+    [tokens?.accessToken, q, page, sortBy, sortOrder],
+  );
+  const {
+    items: products, total, loading, initialLoading, error: loadError, reload: fetchProducts,
+  } = useListData(loadProducts, list.ready);
 
   const reloadCategories = useCallback(async () => {
     if (!tokens?.accessToken) return;
@@ -443,15 +419,6 @@ export default function ProductsPage() {
       if (brandsRes.status === "fulfilled") setBrands(brandsRes.value ?? []);
     });
   }, [tokens]);
-
-  useEffect(() => {
-    fetchProducts();
-  }, [fetchProducts]);
-
-  // Debounce search
-  useEffect(() => {
-    setPage(1);
-  }, [search]);
 
   // ── Handle create ───────────────────────────────────────────────────────
 
@@ -508,7 +475,7 @@ export default function ProductsPage() {
     try {
       await api.delete(`/products/${product.id}`, { accessToken: tokens?.accessToken });
       setActionSuccess(`"${product.name}" removed.`);
-      await fetchProducts();
+      fetchProducts();
     } catch (err: any) {
       setActionError(err?.message || "Failed to delete the product.");
     }
@@ -532,7 +499,7 @@ export default function ProductsPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <Button variant="outline" size="sm" onClick={fetchProducts} disabled={loading}>
+          <Button variant="outline" size="sm" onClick={() => { setActionError(null); fetchProducts(); }} disabled={loading}>
             <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
             Refresh
           </Button>
@@ -556,193 +523,154 @@ export default function ProductsPage() {
           <button onClick={() => setActionSuccess(null)} className="cursor-pointer"><X className="h-3.5 w-3.5" /></button>
         </div>
       )}
-      {actionError && (
+      {(actionError ?? loadError) && (
         <div className="flex items-center justify-between rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
-          <div className="flex items-center gap-2"><AlertCircle className="h-4 w-4" /><span>{actionError}</span></div>
+          <div className="flex items-center gap-2"><AlertCircle className="h-4 w-4" /><span>{actionError ?? loadError}</span></div>
           <button onClick={() => setActionError(null)} className="cursor-pointer"><X className="h-3.5 w-3.5" /></button>
         </div>
       )}
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by product name, SKU, or barcode..."
-          className="pl-10 h-10 bg-secondary/30"
-        />
-      </div>
+      <TableSearch
+        value={list.search}
+        onChange={list.setSearch}
+        label="Search products"
+        placeholder="Search by product name, SKU, or barcode..."
+      />
 
       {/* Table */}
       <Card className="overflow-hidden">
-        {loading ? (
-          <div className="py-16 text-center text-sm text-muted-foreground">
-            <div className="h-6 w-6 mx-auto mb-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-            Loading products from API...
-          </div>
-        ) : products.length === 0 ? (
-          <div className="py-16 text-center">
-            <Package className="mx-auto h-12 w-12 text-muted-foreground/30" />
-            <h3 className="mt-4 text-sm font-semibold text-foreground">No products found</h3>
-            <p className="mt-1.5 text-xs text-muted-foreground">
-              {search ? "No products match your search." : "Add your first product to get started."}
-            </p>
-            {!search && (
-              <Button size="sm" onClick={() => setIsModalOpen(true)} className="mt-4">
-                <Plus className="h-3.5 w-3.5" /> Add Product
-              </Button>
-            )}
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="border-b border-border bg-secondary/50 text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3.5 font-medium">SKU</th>
-                  <th className="px-4 py-3.5 font-medium">Product Name</th>
-                  <th className="px-4 py-3.5 font-medium">Category</th>
-                  <th className="px-4 py-3.5 font-medium">Unit</th>
-                  <th className="px-4 py-3.5 text-right font-medium">Price (AED)</th>
-                  <th className="px-4 py-3.5 text-center font-medium">Variants</th>
-                  <th className="px-4 py-3.5 text-center font-medium">Status</th>
-                  <th className="px-4 py-3.5 text-right font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {products.map((product) => {
-                  const catName = product.categoryName || product.category?.name;
-                  const unitName = product.unitAbbr || product.unit?.name || "pcs";
-                  const priceDisplay = product.minPrice
-                    ? product.minPrice === product.maxPrice
-                      ? parseFloat(product.minPrice).toFixed(2)
-                      : `${parseFloat(product.minPrice).toFixed(2)} – ${parseFloat(product.maxPrice || "0").toFixed(2)}`
-                    : "—";
+        <TableContainer>
+          <Table>
+            <TableHead>
+              <tr>
+                <SortableTh column="sku" sortBy={sortBy} sortOrder={sortOrder} onSort={list.toggleSort}>SKU</SortableTh>
+                <SortableTh column="name" sortBy={sortBy} sortOrder={sortOrder} onSort={list.toggleSort}>Product Name</SortableTh>
+                <Th>Category</Th>
+                <Th>Unit</Th>
+                <Th align="right">Price ({currency})</Th>
+                <Th align="center">Variants</Th>
+                <Th align="center">Status</Th>
+                <Th align="right">Actions</Th>
+              </tr>
+            </TableHead>
+            <TableBody
+              columns={8}
+              loading={initialLoading}
+              empty={
+                <TableEmpty
+                  columns={8}
+                  icon={Package}
+                  title="No products found"
+                  description={list.q ? `No products match "${list.q}".` : "Add your first product to get started."}
+                  action={
+                    !list.q && (
+                      <Button size="sm" onClick={() => setIsModalOpen(true)}>
+                        <Plus className="h-3.5 w-3.5" /> Add Product
+                      </Button>
+                    )
+                  }
+                />
+              }
+            >
+              {products.map((product) => {
+                const catName = product.categoryName || product.category?.name;
+                const unitName = product.unitAbbr || product.unit?.name || "pcs";
+                const priceDisplay = product.minPrice
+                  ? product.minPrice === product.maxPrice
+                    ? formatMoney(product.minPrice)
+                    : `${formatMoney(product.minPrice)} – ${formatMoney(product.maxPrice || "0")}`
+                  : "—";
 
-                  return (
-                    <tr
-                      key={product.id}
-                      onDoubleClick={() => setViewingProduct(product)}
-                      title="Double-click to view details"
-                      className="cursor-pointer hover:bg-secondary/30 transition-colors"
-                    >
-                      <td className="px-4 py-3.5 font-mono font-bold text-primary">{product.sku}</td>
-                      <td className="px-4 py-3.5 font-medium text-foreground max-w-xs">
-                        <div className="truncate font-semibold">{product.name}</div>
-                        {product.brandName && (
-                          <div className="text-[11px] text-muted-foreground font-normal">{product.brandName}</div>
-                        )}
-                      </td>
-                      <td className="px-4 py-3.5">
-                        {catName ? (
-                          <Badge variant="secondary" className="text-[10px]">{catName}</Badge>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3.5 text-muted-foreground font-mono text-[11px] uppercase">{unitName}</td>
-                      <td className="px-4 py-3.5 text-right font-mono font-semibold text-foreground">
-                        {priceDisplay !== "—" ? `AED ${priceDisplay}` : "—"}
-                      </td>
-                      <td className="px-4 py-3.5 text-center">
-                        <Badge variant="outline" className="text-[10px] font-medium">
-                          {product.variantCount ?? 1} {product.variantCount === 1 ? "variant" : "variants"}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3.5 text-center">
-                        <Badge variant={product.isActive ? "success" : "secondary"}>
-                          {product.isActive ? "Active" : "Inactive"}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3.5 text-right">
-                        {/* One stopPropagation for the whole action cluster, rather than
-                            one per button — a click (or two quick ones) here should never
-                            also open the row's detail drawer underneath it. */}
-                        <div
-                          className="flex items-center justify-end gap-1.5"
-                          onClick={(e) => e.stopPropagation()}
-                          onDoubleClick={(e) => e.stopPropagation()}
-                        >
-                          <Button variant="outline" size="sm" onClick={() => setPackagingProduct(product)}>
-                            <Boxes className="h-3.5 w-3.5" />
-                          </Button>
-                          <button
-                            type="button"
-                            onClick={() => setEditingProduct(product)}
-                            aria-label={`Edit ${product.name}`}
-                            className="cursor-pointer p-1.5 text-muted-foreground hover:text-foreground"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void handleDelete(product)}
-                            aria-label={`Delete ${product.name}`}
-                            className="cursor-pointer p-1.5 text-muted-foreground hover:text-destructive"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex flex-col gap-3 border-t border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <span className="text-xs text-muted-foreground">
-              Showing {((page - 1) * LIMIT) + 1}–{Math.min(page * LIMIT, total)} of {total.toLocaleString()} · Page {page} of {totalPages}
-            </span>
-            <div className="flex items-center gap-1">
-              <Button
-                variant="outline" size="sm" disabled={page === 1}
-                onClick={() => setPage(1)} aria-label="First page"
-              >
-                <ChevronsLeft className="h-3.5 w-3.5" />
-              </Button>
-              <Button
-                variant="outline" size="sm" disabled={page === 1}
-                onClick={() => setPage((p) => p - 1)} aria-label="Previous page"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-              </Button>
-              {paginationRange(page, totalPages).map((p, i) =>
-                p === "ellipsis" ? (
-                  <span key={`e-${i}`} className="px-1.5 text-xs text-muted-foreground">…</span>
-                ) : (
-                  <Button
-                    key={p}
-                    variant={p === page ? "default" : "outline"}
-                    size="sm"
-                    className="min-w-8 px-0 font-mono"
-                    onClick={() => setPage(p)}
-                    aria-label={`Page ${p}`}
-                    aria-current={p === page ? "page" : undefined}
+                return (
+                  <tr
+                    key={product.id}
+                    onDoubleClick={() => setViewingProduct(product)}
+                    // Double-click for the mouse; Enter for the keyboard, which has no double.
+                    tabIndex={0}
+                    aria-label={`${product.name} — press Enter for details`}
+                    onKeyDown={(e) => {
+                      if (e.target !== e.currentTarget) return;
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        setViewingProduct(product);
+                      }
+                    }}
+                    title="Double-click to view details"
+                    className={cn(
+                      "cursor-pointer hover:bg-secondary/30 transition-colors focus:bg-secondary/40 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                      loading && "opacity-60",
+                    )}
                   >
-                    {p}
-                  </Button>
-                ),
-              )}
-              <Button
-                variant="outline" size="sm" disabled={page === totalPages}
-                onClick={() => setPage((p) => p + 1)} aria-label="Next page"
-              >
-                <ChevronRight className="h-3.5 w-3.5" />
-              </Button>
-              <Button
-                variant="outline" size="sm" disabled={page === totalPages}
-                onClick={() => setPage(totalPages)} aria-label="Last page"
-              >
-                <ChevronsRight className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          </div>
-        )}
+                    <td className="px-4 py-3.5 font-mono font-bold text-primary">{product.sku}</td>
+                    <td className="px-4 py-3.5 font-medium text-foreground max-w-xs">
+                      <div className="truncate font-semibold" title={product.name}>{product.name}</div>
+                      {product.brandName && (
+                        <div className="text-[11px] text-muted-foreground font-normal">{product.brandName}</div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3.5">
+                      {catName ? (
+                        <Badge variant="secondary" className="text-[10px]">{catName}</Badge>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3.5 text-muted-foreground font-mono text-[11px] uppercase">{unitName}</td>
+                    <td className={cn("px-4 py-3.5 font-semibold text-foreground whitespace-nowrap", numericCell)}>
+                      {priceDisplay}
+                    </td>
+                    <td className="px-4 py-3.5 text-center">
+                      <Badge variant="outline" className="text-[10px] font-medium">
+                        {product.variantCount ?? 1} {product.variantCount === 1 ? "variant" : "variants"}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3.5 text-center">
+                      <Badge variant={product.isActive ? "success" : "secondary"}>
+                        {product.isActive ? "Active" : "Inactive"}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3.5 text-right">
+                      {/* One stopPropagation for the whole action cluster, rather than
+                          one per button — a click (or two quick ones) here should never
+                          also open the row's detail drawer underneath it. */}
+                      <div
+                        className="flex items-center justify-end gap-1.5"
+                        onClick={(e) => e.stopPropagation()}
+                        onDoubleClick={(e) => e.stopPropagation()}
+                      >
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setPackagingProduct(product)}
+                          aria-label={`Packagings for ${product.name}`}
+                        >
+                          <Boxes className="h-3.5 w-3.5" />
+                        </Button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingProduct(product)}
+                          aria-label={`Edit ${product.name}`}
+                          className="cursor-pointer p-1.5 text-muted-foreground hover:text-foreground"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleDelete(product)}
+                          aria-label={`Delete ${product.name}`}
+                          className="cursor-pointer p-1.5 text-muted-foreground hover:text-destructive"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
+        <TablePagination page={page} pageSize={LIMIT} total={total} onPageChange={list.setPage} noun="products" />
       </Card>
 
       {/* Add Product Dialog */}
@@ -828,7 +756,7 @@ export default function ProductsPage() {
 
             {/* Pricing */}
             <div className="rounded-xl border border-border p-4 space-y-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Pricing (AED)</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Pricing ({currency})</p>
               <div className="grid gap-3 sm:grid-cols-3">
                 <div>
                   <label className="block text-xs font-medium text-foreground mb-1.5">Retail Price *</label>
@@ -1302,6 +1230,7 @@ function ProductDetailDrawer({
   onPackagings: (product: Product) => void;
 }) {
   /** Last product opened. Outlives `product` so the panel has something to show while sliding out. */
+  const currency = useTenantSettings().currency.base;
   const [shown, setShown] = useState<Product | null>(null);
   const [full, setFull] = useState<Product | null>(null);
   const [packagingsByVariant, setPackagingsByVariant] = useState<Record<string, VariantUnit[]>>({});
@@ -1356,7 +1285,7 @@ function ProductDetailDrawer({
   const primaryImage = full?.images?.find((i) => i.isPrimary) ?? full?.images?.[0] ?? null;
   const variants = full?.variants ?? [];
 
-  const money = (value?: string | null) => (value ? `AED ${parseFloat(value).toFixed(2)}` : "—");
+  const money = (value?: string | null) => formatMoney(value, { currency });
 
   return (
     <Sheet open={product !== null} onOpenChange={(open) => !open && onClose()}>

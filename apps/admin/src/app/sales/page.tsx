@@ -1,16 +1,22 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import {
-  Search, RefreshCw, CreditCard, Banknote, Receipt, ShoppingCart,
+  RefreshCw, CreditCard, Banknote, Receipt, ShoppingCart,
   Printer, AlertCircle, FileText, Ban, Undo2,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { api, apiDownload, printBlob } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
+import { formatMoney } from "@/lib/format";
+import { useTenantSettings } from "@/lib/tenant-settings";
+import { readListResult, useListData, useListQuery } from "@/lib/use-list-query";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import {
+  SortableTh, Table, TableBody, TableContainer, TableEmpty, TableHead,
+  TablePagination, TableSearch, Th, numericCell,
+} from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -64,6 +70,7 @@ interface Sale {
   customerName?: string | null;
   customer?: { name: string } | null;
   branchName?: string;
+  branchCode?: string;
   branch?: { code: string; name: string };
   cashierName?: string;
   subtotal?: string;
@@ -73,13 +80,8 @@ interface Sale {
   dueAmount?: string;
   status: string;
   payments?: SalePayment[];
-}
-
-interface SalesPage {
-  items: Sale[];
-  meta?: { total: number };
-  total?: number;
-  page?: number;
+  /** Distinct tender types — what the list endpoint sends instead of `payments`. */
+  paymentMethods?: string[];
 }
 
 const PAYMENT_ICONS: Record<string, React.ReactNode> = {
@@ -93,14 +95,28 @@ const PAYMENT_ICONS: Record<string, React.ReactNode> = {
 
 export default function SalesPage() {
   const { tokens } = useAuth();
+  const settings = useTenantSettings();
+  const currency = settings.currency.base;
 
-  const [sales, setSales] = useState<Sale[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
   const LIMIT = 50;
-  const [error, setError] = useState<string | null>(null);
+  const list = useListQuery({ sortBy: "occurredAt", sortOrder: "desc" });
+  const { q, page, sortBy, sortOrder } = list;
+
+  const loadSales = useCallback(
+    async (signal: AbortSignal) =>
+      readListResult<Sale>(
+        await api.get<unknown>("/sales", {
+          accessToken: tokens?.accessToken,
+          signal,
+          query: { q: q.trim() || undefined, page, limit: LIMIT, sortBy, sortOrder },
+        }),
+      ),
+    [tokens?.accessToken, q, page, sortBy, sortOrder],
+  );
+  const { items: sales, total, loading, initialLoading, error: loadError, reload: fetchSales } =
+    useListData(loadSales, list.ready);
+  const [actionError, setError] = useState<string | null>(null);
+  const error = actionError ?? loadError;
 
   // Row click → the full invoice. Fetched fresh rather than reusing the list
   // row, which carries no lines at all.
@@ -178,28 +194,6 @@ export default function SalesPage() {
     }
   }, [tokens]);
 
-  const fetchSales = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await api.get<any>("/sales", {
-        accessToken: tokens?.accessToken,
-        query: { page, limit: LIMIT },
-      });
-      const list = Array.isArray(res) ? res : (res?.items ?? []);
-      const totalCount = res?.meta?.total ?? res?.total ?? list.length;
-      setSales(list);
-      setTotal(totalCount);
-    } catch (err: any) {
-      console.error("Failed to load sales:", err);
-      setError(err?.message || "Failed to load sales.");
-    } finally {
-      setLoading(false);
-    }
-  }, [tokens, page]);
-
-  useEffect(() => { fetchSales(); }, [fetchSales]);
-
   const formatTime = (iso?: string) => {
     if (!iso) return "—";
     try {
@@ -207,24 +201,16 @@ export default function SalesPage() {
     } catch { return iso; }
   };
 
-  const primaryPaymentMethod = (payments?: SalePayment[]): string => {
-    if (!payments?.length) return "cash";
-    const methods = [...new Set(payments.map(p => p.method.toLowerCase()))];
-    return methods.length > 1 ? "split" : (methods[0] ?? "cash");
+  // A sale with no payment rows is a credit sale, not a cash one.
+  const primaryPaymentMethod = (sale: Sale): string => {
+    const methods = [
+      ...new Set((sale.paymentMethods ?? sale.payments?.map((p) => p.method) ?? []).map((m) => m.toLowerCase())),
+    ];
+    if (methods.length === 0) return "credit";
+    return methods.length > 1 ? "split" : methods[0]!;
   };
 
-  // Client-side search filter (invoice number / customer name)
-  const filtered = sales.filter(s => {
-    const num = s.saleNumber || s.invoiceNumber || "";
-    const cust = s.customerName || s.customer?.name || "";
-    const br = s.branchName || s.branch?.name || s.branch?.code || "";
-    return (
-      !search ||
-      num.toLowerCase().includes(search.toLowerCase()) ||
-      cust.toLowerCase().includes(search.toLowerCase()) ||
-      br.toLowerCase().includes(search.toLowerCase())
-    );
-  });
+  const taxHeader = settings.tax.label;
 
   return (
     <div className="space-y-6">
@@ -240,7 +226,7 @@ export default function SalesPage() {
             Finalized sales from POS terminals with snapshot pricing, VAT calculation, and payment splits.
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={fetchSales} disabled={loading}>
+        <Button variant="outline" size="sm" onClick={() => { setError(null); fetchSales(); }} disabled={loading}>
           <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
           Refresh
         </Button>
@@ -250,148 +236,129 @@ export default function SalesPage() {
         <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">{error}</div>
       )}
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Search by invoice number, customer, or branch code..."
-          className="pl-10 h-10 bg-secondary/30"
-        />
-      </div>
+      <TableSearch
+        value={list.search}
+        onChange={list.setSearch}
+        label="Search sales"
+        placeholder="Search by invoice number, customer, or branch..."
+      />
 
-      {/* Table */}
       <Card className="overflow-hidden">
-        {loading ? (
-          <div className="py-16 text-center text-sm text-muted-foreground">
-            <div className="h-6 w-6 mx-auto mb-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-            Loading invoices from API...
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="py-16 text-center">
-            <ShoppingCart className="mx-auto h-12 w-12 text-muted-foreground/30" />
-            <h3 className="mt-4 text-sm font-semibold text-foreground">No sales found</h3>
-            <p className="mt-1.5 text-xs text-muted-foreground">
-              {search ? "No invoices match your search." : "Sales are created from the POS terminal."}
-            </p>
-          </div>
-        ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="border-b border-border bg-secondary/50 text-muted-foreground">
-                  <tr>
-                    <th className="px-4 py-3.5 font-medium">Invoice #</th>
-                    <th className="px-4 py-3.5 font-medium">Customer</th>
-                    <th className="px-4 py-3.5 font-medium">Branch</th>
-                    <th className="px-4 py-3.5 font-medium">Date & Time</th>
-                    <th className="px-4 py-3.5 font-medium">Payment</th>
-                    <th className="px-4 py-3.5 text-right font-medium">Subtotal</th>
-                    <th className="px-4 py-3.5 text-right font-medium">VAT (5%)</th>
-                    <th className="px-4 py-3.5 text-right font-medium">Total (AED)</th>
-                    <th className="px-4 py-3.5 text-center font-medium">Status</th>
-                    <th className="px-4 py-3.5 text-right font-medium">Print</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {filtered.map((sale) => {
-                    const method = primaryPaymentMethod(sale.payments);
-                    return (
-                      <tr
-                        key={sale.id}
-                        onClick={() => void openSale(sale)}
-                        /**
-                         * The whole row opens the invoice. A tabIndex and a
-                         * keyboard handler come with that: making a `tr`
-                         * clickable and leaving it unreachable by keyboard
-                         * just moves the problem.
-                         */
-                        tabIndex={0}
-                        role="button"
-                        aria-label={`Open invoice ${sale.saleNumber || sale.invoiceNumber || ""}`}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            void openSale(sale);
-                          }
+        <TableContainer>
+          <Table>
+            <TableHead>
+              <tr>
+                <SortableTh column="saleNumber" sortBy={sortBy} sortOrder={sortOrder} onSort={list.toggleSort}>Invoice #</SortableTh>
+                <Th>Customer</Th>
+                <Th>Branch</Th>
+                <SortableTh column="occurredAt" sortBy={sortBy} sortOrder={sortOrder} onSort={list.toggleSort} firstOrder="desc">Date & Time</SortableTh>
+                <Th>Payment</Th>
+                <Th align="right">Subtotal</Th>
+                <Th align="right">{taxHeader}</Th>
+                <SortableTh column="total" sortBy={sortBy} sortOrder={sortOrder} onSort={list.toggleSort} firstOrder="desc" align="right">Total ({currency})</SortableTh>
+                <Th align="center">Status</Th>
+                <Th align="right"><span className="sr-only">Actions</span></Th>
+              </tr>
+            </TableHead>
+            <TableBody
+              columns={10}
+              loading={initialLoading}
+              empty={
+                <TableEmpty
+                  columns={10}
+                  icon={ShoppingCart}
+                  title="No sales found"
+                  description={list.q ? `No invoices match "${list.q}".` : "Sales are created from the POS terminal."}
+                />
+              }
+            >
+              {sales.map((sale) => {
+                const method = primaryPaymentMethod(sale);
+                return (
+                  <tr
+                    key={sale.id}
+                    onClick={() => void openSale(sale)}
+                    /**
+                     * The whole row opens the invoice. A tabIndex and a
+                     * keyboard handler come with that: making a `tr`
+                     * clickable and leaving it unreachable by keyboard
+                     * just moves the problem.
+                     */
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`Open invoice ${sale.saleNumber || sale.invoiceNumber || ""}`}
+                    onKeyDown={(e) => {
+                      if (e.target !== e.currentTarget) return;
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        void openSale(sale);
+                      }
+                    }}
+                    className={cn(
+                      "cursor-pointer hover:bg-secondary/30 transition-colors focus:bg-secondary/40 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                      loading && "opacity-60",
+                    )}
+                  >
+                    <td className="px-4 py-3.5 font-mono font-bold text-primary whitespace-nowrap">
+                      <span className="underline decoration-dotted underline-offset-2">
+                        {sale.saleNumber || sale.invoiceNumber || "—"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 font-medium text-foreground max-w-45 truncate" title={sale.customerName || sale.customer?.name || undefined}>
+                      {sale.customerName || sale.customer?.name || "Walk-in Customer"}
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <Badge variant="secondary" className="font-mono text-[10px] font-bold">
+                        {sale.branchCode || sale.branch?.code || sale.branchName || "HQ"}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3.5 text-muted-foreground whitespace-nowrap tabular-nums">
+                      {formatTime(sale.occurredAt || sale.createdAt)}
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <span className="inline-flex items-center gap-1.5 font-medium text-foreground capitalize">
+                        {PAYMENT_ICONS[method] ?? <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />}
+                        {method}
+                      </span>
+                    </td>
+                    <td className={cn("px-4 py-3.5 text-muted-foreground", numericCell)}>
+                      {formatMoney(sale.subtotal)}
+                    </td>
+                    <td className={cn("px-4 py-3.5 text-muted-foreground", numericCell)}>
+                      {formatMoney(sale.taxAmount)}
+                    </td>
+                    <td className={cn("px-4 py-3.5 font-bold text-foreground", numericCell)}>
+                      {formatMoney(sale.total)}
+                    </td>
+                    <td className="px-4 py-3.5 text-center">
+                      <Badge variant={sale.status === "completed" ? "success" : sale.status === "void" ? "destructive" : "secondary"}>
+                        {sale.status}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3.5 text-right">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        // Stops the row's own click firing underneath, which
+                        // would open the dialog on every print.
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void printInvoice(sale);
                         }}
-                        className="cursor-pointer hover:bg-secondary/30 transition-colors focus:bg-secondary/40 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        disabled={printing === sale.id}
+                        aria-label={`Print invoice ${sale.saleNumber || ""}`}
                       >
-                        <td className="px-4 py-3.5 font-mono font-bold text-primary whitespace-nowrap">
-                          <span className="underline decoration-dotted underline-offset-2">
-                            {sale.saleNumber || sale.invoiceNumber || "—"}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3.5 font-medium text-foreground max-w-45 truncate">
-                          {sale.customerName || sale.customer?.name || "Walk-in Customer"}
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <Badge variant="secondary" className="font-mono text-[10px] font-bold">
-                            {sale.branchName || sale.branch?.code || "HQ"}
-                          </Badge>
-                        </td>
-                        <td className="px-4 py-3.5 text-muted-foreground whitespace-nowrap">
-                          {formatTime(sale.occurredAt || sale.createdAt)}
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <span className="inline-flex items-center gap-1.5 font-medium text-foreground capitalize">
-                            {PAYMENT_ICONS[method] ?? <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />}
-                            {method}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3.5 text-right font-mono text-muted-foreground">
-                          {sale.subtotal ? `AED ${parseFloat(sale.subtotal).toFixed(2)}` : "—"}
-                        </td>
-                        <td className="px-4 py-3.5 text-right font-mono text-muted-foreground">
-                          {sale.taxAmount ? `AED ${parseFloat(sale.taxAmount).toFixed(2)}` : "—"}
-                        </td>
-                        <td className="px-4 py-3.5 text-right font-mono font-bold text-foreground">
-                          AED {parseFloat(sale.total).toFixed(2)}
-                        </td>
-                        <td className="px-4 py-3.5 text-center">
-                          <Badge variant={sale.status === "completed" ? "success" : sale.status === "void" ? "destructive" : "secondary"}>
-                            {sale.status}
-                          </Badge>
-                        </td>
-                        <td className="px-4 py-3.5 text-right">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            // Stops the row's own click firing underneath, which
-                            // would open the dialog on every print.
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void printInvoice(sale);
-                            }}
-                            disabled={printing === sale.id}
-                            aria-label={`Print invoice ${sale.saleNumber || ""} `}
-                          >
-                            <Printer className="h-3.5 w-3.5" />
-                            {printing === sale.id ? "…" : "Print"}
-                          </Button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Pagination */}
-            {total > LIMIT && (
-              <div className="flex items-center justify-between border-t border-border px-4 py-3">
-                <span className="text-xs text-muted-foreground">
-                  Page {page} · {total} total invoices
-                </span>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>Previous</Button>
-                  <Button variant="outline" size="sm" disabled={page * LIMIT >= total} onClick={() => setPage(p => p + 1)}>Next</Button>
-                </div>
-              </div>
-            )}
-          </>
-        )}
+                        <Printer className="h-3.5 w-3.5" />
+                        {printing === sale.id ? "…" : "Print"}
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
+        <TablePagination page={page} pageSize={LIMIT} total={total} onPageChange={list.setPage} noun="invoices" />
       </Card>
 
       <Dialog open={selected !== null} onOpenChange={(open) => !open && setSelected(null)}>
@@ -437,7 +404,7 @@ export default function SalesPage() {
                     <p key={i} className="text-sm text-foreground capitalize">
                       {p.method.replace("_", " ")}{" "}
                       <span className="font-mono text-muted-foreground">
-                        AED {parseFloat(p.amount).toFixed(2)}
+                        {formatMoney(p.amount, { currency })}
                       </span>
                     </p>
                   ))
@@ -478,12 +445,12 @@ export default function SalesPage() {
                           <div className="font-mono text-[10px] text-muted-foreground">{item.productSku}</div>
                         </td>
                         <td className="px-3 py-2 text-right font-mono">{item.quantity}</td>
-                        <td className="px-3 py-2 text-right font-mono">{parseFloat(item.unitPrice).toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right font-mono tabular-nums">{formatMoney(item.unitPrice)}</td>
                         <td className="px-3 py-2 text-right font-mono text-muted-foreground">
                           {Number(item.taxPercent)}%
                         </td>
                         <td className="px-3 py-2 text-right font-mono font-semibold">
-                          {parseFloat(item.total).toFixed(2)}
+                          {formatMoney(item.total)}
                         </td>
                       </tr>
                     ))}
@@ -494,22 +461,22 @@ export default function SalesPage() {
           </div>
 
           <div className="ml-auto w-full max-w-xs space-y-1 text-xs">
-            <Row label="Subtotal" value={selected?.subtotal} />
+            <Row label="Subtotal" value={selected?.subtotal} currency={currency} />
             {Number(selected?.discountAmount ?? "0") > 0 && (
-              <Row label="Discount" value={`-${selected?.discountAmount}`} />
+              <Row label="Discount" value={`-${selected?.discountAmount}`} currency={currency} />
             )}
-            <Row label="VAT" value={selected?.taxAmount} />
+            <Row label={settings.tax.label} value={selected?.taxAmount} currency={currency} />
             <div className="flex justify-between border-t border-border pt-1.5 text-sm font-bold text-foreground">
               <span>Total</span>
               <span className="font-mono">
-                AED {selected ? parseFloat(selected.total).toFixed(2) : "0.00"}
+                {formatMoney(selected?.total ?? "0", { currency })}
               </span>
             </div>
             {Number(selected?.dueAmount ?? "0") > 0 && (
               <div className="flex justify-between text-amber-500 font-medium">
                 <span>Balance due</span>
                 <span className="font-mono">
-                  AED {parseFloat(selected!.dueAmount!).toFixed(2)}
+                  {formatMoney(selected!.dueAmount!, { currency })}
                 </span>
               </div>
             )}
@@ -584,13 +551,13 @@ export default function SalesPage() {
   );
 }
 
-/** One right-aligned totals line. Dashes rather than "AED NaN" when absent. */
-function Row({ label, value }: { label: string; value?: string }) {
+/** One right-aligned totals line. A dash rather than "NaN" when absent. */
+function Row({ label, value, currency }: { label: string; value?: string; currency: string }) {
   return (
     <div className="flex justify-between text-muted-foreground">
       <span>{label}</span>
-      <span className="font-mono">
-        {value === undefined || value === null ? "—" : `AED ${parseFloat(value).toFixed(2)}`}
+      <span className="font-mono tabular-nums">
+        {formatMoney(value, { currency })}
       </span>
     </div>
   );

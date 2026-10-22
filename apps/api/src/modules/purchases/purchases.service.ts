@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gte, inArray, lte, schema, sql } from "@devsfleet/db";
+import { and, asc, count, desc, eq, gte, ilike, inArray, lte, or, schema, sql } from "@devsfleet/db";
 import { resolveTenantSettings } from "@devsfleet/shared-types";
 import {
   AppError,
@@ -11,6 +11,7 @@ import {
 import { Injectable } from "@nestjs/common";
 import { assertBranchInScope, requireBranchId } from "../../common/context/branch-scope.js";
 import { RequestContext } from "../../common/context/request-context.js";
+import { containsPattern } from "../../common/db/list-query.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import { StockService } from "../inventory/stock.service.js";
 import { SerialsService } from "../serials/serials.service.js";
@@ -770,6 +771,7 @@ export class PurchasesService {
 
   async list(query: ListPurchaseOrdersDto): Promise<{ items: unknown[]; total: number }> {
     if (query.branchId) assertBranchInScope(query.branchId);
+    const term = containsPattern(query.q);
 
     return this.db.run(async (tx) => {
       const where = and(
@@ -782,11 +784,23 @@ export class PurchasesService {
         query.to
           ? lte(schema.purchaseOrders.createdAt, new Date(`${query.to}T23:59:59.999Z`))
           : undefined,
+        term
+          ? or(ilike(schema.purchaseOrders.poNumber, term), ilike(schema.suppliers.name, term))
+          : undefined,
       );
 
+      const sortColumn = {
+        createdAt: schema.purchaseOrders.createdAt,
+        poNumber: schema.purchaseOrders.poNumber,
+        total: schema.purchaseOrders.total,
+        expectedDate: schema.purchaseOrders.expectedDate,
+      }[query.sortBy];
+
+      // Joined like the page below: the search reaches the supplier's name.
       const [total] = await tx
         .select({ value: count() })
         .from(schema.purchaseOrders)
+        .innerJoin(schema.suppliers, eq(schema.purchaseOrders.supplierId, schema.suppliers.id))
         .where(where);
 
       const items = await tx
@@ -802,7 +816,10 @@ export class PurchasesService {
         .from(schema.purchaseOrders)
         .innerJoin(schema.suppliers, eq(schema.purchaseOrders.supplierId, schema.suppliers.id))
         .where(where)
-        .orderBy(desc(schema.purchaseOrders.createdAt))
+        .orderBy(
+          query.sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn),
+          desc(schema.purchaseOrders.id),
+        )
         .limit(query.pageSize)
         .offset((query.page - 1) * query.pageSize);
 

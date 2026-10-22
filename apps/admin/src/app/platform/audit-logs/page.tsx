@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import Link from "next/link";
 import {
   ScrollText,
@@ -19,6 +19,11 @@ import { api } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  Table, TableBody, TableContainer, TableEmpty, TableHead, TablePagination, Th,
+} from "@/components/ui/data-table";
+import { cn } from "@/lib/utils";
+import { readListResult, useListData, useListQuery } from "@/lib/use-list-query";
 
 interface AuditLogItem {
   id: string;
@@ -37,57 +42,25 @@ interface AuditLogItem {
   createdAt: string;
 }
 
-interface PaginatedAuditLogs {
-  items: AuditLogItem[];
-  meta: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-    hasNext: boolean;
-    hasPrev: boolean;
-  };
-}
+const PAGE_SIZE = 25;
 
 export default function PlatformAuditLogsPage() {
-  const [data, setData] = useState<PaginatedAuditLogs | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedAction, setSelectedAction] = useState<string>("");
-  const [page, setPage] = useState(1);
+  const list = useListQuery({ sortBy: "createdAt", sortOrder: "desc", filters: { action: "" } });
+  const { page } = list;
+  const selectedAction = list.filters.action;
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const fetchLogs = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await api.get<any>("/admin/audit-logs", {
-        query: {
-          page,
-          limit: 25,
-          action: selectedAction || undefined,
-        },
-      });
-      const items = Array.isArray(res) ? res : (res?.items ?? []);
-      const meta = res?.meta ?? {
-        page,
-        limit: 25,
-        total: items.length,
-        totalPages: Math.max(1, Math.ceil(items.length / 25)),
-        hasNext: false,
-        hasPrev: page > 1,
-      };
-      setData({ items, meta });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load audit logs");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchLogs();
-  }, [page, selectedAction]);
+  const loadLogs = useCallback(
+    async (signal: AbortSignal) =>
+      readListResult<AuditLogItem>(
+        await api.get<unknown>("/admin/audit-logs", {
+          signal,
+          query: { page, limit: PAGE_SIZE, action: selectedAction || undefined },
+        }),
+      ),
+    [page, selectedAction],
+  );
+  const { items, total, loading, initialLoading, error, reload } = useListData(loadLogs, list.ready);
 
   const toggleExpand = (id: string) => {
     setExpandedId((prev) => (prev === id ? null : id));
@@ -118,7 +91,7 @@ export default function PlatformAuditLogsPage() {
               Platform Audit Trail
             </h1>
             <Badge variant="outline" className="text-xs">
-              {data?.meta?.total || 0} Events Logged
+              {total.toLocaleString()} Events Logged
             </Badge>
           </div>
           <p className="text-xs sm:text-sm text-muted-foreground mt-1">
@@ -129,7 +102,7 @@ export default function PlatformAuditLogsPage() {
         <Button
           variant="outline"
           size="sm"
-          onClick={fetchLogs}
+          onClick={reload}
           disabled={loading}
           className="text-xs h-9"
         >
@@ -142,13 +115,11 @@ export default function PlatformAuditLogsPage() {
       <Card className="border-border/60 shadow-2xs">
         <CardContent className="p-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="font-semibold text-muted-foreground">Action Filter:</span>
+            <label htmlFor="audit-action-filter" className="font-semibold text-muted-foreground">Action Filter:</label>
             <select
+              id="audit-action-filter"
               value={selectedAction}
-              onChange={(e) => {
-                setSelectedAction(e.target.value);
-                setPage(1);
-              }}
+              onChange={(e) => list.setFilter("action", e.target.value)}
               className="h-9 rounded-xl border border-input bg-background px-3 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
             >
               <option value="">All Platform Actions</option>
@@ -176,170 +147,146 @@ export default function PlatformAuditLogsPage() {
 
       {/* ── Audit Log Table ── */}
       <Card className="border-border/60 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="border-b border-border bg-muted/40 text-muted-foreground font-semibold">
-                <th className="py-3 px-4 w-8"></th>
-                <th className="py-3 px-4">Timestamp</th>
-                <th className="py-3 px-4">Action</th>
-                <th className="py-3 px-4">Target Business</th>
-                <th className="py-3 px-4">Actor / Operator</th>
-                <th className="py-3 px-4">Notes / Reason</th>
-                <th className="py-3 px-4">IP Address</th>
+        <TableContainer>
+          <Table className="border-collapse">
+            <TableHead>
+              <tr>
+                <Th className="w-8"><span className="sr-only">Details</span></Th>
+                <Th>Timestamp</Th>
+                <Th>Action</Th>
+                <Th>Target Business</Th>
+                <Th>Actor / Operator</Th>
+                <Th>Notes / Reason</Th>
+                <Th>IP Address</Th>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-border/50">
-              {loading ? (
-                <tr>
-                  <td colSpan={7} className="py-12 text-center text-muted-foreground">
-                    <div className="inline-flex items-center gap-2">
-                      <RefreshCw className="h-4 w-4 animate-spin text-primary" />
-                      <span>Reading audit log ledger…</span>
-                    </div>
-                  </td>
-                </tr>
-              ) : data?.items && data.items.length > 0 ? (
-                data.items.map((log) => {
-                  const isExpanded = expandedId === log.id;
+            </TableHead>
+            <TableBody
+              columns={7}
+              loading={initialLoading}
+              empty={
+                <TableEmpty
+                  columns={7}
+                  icon={ScrollText}
+                  title={selectedAction ? `No "${selectedAction}" events` : "No platform audit events logged yet."}
+                />
+              }
+            >
+              {items.map((log) => {
+                const isExpanded = expandedId === log.id;
 
-                  return (
-                    <React.Fragment key={log.id}>
-                      <tr
-                        onClick={() => toggleExpand(log.id)}
-                        className="hover:bg-muted/20 cursor-pointer transition-colors"
-                      >
-                        <td className="py-3 px-4 text-muted-foreground">
+                return (
+                  <React.Fragment key={log.id}>
+                    <tr
+                      onClick={() => toggleExpand(log.id)}
+                      className={cn("hover:bg-muted/20 cursor-pointer transition-colors", loading && "opacity-60")}
+                    >
+                      <td className="py-3 px-4 text-muted-foreground">
+                        {/* The row click is a mouse shortcut; this button is the control. */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleExpand(log.id);
+                          }}
+                          aria-expanded={isExpanded}
+                          aria-label={`${isExpanded ? "Hide" : "Show"} details for ${log.action}`}
+                          className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
                           {isExpanded ? (
                             <ChevronDown className="h-3.5 w-3.5" />
                           ) : (
                             <ChevronRight className="h-3.5 w-3.5" />
                           )}
-                        </td>
-                        <td className="py-3 px-4 text-muted-foreground whitespace-nowrap">
-                          {new Date(log.createdAt).toLocaleString()}
-                        </td>
-                        <td className="py-3 px-4">
-                          <Badge
-                            variant={getActionBadgeVariant(log.action)}
-                            className="font-mono text-[10px] uppercase"
+                        </button>
+                      </td>
+                      <td className="py-3 px-4 text-muted-foreground whitespace-nowrap tabular-nums">
+                        {new Date(log.createdAt).toLocaleString()}
+                      </td>
+                      <td className="py-3 px-4">
+                        <Badge
+                          variant={getActionBadgeVariant(log.action)}
+                          className="font-mono text-[10px] uppercase"
+                        >
+                          {log.action}
+                        </Badge>
+                      </td>
+                      <td className="py-3 px-4 font-medium text-foreground">
+                        {log.tenantName ? (
+                          <Link
+                            href={`/platform/tenants/${log.tenantId}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="hover:text-primary transition-colors flex items-center gap-1.5"
                           >
-                            {log.action}
-                          </Badge>
-                        </td>
-                        <td className="py-3 px-4 font-medium text-foreground">
-                          {log.tenantName ? (
-                            <Link
-                              href={`/platform/tenants/${log.tenantId}`}
-                              onClick={(e) => e.stopPropagation()}
-                              className="hover:text-primary transition-colors flex items-center gap-1.5"
-                            >
-                              <Building2 className="h-3.5 w-3.5 text-primary shrink-0" />
-                              <span>{log.tenantName}</span>
-                            </Link>
-                          ) : (
-                            <span className="text-muted-foreground font-mono text-[11px]">
-                              {log.tenantId.slice(0, 8)}…
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-3 px-4 text-foreground">
-                          {log.userName || (
-                            <span className="font-mono text-muted-foreground text-[11px]">
-                              Platform Operator
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-3 px-4 text-muted-foreground truncate max-w-50">
-                          {log.reason || "—"}
-                        </td>
-                        <td className="py-3 px-4 font-mono text-muted-foreground">
-                          {log.ipAddress || "Internal"}
+                            <Building2 className="h-3.5 w-3.5 text-primary shrink-0" />
+                            <span>{log.tenantName}</span>
+                          </Link>
+                        ) : (
+                          <span className="text-muted-foreground font-mono text-[11px]">
+                            {log.tenantId.slice(0, 8)}…
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-foreground">
+                        {log.userName || (
+                          <span className="font-mono text-muted-foreground text-[11px]">
+                            Platform Operator
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-muted-foreground truncate max-w-50" title={log.reason ?? undefined}>
+                        {log.reason || "—"}
+                      </td>
+                      <td className="py-3 px-4 font-mono text-muted-foreground">
+                        {log.ipAddress || "Internal"}
+                      </td>
+                    </tr>
+
+                    {/* Expanded Details */}
+                    {isExpanded && (
+                      <tr className="bg-muted/30">
+                        <td colSpan={7} className="p-4 border-b border-border/60">
+                          <div className="space-y-3 rounded-xl border border-border/50 bg-background p-4 text-xs">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-muted-foreground">
+                              <div>
+                                <span className="font-semibold text-foreground">Audit ID: </span>
+                                <span className="font-mono text-[11px]">{log.id}</span>
+                              </div>
+                              <div>
+                                <span className="font-semibold text-foreground">Entity: </span>
+                                <span className="font-mono text-[11px]">{log.entityType} ({log.entityId || "N/A"})</span>
+                              </div>
+                              <div>
+                                <span className="font-semibold text-foreground">Request ID: </span>
+                                <span className="font-mono text-[11px]">{log.requestId || "N/A"}</span>
+                              </div>
+                            </div>
+
+                            {log.reason && (
+                              <div>
+                                <span className="font-semibold text-foreground">Reason/Details: </span>
+                                <span className="text-foreground">{log.reason}</span>
+                              </div>
+                            )}
+
+                            {log.changes && Object.keys(log.changes).length > 0 && (
+                              <div>
+                                <div className="font-semibold text-foreground mb-1">Field Changes:</div>
+                                <pre className="p-2.5 rounded-lg bg-muted/60 text-[11px] font-mono overflow-x-auto text-foreground">
+                                  {JSON.stringify(log.changes, null, 2)}
+                                </pre>
+                              </div>
+                            )}
+                          </div>
                         </td>
                       </tr>
-
-                      {/* Expanded Details */}
-                      {isExpanded && (
-                        <tr className="bg-muted/30">
-                          <td colSpan={7} className="p-4 border-b border-border/60">
-                            <div className="space-y-3 rounded-xl border border-border/50 bg-background p-4 text-xs">
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-muted-foreground">
-                                <div>
-                                  <span className="font-semibold text-foreground">Audit ID: </span>
-                                  <span className="font-mono text-[11px]">{log.id}</span>
-                                </div>
-                                <div>
-                                  <span className="font-semibold text-foreground">Entity: </span>
-                                  <span className="font-mono text-[11px]">{log.entityType} ({log.entityId || "N/A"})</span>
-                                </div>
-                                <div>
-                                  <span className="font-semibold text-foreground">Request ID: </span>
-                                  <span className="font-mono text-[11px]">{log.requestId || "N/A"}</span>
-                                </div>
-                              </div>
-
-                              {log.reason && (
-                                <div>
-                                  <span className="font-semibold text-foreground">Reason/Details: </span>
-                                  <span className="text-foreground">{log.reason}</span>
-                                </div>
-                              )}
-
-                              {log.changes && Object.keys(log.changes).length > 0 && (
-                                <div>
-                                  <div className="font-semibold text-foreground mb-1">Field Changes:</div>
-                                  <pre className="p-2.5 rounded-lg bg-muted/60 text-[11px] font-mono overflow-x-auto text-foreground">
-                                    {JSON.stringify(log.changes, null, 2)}
-                                  </pre>
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td colSpan={7} className="py-12 text-center text-muted-foreground">
-                    No platform audit events logged yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination bar */}
-        {data && data?.meta?.totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-muted/20 text-xs">
-            <div className="text-muted-foreground">
-              Showing page <strong>{data?.meta?.page}</strong> of{" "}
-              <strong>{data?.meta?.totalPages}</strong> ({data?.meta?.total} total)
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={!data?.meta?.hasPrev}
-                className="h-8 text-xs"
-              >
-                Previous
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage((p) => p + 1)}
-                disabled={!data?.meta?.hasNext}
-                className="h-8 text-xs"
-              >
-                Next
-              </Button>
-            </div>
-          </div>
-        )}
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
+        <TablePagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={list.setPage} noun="events" />
       </Card>
     </div>
   );

@@ -7,6 +7,7 @@ import {
 } from "@devsfleet/shared-types";
 import { slugify } from "@devsfleet/shared-utils";
 import { z } from "zod";
+import { sortSchema } from "../../../common/db/list-query.js";
 import { wireEnum } from "../wire.js";
 
 const decimal = z
@@ -24,6 +25,7 @@ const pageSize = z.coerce.number().int().min(1).max(100).default(25);
 export const ListWebOrdersSchema = z.object({
   status: wireEnum(WEB_ORDER_STATUSES).optional(),
   q: z.string().trim().max(100).optional(),
+  ...sortSchema(["createdAt", "orderNumber", "total"], { sortBy: "createdAt", sortOrder: "desc" }),
   page,
   pageSize,
 });
@@ -60,6 +62,7 @@ export type ShipmentDto = z.infer<typeof ShipmentSchema>;
 export const ListListingsSchema = z.object({
   q: z.string().trim().max(100).optional(),
   status: z.enum(["all", "published", "unpublished", "unlisted"]).default("all"),
+  ...sortSchema(["updatedAt", "name", "sku"], { sortBy: "updatedAt", sortOrder: "desc" }),
   page,
   pageSize,
 });

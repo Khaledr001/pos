@@ -1,9 +1,10 @@
-import { and, count, desc, eq, inArray, schema, sql, or } from "@devsfleet/db";
+import { and, asc, count, desc, eq, ilike, inArray, schema, sql, or } from "@devsfleet/db";
 import type { Paginated } from "@devsfleet/shared-types";
 import { AppError, ERROR_CODES } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
 import { assertBranchInScope, branchScope } from "../../common/context/branch-scope.js";
 import { RequestContext } from "../../common/context/request-context.js";
+import { containsPattern } from "../../common/db/list-query.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import { StockService } from "../inventory/stock.service.js";
 import type { CreateTransferDto, ListTransfersDto } from "./dto.js";
@@ -73,8 +74,9 @@ export class TransfersService {
   }
 
   async list(query: ListTransfersDto): Promise<Paginated<unknown>> {
-    const { page, limit, status, branchId, direction } = query;
+    const { page, limit, status, branchId, direction, sortBy, sortOrder } = query;
     const offset = (page - 1) * limit;
+    const term = containsPattern(query.q);
 
     // A scoped user sees transfers that touch one of their branches, at either
     // end. Without this an unfiltered list showed the whole estate's movements.
@@ -97,6 +99,9 @@ export class TransfersService {
                 eq(schema.stockTransfers.fromBranchId, branchId),
               )
         : undefined,
+      term
+        ? or(ilike(schema.stockTransfers.transferNumber, term), ilike(schema.stockTransfers.notes, term))
+        : undefined,
     );
 
     return this.db.run(async (tx) => {
@@ -113,7 +118,12 @@ export class TransfersService {
           })
           .from(schema.stockTransfers)
           .where(where)
-          .orderBy(desc(schema.stockTransfers.createdAt))
+          .orderBy(
+            sortOrder === "asc"
+              ? asc(schema.stockTransfers[sortBy])
+              : desc(schema.stockTransfers[sortBy]),
+            desc(schema.stockTransfers.id),
+          )
           .limit(limit)
           .offset(offset),
         tx.select({ value: count() }).from(schema.stockTransfers).where(where),

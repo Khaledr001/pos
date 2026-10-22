@@ -13,14 +13,18 @@ import {
   CheckCircle2,
   AlertCircle,
   X,
-  Plus,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
+import { readListResult, useListData, useListQuery } from "@/lib/use-list-query";
+import {
+  SortableTh, Table, TableBody, TableContainer, TableEmpty, TableHead,
+  TablePagination, TableSearch, Th, numericCell,
+} from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -40,37 +44,32 @@ import {
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
+/** `GET /inventory`. Quantities are numeric strings, as every numeric column is. */
 interface StockRow {
   variantId: string;
-  variantSku: string;
+  sku: string;
   variantName: string;
   productName: string;
+  unitAbbr: string;
   branchId: string;
-  branchCode: string;
-  quantity: number;
-  minStock: number;
+  branchName: string;
+  quantity: string;
+  available: string;
+  minStock: string;
 }
 
-interface StockPage {
-  items: StockRow[];
-  total: number;
-}
-
+/** `GET /inventory/transactions`. */
 interface TxRow {
   id: string;
   createdAt: string;
   type: string;
-  quantity: number;
-  balanceAfter: number;
-  variantSku: string;
-  branchCode: string;
-  reference?: string;
-  notes?: string;
-}
-
-interface TxPage {
-  items: TxRow[];
-  total: number;
+  quantity: string;
+  balanceAfter: string;
+  sku: string;
+  productName: string;
+  branchName: string;
+  referenceType?: string | null;
+  notes?: string | null;
 }
 
 interface Branch {
@@ -79,19 +78,76 @@ interface Branch {
   code: string;
 }
 
+/**
+ * "85.0000" → "85", "2.5000" → "2.5". Trimmed as a string: a quantity column
+ * holding four decimals of trailing zeros is unreadable, and going through a
+ * float to drop them would be the one place a quantity could pick up an error.
+ */
+function formatQty(value: string | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "—";
+  return value.includes(".") ? value.replace(/\.?0+$/, "") : value;
+}
+
+const STOCK_PAGE_SIZE = 50;
+const TX_PAGE_SIZE = 20;
+
 // ── Component ─────────────────────────────────────────────────────────────
 
 export default function InventoryPage() {
   const { tokens } = useAuth();
 
-  const [stock, setStock] = useState<StockRow[]>([]);
-  const [transactions, setTransactions] = useState<TxRow[]>([]);
+  const list = useListQuery({
+    sortBy: "productName",
+    sortOrder: "asc",
+    filters: { branch: "", low: "" },
+  });
+  const { q, page, sortBy, sortOrder } = list;
+  const branchFilter = list.filters.branch;
+  const lowOnly = list.filters.low === "1";
+
+  const loadStock = useCallback(
+    async (signal: AbortSignal) =>
+      readListResult<StockRow>(
+        await api.get<unknown>("/inventory", {
+          accessToken: tokens?.accessToken,
+          signal,
+          query: {
+            q: q.trim() || undefined,
+            page,
+            limit: STOCK_PAGE_SIZE,
+            sortBy,
+            sortOrder,
+            branchId: branchFilter || undefined,
+            lowStockOnly: lowOnly || undefined,
+          },
+        }),
+      ),
+    [tokens?.accessToken, q, page, sortBy, sortOrder, branchFilter, lowOnly],
+  );
+  const stockList = useListData(loadStock, list.ready && Boolean(tokens?.accessToken));
+  const stock = stockList.items;
+
+  // The ledger pages on its own, outside the URL: it is a feed beside the
+  // table, and two page numbers in one query string would be ambiguous.
+  const [txPage, setTxPage] = useState(1);
+  const loadTx = useCallback(
+    async (signal: AbortSignal) =>
+      readListResult<TxRow>(
+        await api.get<unknown>("/inventory/transactions", {
+          accessToken: tokens?.accessToken,
+          signal,
+          query: { limit: TX_PAGE_SIZE, page: txPage },
+        }),
+      ),
+    [tokens?.accessToken, txPage],
+  );
+  const txList = useListData(loadTx, Boolean(tokens?.accessToken));
+  const transactions = txList.items;
+
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [loadingStock, setLoadingStock] = useState(true);
-  const [loadingTx, setLoadingTx] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const error = stockList.error ?? txList.error;
 
   // Dialogs
   const [isAdjustOpen, setIsAdjustOpen] = useState(false);
@@ -111,76 +167,46 @@ export default function InventoryPage() {
   const [trQty, setTrQty] = useState("");
   const [trNotes, setTrNotes] = useState("");
 
-  const fetchAll = useCallback(async () => {
+  useEffect(() => {
     if (!tokens?.accessToken) return;
-    setLoadingStock(true);
-    setLoadingTx(true);
-    setError(null);
-
-    try {
-      const [stockRes, txRes, branchRes] = await Promise.allSettled([
-        api.get<StockPage>("/inventory", {
-          accessToken: tokens.accessToken,
-          query: { limit: 50, page: 1 },
-        }),
-        api.get<TxPage>("/inventory/transactions", {
-          accessToken: tokens.accessToken,
-          query: { limit: 20, page: 1 },
-        }),
-        api.get<{ items: Branch[] }>("/branches", {
-          accessToken: tokens.accessToken,
-        }),
-      ]);
-
-      if (stockRes.status === "fulfilled") {
-        const val = stockRes.value as any;
-        const list = Array.isArray(val) ? val : (val?.items ?? []);
-        setStock(list);
-        if (list[0]) {
-          setAdjVariantId(list[0].variantId);
-          setTrVariantId(list[0].variantId);
-        }
-      }
-      if (txRes.status === "fulfilled") {
-        const val = txRes.value as any;
-        const list = Array.isArray(val) ? val : (val?.items ?? []);
-        setTransactions(list);
-      }
-      if (branchRes.status === "fulfilled") {
-        const val = branchRes.value as any;
+    api
+      .get<{ items: Branch[] } | Branch[]>("/branches", { accessToken: tokens.accessToken })
+      .then((val) => {
         const bs = Array.isArray(val) ? val : (val?.items ?? []);
         setBranches(bs);
         if (bs[0]) {
-          setAdjBranchId(bs[0].id);
-          setTrFromBranch(bs[0].id);
+          setAdjBranchId((cur) => cur || bs[0]!.id);
+          setTrFromBranch((cur) => cur || bs[0]!.id);
         }
-        if (bs[1]) {
-          setTrToBranch(bs[1].id);
-        }
-      }
-      if (stockRes.status === "rejected" && txRes.status === "rejected") {
-        setError("Failed to load inventory data from API.");
-      }
-    } finally {
-      setLoadingStock(false);
-      setLoadingTx(false);
-    }
-  }, [tokens]);
+        if (bs[1]) setTrToBranch((cur) => cur || bs[1]!.id);
+      })
+      .catch(() => {
+        // The table still works without the branch filter; the dialogs say what is missing.
+      });
+  }, [tokens?.accessToken]);
 
-  useEffect(() => {
-    fetchAll();
-  }, [fetchAll]);
+  const fetchAll = useCallback(() => {
+    stockList.reload();
+    txList.reload();
+  }, [stockList.reload, txList.reload]);
 
-  // Unique list of variants from stock
+  // The dialogs offer the variants on screen — search the table to bring another into reach.
   const uniqueVariants = React.useMemo(() => {
-    const map = new Map<string, { variantId: string; variantSku: string; productName: string }>();
+    const map = new Map<string, { variantId: string; sku: string; productName: string }>();
     for (const s of stock) {
       if (!map.has(s.variantId)) {
-        map.set(s.variantId, { variantId: s.variantId, variantSku: s.variantSku, productName: s.productName });
+        map.set(s.variantId, { variantId: s.variantId, sku: s.sku, productName: s.productName });
       }
     }
     return Array.from(map.values());
   }, [stock]);
+
+  useEffect(() => {
+    const first = uniqueVariants[0]?.variantId;
+    if (!first) return;
+    setAdjVariantId((cur) => cur || first);
+    setTrVariantId((cur) => cur || first);
+  }, [uniqueVariants]);
 
   const handleAdjust = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -259,6 +285,8 @@ export default function InventoryPage() {
     }
   };
 
+  const refreshing = stockList.loading || txList.loading;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -273,8 +301,8 @@ export default function InventoryPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
-          <Button variant="outline" size="sm" onClick={fetchAll} disabled={loadingStock || loadingTx}>
-            <RefreshCw className={cn("h-3.5 w-3.5", (loadingStock || loadingTx) && "animate-spin")} />
+          <Button variant="outline" size="sm" onClick={fetchAll} disabled={refreshing}>
+            <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />
             Refresh
           </Button>
           <Button variant="outline" size="sm" onClick={() => { setActionError(null); setIsTransferOpen(true); }}>
@@ -295,26 +323,28 @@ export default function InventoryPage() {
             <CheckCircle2 className="h-4 w-4" />
             <span>{actionSuccess}</span>
           </div>
-          <button onClick={() => setActionSuccess(null)} className="cursor-pointer">
+          <button onClick={() => setActionSuccess(null)} className="cursor-pointer" aria-label="Dismiss">
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
       )}
-      {actionError && !isAdjustOpen && !isTransferOpen && (
+      {((actionError && !isAdjustOpen && !isTransferOpen) || error) && (
         <div className="flex items-center justify-between rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
           <div className="flex items-center gap-2">
             <AlertCircle className="h-4 w-4" />
-            <span>{actionError}</span>
+            <span>{actionError ?? error}</span>
           </div>
-          <button onClick={() => setActionError(null)} className="cursor-pointer">
-            <X className="h-3.5 w-3.5" />
-          </button>
+          {actionError && (
+            <button onClick={() => setActionError(null)} className="cursor-pointer" aria-label="Dismiss">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
       )}
 
       {/* Stock Table */}
       <Card className="overflow-hidden">
-        <CardHeader className="pb-0 border-b border-border bg-secondary/30">
+        <CardHeader className="pb-4 border-b border-border bg-secondary/30">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-linear-to-br from-emerald-500 to-teal-600 text-white">
               <Boxes className="h-4 w-4" />
@@ -324,76 +354,134 @@ export default function InventoryPage() {
               <CardDescription className="text-[11px]">Live quantities per variant per branch</CardDescription>
             </div>
           </div>
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <TableSearch
+              value={list.search}
+              onChange={list.setSearch}
+              label="Search stock"
+              placeholder="Search by product name, SKU, or barcode..."
+              className="flex-1"
+            />
+            <Select
+              value={branchFilter || "all"}
+              onValueChange={(v) => list.setFilter("branch", v === "all" ? "" : v)}
+            >
+              <SelectTrigger className="h-10 text-xs sm:w-56" aria-label="Filter by branch">
+                <SelectValue placeholder="All branches" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All branches</SelectItem>
+                {branches.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              type="button"
+              variant={lowOnly ? "default" : "outline"}
+              size="sm"
+              className="h-10"
+              aria-pressed={lowOnly}
+              onClick={() => list.setFilter("low", lowOnly ? "" : "1")}
+            >
+              <AlertTriangle className="h-3.5 w-3.5" />
+              Low stock only
+            </Button>
+          </div>
         </CardHeader>
 
-        {loadingStock ? (
-          <CardContent className="py-12 text-center text-sm text-muted-foreground">
-            <div className="h-6 w-6 mx-auto mb-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-            Loading stock from API...
-          </CardContent>
-        ) : stock.length === 0 ? (
-          <CardContent className="py-12 text-center text-sm text-muted-foreground">
-            No stock data found. Add products and record opening stock to get started.
-          </CardContent>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="border-b border-border bg-secondary/50 text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3 font-medium">SKU</th>
-                  <th className="px-4 py-3 font-medium">Product</th>
-                  <th className="px-4 py-3 text-right font-medium">Qty</th>
-                  <th className="px-4 py-3 font-medium">Branch</th>
-                  <th className="px-4 py-3 text-right font-medium">Min Stock</th>
-                  <th className="px-4 py-3 text-center font-medium">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {stock.slice(0, 50).map((row) => {
-                  const isLow = row.quantity <= row.minStock && row.minStock > 0;
-                  const pct = row.minStock > 0 ? Math.min((row.quantity / (row.minStock * 5)) * 100, 100) : 100;
-                  return (
-                    <tr key={`${row.variantId}-${row.branchId}`} className="hover:bg-secondary/30 transition-colors">
-                      <td className="px-4 py-3.5 font-mono font-bold text-primary">{row.variantSku}</td>
-                      <td className="px-4 py-3.5 font-medium text-foreground max-w-xs truncate">{row.productName}</td>
-                      <td className="px-4 py-3.5 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <div className="w-16 h-1.5 rounded-full bg-border overflow-hidden hidden sm:block">
-                            <div
-                              className={cn("h-full rounded-full", isLow ? "bg-amber-500" : "bg-emerald-500")}
-                              style={{ width: `${pct}%` }}
-                            />
-                          </div>
-                          <span className={cn("font-mono font-bold", isLow ? "text-amber-500" : "text-emerald-500")}>
-                            {row.quantity}
-                          </span>
+        <TableContainer>
+          <Table>
+            <TableHead>
+              <tr>
+                <SortableTh column="sku" sortBy={sortBy} sortOrder={sortOrder} onSort={list.toggleSort}>SKU</SortableTh>
+                <SortableTh column="productName" sortBy={sortBy} sortOrder={sortOrder} onSort={list.toggleSort}>Product</SortableTh>
+                <SortableTh column="available" sortBy={sortBy} sortOrder={sortOrder} onSort={list.toggleSort} align="right">Available</SortableTh>
+                <SortableTh column="branchName" sortBy={sortBy} sortOrder={sortOrder} onSort={list.toggleSort}>Branch</SortableTh>
+                <Th align="right">Min Stock</Th>
+                <Th align="center">Status</Th>
+              </tr>
+            </TableHead>
+            <TableBody
+              columns={6}
+              loading={stockList.initialLoading}
+              empty={
+                <TableEmpty
+                  columns={6}
+                  icon={Boxes}
+                  title="No stock found"
+                  description={
+                    list.q || branchFilter || lowOnly
+                      ? "Nothing matches this filter."
+                      : "Add products and record opening stock to get started."
+                  }
+                />
+              }
+            >
+              {stock.map((row) => {
+                const available = Number(row.available);
+                const min = Number(row.minStock);
+                const isLow = min > 0 && available <= min;
+                const pct = min > 0 ? Math.min((available / (min * 5)) * 100, 100) : 100;
+                return (
+                  <tr
+                    key={`${row.variantId}-${row.branchId}`}
+                    className={cn("hover:bg-secondary/30 transition-colors", stockList.loading && "opacity-60")}
+                  >
+                    <td className="px-4 py-3.5 font-mono font-bold text-primary whitespace-nowrap">{row.sku}</td>
+                    <td className="px-4 py-3.5 font-medium text-foreground max-w-xs">
+                      <div className="truncate" title={row.productName}>{row.productName}</div>
+                      {row.variantName && row.variantName !== "Default" && (
+                        <div className="text-[11px] font-normal text-muted-foreground">{row.variantName}</div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3.5 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <div className="w-16 h-1.5 rounded-full bg-border overflow-hidden hidden sm:block" aria-hidden="true">
+                          <div
+                            className={cn("h-full rounded-full", isLow ? "bg-amber-500" : "bg-emerald-500")}
+                            style={{ width: `${Math.max(pct, 0)}%` }}
+                          />
                         </div>
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <Badge variant="secondary" className="font-mono text-[10px] font-bold">{row.branchCode}</Badge>
-                      </td>
-                      <td className="px-4 py-3.5 text-right font-mono text-muted-foreground">{row.minStock}</td>
-                      <td className="px-4 py-3.5 text-center">
-                        {isLow ? (
-                          <Badge variant="warning" className="gap-1">
-                            <AlertTriangle className="h-3 w-3" />Low Stock
-                          </Badge>
-                        ) : (
-                          <Badge variant="success">In Stock</Badge>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                        <span className={cn("font-mono font-bold tabular-nums", isLow ? "text-amber-500" : "text-emerald-500")}>
+                          {formatQty(row.available)}
+                        </span>
+                        <span className="text-[11px] text-muted-foreground">{row.unitAbbr}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <Badge variant="secondary" className="text-[10px] font-semibold max-w-48 truncate" title={row.branchName}>
+                        {row.branchName}
+                      </Badge>
+                    </td>
+                    <td className={cn("px-4 py-3.5 text-muted-foreground", numericCell)}>{formatQty(row.minStock)}</td>
+                    <td className="px-4 py-3.5 text-center">
+                      {isLow ? (
+                        <Badge variant="warning" className="gap-1">
+                          <AlertTriangle className="h-3 w-3" aria-hidden="true" />Low Stock
+                        </Badge>
+                      ) : (
+                        <Badge variant="success">In Stock</Badge>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
+        <TablePagination
+          page={page}
+          pageSize={STOCK_PAGE_SIZE}
+          total={stockList.total}
+          onPageChange={list.setPage}
+          noun="stock lines"
+        />
       </Card>
 
       {/* Ledger */}
       <Card className="overflow-hidden">
-        <CardHeader className="pb-0 border-b border-border bg-secondary/30">
+        <CardHeader className="pb-4 border-b border-border bg-secondary/30">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-linear-to-br from-violet-500 to-purple-600 text-white">
@@ -401,65 +489,77 @@ export default function InventoryPage() {
               </div>
               <div>
                 <CardTitle className="text-sm">Stock Movement Ledger</CardTitle>
-                <CardDescription className="text-[11px]">Last 20 inventory transactions (immutable)</CardDescription>
+                <CardDescription className="text-[11px]">Every inventory transaction, newest first (immutable)</CardDescription>
               </div>
             </div>
             <Badge variant="outline" className="text-[10px] font-mono hidden md:inline-flex">inventory_transactions</Badge>
           </div>
         </CardHeader>
 
-        {loadingTx ? (
-          <CardContent className="py-12 text-center text-sm text-muted-foreground">
-            <div className="h-6 w-6 mx-auto mb-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-            Loading transactions...
-          </CardContent>
-        ) : transactions.length === 0 ? (
-          <CardContent className="py-12 text-center text-sm text-muted-foreground">
-            No transactions found. Transactions are created automatically when sales, adjustments, or transfers occur.
-          </CardContent>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs font-mono">
-              <thead className="border-b border-border bg-secondary/50 text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Time</th>
-                  <th className="px-4 py-3 font-medium">Branch</th>
-                  <th className="px-4 py-3 font-medium">Type</th>
-                  <th className="px-4 py-3 font-medium">SKU</th>
-                  <th className="px-4 py-3 text-right font-medium">Movement</th>
-                  <th className="px-4 py-3 text-right font-medium">Balance After</th>
-                  <th className="px-4 py-3 font-medium">Reference / Notes</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {transactions.map((tx) => (
-                  <tr key={tx.id} className="hover:bg-secondary/30 transition-colors">
-                    <td className="px-4 py-3.5 text-muted-foreground">{formatTime(tx.createdAt)}</td>
+        <TableContainer>
+          <Table className="font-mono">
+            <TableHead>
+              <tr>
+                <Th>Time</Th>
+                <Th>Branch</Th>
+                <Th>Type</Th>
+                <Th>SKU</Th>
+                <Th align="right">Movement</Th>
+                <Th align="right">Balance After</Th>
+                <Th>Reference / Notes</Th>
+              </tr>
+            </TableHead>
+            <TableBody
+              columns={7}
+              loading={txList.initialLoading}
+              empty={
+                <TableEmpty
+                  columns={7}
+                  icon={History}
+                  title="No transactions yet"
+                  description="Transactions are created automatically when sales, adjustments, or transfers occur."
+                />
+              }
+            >
+              {transactions.map((tx) => {
+                const outgoing = tx.quantity.trim().startsWith("-");
+                return (
+                  <tr key={tx.id} className={cn("hover:bg-secondary/30 transition-colors", txList.loading && "opacity-60")}>
+                    <td className="px-4 py-3.5 text-muted-foreground whitespace-nowrap tabular-nums">{formatTime(tx.createdAt)}</td>
                     <td className="px-4 py-3.5">
-                      <Badge variant="secondary" className="text-[10px] font-bold">{tx.branchCode}</Badge>
+                      <Badge variant="secondary" className="text-[10px] font-bold max-w-40 truncate" title={tx.branchName}>
+                        {tx.branchName}
+                      </Badge>
                     </td>
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-1.5 font-semibold text-foreground">
-                        {tx.quantity < 0
-                          ? <ArrowDown className="h-3 w-3 text-red-500" />
-                          : <ArrowUp className="h-3 w-3 text-emerald-500" />}
+                        {outgoing
+                          ? <ArrowDown className="h-3 w-3 text-red-500" aria-hidden="true" />
+                          : <ArrowUp className="h-3 w-3 text-emerald-500" aria-hidden="true" />}
                         <span className="text-[11px]">{tx.type}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3.5 text-muted-foreground">{tx.variantSku}</td>
-                    <td className={cn("px-4 py-3.5 text-right font-bold", tx.quantity < 0 ? "text-red-500" : "text-emerald-500")}>
-                      {tx.quantity > 0 ? `+${tx.quantity}` : tx.quantity}
+                    <td className="px-4 py-3.5 text-muted-foreground whitespace-nowrap" title={tx.productName}>{tx.sku}</td>
+                    <td className={cn("px-4 py-3.5 font-bold", numericCell, outgoing ? "text-red-500" : "text-emerald-500")}>
+                      {outgoing ? formatQty(tx.quantity) : `+${formatQty(tx.quantity)}`}
                     </td>
-                    <td className="px-4 py-3.5 text-right text-foreground">{tx.balanceAfter}</td>
-                    <td className="px-4 py-3.5 text-muted-foreground truncate max-w-50">
-                      {tx.reference ?? tx.notes ?? "—"}
+                    <td className={cn("px-4 py-3.5 text-foreground", numericCell)}>{formatQty(tx.balanceAfter)}</td>
+                    <td className="px-4 py-3.5 text-muted-foreground truncate max-w-50" title={tx.notes ?? undefined}>
+                      {tx.notes ?? tx.referenceType ?? "—"}
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
+        <TablePagination
+          page={txPage}
+          pageSize={TX_PAGE_SIZE}
+          total={txList.total}
+          onPageChange={setTxPage}
+          noun="movements"
+        />
       </Card>
 
       {/* ── Adjust Stock Dialog ── */}
@@ -493,7 +593,7 @@ export default function InventoryPage() {
                 <SelectContent>
                   {uniqueVariants.map((v) => (
                     <SelectItem key={v.variantId} value={v.variantId}>
-                      {v.variantSku} · {v.productName}
+                      {v.sku} · {v.productName}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -582,7 +682,7 @@ export default function InventoryPage() {
                 <SelectContent>
                   {uniqueVariants.map((v) => (
                     <SelectItem key={v.variantId} value={v.variantId}>
-                      {v.variantSku} · {v.productName}
+                      {v.sku} · {v.productName}
                     </SelectItem>
                   ))}
                 </SelectContent>

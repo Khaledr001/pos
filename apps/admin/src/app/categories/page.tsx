@@ -10,6 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
+  Table, TableBody, TableContainer, TableEmpty, TableHead, Th,
+} from "@/components/ui/data-table";
+import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
@@ -192,75 +195,75 @@ export default function CategoriesPage() {
       )}
 
       <Card className="overflow-hidden">
-        {loading ? (
-          <div className="py-16 text-center text-sm text-muted-foreground">
-            <div className="h-6 w-6 mx-auto mb-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-            Loading categories...
-          </div>
-        ) : flat.length === 0 ? (
-          <div className="py-16 text-center">
-            <FolderTree className="mx-auto h-12 w-12 text-muted-foreground/30" />
-            <h3 className="mt-4 text-sm font-semibold text-foreground">No categories yet</h3>
-            <Button size="sm" onClick={openCreate} className="mt-4">
-              <Plus className="h-3.5 w-3.5" /> Add Category
-            </Button>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="border-b border-border bg-secondary/50 text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3.5 font-medium">Name</th>
-                  <th className="px-4 py-3.5 font-medium">SKU Prefix</th>
-                  <th className="px-4 py-3.5 text-center font-medium">Products</th>
-                  <th className="px-4 py-3.5 text-center font-medium">Status</th>
-                  <th className="px-4 py-3.5 text-right font-medium">Actions</th>
+        <TableContainer>
+          <Table>
+            <TableHead>
+              <tr>
+                <Th>Name</Th>
+                <Th>SKU Prefix</Th>
+                <Th align="center">Products</Th>
+                <Th align="center">Status</Th>
+                <Th align="right">Actions</Th>
+              </tr>
+            </TableHead>
+            <TableBody
+              columns={5}
+              loading={loading && flat.length === 0}
+              empty={
+                <TableEmpty
+                  columns={5}
+                  icon={FolderTree}
+                  title="No categories yet"
+                  action={
+                    <Button size="sm" onClick={openCreate}>
+                      <Plus className="h-3.5 w-3.5" /> Add Category
+                    </Button>
+                  }
+                />
+              }
+            >
+              {flat.map((cat) => (
+                <tr key={cat.id} className="hover:bg-secondary/30 transition-colors">
+                  <td className="px-4 py-3.5 font-medium text-foreground">
+                    <span style={{ paddingLeft: `${cat.depth * 1.25}rem` }}>
+                      {cat.depth > 0 && <span className="text-muted-foreground mr-1.5">└</span>}
+                      {cat.name}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3.5 font-mono text-muted-foreground">{cat.skuPrefix || "—"}</td>
+                  <td className="px-4 py-3.5 text-center">
+                    <Badge variant="outline" className="text-[10px]">{cat.productCount}</Badge>
+                  </td>
+                  <td className="px-4 py-3.5 text-center">
+                    <Badge variant={cat.isActive ? "success" : "secondary"}>
+                      {cat.isActive ? "Active" : "Inactive"}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3.5 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openEdit(cat)}
+                        aria-label={`Edit ${cat.name}`}
+                        className="cursor-pointer text-muted-foreground hover:text-foreground"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleDelete(cat)}
+                        aria-label={`Delete ${cat.name}`}
+                        className="cursor-pointer text-muted-foreground hover:text-destructive"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {flat.map((cat) => (
-                  <tr key={cat.id} className="hover:bg-secondary/30 transition-colors">
-                    <td className="px-4 py-3.5 font-medium text-foreground">
-                      <span style={{ paddingLeft: `${cat.depth * 1.25}rem` }}>
-                        {cat.depth > 0 && <span className="text-muted-foreground mr-1.5">└</span>}
-                        {cat.name}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3.5 font-mono text-muted-foreground">{cat.skuPrefix || "—"}</td>
-                    <td className="px-4 py-3.5 text-center">
-                      <Badge variant="outline" className="text-[10px]">{cat.productCount}</Badge>
-                    </td>
-                    <td className="px-4 py-3.5 text-center">
-                      <Badge variant={cat.isActive ? "success" : "secondary"}>
-                        {cat.isActive ? "Active" : "Inactive"}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3.5 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => openEdit(cat)}
-                          aria-label={`Edit ${cat.name}`}
-                          className="cursor-pointer text-muted-foreground hover:text-foreground"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void handleDelete(cat)}
-                          aria-label={`Delete ${cat.name}`}
-                          className="cursor-pointer text-muted-foreground hover:text-destructive"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
       </Card>
 
       <Dialog open={isOpen} onOpenChange={(open) => !open && closeDialog()}>

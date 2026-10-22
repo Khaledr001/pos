@@ -10,6 +10,10 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
+  SortableTh, Table, TableBody, TableContainer, TableEmpty, TableHead, Th,
+} from "@/components/ui/data-table";
+import type { SortOrder } from "@/lib/use-list-query";
+import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
@@ -27,6 +31,7 @@ export default function BrandsPage() {
 
   const [brands, setBrands] = useState<Brand[]>([]);
   const [loading, setLoading] = useState(true);
+  const [nameOrder, setNameOrder] = useState<SortOrder>("asc");
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
 
@@ -123,6 +128,10 @@ export default function BrandsPage() {
 
   const isOpen = creating || editing !== null;
 
+  const sortedBrands = [...brands].sort((a, b) =>
+    nameOrder === "asc" ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name),
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
@@ -158,74 +167,74 @@ export default function BrandsPage() {
       )}
 
       <Card className="overflow-hidden">
-        {loading ? (
-          <div className="py-16 text-center text-sm text-muted-foreground">
-            <div className="h-6 w-6 mx-auto mb-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-            Loading brands...
-          </div>
-        ) : brands.length === 0 ? (
-          <div className="py-16 text-center">
-            <Tag className="mx-auto h-12 w-12 text-muted-foreground/30" />
-            <h3 className="mt-4 text-sm font-semibold text-foreground">No brands yet</h3>
-            <Button size="sm" onClick={openCreate} className="mt-4">
-              <Plus className="h-3.5 w-3.5" /> Add Brand
-            </Button>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="border-b border-border bg-secondary/50 text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3.5 font-medium">Name</th>
-                  <th className="px-4 py-3.5 font-medium">Slug</th>
-                  <th className="px-4 py-3.5 text-center font-medium">Status</th>
-                  <th className="px-4 py-3.5 text-right font-medium">Actions</th>
+        <TableContainer>
+          <Table>
+            <TableHead>
+              <tr>
+                <SortableTh column="name" sortBy="name" sortOrder={nameOrder} onSort={() => setNameOrder((o) => (o === "asc" ? "desc" : "asc"))}>Name</SortableTh>
+                <Th>Slug</Th>
+                <Th align="center">Status</Th>
+                <Th align="right">Actions</Th>
+              </tr>
+            </TableHead>
+            <TableBody
+              columns={4}
+              loading={loading && brands.length === 0}
+              empty={
+                <TableEmpty
+                  columns={4}
+                  icon={Tag}
+                  title="No brands yet"
+                  action={
+                    <Button size="sm" onClick={openCreate}>
+                      <Plus className="h-3.5 w-3.5" /> Add Brand
+                    </Button>
+                  }
+                />
+              }
+            >
+              {sortedBrands.map((brand) => (
+                <tr key={brand.id} className="hover:bg-secondary/30 transition-colors">
+                  <td className="px-4 py-3.5 font-medium text-foreground">
+                    <div className="flex items-center gap-2">
+                      {brand.logoUrl && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={brand.logoUrl} alt="" className="h-5 w-5 rounded object-contain" />
+                      )}
+                      {brand.name}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3.5 font-mono text-muted-foreground">{brand.slug}</td>
+                  <td className="px-4 py-3.5 text-center">
+                    <Badge variant={brand.isActive ? "success" : "secondary"}>
+                      {brand.isActive ? "Active" : "Inactive"}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3.5 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openEdit(brand)}
+                        aria-label={`Edit ${brand.name}`}
+                        className="cursor-pointer text-muted-foreground hover:text-foreground"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleDelete(brand)}
+                        aria-label={`Delete ${brand.name}`}
+                        className="cursor-pointer text-muted-foreground hover:text-destructive"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {brands.map((brand) => (
-                  <tr key={brand.id} className="hover:bg-secondary/30 transition-colors">
-                    <td className="px-4 py-3.5 font-medium text-foreground">
-                      <div className="flex items-center gap-2">
-                        {brand.logoUrl && (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={brand.logoUrl} alt="" className="h-5 w-5 rounded object-contain" />
-                        )}
-                        {brand.name}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3.5 font-mono text-muted-foreground">{brand.slug}</td>
-                    <td className="px-4 py-3.5 text-center">
-                      <Badge variant={brand.isActive ? "success" : "secondary"}>
-                        {brand.isActive ? "Active" : "Inactive"}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3.5 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => openEdit(brand)}
-                          aria-label={`Edit ${brand.name}`}
-                          className="cursor-pointer text-muted-foreground hover:text-foreground"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void handleDelete(brand)}
-                          aria-label={`Delete ${brand.name}`}
-                          className="cursor-pointer text-muted-foreground hover:text-destructive"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
       </Card>
 
       <Dialog open={isOpen} onOpenChange={(open) => !open && closeDialog()}>

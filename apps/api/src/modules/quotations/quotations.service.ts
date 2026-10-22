@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte, inArray, lte, schema, sql } from "@devsfleet/db";
+import { and, asc, count, desc, eq, gte, ilike, inArray, lte, or, schema, sql } from "@devsfleet/db";
 import { resolveTenantSettings } from "@devsfleet/shared-types";
 import {
   AppError,
@@ -11,6 +11,7 @@ import {
 import { Injectable } from "@nestjs/common";
 import { assertBranchInScope, requireBranchId } from "../../common/context/branch-scope.js";
 import { RequestContext } from "../../common/context/request-context.js";
+import { containsPattern } from "../../common/db/list-query.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import { OrdersService } from "../orders/orders.service.js";
 import { PriceResolverService } from "../pricing/price-resolver.service.js";
@@ -496,6 +497,7 @@ export class QuotationsService {
 
   async list(query: ListQuotationsDto): Promise<{ items: unknown[]; total: number }> {
     if (query.branchId) assertBranchInScope(query.branchId);
+    const term = containsPattern(query.q);
 
     return this.db.run(async (tx) => {
       const where = and(
@@ -508,9 +510,25 @@ export class QuotationsService {
         query.to
           ? lte(schema.quotations.createdAt, new Date(`${query.to}T23:59:59.999Z`))
           : undefined,
+        term
+          ? or(ilike(schema.quotations.quotationNumber, term), ilike(schema.customers.name, term))
+          : undefined,
       );
 
-      const [total] = await tx.select({ value: count() }).from(schema.quotations).where(where);
+      const sortColumn = {
+        createdAt: schema.quotations.createdAt,
+        quotationNumber: schema.quotations.quotationNumber,
+        total: schema.quotations.total,
+        validUntil: schema.quotations.validUntil,
+      }[query.sortBy];
+
+      // Joined for the same reason as the page below: the search reaches the
+      // customer's name.
+      const [total] = await tx
+        .select({ value: count() })
+        .from(schema.quotations)
+        .leftJoin(schema.customers, eq(schema.quotations.customerId, schema.customers.id))
+        .where(where);
 
       const items = await tx
         .select({
@@ -526,7 +544,10 @@ export class QuotationsService {
         .from(schema.quotations)
         .leftJoin(schema.customers, eq(schema.quotations.customerId, schema.customers.id))
         .where(where)
-        .orderBy(desc(schema.quotations.createdAt))
+        .orderBy(
+          query.sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn),
+          desc(schema.quotations.id),
+        )
         .limit(query.pageSize)
         .offset((query.page - 1) * query.pageSize);
 

@@ -1,5 +1,6 @@
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, PURCHASE_ORDER_STATUSES } from "@devsfleet/shared-types";
 import { z } from "zod";
+import { sortSchema } from "../../common/db/list-query.js";
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a YYYY-MM-DD date");
 
@@ -144,6 +145,12 @@ export const ListPurchaseOrdersSchema = z.object({
   status: z.enum(PURCHASE_ORDER_STATUSES).optional(),
   from: isoDate.optional(),
   to: isoDate.optional(),
+  /** PO number or supplier name. */
+  q: z.string().trim().max(100).optional(),
+  ...sortSchema(["createdAt", "poNumber", "total", "expectedDate"], {
+    sortBy: "createdAt",
+    sortOrder: "desc",
+  }),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
 });

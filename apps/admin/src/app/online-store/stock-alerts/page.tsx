@@ -7,7 +7,10 @@ import { api } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Loading, Notice, PageHeader, errorText } from "../shared";
+import {
+  Table, TableBody, TableContainer, TableEmpty, TableHead, Th, numericCell,
+} from "@/components/ui/data-table";
+import { Notice, PageHeader, errorText } from "../shared";
 
 interface Demand {
   productId: string;
@@ -50,35 +53,32 @@ export default function StockAlertsPage() {
       </PageHeader>
       {error && <Notice kind="error" message={error} onClose={() => setError(null)} />}
       <Card className="overflow-hidden">
-        {loading ? (
-          <Loading label="Loading stock alerts..." />
-        ) : items.length === 0 ? (
-          <div className="py-16 text-center">
-            <BellRing className="mx-auto h-12 w-12 text-muted-foreground/30" />
-            <h3 className="mt-4 text-sm font-semibold text-foreground">Nobody is waiting for a product</h3>
-          </div>
-        ) : (
-          <table className="w-full text-left text-xs">
-            <thead className="border-b border-border bg-secondary/50 text-muted-foreground">
+        <TableContainer>
+          <Table>
+            <TableHead>
               <tr>
-                <th className="px-4 py-3.5 font-medium">Product</th>
-                <th className="px-4 py-3.5 text-right font-medium">Waiting</th>
-                <th className="px-4 py-3.5 text-right font-medium">Options</th>
-                <th className="px-4 py-3.5 font-medium">Oldest request</th>
+                <Th>Product</Th>
+                <Th align="right">Waiting</Th>
+                <Th align="right">Options</Th>
+                <Th>Oldest request</Th>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
+            </TableHead>
+            <TableBody
+              columns={4}
+              loading={loading && items.length === 0}
+              empty={<TableEmpty columns={4} icon={BellRing} title="Nobody is waiting for a product" />}
+            >
               {items.map((d) => (
                 <tr key={d.productId}>
                   <td className="px-4 py-3.5 font-medium text-foreground">{d.productName}</td>
-                  <td className="px-4 py-3.5 text-right font-medium text-foreground">{d.waiting}</td>
-                  <td className="px-4 py-3.5 text-right text-muted-foreground">{d.variants}</td>
-                  <td className="px-4 py-3.5 text-muted-foreground">{d.oldest ? new Date(d.oldest).toLocaleDateString("en-AE") : "—"}</td>
+                  <td className={cn("px-4 py-3.5 font-medium text-foreground", numericCell)}>{d.waiting}</td>
+                  <td className={cn("px-4 py-3.5 text-muted-foreground", numericCell)}>{d.variants}</td>
+                  <td className="px-4 py-3.5 text-muted-foreground tabular-nums">{d.oldest ? new Date(d.oldest).toLocaleDateString("en-AE") : "—"}</td>
                 </tr>
               ))}
-            </tbody>
-          </table>
-        )}
+            </TableBody>
+          </Table>
+        </TableContainer>
       </Card>
     </div>
   );

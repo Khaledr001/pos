@@ -7,7 +7,10 @@ import { api } from "@/lib/api-client";
 import { usePermission } from "@/lib/require-auth";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Loading, Notice, PageHeader, StatusBadge, errorText, selectClass } from "../shared";
+import {
+  Table, TableBody, TableContainer, TableEmpty, TableHead, Th,
+} from "@/components/ui/data-table";
+import { Notice, PageHeader, StatusBadge, errorText, selectClass } from "../shared";
 
 interface Application {
   accountId: string;
@@ -84,30 +87,36 @@ export default function TradeApplicationsPage() {
       {error && <Notice kind="error" message={error} onClose={() => setError(null)} />}
 
       <Card className="overflow-hidden">
-        {loading ? (
-          <Loading label="Loading applications..." />
-        ) : apps.length === 0 ? (
-          <div className="py-16 text-center"><Briefcase className="mx-auto h-12 w-12 text-muted-foreground/30" /><h3 className="mt-4 text-sm font-semibold">No trade applications</h3></div>
-        ) : (
-          <table className="w-full text-left text-xs">
-            <thead className="border-b border-border bg-secondary/50 text-muted-foreground">
-              <tr><th className="px-4 py-3.5 font-medium">Applicant</th><th className="px-4 py-3.5 font-medium">Company</th><th className="px-4 py-3.5 font-medium">Status</th><th className="px-4 py-3.5 font-medium">Decision</th></tr>
-            </thead>
-            <tbody className="divide-y divide-border">
+        <TableContainer>
+          <Table>
+            <TableHead>
+              <tr>
+                <Th>Applicant</Th>
+                <Th>Company</Th>
+                <Th>Status</Th>
+                <Th>Decision</Th>
+              </tr>
+            </TableHead>
+            <TableBody
+              columns={4}
+              loading={loading && apps.length === 0}
+              empty={<TableEmpty columns={4} icon={Briefcase} title="No trade applications" />}
+            >
               {apps.map((a) => {
                 const picked = choice[a.accountId] ?? { priceListId: tradeList?.id ?? "", customerType: "wholesale" };
+                const who = `${a.firstName} ${a.lastName}`;
                 return (
                   <tr key={a.accountId} className="align-top">
-                    <td className="px-4 py-3.5"><div className="font-medium text-foreground">{a.firstName} {a.lastName}</div><div className="text-muted-foreground">{a.email}{a.phone ? ` · ${a.phone}` : ""}</div></td>
+                    <td className="px-4 py-3.5"><div className="font-medium text-foreground">{who}</div><div className="text-muted-foreground">{a.email}{a.phone ? ` · ${a.phone}` : ""}</div></td>
                     <td className="px-4 py-3.5"><div>{a.companyName ?? "—"}</div><div className="font-mono text-muted-foreground">{a.trn ? `TRN ${a.trn}` : ""}</div>{a.tradeNote && <div className="mt-1 italic text-muted-foreground">“{a.tradeNote}”</div>}</td>
                     <td className="px-4 py-3.5"><StatusBadge status={a.tradeStatus} /></td>
                     <td className="px-4 py-3.5">
                       {mayWrite && a.tradeStatus === "PENDING" && (
                         <div className="flex flex-wrap items-center gap-2">
-                          <select className={`${selectClass} w-44`} value={picked.priceListId} onChange={(e) => setChoice({ ...choice, [a.accountId]: { ...picked, priceListId: e.target.value } })}>
+                          <select aria-label={`Price list for ${who}`} className={`${selectClass} w-44`} value={picked.priceListId} onChange={(e) => setChoice({ ...choice, [a.accountId]: { ...picked, priceListId: e.target.value } })}>
                             {lists.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
                           </select>
-                          <select className={`${selectClass} w-32`} value={picked.customerType} onChange={(e) => setChoice({ ...choice, [a.accountId]: { ...picked, customerType: e.target.value } })}>
+                          <select aria-label={`Customer type for ${who}`} className={`${selectClass} w-32`} value={picked.customerType} onChange={(e) => setChoice({ ...choice, [a.accountId]: { ...picked, customerType: e.target.value } })}>
                             <option value="wholesale">Wholesale</option>
                             <option value="vip">VIP</option>
                           </select>
@@ -119,9 +128,9 @@ export default function TradeApplicationsPage() {
                   </tr>
                 );
               })}
-            </tbody>
-          </table>
-        )}
+            </TableBody>
+          </Table>
+        </TableContainer>
       </Card>
     </div>
   );

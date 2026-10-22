@@ -1,8 +1,9 @@
-import { and, count, desc, eq, ilike, or, schema, sql, type SQL, type Transaction } from "@devsfleet/db";
+import { and, asc, count, desc, eq, ilike, or, schema, sql, type SQL, type Transaction } from "@devsfleet/db";
 import { hasPermission, type TaxMode } from "@devsfleet/shared-types";
 import { AppError, ERROR_CODES, Money } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
 import { RequestContext } from "../../../common/context/request-context.js";
+import { containsPattern } from "../../../common/db/list-query.js";
 import { TenantDatabase } from "../../../database/tenant-database.service.js";
 import { toWire } from "../wire.js";
 import type { CloseQuoteDto, ListQuotesDto, PriceQuoteDto } from "./dto.js";
@@ -25,7 +26,7 @@ export class QuotesAdminService {
 
   async list(dto: ListQuotesDto) {
     return this.db.run(async (tx) => {
-      const search = dto.q ? `%${dto.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%` : null;
+      const search = containsPattern(dto.q);
       const where = and(
         statusFilter(dto.status),
         search
@@ -42,7 +43,10 @@ export class QuotesAdminService {
         .select()
         .from(schema.webQuotes)
         .where(where)
-        .orderBy(desc(schema.webQuotes.createdAt))
+        .orderBy(
+          dto.sortOrder === "asc" ? asc(schema.webQuotes[dto.sortBy]) : desc(schema.webQuotes[dto.sortBy]),
+          desc(schema.webQuotes.id),
+        )
         .limit(dto.pageSize)
         .offset((dto.page - 1) * dto.pageSize);
       const decimals = await displayDecimals(tx);

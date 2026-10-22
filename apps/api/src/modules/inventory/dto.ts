@@ -1,5 +1,6 @@
 import { DEFAULT_PAGE_SIZE, INVENTORY_TX_TYPES, MAX_PAGE_SIZE } from "@devsfleet/shared-types";
 import { z } from "zod";
+import { sortSchema } from "../../common/db/list-query.js";
 import { zQueryBoolean } from "../../common/pipes/zod-validation.pipe.js";
 
 export const ListStockSchema = z.object({
@@ -9,6 +10,10 @@ export const ListStockSchema = z.object({
   branchId: z.string().uuid().optional(),
   categoryId: z.string().uuid().optional(),
   lowStockOnly: zQueryBoolean(false),
+  ...sortSchema(["productName", "sku", "available", "branchName"], {
+    sortBy: "productName",
+    sortOrder: "asc",
+  }),
 });
 export type ListStockDto = z.infer<typeof ListStockSchema>;
 

@@ -12,7 +12,14 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api-client";
+import { Money } from "@devsfleet/shared-utils";
 import { cn } from "@/lib/utils";
+import { formatMoney } from "@/lib/format";
+import { useTenantSettings } from "@/lib/tenant-settings";
+import { readListResult, useListData } from "@/lib/use-list-query";
+import {
+  Table, TableBody, TableContainer, TableEmpty, TableHead, TablePagination, Th, numericCell,
+} from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -66,17 +73,25 @@ interface DayHistoryRow {
   closedAt: string | null;
 }
 
-function money(value: string | null | undefined): string {
-  return Number(value ?? "0").toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const HISTORY_PAGE_SIZE = 10;
+
+/** Counted minus expected, in `Money` — a float subtraction here showed a 0.01 shortfall that was not there. */
+function variance(counted: string, expected: string): string | null {
+  try {
+    return Money.toDecimalString(Money.subtract(Money.toMinor(counted), Money.toMinor(expected)));
+  } catch {
+    return null;
+  }
 }
 
 export default function DayClosePage() {
   const { tokens } = useAuth();
+  const currency = useTenantSettings().currency.base;
+  const money = (value: string | null | undefined) => formatMoney(value ?? "0", { currency });
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchId, setBranchId] = useState("");
   const [preview, setPreview] = useState<Preview | null>(null);
-  const [history, setHistory] = useState<DayHistoryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -98,28 +113,40 @@ export default function DayClosePage() {
       .catch(() => undefined);
   }, [tokens]);
 
+  const [historyPage, setHistoryPage] = useState(1);
+  useEffect(() => setHistoryPage(1), [branchId]);
+  const loadHistory = useCallback(
+    async (signal: AbortSignal) =>
+      readListResult<DayHistoryRow>(
+        await api.get<unknown>("/day-close", {
+          accessToken: tokens?.accessToken,
+          signal,
+          query: { branchId, page: historyPage, pageSize: HISTORY_PAGE_SIZE },
+        }),
+      ),
+    [tokens?.accessToken, branchId, historyPage],
+  );
+  const history = useListData(loadHistory, Boolean(branchId));
+
   const fetchPreview = useCallback(async () => {
     if (!branchId) return;
     setLoading(true);
     setError(null);
     try {
-      const [prevRes, listRes] = await Promise.allSettled([
-        api.get<Preview>("/day-close/preview", {
+      setPreview(
+        await api.get<Preview>("/day-close/preview", {
           accessToken: tokens?.accessToken,
           query: { branchId },
         }),
-        api.get<{ items: DayHistoryRow[] }>("/day-close", {
-          accessToken: tokens?.accessToken,
-          query: { branchId, pageSize: 10 },
-        }),
-      ]);
-      if (prevRes.status === "fulfilled") setPreview(prevRes.value);
-      else setError(prevRes.reason?.message ?? "Failed to load today's figures.");
-      if (listRes.status === "fulfilled") setHistory(listRes.value.items ?? []);
+      );
+    } catch (err: any) {
+      setError(err?.message ?? "Failed to load today's figures.");
     } finally {
       setLoading(false);
     }
-  }, [tokens, branchId]);
+    history.reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tokens, branchId, history.reload]);
 
   useEffect(() => {
     fetchPreview();
@@ -168,9 +195,8 @@ export default function DayClosePage() {
   };
 
   const varianceFromCounted =
-    preview && countedCash
-      ? Number(countedCash) - Number(preview.expectedCash)
-      : null;
+    preview && countedCash ? variance(countedCash, preview.expectedCash) : null;
+  const shortFromCounted = varianceFromCounted !== null && varianceFromCounted.startsWith("-");
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -236,24 +262,24 @@ export default function DayClosePage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-3">
-              <Stat label="Sales" value={`AED ${money(preview.totalSales)}`} sub={`${preview.saleCount} transactions`} />
-              <Stat label="Returns" value={`AED ${money(preview.totalReturns)}`} />
-              <Stat label="Expenses" value={`AED ${money(preview.totalExpenses)}`} />
-              <Stat label="Cash" value={`AED ${money(preview.cashTotal)}`} />
-              <Stat label="Card" value={`AED ${money(preview.cardTotal)}`} />
-              <Stat label="Bank / Credit" value={`AED ${money(preview.bankTotal)} / ${money(preview.creditTotal)}`} />
+              <Stat label="Sales" value={money(preview.totalSales)} sub={`${preview.saleCount} transactions`} />
+              <Stat label="Returns" value={money(preview.totalReturns)} />
+              <Stat label="Expenses" value={money(preview.totalExpenses)} />
+              <Stat label="Cash" value={money(preview.cashTotal)} />
+              <Stat label="Card" value={money(preview.cardTotal)} />
+              <Stat label="Bank / Credit" value={`${money(preview.bankTotal)} / ${formatMoney(preview.creditTotal ?? "0")}`} />
             </div>
 
             <div className="rounded-xl border border-border p-4 bg-secondary/20 flex items-center justify-between">
               <span className="text-xs text-muted-foreground">Expected cash in drawer</span>
-              <span className="text-lg font-bold font-mono text-foreground">AED {money(preview.expectedCash)}</span>
+              <span className="text-lg font-bold font-mono tabular-nums text-foreground">{money(preview.expectedCash)}</span>
             </div>
 
             {preview.status === "closed" && (
               <div className="rounded-xl border border-border p-4 space-y-2">
                 <div className="flex justify-between text-xs">
                   <span className="text-muted-foreground">Counted</span>
-                  <span className="font-mono font-semibold">AED {money(preview.countedCash)}</span>
+                  <span className="font-mono font-semibold tabular-nums">{money(preview.countedCash)}</span>
                 </div>
                 <div className="flex justify-between text-xs">
                   <span className="text-muted-foreground">Variance</span>
@@ -263,7 +289,7 @@ export default function DayClosePage() {
                       Number(preview.cashVariance) < 0 ? "text-destructive" : "text-emerald-600",
                     )}
                   >
-                    AED {money(preview.cashVariance)}
+                    {money(preview.cashVariance)}
                   </span>
                 </div>
                 {preview.closedAt && (
@@ -307,14 +333,14 @@ export default function DayClosePage() {
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-foreground mb-1.5">
-                      Notes {varianceFromCounted !== null && varianceFromCounted < 0 && <span className="text-destructive">(required — short)</span>}
+                      Notes {shortFromCounted && <span className="text-destructive">(required — short)</span>}
                     </label>
                     <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Explain any shortfall" />
                   </div>
                 </div>
                 {varianceFromCounted !== null && (
-                  <p className={cn("text-xs font-mono", varianceFromCounted < 0 ? "text-destructive" : "text-emerald-600")}>
-                    Variance: AED {money(String(varianceFromCounted))}
+                  <p className={cn("text-xs font-mono tabular-nums", shortFromCounted ? "text-destructive" : "text-emerald-600")}>
+                    Variance: {money(varianceFromCounted)}
                   </p>
                 )}
                 <Button type="submit" size="sm" disabled={submitting}>
@@ -333,44 +359,55 @@ export default function DayClosePage() {
             <CardTitle className="text-sm">History</CardTitle>
           </div>
         </CardHeader>
-        <CardContent className="p-0">
-          {history.length === 0 ? (
-            <p className="px-4 py-6 text-center text-xs text-muted-foreground">No closed days yet.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="border-b border-border bg-secondary/50 text-muted-foreground">
-                  <tr>
-                    <th className="px-4 py-2.5 font-medium">Date</th>
-                    <th className="px-4 py-2.5 font-medium">Status</th>
-                    <th className="px-4 py-2.5 text-right font-medium">Sales</th>
-                    <th className="px-4 py-2.5 text-right font-medium">Expected</th>
-                    <th className="px-4 py-2.5 text-right font-medium">Counted</th>
-                    <th className="px-4 py-2.5 text-right font-medium">Variance</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {history.map((row) => (
-                    <tr key={row.id}>
-                      <td className="px-4 py-2.5">{row.closingDate}</td>
-                      <td className="px-4 py-2.5">
-                        <Badge variant={row.status === "closed" ? "secondary" : "success"} className="text-[10px]">
-                          {row.status}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-2.5 text-right font-mono">{money(row.totalSales)}</td>
-                      <td className="px-4 py-2.5 text-right font-mono">{money(row.expectedCash)}</td>
-                      <td className="px-4 py-2.5 text-right font-mono">{row.countedCash ? money(row.countedCash) : "—"}</td>
-                      <td className={cn("px-4 py-2.5 text-right font-mono", row.cashVariance && Number(row.cashVariance) < 0 && "text-destructive")}>
-                        {row.cashVariance ? money(row.cashVariance) : "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
+        <TableContainer>
+          <Table>
+            <TableHead>
+              <tr>
+                <Th>Date</Th>
+                <Th>Status</Th>
+                <Th align="right">Sales ({currency})</Th>
+                <Th align="right">Expected</Th>
+                <Th align="right">Counted</Th>
+                <Th align="right">Variance</Th>
+              </tr>
+            </TableHead>
+            <TableBody
+              columns={6}
+              loading={history.initialLoading}
+              empty={<TableEmpty columns={6} icon={History} title="No closed days yet" />}
+            >
+              {history.items.map((row) => (
+                <tr key={row.id} className={cn(history.loading && "opacity-60")}>
+                  <td className="px-4 py-2.5 tabular-nums whitespace-nowrap">{row.closingDate}</td>
+                  <td className="px-4 py-2.5">
+                    <Badge variant={row.status === "closed" ? "secondary" : "success"} className="text-[10px]">
+                      {row.status}
+                    </Badge>
+                  </td>
+                  <td className={cn("px-4 py-2.5", numericCell)}>{formatMoney(row.totalSales)}</td>
+                  <td className={cn("px-4 py-2.5", numericCell)}>{formatMoney(row.expectedCash)}</td>
+                  <td className={cn("px-4 py-2.5", numericCell)}>{formatMoney(row.countedCash)}</td>
+                  <td
+                    className={cn(
+                      "px-4 py-2.5",
+                      numericCell,
+                      row.cashVariance?.trim().startsWith("-") && "text-destructive",
+                    )}
+                  >
+                    {formatMoney(row.cashVariance)}
+                  </td>
+                </tr>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+        <TablePagination
+          page={historyPage}
+          pageSize={HISTORY_PAGE_SIZE}
+          total={history.total}
+          onPageChange={setHistoryPage}
+          noun="days"
+        />
       </Card>
     </div>
   );

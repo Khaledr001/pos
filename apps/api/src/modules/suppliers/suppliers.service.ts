@@ -1,8 +1,9 @@
-import { and, count, desc, eq, ilike, isNull, or, schema } from "@devsfleet/db";
+import { and, asc, count, desc, eq, ilike, isNull, or, schema } from "@devsfleet/db";
 import type { Supplier } from "@devsfleet/db";
 import { AppError, ERROR_CODES } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
 import { RequestContext } from "../../common/context/request-context.js";
+import { containsPattern } from "../../common/db/list-query.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import type { CreateSupplierDto, ListSuppliersDto, UpdateSupplierDto } from "./dto.js";
 
@@ -56,7 +57,7 @@ export class SuppliersService {
 
   async list(query: ListSuppliersDto): Promise<{ items: Supplier[]; total: number }> {
     return this.db.run(async (tx) => {
-      const term = query.q ? `%${query.q}%` : null;
+      const term = containsPattern(query.q);
       const where = and(
         isNull(schema.suppliers.deletedAt),
         query.includeInactive ? undefined : eq(schema.suppliers.isActive, true),
@@ -65,6 +66,7 @@ export class SuppliersService {
               ilike(schema.suppliers.name, term),
               ilike(schema.suppliers.company, term),
               ilike(schema.suppliers.phone, term),
+              ilike(schema.suppliers.trn, term),
             )
           : undefined,
       );
@@ -74,7 +76,12 @@ export class SuppliersService {
         .select()
         .from(schema.suppliers)
         .where(where)
-        .orderBy(desc(schema.suppliers.createdAt))
+        .orderBy(
+          query.sortOrder === "asc"
+            ? asc(schema.suppliers[query.sortBy])
+            : desc(schema.suppliers[query.sortBy]),
+          desc(schema.suppliers.id),
+        )
         .limit(query.pageSize)
         .offset((query.page - 1) * query.pageSize);
 

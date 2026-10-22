@@ -1,7 +1,8 @@
-import { and, count, desc, eq, ilike, inArray, isNull, or, schema, sql } from "@devsfleet/db";
+import { and, asc, count, desc, eq, ilike, inArray, isNull, or, schema, sql } from "@devsfleet/db";
 import { AppError, ERROR_CODES, slugify } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
 import { RequestContext } from "../../../common/context/request-context.js";
+import { containsPattern } from "../../../common/db/list-query.js";
 import { TenantDatabase } from "../../../database/tenant-database.service.js";
 import type { ListListingsDto, ProductLinksDto, UpsertListingDto } from "./dto.js";
 
@@ -18,7 +19,7 @@ export class ListingsAdminService {
 
   async list(dto: ListListingsDto) {
     return this.db.run(async (tx) => {
-      const search = dto.q ? `%${dto.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%` : null;
+      const search = containsPattern(dto.q);
       const where = and(
         isNull(schema.products.deletedAt),
         // The delivery line is a product too, and never one to sell.
@@ -56,7 +57,10 @@ export class ListingsAdminService {
         .leftJoin(schema.productListings, eq(schema.productListings.productId, schema.products.id))
         .where(where);
       const rows = await base()
-        .orderBy(desc(schema.products.updatedAt))
+        .orderBy(
+          dto.sortOrder === "asc" ? asc(schema.products[dto.sortBy]) : desc(schema.products[dto.sortBy]),
+          desc(schema.products.id),
+        )
         .limit(dto.pageSize)
         .offset((dto.page - 1) * dto.pageSize);
 

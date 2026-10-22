@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
-import { FileSignature, RefreshCw, Search } from "lucide-react";
+import React, { useCallback, useState } from "react";
+import { FileSignature, RefreshCw } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api-client";
 import { usePermission } from "@/lib/require-auth";
@@ -10,7 +10,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Field, Loading, Notice, PageHeader, StatusBadge, errorText, humanize, textareaClass } from "../shared";
+import {
+  SortableTh, Table, TableBody, TableContainer, TableEmpty, TableHead,
+  TablePagination, TableSearch, Th, numericCell,
+} from "@/components/ui/data-table";
+import { useTenantSettings } from "@/lib/tenant-settings";
+import { readListResult, useListData, useListQuery } from "@/lib/use-list-query";
+import { Field, Notice, PageHeader, StatusBadge, errorText, humanize, textareaClass } from "../shared";
 
 interface Money { amount: string; formatted: string }
 
@@ -73,15 +79,10 @@ function toLocalInput(iso: string | null): string {
 export default function QuotesPage() {
   const { tokens } = useAuth();
   const mayWrite = usePermission("order:write");
+  const taxLabel = useTenantSettings().tax.label;
   const auth = { accessToken: tokens?.accessToken };
 
-  const [rows, setRows] = useState<QuoteRow[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [status, setStatus] = useState("");
-  const [q, setQ] = useState("");
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -92,28 +93,26 @@ export default function QuotesPage() {
   const [validUntil, setValidUntil] = useState(defaultValidity());
   const [staffNotes, setStaffNotes] = useState("");
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await api.get<{ items: QuoteRow[]; total: number; countsByStatus: Record<string, number> }>("/storefront-admin/quotes", {
-        ...auth,
-        query: { page, pageSize: PAGE_SIZE, ...(status ? { status } : {}), ...(q.trim() ? { q: q.trim() } : {}) },
-      });
-      setRows(res.items);
-      setTotal(res.total);
-      setCounts(res.countsByStatus);
-    } catch (err) {
-      setError(errorText(err, "Failed to load quotes."));
-    } finally {
-      setLoading(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tokens, page, status, q]);
+  const list = useListQuery({ sortBy: "createdAt", sortOrder: "desc", filters: { status: "" } });
+  const { q, page, sortBy, sortOrder } = list;
+  const status = list.filters.status;
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const loadQuotes = useCallback(
+    async (signal: AbortSignal) => {
+      const res = await api.get<{ items: QuoteRow[]; total: number; countsByStatus: Record<string, number> }>(
+        "/storefront-admin/quotes",
+        {
+          accessToken: tokens?.accessToken,
+          signal,
+          query: { page, pageSize: PAGE_SIZE, status: status || undefined, q: q.trim() || undefined, sortBy, sortOrder },
+        },
+      );
+      setCounts(res.countsByStatus ?? {});
+      return readListResult<QuoteRow>(res);
+    },
+    [tokens?.accessToken, page, status, q, sortBy, sortOrder],
+  );
+  const { items: rows, total, loading, initialLoading, error: loadError, reload: load } = useListData(loadQuotes, list.ready);
 
   function show(detail: QuoteDetail) {
     setSelected(detail);
@@ -174,25 +173,32 @@ export default function QuotesPage() {
     }
   }
 
-  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const editable = mayWrite && !!selected?.canPrice;
 
   return (
     <div className="space-y-6">
       <PageHeader title="Quotes" description="Trade requests from the website. Price each line, set how long the price holds, and send it back; the shopper accepts or declines from their account.">
-        <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
+        <Button variant="outline" size="sm" onClick={load} disabled={loading}>
           <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} /> Refresh
         </Button>
       </PageHeader>
 
       {success && <Notice kind="success" message={success} onClose={() => setSuccess(null)} />}
       {error && !selected && <Notice kind="error" message={error} onClose={() => setError(null)} />}
+      {loadError && (
+        <div role="alert" className="flex items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+          <span>{loadError}</span>
+          <Button variant="outline" size="sm" onClick={load}>Retry</Button>
+        </div>
+      )}
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by status">
         {FILTERS.map((f) => (
           <button
             key={f || "all"}
-            onClick={() => { setStatus(f); setPage(1); }}
+            type="button"
+            aria-pressed={status === f}
+            onClick={() => list.setFilter("status", f)}
             className={cn(
               "rounded-full border px-3 py-1 text-xs cursor-pointer transition-colors",
               status === f ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:text-foreground",
@@ -204,63 +210,78 @@ export default function QuotesPage() {
         ))}
       </div>
 
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-        <Input className="pl-8" placeholder="Quote number, name, email or company" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} />
-      </div>
+      <TableSearch
+        className="max-w-sm"
+        value={list.search}
+        onChange={list.setSearch}
+        label="Search quotes"
+        placeholder="Quote number, name, email or company"
+      />
 
       <Card className="overflow-hidden">
-        {loading ? (
-          <Loading label="Loading quotes..." />
-        ) : rows.length === 0 ? (
-          <div className="py-16 text-center">
-            <FileSignature className="mx-auto h-12 w-12 text-muted-foreground/30" />
-            <h3 className="mt-4 text-sm font-semibold text-foreground">No quotes {status ? `that are ${humanize(status).toLowerCase()}` : "yet"}</h3>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="border-b border-border bg-secondary/50 text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3.5 font-medium">Quote</th>
-                  <th className="px-4 py-3.5 font-medium">Customer</th>
-                  <th className="px-4 py-3.5 font-medium">Status</th>
-                  <th className="px-4 py-3.5 font-medium">Valid until</th>
-                  <th className="px-4 py-3.5 text-right font-medium">Total</th>
+        <TableContainer>
+          <Table>
+            <TableHead>
+              <tr>
+                <SortableTh column="number" sortBy={sortBy} sortOrder={sortOrder} onSort={list.toggleSort}>Quote</SortableTh>
+                <Th>Customer</Th>
+                <Th>Status</Th>
+                <Th>Valid until</Th>
+                <Th align="right">Total</Th>
+              </tr>
+            </TableHead>
+            <TableBody
+              columns={5}
+              loading={initialLoading}
+              empty={
+                <TableEmpty
+                  columns={5}
+                  icon={FileSignature}
+                  title={q ? "No matching quotes" : `No quotes ${status ? `that are ${humanize(status).toLowerCase()}` : "yet"}`}
+                  description={q ? `Nothing matches "${q}".` : undefined}
+                />
+              }
+            >
+              {rows.map((r) => (
+                <tr
+                  key={r.id}
+                  onClick={() => void open(r.id)}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`Open quote ${r.number}`}
+                  onKeyDown={(e) => {
+                    if (e.target !== e.currentTarget) return;
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      void open(r.id);
+                    }
+                  }}
+                  className={cn(
+                    "cursor-pointer hover:bg-secondary/30 transition-colors focus:bg-secondary/40 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                    loading && "opacity-60",
+                  )}
+                >
+                  <td className="px-4 py-3.5">
+                    <div className="font-mono font-medium text-foreground">{r.number}</div>
+                    <div className="text-muted-foreground tabular-nums">{new Date(r.requestedAt).toLocaleString("en-AE")}</div>
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <div className="text-foreground">{r.companyName ?? r.contactName}</div>
+                    <div className="text-muted-foreground">{r.contactName} · {r.contactPhone}</div>
+                  </td>
+                  <td className="px-4 py-3.5"><StatusBadge status={r.status} /></td>
+                  <td className="px-4 py-3.5 text-muted-foreground tabular-nums">{r.validUntil && !r.estimate ? new Date(r.validUntil).toLocaleDateString("en-AE") : "—"}</td>
+                  <td className={cn("px-4 py-3.5 font-medium text-foreground", numericCell)}>
+                    {r.total.formatted}
+                    {r.estimate && <div className="font-sans font-normal text-muted-foreground">estimate</div>}
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {rows.map((r) => (
-                  <tr key={r.id} onClick={() => void open(r.id)} className="cursor-pointer hover:bg-secondary/30 transition-colors">
-                    <td className="px-4 py-3.5">
-                      <div className="font-mono font-medium text-foreground">{r.number}</div>
-                      <div className="text-muted-foreground">{new Date(r.requestedAt).toLocaleString("en-AE")}</div>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <div className="text-foreground">{r.companyName ?? r.contactName}</div>
-                      <div className="text-muted-foreground">{r.contactName} · {r.contactPhone}</div>
-                    </td>
-                    <td className="px-4 py-3.5"><StatusBadge status={r.status} /></td>
-                    <td className="px-4 py-3.5 text-muted-foreground">{r.validUntil && !r.estimate ? new Date(r.validUntil).toLocaleDateString("en-AE") : "—"}</td>
-                    <td className="px-4 py-3.5 text-right font-medium text-foreground">
-                      {r.total.formatted}
-                      {r.estimate && <div className="font-normal text-muted-foreground">estimate</div>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+        <TablePagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={list.setPage} noun="quotes" />
       </Card>
-
-      {pages > 1 && (
-        <div className="flex items-center justify-end gap-2 text-xs">
-          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
-          <span className="text-muted-foreground">Page {page} of {pages}</span>
-          <Button variant="outline" size="sm" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>Next</Button>
-        </div>
-      )}
 
       <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
         <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -293,7 +314,7 @@ export default function QuotesPage() {
                       <tr key={i.id}>
                         <td className="py-2">
                           <div className="text-foreground">{i.name}{i.variantName ? ` — ${i.variantName}` : ""}</div>
-                          <div className="font-mono text-muted-foreground">{i.sku} · VAT {trimZeros(i.taxPercent)}%</div>
+                          <div className="font-mono text-muted-foreground">{i.sku} · {taxLabel} {trimZeros(i.taxPercent)}%</div>
                         </td>
                         <td className="py-2 text-right">{trimZeros(i.quantity)} {i.uom}</td>
                         <td className="py-2 text-right text-muted-foreground">{trimZeros(i.listUnitPrice)}</td>
@@ -316,7 +337,7 @@ export default function QuotesPage() {
                 </table>
               </div>
               <p className="text-[11px] text-muted-foreground">
-                Unit prices are in {selected.currency}, {selected.taxMode === "inclusive" ? "including" : "excluding"} VAT. Pricing below list needs the discount permission and stays within your discount limit.
+                Unit prices are in {selected.currency}, {selected.taxMode === "inclusive" ? "including" : "excluding"} {taxLabel}. Pricing below list needs the discount permission and stays within your discount limit.
               </p>
 
               {editable && (
@@ -341,7 +362,7 @@ export default function QuotesPage() {
               <div className="ml-auto w-64 space-y-1 text-xs">
                 <Row label="Subtotal (net)" value={selected.totals.subtotalNet.formatted} />
                 {selected.totals.discountNet.amount !== "0.00" && <Row label="Discount" value={`− ${selected.totals.discountNet.formatted}`} />}
-                <Row label="VAT" value={selected.totals.vat.formatted} />
+                <Row label={taxLabel} value={selected.totals.vat.formatted} />
                 <Row label={selected.estimate ? "Estimated total" : "Total"} value={selected.totals.total.formatted} strong />
                 {selected.validUntil && !selected.estimate && <Row label="Valid until" value={new Date(selected.validUntil).toLocaleString("en-AE")} />}
               </div>

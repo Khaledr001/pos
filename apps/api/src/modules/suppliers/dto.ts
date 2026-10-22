@@ -1,5 +1,6 @@
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from "@devsfleet/shared-types";
 import { z } from "zod";
+import { sortSchema } from "../../common/db/list-query.js";
 import { zQueryBoolean } from "../../common/pipes/zod-validation.pipe.js";
 
 export const CreateSupplierSchema = z.object({
@@ -25,6 +26,7 @@ export type UpdateSupplierDto = z.infer<typeof UpdateSupplierSchema>;
 export const ListSuppliersSchema = z.object({
   q: z.string().trim().max(100).optional(),
   includeInactive: zQueryBoolean(false),
+  ...sortSchema(["createdAt", "name"], { sortBy: "createdAt", sortOrder: "desc" }),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
 });
