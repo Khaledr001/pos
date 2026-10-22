@@ -15,8 +15,6 @@ release/
 uploads/
 
 # env
-.env
-.env.local
 .env.*.local
 !.env.example
 
@@ -49,7 +47,6 @@ data/price-lists/
 Thumbs.db
 .idea/
 *.swp
-.vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
 
@@ -69,3 +66,4 @@ graphify-out/*
 # image tools
 .cache/
 image-pack-report/
+config.bat
