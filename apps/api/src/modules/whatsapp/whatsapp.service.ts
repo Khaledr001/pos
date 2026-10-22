@@ -7,6 +7,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { RequestContext } from "../../common/context/request-context.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import type { WhatsappWebhookDto, WhatsappWebhookValue } from "./dto.js";
+import { generateVerifyToken } from "./meta-graph.js";
 
 /** Meta's customer-service window. Free-form replies are refused after this. */
 const CUSTOMER_SERVICE_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -253,11 +254,15 @@ export class WhatsappService {
     displayPhoneNumber?: string | undefined;
     businessAccountId?: string | undefined;
     accessToken: string;
-    verifyToken: string;
+    verifyToken?: string | undefined;
     appSecret: string;
     defaultBranchId?: string | undefined;
     isActive?: boolean | undefined;
-  }): Promise<{ id: string }> {
+  }): Promise<{ id: string; verifyToken?: string }> {
+    // Generated when absent, and handed back ONCE so the wizard can show it
+    // for pasting into Meta if the webhook has to be connected by hand.
+    const generated = input.verifyToken ? undefined : generateVerifyToken();
+    const verifyToken = input.verifyToken ?? generated!;
     const tenantId = RequestContext.requireTenantId();
 
     return this.db.run(async (tx) => {
@@ -285,14 +290,14 @@ export class WhatsappService {
           displayPhoneNumber: input.displayPhoneNumber ?? null,
           businessAccountId: input.businessAccountId ?? null,
           accessToken: input.accessToken,
-          verifyToken: input.verifyToken,
+          verifyToken,
           appSecret: input.appSecret,
           defaultBranchId: input.defaultBranchId ?? null,
           isActive: input.isActive ?? true,
         })
         .returning({ id: schema.whatsappAccounts.id });
 
-      return { id: account!.id };
+      return { id: account!.id, ...(generated ? { verifyToken: generated } : {}) };
     });
   }
 

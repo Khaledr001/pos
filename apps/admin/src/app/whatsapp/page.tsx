@@ -20,6 +20,7 @@ import { useAuth } from "@/lib/auth-context";
 import { usePermission } from "@/lib/require-auth";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { ConnectWizard, type WizardAccount } from "./connect-wizard";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -92,6 +93,7 @@ export default function WhatsappPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [setupOpen, setSetupOpen] = useState(false);
+  const [wizard, setWizard] = useState<{ open: boolean; account: WizardAccount | null }>({ open: false, account: null });
 
   const load = useCallback(async () => {
     if (!accessToken) return;
@@ -198,32 +200,13 @@ export default function WhatsappPage() {
             <h2 className="text-sm font-semibold">No WhatsApp number is connected yet</h2>
           </div>
           <p className="max-w-2xl text-sm text-muted-foreground">
-            Messages cannot arrive until a Meta Cloud API number is registered here. The
-            webhook rejects Meta&apos;s verification handshake while no account exists, so
-            the subscription cannot even be completed.
+            Connect your shop&apos;s WhatsApp Business number to answer customers here. The setup
+            walks you through it and checks everything with Meta as you go — about 10 minutes.
           </p>
-          <ol className="max-w-2xl list-decimal space-y-1.5 pl-5 text-xs text-muted-foreground">
-            <li>
-              In Meta&apos;s app dashboard, take the <strong>phone number ID</strong>,{" "}
-              <strong>access token</strong> and <strong>app secret</strong>.
-            </li>
-            <li>
-              Invent a <strong>verify token</strong> — any long random string. You will paste
-              the same value into Meta.
-            </li>
-            <li>Add them under Setup below.</li>
-            <li>
-              Point Meta&apos;s webhook at{" "}
-              <code className="rounded bg-secondary px-1 py-0.5 font-mono text-[11px]">
-                /api/v1/whatsapp/webhook
-              </code>{" "}
-              and subscribe to <code className="font-mono text-[11px]">messages</code>.
-            </li>
-          </ol>
           {canConfigure ? (
-            <Button size="sm" onClick={() => setSetupOpen(true)}>
+            <Button size="sm" onClick={() => setWizard({ open: true, account: null })}>
               <Plus className="size-3.5" aria-hidden="true" />
-              Connect a number
+              Connect WhatsApp
             </Button>
           ) : (
             <p className="text-xs text-muted-foreground">
@@ -261,6 +244,18 @@ export default function WhatsappPage() {
         accounts={accounts}
         accessToken={accessToken}
         onChanged={() => void load()}
+        onConnect={(account) => {
+          setSetupOpen(false);
+          setWizard({ open: true, account });
+        }}
+      />
+
+      <ConnectWizard
+        open={wizard.open}
+        account={wizard.account}
+        accessToken={accessToken}
+        onClose={() => setWizard({ open: false, account: null })}
+        onSaved={() => void load()}
       />
     </div>
   );
@@ -492,60 +487,65 @@ function ConversationPane({
 
 // ── Setup ────────────────────────────────────────────────────────────────────
 
+type Health = "connected" | "token_expiring" | "token_invalid" | "webhook_not_subscribed" | "error";
+
+const HEALTH: Record<Health, { label: string; variant: "success" | "destructive" | "secondary" | "default"; icon: typeof CheckCircle2 }> = {
+  connected: { label: "Connected", variant: "success", icon: CheckCircle2 },
+  token_expiring: { label: "Token expiring", variant: "destructive", icon: Clock },
+  token_invalid: { label: "Token invalid", variant: "destructive", icon: AlertCircle },
+  webhook_not_subscribed: { label: "Webhook not connected", variant: "secondary", icon: AlertCircle },
+  error: { label: "Can't reach Meta", variant: "secondary", icon: AlertCircle },
+};
+
+/**
+ * The connected numbers, each re-checked with Meta when this opens — a token
+ * that expired last night shows as such here, rather than as a quiet inbox.
+ */
 function SetupDialog({
   open,
   onClose,
   accounts,
   accessToken,
   onChanged,
+  onConnect,
 }: {
   open: boolean;
   onClose: () => void;
   accounts: Account[];
   accessToken: string | undefined;
   onChanged: () => void;
+  /** Opens the wizard: a new number when null, a token update otherwise. */
+  onConnect: (account: WizardAccount | null) => void;
 }) {
-  const [phoneNumberId, setPhoneNumberId] = useState("");
-  const [displayPhoneNumber, setDisplayPhoneNumber] = useState("");
-  const [tokenValue, setTokenValue] = useState("");
-  const [verifyToken, setVerifyToken] = useState("");
-  const [appSecret, setAppSecret] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
+  const [health, setHealth] = useState<Record<string, { health: Health; message?: string } | "loading">>({});
+  const [confirmRemove, setConfirmRemove] = useState<Account | null>(null);
 
-  async function create(event: React.FormEvent) {
-    event.preventDefault();
-    if (!accessToken) return;
-    setBusy(true);
-    setFormError(null);
-    try {
-      await api.post(
-        "/whatsapp/accounts",
-        {
-          phoneNumberId: phoneNumberId.trim(),
-          ...(displayPhoneNumber.trim() ? { displayPhoneNumber: displayPhoneNumber.trim() } : {}),
-          accessToken: tokenValue.trim(),
-          verifyToken: verifyToken.trim(),
-          appSecret: appSecret.trim(),
-        },
-        { accessToken },
-      );
-      setPhoneNumberId("");
-      setDisplayPhoneNumber("");
-      setTokenValue("");
-      setVerifyToken("");
-      setAppSecret("");
-      onChanged();
-    } catch (err: any) {
-      setFormError(err?.message || "Could not save that number.");
-    } finally {
-      setBusy(false);
+  useEffect(() => {
+    if (!open || !accessToken) return;
+    let live = true;
+    for (const a of accounts) {
+      setHealth((h) => ({ ...h, [a.id]: "loading" }));
+      api
+        .get<{ health: Health; check: { problem?: { message: string }; warnings: string[] } }>(
+          `/whatsapp/accounts/${a.id}/status`,
+          { accessToken },
+        )
+        .then((r) => {
+          if (live) setHealth((h) => ({ ...h, [a.id]: { health: r.health, message: r.check.problem?.message ?? r.check.warnings[0] } }));
+        })
+        .catch(() => {
+          if (live) setHealth((h) => ({ ...h, [a.id]: { health: "error" } }));
+        });
     }
-  }
+    return () => {
+      live = false;
+    };
+  }, [open, accessToken, accounts]);
 
   async function remove(id: string) {
     if (!accessToken) return;
     await api.delete(`/whatsapp/accounts/${id}`, { accessToken });
+    setConfirmRemove(null);
     onChanged();
   }
 
@@ -553,151 +553,103 @@ function SetupDialog({
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>WhatsApp setup</DialogTitle>
+          <DialogTitle>WhatsApp numbers</DialogTitle>
           <DialogDescription>
-            Credentials from Meta&apos;s Cloud API. They are stored server-side and never sent
-            back to this browser.
+            Each number is checked with Meta when you open this. Credentials are stored on the server and never
+            sent back to this browser.
           </DialogDescription>
         </DialogHeader>
 
-        {accounts.length > 0 && (
+        {accounts.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+            No number connected yet.
+          </p>
+        ) : (
           <ul className="divide-y divide-border rounded-lg border border-border">
-            {accounts.map((a) => (
-              <li key={a.id} className="flex items-center justify-between gap-2 px-3 py-2">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">
-                    {a.displayPhoneNumber || a.phoneNumberId}
-                  </p>
-                  <p className="flex flex-wrap gap-1.5 text-[10px] text-muted-foreground">
-                    <span>Token {a.hasAccessToken ? "set" : "missing"}</span>
-                    <span>· Secret {a.hasAppSecret ? "set" : "missing"}</span>
-                    <span>· Verify {a.hasVerifyToken ? "set" : "missing"}</span>
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <Badge variant={a.isActive ? "success" : "secondary"}>
-                    {a.isActive ? "Active" : "Off"}
-                  </Badge>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => void remove(a.id)}
-                    aria-label={`Remove ${a.displayPhoneNumber || a.phoneNumberId}`}
-                  >
-                    <Trash2 className="size-3.5 text-destructive" aria-hidden="true" />
-                  </Button>
-                </div>
-              </li>
-            ))}
+            {accounts.map((a) => {
+              const h = health[a.id];
+              const meta = h && h !== "loading" ? HEALTH[h.health] : null;
+              const Icon = meta?.icon;
+              return (
+                <li key={a.id} className="space-y-2 px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{a.displayPhoneNumber || a.phoneNumberId}</p>
+                      <p className="truncate font-mono text-[10px] text-muted-foreground">ID {a.phoneNumberId}</p>
+                    </div>
+                    {h === "loading" || !h ? (
+                      <Badge variant="secondary" className="shrink-0 gap-1">
+                        <Loader2 className="size-3 animate-spin" aria-hidden="true" />
+                        Checking
+                      </Badge>
+                    ) : (
+                      <Badge variant={meta!.variant} className="shrink-0 gap-1">
+                        {Icon && <Icon className="size-3" aria-hidden="true" />}
+                        {meta!.label}
+                      </Badge>
+                    )}
+                  </div>
+                  {h && h !== "loading" && h.health !== "connected" && h.message && (
+                    <p className="text-[11px] text-muted-foreground">{h.message}</p>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        onConnect({
+                          id: a.id,
+                          phoneNumberId: a.phoneNumberId,
+                          displayPhoneNumber: a.displayPhoneNumber,
+                          businessAccountId: a.businessAccountId,
+                        })
+                      }
+                    >
+                      Update token
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      onClick={() => setConfirmRemove(a)}
+                    >
+                      <Trash2 className="size-3.5" aria-hidden="true" />
+                      Remove
+                    </Button>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
 
-        <form onSubmit={create} className="space-y-3">
-          <Field
-            label="Phone number ID"
-            value={phoneNumberId}
-            onChange={setPhoneNumberId}
-            required
-            hint="Not the phone number — Meta's numeric ID for it, e.g. 779418925277868. Find it under the From dropdown in Meta's API Setup."
-            /* Entering the phone number here is the single most common setup
-               mistake, and it fails silently: inbound webhooks never resolve
-               to a tenant and every send 404s. Warned inline rather than
-               validated, because the format is Meta's to change. */
-            warn={/[+\s]/.test(phoneNumberId) ? "That looks like a phone number, not a phone number ID." : null}
-          />
-          <Field
-            label="Display number"
-            value={displayPhoneNumber}
-            onChange={setDisplayPhoneNumber}
-            hint="The human-readable number, for your reference only — never used for routing."
-          />
-          <Field
-            label="Access token"
-            value={tokenValue}
-            onChange={setTokenValue}
-            required
-            secret
-            hint="From Business Settings → System users, NOT the temporary one on the API Setup page — that expires in about a day."
-          />
-          <Field
-            label="Verify token"
-            value={verifyToken}
-            onChange={setVerifyToken}
-            required
-            secret
-            hint="You invent this one. Any long random string; paste the same value into Meta's webhook config."
-          />
-          <Field
-            label="App secret"
-            value={appSecret}
-            onChange={setAppSecret}
-            required
-            secret
-            hint="App settings → Basic → App secret. Signs every inbound webhook."
-          />
-
-          {formError && (
-            <p role="alert" className="text-xs text-destructive">
-              {formError}
+        {confirmRemove && (
+          <div role="alert" className="space-y-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs">
+            <p className="text-destructive">
+              Remove {confirmRemove.displayPhoneNumber || confirmRemove.phoneNumberId}? Messages to it will stop
+              arriving here. Past conversations are kept.
             </p>
-          )}
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={() => setConfirmRemove(null)}>
+                Keep
+              </Button>
+              <Button size="sm" variant="destructive" onClick={() => void remove(confirmRemove.id)}>
+                Remove
+              </Button>
+            </div>
+          </div>
+        )}
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
-              Close
-            </Button>
-            <Button type="submit" disabled={busy}>
-              {busy ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
-              Save number
-            </Button>
-          </DialogFooter>
-        </form>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onClose}>
+            Close
+          </Button>
+          <Button type="button" onClick={() => onConnect(null)}>
+            <Plus className="size-4" aria-hidden="true" />
+            Connect a number
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function Field({
-  label,
-  value,
-  onChange,
-  required,
-  secret,
-  hint,
-  warn,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  required?: boolean;
-  secret?: boolean;
-  hint?: string;
-  /** A caution, not an error — it never blocks submit. */
-  warn?: string | null;
-}) {
-  const id = `wa-${label.replace(/\s+/g, "-").toLowerCase()}`;
-  return (
-    <div>
-      <label htmlFor={id} className="mb-1 block text-xs font-medium">
-        {label}
-        {required && <span className="ml-0.5 text-destructive">*</span>}
-      </label>
-      <Input
-        id={id}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        required={required}
-        type={secret ? "password" : "text"}
-        autoComplete="off"
-        className={secret ? "font-mono text-xs" : undefined}
-      />
-      {warn && (
-        <p className="mt-1 flex items-start gap-1 text-[11px] text-amber-600 dark:text-amber-400">
-          <AlertCircle className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
-          {warn}
-        </p>
-      )}
-      {hint && <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>}
-    </div>
   );
 }
