@@ -432,7 +432,7 @@ export default function UsersPage() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-foreground mb-1.5">Password *</label>
-                <Input required type="password" value={fPassword} onChange={(e) => setFPassword(e.target.value)} placeholder="Min 10 chars with Aa1" />
+                <Input required type="password" value={fPassword} onChange={(e) => setFPassword(e.target.value)} placeholder="Min 6 chars with Aa1" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-foreground mb-1.5">POS Quick PIN (4-6 digits)</label>

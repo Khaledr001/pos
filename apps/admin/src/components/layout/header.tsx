@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   Search,
   Sun,
@@ -9,7 +10,9 @@ import {
   Building2,
   Menu,
   Crown,
+  Calculator,
 } from "lucide-react";
+import { hasPermission, type Permission } from "@devsfleet/shared-types";
 import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/lib/theme-context";
 import { Button } from "@/components/ui/button";
@@ -24,6 +27,12 @@ export function Header({
 }) {
   const { user, isImpersonating } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const pathname = usePathname();
+  const canSell = hasPermission(
+    (user?.permissions ?? []) as Permission[],
+    "sale:create",
+  );
+  const onTerminal = pathname === "/sell" || pathname.startsWith("/sell/");
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isMac, setIsMac] = useState(false);
@@ -84,6 +93,23 @@ export function Header({
 
         {/* ── Right Controls ── */}
         <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+          {canSell && (
+            <Link
+              href="/sell"
+              aria-current={onTerminal ? "page" : undefined}
+              aria-label="Sales Terminal"
+              className={cn(
+                "inline-flex h-9 items-center gap-1.5 rounded-xl px-2.5 sm:px-3 text-xs font-semibold transition-all shadow-xs shrink-0",
+                onTerminal
+                  ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                  : "border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20",
+              )}
+            >
+              <Calculator className="h-4 w-4 shrink-0" />
+              <span className="hidden sm:inline">Sales Terminal</span>
+            </Link>
+          )}
+
           {/* Platform Super Admin Quick Switcher */}
           {user?.isPlatformAdmin && (
             <Link

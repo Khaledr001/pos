@@ -657,17 +657,17 @@ export default function PlatformTenantsPage() {
                   <Input
                     type="password"
                     required
-                    minLength={10}
+                    minLength={6}
                     // Mirrors CreateTenantSchema. Kept in step deliberately:
                     // a client rule looser than the server's turns a fixable
                     // typo into an opaque 400 after the form is submitted.
-                    pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9]).{10,}"
-                    title="At least 10 characters, with a lowercase letter, an uppercase letter, and a digit"
+                    pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9]).{6,}"
+                    title="At least 6 characters, with a lowercase letter, an uppercase letter, and a digit"
                     value={provisionForm.password}
                     onChange={(e) =>
                       setProvisionForm((prev) => ({ ...prev, password: e.target.value }))
                     }
-                    placeholder="Min 10 chars, mixed case + digit"
+                    placeholder="Min 6 chars, mixed case + digit"
                     className="pl-9 h-9 text-xs"
                   />
                 </div>

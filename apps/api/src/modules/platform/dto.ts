@@ -75,14 +75,14 @@ export const CreateTenantSchema = z.object({
    * The same bar as every other account-creation path.
    *
    * This was `min(8)` with no complexity while `users/dto.ts` and public
-   * self-registration both required ten characters plus three character
+   * self-registration both required six characters plus three character
    * classes — so the one account an operator provisions by hand, which owns a
    * brand-new business outright, was the weakest credential the system would
    * accept. Self-signup refused passwords this route allowed.
    */
   password: z
     .string()
-    .min(10, "Use at least 10 characters")
+    .min(6, "Use at least 6 characters")
     .max(128)
     .regex(/[a-z]/, "Include a lowercase letter")
     .regex(/[A-Z]/, "Include an uppercase letter")

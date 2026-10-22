@@ -33,7 +33,7 @@ export const CreateUserSchema = z
 
     password: z
       .string()
-      .min(10, "Use at least 10 characters")
+      .min(6, "Use at least 6 characters")
       .max(128)
       .regex(/[a-z]/, "Include a lowercase letter")
       .regex(/[A-Z]/, "Include an uppercase letter")
@@ -71,7 +71,7 @@ export type UpdateUserDto = z.infer<typeof UpdateUserSchema>;
 export const SetPasswordSchema = z.object({
   password: z
     .string()
-    .min(10)
+    .min(6, "Use at least 6 characters")
     .max(128)
     .regex(/[a-z]/, "Include a lowercase letter")
     .regex(/[A-Z]/, "Include an uppercase letter")
