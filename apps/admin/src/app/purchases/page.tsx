@@ -24,6 +24,7 @@ import {
   SortableTh, Table, TableBody, TableContainer, TableEmpty, TableHead,
   TablePagination, TableSearch, Th, numericCell,
 } from "@/components/ui/data-table";
+import { MobileEmpty, MobileList, MobileRow, MobileSort, listCard } from "@/components/ui/mobile-list";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -233,15 +234,89 @@ export default function PurchasesPage() {
         </div>
       )}
 
-      <TableSearch
-        value={list.search}
-        onChange={list.setSearch}
-        label="Search purchase orders"
-        placeholder="Search by PO number or supplier..."
-      />
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <TableSearch
+          value={list.search}
+          onChange={list.setSearch}
+          label="Search purchase orders"
+          placeholder="Search by PO number or supplier..."
+          className="flex-1"
+        />
+        <MobileSort
+          options={[
+            { column: "createdAt", label: "Created", firstOrder: "desc" },
+            { column: "expectedDate", label: "Expected" },
+            { column: "total", label: "Total", firstOrder: "desc" },
+            { column: "poNumber", label: "PO #" },
+          ]}
+          sortBy={sortBy}
+          sortOrder={sortOrder}
+          onChange={list.setSort}
+        />
+      </div>
 
-      <Card className="overflow-hidden">
-        <TableContainer>
+      <MobileList
+        loading={initialLoading}
+        empty={
+          <MobileEmpty
+            icon={Package}
+            title="No purchase orders found"
+            description={q || statusFilter ? "No purchase orders match your search or filter." : "Order stock from a supplier to get started."}
+          />
+        }
+      >
+        {orders.map((o) => {
+          const mayReceive = o.status === "draft" || o.status === "sent" || o.status === "partial";
+          const mayCancel = o.status === "draft" || o.status === "sent";
+          return (
+            <MobileRow
+              key={o.id}
+              title={<span className="font-mono">{o.poNumber}</span>}
+              subtitle={o.supplierName}
+              badge={<Badge variant={STATUS_TONE[o.status]} className="text-[10px] capitalize">{o.status}</Badge>}
+              fields={[
+                { label: "Supplier", value: o.supplierName },
+                { label: "Total", value: formatMoney(o.total ?? "0", { currency }), numeric: true },
+                { label: "Created", value: new Date(o.createdAt).toLocaleDateString(undefined, { dateStyle: "medium" }) },
+                {
+                  label: "Expected",
+                  value: o.expectedDate ? new Date(o.expectedDate).toLocaleDateString(undefined, { dateStyle: "medium" }) : "—",
+                },
+              ]}
+              actions={
+                o.status === "draft" || mayReceive || mayCancel ? (
+                  <>
+                    {o.status === "draft" && (
+                      <Button size="sm" variant="outline" disabled={busyId === o.id} onClick={() => runAction(o, "send")}>
+                        <Send className="h-3.5 w-3.5" /> Send
+                      </Button>
+                    )}
+                    {mayReceive && (
+                      <Button size="sm" variant="outline" disabled={busyId === o.id} onClick={() => setReceivingId(o.id)}>
+                        <PackageCheck className="h-3.5 w-3.5" /> Receive
+                      </Button>
+                    )}
+                    {mayCancel && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busyId === o.id}
+                        onClick={() => runAction(o, "cancel")}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Ban className="h-3.5 w-3.5" /> Cancel
+                      </Button>
+                    )}
+                  </>
+                ) : undefined
+              }
+            />
+          );
+        })}
+      </MobileList>
+
+      <Card className={listCard}>
+        <TableContainer className="hidden md:block">
           <Table>
             <TableHead>
               <tr>

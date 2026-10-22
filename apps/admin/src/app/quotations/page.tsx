@@ -15,6 +15,7 @@ import {
   SortableTh, Table, TableBody, TableContainer, TableEmpty, TableHead,
   TablePagination, TableSearch, Th, numericCell,
 } from "@/components/ui/data-table";
+import { MobileEmpty, MobileList, MobileRow, MobileSort, listCard } from "@/components/ui/mobile-list";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -243,13 +244,24 @@ export default function QuotationsPage() {
         </div>
       )}
 
-      <div className="flex flex-col gap-3 sm:flex-row">
+      <div className="flex flex-col gap-2 sm:flex-row">
         <TableSearch
           value={list.search}
           onChange={list.setSearch}
           label="Search quotations"
           placeholder="Search by quote number or customer..."
           className="flex-1"
+        />
+        <MobileSort
+          options={[
+            { column: "createdAt", label: "Raised", firstOrder: "desc" },
+            { column: "validUntil", label: "Valid until" },
+            { column: "total", label: "Total", firstOrder: "desc" },
+            { column: "quotationNumber", label: "Quote #" },
+          ]}
+          sortBy={sortBy}
+          sortOrder={sortOrder}
+          onChange={list.setSort}
         />
         <Select value={status || "all"} onValueChange={(val) => list.setFilter("status", val === "all" ? "" : val)}>
           <SelectTrigger className="h-10 sm:w-48 text-xs" aria-label="Filter by status">
@@ -266,8 +278,64 @@ export default function QuotationsPage() {
         </Select>
       </div>
 
-      <Card className="overflow-hidden">
-        <TableContainer>
+      <MobileList
+        loading={initialLoading}
+        empty={
+          <MobileEmpty
+            icon={FileText}
+            title="No quotations found"
+            description={
+              list.q || status
+                ? "Nothing matches this filter."
+                : "Raise one here, or from a POS terminal with F7."
+            }
+          />
+        }
+      >
+        {rows.map((row) => (
+          <MobileRow
+            key={row.id}
+            title={row.quotationNumber}
+            subtitle={row.customerName ?? "—"}
+            badge={<Badge variant={STATUS_VARIANT[row.status] ?? "secondary"}>{row.status}</Badge>}
+            fields={[
+              { label: "Total", value: formatMoney(row.total, { currency }), numeric: true },
+              { label: "Customer", value: row.customerName ?? "—" },
+              { label: "Raised", value: fmtDate(row.createdAt) },
+              {
+                label: "Valid until",
+                value: (
+                  <span className={cn(row.expired && "text-destructive")}>
+                    {fmtDate(row.validUntil)}
+                    {row.expired && row.status !== "converted" && " · expired"}
+                  </span>
+                ),
+              },
+            ]}
+            actions={
+              <>
+                <Button variant="outline" size="sm" onClick={() => void openQuotation(row.id)}>
+                  <FileText className="h-3.5 w-3.5" />
+                  View
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void printQuotation(row)}
+                  disabled={busy === `pdf:${row.id}`}
+                  aria-label={`Print quotation ${row.quotationNumber}`}
+                >
+                  <Printer className="h-3.5 w-3.5" />
+                  {busy === `pdf:${row.id}` ? "…" : "Print"}
+                </Button>
+              </>
+            }
+          />
+        ))}
+      </MobileList>
+
+      <Card className={listCard}>
+        <TableContainer className="hidden md:block">
           <Table>
             <TableHead>
               <tr>

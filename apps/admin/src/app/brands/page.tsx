@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   SortableTh, Table, TableBody, TableContainer, TableEmpty, TableHead, Th,
 } from "@/components/ui/data-table";
+import { MobileEmpty, MobileList, MobileRow, MobileSort, listCard } from "@/components/ui/mobile-list";
 import type { SortOrder } from "@/lib/use-list-query";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -166,8 +167,63 @@ export default function BrandsPage() {
         </div>
       )}
 
-      <Card className="overflow-hidden">
-        <TableContainer>
+      <MobileSort
+        options={[{ column: "name", label: "Name" }]}
+        sortBy="name"
+        sortOrder={nameOrder}
+        onChange={(_, order) => setNameOrder(order)}
+      />
+
+      <MobileList
+        loading={loading && brands.length === 0}
+        empty={
+          <MobileEmpty
+            icon={Tag}
+            title="No brands yet"
+            action={
+              <Button size="sm" onClick={openCreate}>
+                <Plus className="h-3.5 w-3.5" /> Add Brand
+              </Button>
+            }
+          />
+        }
+      >
+        {sortedBrands.map((brand) => (
+          <MobileRow
+            key={brand.id}
+            title={brand.name}
+            subtitle={brand.slug}
+            badge={
+              <Badge variant={brand.isActive ? "success" : "secondary"}>
+                {brand.isActive ? "Active" : "Inactive"}
+              </Badge>
+            }
+            fields={[
+              { label: "Slug", value: <span className="font-mono">{brand.slug}</span> },
+              ...(brand.logoUrl
+                ? [{
+                    label: "Logo",
+                    // eslint-disable-next-line @next/next/no-img-element
+                    value: <img src={brand.logoUrl} alt="" className="ml-auto h-6 w-6 rounded object-contain" />,
+                  }]
+                : []),
+            ]}
+            actions={
+              <>
+                <Button variant="outline" size="sm" onClick={() => openEdit(brand)}>
+                  <Pencil className="h-3.5 w-3.5" /> Edit
+                </Button>
+                <Button variant="outline" size="sm" className="text-destructive" onClick={() => void handleDelete(brand)}>
+                  <Trash2 className="h-3.5 w-3.5" /> Delete
+                </Button>
+              </>
+            }
+          />
+        ))}
+      </MobileList>
+
+      <Card className={listCard}>
+        <TableContainer className="hidden md:block">
           <Table>
             <TableHead>
               <tr>

@@ -21,6 +21,7 @@ import {
   SortableTh, Table, TableBody, TableContainer, TableEmpty, TableHead,
   TablePagination, TableSearch, Th,
 } from "@/components/ui/data-table";
+import { MobileEmpty, MobileList, MobileRow, MobileSort, listCard } from "@/components/ui/mobile-list";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -259,16 +260,73 @@ export default function UsersPage() {
         </div>
       )}
 
-      <TableSearch
-        value={list.search}
-        onChange={list.setSearch}
-        label="Search staff"
-        placeholder="Search staff by name or email address..."
-      />
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <TableSearch
+          value={list.search}
+          onChange={list.setSearch}
+          label="Search staff"
+          placeholder="Search staff by name or email address..."
+          className="flex-1"
+        />
+        <MobileSort
+          options={[{ column: "name", label: "Name" }]}
+          sortBy={sortBy}
+          sortOrder={sortOrder}
+          onChange={list.setSort}
+        />
+      </div>
+
+      <MobileList
+        loading={initialLoading}
+        empty={
+          <MobileEmpty
+            icon={UserCheck}
+            title="No staff members found"
+            description={q ? "No staff match your search query." : "Add store cashiers or managers."}
+          />
+        }
+      >
+        {users.map((u) => (
+          <MobileRow
+            key={u.id}
+            title={u.name}
+            subtitle={roleName(u.roleId)}
+            badge={
+              <Badge variant={u.isActive ? "success" : "secondary"}>
+                {u.isActive ? "Active" : "Disabled"}
+              </Badge>
+            }
+            fields={[
+              { label: "Email", value: u.email },
+              { label: "Role", value: <span className="capitalize">{roleName(u.roleId)}</span> },
+              { label: "Branch", value: getBranchName(u.branchId) },
+              { label: "Discount limit", value: `Max ${u.maxDiscountPercent ?? 0}%`, numeric: true },
+              {
+                label: "Access",
+                value:
+                  u.canApproveRefund || u.canViewCost
+                    ? [u.canApproveRefund && "Refunds", u.canViewCost && "Cost visible"].filter(Boolean).join(", ")
+                    : "—",
+              },
+            ]}
+            actions={
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleDeactivate(u.id, u.name)}
+                className="text-destructive hover:text-destructive"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Deactivate
+              </Button>
+            }
+          />
+        ))}
+      </MobileList>
 
       {/* Table */}
-      <Card className="overflow-hidden">
-        <TableContainer>
+      <Card className={listCard}>
+        <TableContainer className="hidden md:block">
           <Table>
             <TableHead>
               <tr>

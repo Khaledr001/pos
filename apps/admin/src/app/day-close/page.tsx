@@ -20,6 +20,7 @@ import { readListResult, useListData } from "@/lib/use-list-query";
 import {
   Table, TableBody, TableContainer, TableEmpty, TableHead, TablePagination, Th, numericCell,
 } from "@/components/ui/data-table";
+import { MobileEmpty, MobileList, MobileRow, listCard } from "@/components/ui/mobile-list";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -352,14 +353,45 @@ export default function DayClosePage() {
         </Card>
       )}
 
-      <Card>
-        <CardHeader className="pb-4">
+      <Card className={listCard}>
+        <CardHeader className="pb-4 max-md:px-0 max-md:pt-0">
           <div className="flex items-center gap-2">
             <History className="h-4 w-4 text-muted-foreground" />
             <CardTitle className="text-sm">History</CardTitle>
           </div>
         </CardHeader>
-        <TableContainer>
+        <MobileList
+          loading={history.initialLoading}
+          empty={<MobileEmpty icon={History} title="No closed days yet" />}
+        >
+          {history.items.map((row) => (
+            <MobileRow
+              key={row.id}
+              title={<span className="tabular-nums">{row.closingDate}</span>}
+              subtitle={formatMoney(row.totalSales, { currency })}
+              badge={
+                <Badge variant={row.status === "closed" ? "secondary" : "success"}>
+                  {row.status}
+                </Badge>
+              }
+              fields={[
+                { label: `Sales (${currency})`, value: formatMoney(row.totalSales), numeric: true },
+                { label: "Expected", value: formatMoney(row.expectedCash), numeric: true },
+                { label: "Counted", value: formatMoney(row.countedCash), numeric: true },
+                {
+                  label: "Variance",
+                  value: (
+                    <span className={cn(row.cashVariance?.trim().startsWith("-") && "text-destructive")}>
+                      {formatMoney(row.cashVariance)}
+                    </span>
+                  ),
+                  numeric: true,
+                },
+              ]}
+            />
+          ))}
+        </MobileList>
+        <TableContainer className="hidden md:block">
           <Table>
             <TableHead>
               <tr>

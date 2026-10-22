@@ -306,7 +306,9 @@ export function TablePagination({
   return (
     <nav
       aria-label="Pagination"
-      className="flex flex-col gap-3 border-t border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+      // No rule or inset below md: there the card around it is stripped away
+      // (see `listCard`) and the pager sits under the phone cards on its own.
+      className="flex flex-col gap-3 border-border py-3 sm:flex-row sm:items-center sm:justify-between md:border-t md:px-4"
     >
       <span className="text-xs tabular-nums text-muted-foreground" aria-live="polite">
         Showing {from.toLocaleString()}–{to.toLocaleString()} of {total.toLocaleString()} {noun}

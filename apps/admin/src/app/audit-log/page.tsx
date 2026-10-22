@@ -12,6 +12,7 @@ import {
   SortableTh, Table, TableBody, TableContainer, TableEmpty, TableHead,
   TablePagination, TableSearch, Th,
 } from "@/components/ui/data-table";
+import { MobileEmpty, MobileList, MobileRow, MobileSort, listCard } from "@/components/ui/mobile-list";
 import { readListResult, useListData, useListQuery } from "@/lib/use-list-query";
 import {
   Select,
@@ -128,15 +129,60 @@ export default function AuditLogPage() {
         </div>
       )}
 
-      <TableSearch
-        value={list.search}
-        onChange={list.setSearch}
-        label="Search the audit trail"
-        placeholder="Search by action, entity type, or user..."
-      />
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <TableSearch
+          className="flex-1"
+          value={list.search}
+          onChange={list.setSearch}
+          label="Search the audit trail"
+          placeholder="Search by action, entity type, or user..."
+        />
+        <MobileSort
+          options={[
+            { column: "createdAt", label: "When", firstOrder: "desc" },
+            { column: "entityType", label: "Entity" },
+            { column: "action", label: "Action" },
+          ]}
+          sortBy={sortBy}
+          sortOrder={sortOrder}
+          onChange={list.setSort}
+        />
+      </div>
 
-      <Card className="overflow-hidden">
-        <TableContainer>
+      <MobileList
+        loading={initialLoading}
+        empty={
+          <MobileEmpty
+            icon={ScrollText}
+            title={q || entityFilter ? "No matching entries" : "Nothing recorded yet"}
+            description={
+              q
+                ? `No entries match "${q}".`
+                : entityFilter
+                  ? "No entries for this entity type."
+                  : "Actions across the system will appear here."
+            }
+          />
+        }
+      >
+        {entries.map((e) => (
+          <MobileRow
+            key={e.id}
+            title={<span className="font-mono text-xs">{e.entityType}</span>}
+            subtitle={e.userName ?? "System"}
+            badge={<Badge variant={ACTION_TONE[e.action] ?? "outline"} className="text-[10px]">{e.action}</Badge>}
+            fields={[
+              { label: "When", value: formatWhen(e.createdAt) },
+              { label: "By", value: e.userName ?? "System" },
+              { label: "Branch", value: e.branchName ?? "—" },
+              { label: "Entity ID", value: e.entityId ? <span className="font-mono text-xs">{e.entityId}</span> : "—" },
+            ]}
+          />
+        ))}
+      </MobileList>
+
+      <Card className={listCard}>
+        <TableContainer className="hidden md:block">
           <Table>
             <TableHead>
               <tr>

@@ -67,6 +67,7 @@ import { Money } from "@devsfleet/shared-utils";
 import { formatMoney as formatAmount, timeAgo } from "@/lib/format";
 import { useTenantSettings } from "@/lib/tenant-settings";
 import { TableContainer, TableHead, TableSearch } from "@/components/ui/data-table";
+import { MobileList, MobileRow } from "@/components/ui/mobile-list";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -405,6 +406,17 @@ export default function ClientDetailPage() {
       console.error("Failed to load bill detail:", err);
     } finally {
       setBillLoading(false);
+    }
+  };
+
+  const handlePrintQuote = async (q: CustomerQuotation) => {
+    try {
+      const { blob } = await apiDownload(`/quotations/${q.id}/pdf`, {
+        accessToken: tokens?.accessToken,
+      });
+      printBlob(blob, `Quote ${q.quotationNumber}`);
+    } catch (err: any) {
+      setPageError(err?.message || "Failed to download quotation PDF.");
     }
   };
 
@@ -1380,7 +1392,52 @@ export default function ClientDetailPage() {
               </p>
             </div>
           ) : (
-            <TableContainer>
+            <>
+            <MobileList loading={false} empty={null} className="p-3">
+              {filteredSales.map((s) => (
+                <MobileRow
+                  key={s.id}
+                  title={s.saleNumber || s.invoiceNumber || s.id.slice(0, 8)}
+                  badge={
+                    <Badge variant={s.status === "completed" ? "success" : s.status === "void" ? "destructive" : "secondary"} className="capitalize">
+                      {s.status}
+                    </Badge>
+                  }
+                  fields={[
+                    { label: `Total`, value: `${currency} ${formatMoney(s.total)}`, numeric: true },
+                    { label: "Paid", value: formatMoney(s.paidAmount), numeric: true },
+                    { label: "Balance due", value: formatMoney(s.dueAmount), numeric: true },
+                    { label: "Date", value: formatDateTime(s.occurredAt || s.createdAt) },
+                    { label: "Branch", value: s.branchName || "Main HQ" },
+                    { label: "Cashier", value: s.cashierName || "—" },
+                  ]}
+                  actions={
+                    <>
+                      <Button variant="outline" size="sm" onClick={() => openBill(s)}>
+                        <Eye className="h-3.5 w-3.5" /> View
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePrintInvoice(s.id, s.saleNumber)}
+                        disabled={printingSaleId === s.id}
+                      >
+                        <Printer className="h-3.5 w-3.5" /> {printingSaleId === s.id ? "…" : "Print"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDownloadInvoice(s.id, s.saleNumber)}
+                        disabled={downloadingSaleId === s.id}
+                      >
+                        <Download className="h-3.5 w-3.5" /> PDF
+                      </Button>
+                    </>
+                  }
+                />
+              ))}
+            </MobileList>
+            <TableContainer className="hidden md:block">
               <table className="w-full text-left text-xs">
                 <TableHead className="font-medium">
                   <tr>
@@ -1491,6 +1548,7 @@ export default function ClientDetailPage() {
                 </tbody>
               </table>
             </TableContainer>
+            </>
           )}
         </Card>
       )}
@@ -1527,7 +1585,28 @@ export default function ClientDetailPage() {
               )}
             </div>
           ) : (
-            <TableContainer>
+            <>
+            <MobileList loading={false} empty={null} className="p-3">
+              {payments.map((p) => (
+                <MobileRow
+                  key={p.id}
+                  title={p.referenceNumber || p.id.slice(0, 8)}
+                  subtitle={<span className="capitalize">{p.method.replace("_", " ")}</span>}
+                  badge={
+                    <span className="font-mono text-xs font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+                      {formatMoney(p.amount)}
+                    </span>
+                  }
+                  fields={[
+                    { label: "Amount", value: `${currency} ${formatMoney(p.amount)}`, numeric: true },
+                    { label: "Date", value: formatDateTime(p.createdAt) },
+                    { label: "Branch", value: branches.find((b) => b.id === p.branchId)?.name || "Main HQ" },
+                    { label: "Notes", value: p.notes || "—" },
+                  ]}
+                />
+              ))}
+            </MobileList>
+            <TableContainer className="hidden md:block">
               <table className="w-full text-left text-xs">
                 <TableHead className="font-medium">
                   <tr>
@@ -1569,6 +1648,7 @@ export default function ClientDetailPage() {
                 </tbody>
               </table>
             </TableContainer>
+            </>
           )}
         </Card>
       )}
@@ -1605,7 +1685,36 @@ export default function ClientDetailPage() {
               </p>
             </div>
           ) : (
-            <TableContainer>
+            <>
+            <MobileList loading={false} empty={null} className="p-3">
+              {statementLedger.map((row) => (
+                <MobileRow
+                  key={row.id}
+                  title={row.docNumber}
+                  subtitle={row.description}
+                  badge={
+                    <span className="font-mono text-xs font-bold tabular-nums text-foreground">
+                      {formatMoney(row.runningBalance)}
+                    </span>
+                  }
+                  fields={[
+                    { label: "Date", value: formatDateTime(row.date) },
+                    { label: "Debit (+)", value: row.debit > 0n ? formatMoney(row.debit) : "—", numeric: true },
+                    { label: "Credit (−)", value: row.credit > 0n ? formatMoney(row.credit) : "—", numeric: true },
+                    { label: "Balance", value: `${currency} ${formatMoney(row.runningBalance)}`, numeric: true },
+                    { label: "Branch", value: row.branchName || "Main HQ" },
+                  ]}
+                  actions={
+                    row.type === "invoice" ? (
+                      <Button variant="outline" size="sm" onClick={() => openBill(row.raw)}>
+                        <Eye className="h-3.5 w-3.5" /> View bill
+                      </Button>
+                    ) : undefined
+                  }
+                />
+              ))}
+            </MobileList>
+            <TableContainer className="hidden md:block">
               <table className="w-full text-left text-xs">
                 <TableHead className="font-medium">
                   <tr>
@@ -1661,6 +1770,7 @@ export default function ClientDetailPage() {
                 </tbody>
               </table>
             </TableContainer>
+            </>
           )}
         </Card>
       )}
@@ -1692,7 +1802,31 @@ export default function ClientDetailPage() {
               </p>
             </div>
           ) : (
-            <TableContainer>
+            <>
+            <MobileList loading={false} empty={null} className="p-3">
+              {quotations.map((q) => (
+                <MobileRow
+                  key={q.id}
+                  title={q.quotationNumber}
+                  badge={
+                    <Badge variant={q.status === "accepted" || q.status === "converted" ? "success" : q.status === "expired" ? "destructive" : "secondary"} className="capitalize">
+                      {q.status}
+                    </Badge>
+                  }
+                  fields={[
+                    { label: "Total", value: `${currency} ${formatMoney(q.total)}`, numeric: true },
+                    { label: "Date", value: formatDate(q.createdAt) },
+                    { label: "Valid until", value: q.expiresAt ? formatDate(q.expiresAt) : "—" },
+                  ]}
+                  actions={
+                    <Button variant="outline" size="sm" onClick={() => void handlePrintQuote(q)}>
+                      <Printer className="h-3.5 w-3.5" /> Print
+                    </Button>
+                  }
+                />
+              ))}
+            </MobileList>
+            <TableContainer className="hidden md:block">
               <table className="w-full text-left text-xs">
                 <TableHead className="font-medium">
                   <tr>
@@ -1738,17 +1872,7 @@ export default function ClientDetailPage() {
                           variant="outline"
                           size="sm"
                           className="h-7 text-xs"
-                          onClick={async () => {
-                            try {
-                              const { blob, filename } = await apiDownload(
-                                `/quotations/${q.id}/pdf`,
-                                { accessToken: tokens?.accessToken },
-                              );
-                              printBlob(blob, `Quote ${q.quotationNumber}`);
-                            } catch (err: any) {
-                              setPageError(err?.message || "Failed to download quotation PDF.");
-                            }
-                          }}
+                          onClick={() => void handlePrintQuote(q)}
                         >
                           <Printer className="h-3 w-3 mr-1" /> Print
                         </Button>
@@ -1758,6 +1882,7 @@ export default function ClientDetailPage() {
                 </tbody>
               </table>
             </TableContainer>
+            </>
           )}
         </Card>
       )}
@@ -1789,7 +1914,30 @@ export default function ClientDetailPage() {
               </p>
             </div>
           ) : (
-            <TableContainer>
+            <>
+            <MobileList loading={false} empty={null} className="p-3">
+              {loyaltyHistory.map((rec) => (
+                <MobileRow
+                  key={rec.id}
+                  title={
+                    <span className={rec.points > 0 ? "text-emerald-500" : "text-amber-500"}>
+                      {rec.points > 0 ? `+${rec.points}` : rec.points} pts
+                    </span>
+                  }
+                  subtitle={formatDateTime(rec.createdAt)}
+                  badge={
+                    <Badge variant={rec.type === "earned" ? "success" : "warning"} className="capitalize">
+                      {rec.type}
+                    </Badge>
+                  }
+                  fields={[
+                    { label: "Reference", value: <span className="font-mono">{rec.referenceType || "Manual"}</span> },
+                    { label: "Notes", value: rec.notes || "—" },
+                  ]}
+                />
+              ))}
+            </MobileList>
+            <TableContainer className="hidden md:block">
               <table className="w-full text-left text-xs">
                 <TableHead className="font-medium">
                   <tr>
@@ -1833,6 +1981,7 @@ export default function ClientDetailPage() {
                 </tbody>
               </table>
             </TableContainer>
+            </>
           )}
         </Card>
       )}

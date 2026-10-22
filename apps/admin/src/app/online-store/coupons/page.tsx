@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import {
   Table, TableBody, TableContainer, TableEmpty, TableHead, Th, numericCell,
 } from "@/components/ui/data-table";
+import { MobileEmpty, MobileList, MobileRow } from "@/components/ui/mobile-list";
 import { formatMoney } from "@/lib/format";
 import { useTenantSettings } from "@/lib/tenant-settings";
 import { cn } from "@/lib/utils";
@@ -110,7 +111,35 @@ export default function CouponsPage() {
 
       {error && !form && <Notice kind="error" message={error} onClose={() => setError(null)} />}
 
-      <Card className="overflow-hidden">
+      <MobileList loading={loading} empty={<MobileEmpty icon={TicketPercent} title="No promo codes yet" />}>
+        {coupons.map((c) => (
+          <MobileRow
+            key={c.id}
+            title={<span className="font-mono">{c.code}</span>}
+            subtitle={c.type === "percent" ? `${Number(c.value)}% off` : c.type === "free_shipping" ? "Free delivery" : "Fixed amount"}
+            badge={<Badge variant={c.isActive ? "success" : "secondary"}>{c.isActive ? "On" : "Off"}</Badge>}
+            fields={[
+              { label: "Gives", value: c.type === "percent" ? `${Number(c.value)}% off` : c.type === "free_shipping" ? "Free delivery" : "Fixed amount (not usable online)" },
+              {
+                label: `Min. spend (excl. ${settings.tax.label})`,
+                value: c.minSubtotal === "0.0000" ? "—" : formatMoney(c.minSubtotal, { currency: settings.currency.base }),
+                numeric: true,
+              },
+              { label: "Used", value: `${c.usedCount}${c.maxUses ? ` / ${c.maxUses}` : ""}`, numeric: true },
+              { label: "Valid until", value: c.validTo ? new Date(c.validTo).toLocaleDateString("en-AE") : "No end" },
+            ]}
+            actions={
+              mayWrite ? (
+                <Button variant="outline" size="sm" onClick={() => void toggle(c)} aria-pressed={c.isActive}>
+                  {c.isActive ? "Turn off" : "Turn on"}
+                </Button>
+              ) : undefined
+            }
+          />
+        ))}
+      </MobileList>
+
+      <Card className="hidden overflow-hidden md:block">
         <TableContainer>
           <Table>
             <TableHead>

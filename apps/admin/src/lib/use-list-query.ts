@@ -16,6 +16,8 @@ export interface ListQueryState<F extends string> {
   sortOrder: SortOrder;
   /** Same column flips direction; a new column starts at its natural order. */
   toggleSort: (column: string, firstOrder?: SortOrder) => void;
+  /** Column and direction at once — for a sort picker rather than a header click. */
+  setSort: (column: string, order: SortOrder) => void;
   filters: Record<F, string>;
   setFilter: (name: F, value: string) => void;
   /**
@@ -119,12 +121,18 @@ export function useListQuery<F extends string = never>(options: {
     [sortBy],
   );
 
+  const setSort = useCallback((column: string, order: SortOrder) => {
+    setSortBy(column);
+    setSortOrder(order);
+    setPageState(1);
+  }, []);
+
   const setFilter = useCallback((name: F, value: string) => {
     setFilters((prev) => ({ ...prev, [name]: value }));
     setPageState(1);
   }, []);
 
-  return { search, setSearch, q, page, setPage, sortBy, sortOrder, toggleSort, filters, setFilter, ready };
+  return { search, setSearch, q, page, setPage, sortBy, sortOrder, toggleSort, setSort, filters, setFilter, ready };
 }
 
 export interface ListResult<T> {

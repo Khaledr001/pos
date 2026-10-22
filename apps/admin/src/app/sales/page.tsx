@@ -17,6 +17,7 @@ import {
   SortableTh, Table, TableBody, TableContainer, TableEmpty, TableHead,
   TablePagination, TableSearch, Th, numericCell,
 } from "@/components/ui/data-table";
+import { MobileEmpty, MobileList, MobileRow, MobileSort, listCard } from "@/components/ui/mobile-list";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -236,15 +237,78 @@ export default function SalesPage() {
         <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">{error}</div>
       )}
 
-      <TableSearch
-        value={list.search}
-        onChange={list.setSearch}
-        label="Search sales"
-        placeholder="Search by invoice number, customer, or branch..."
-      />
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <TableSearch
+          value={list.search}
+          onChange={list.setSearch}
+          label="Search sales"
+          placeholder="Search by invoice number, customer, or branch..."
+          className="flex-1"
+        />
+        <MobileSort
+          options={[
+            { column: "occurredAt", label: "Date", firstOrder: "desc" },
+            { column: "total", label: "Total", firstOrder: "desc" },
+            { column: "saleNumber", label: "Invoice #" },
+          ]}
+          sortBy={sortBy}
+          sortOrder={sortOrder}
+          onChange={list.setSort}
+        />
+      </div>
 
-      <Card className="overflow-hidden">
-        <TableContainer>
+      <MobileList
+        loading={initialLoading}
+        empty={
+          <MobileEmpty
+            icon={ShoppingCart}
+            title="No sales found"
+            description={list.q ? `No invoices match "${list.q}".` : "Sales are created from the POS terminal."}
+          />
+        }
+      >
+        {sales.map((sale) => (
+          <MobileRow
+            key={sale.id}
+            title={sale.saleNumber || sale.invoiceNumber || "—"}
+            subtitle={sale.customerName || sale.customer?.name || "Walk-in Customer"}
+            badge={
+              <Badge variant={sale.status === "completed" ? "success" : sale.status === "void" ? "destructive" : "secondary"}>
+                {sale.status}
+              </Badge>
+            }
+            fields={[
+              { label: "Total", value: formatMoney(sale.total, { currency }), numeric: true },
+              { label: "Subtotal", value: formatMoney(sale.subtotal), numeric: true },
+              { label: taxHeader, value: formatMoney(sale.taxAmount), numeric: true },
+              { label: "Payment", value: <span className="capitalize">{primaryPaymentMethod(sale)}</span> },
+              { label: "Date", value: formatTime(sale.occurredAt || sale.createdAt) },
+              { label: "Branch", value: sale.branchName || sale.branch?.name || sale.branchCode || "—" },
+            ]}
+            actions={
+              <>
+                <Button variant="outline" size="sm" onClick={() => void openSale(sale)}>
+                  <FileText className="h-3.5 w-3.5" />
+                  View
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void printInvoice(sale)}
+                  disabled={printing === sale.id}
+                  aria-label={`Print invoice ${sale.saleNumber || ""}`}
+                >
+                  <Printer className="h-3.5 w-3.5" />
+                  {printing === sale.id ? "…" : "Print"}
+                </Button>
+              </>
+            }
+          />
+        ))}
+      </MobileList>
+
+      <Card className={listCard}>
+        <TableContainer className="hidden md:block">
           <Table>
             <TableHead>
               <tr>

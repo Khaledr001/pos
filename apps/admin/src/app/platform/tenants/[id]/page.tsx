@@ -34,6 +34,8 @@ import { Badge } from "@/components/ui/badge";
 import {
   Table, TableBody, TableContainer, TableEmpty, TableHead, Th,
 } from "@/components/ui/data-table";
+import { MobileEmpty, MobileList, MobileRow, listCard } from "@/components/ui/mobile-list";
+import { cn } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -561,8 +563,29 @@ export default function TenantDetailPage() {
       )}
 
       {activeTab === "branches" && (
-        <Card className="border-border/60 shadow-xs overflow-hidden">
-          <TableContainer>
+        <MobileList loading={false} empty={<MobileEmpty icon={GitBranch} title="No branches" />}>
+          {tenant.branches.map((b) => (
+            <MobileRow
+              key={b.id}
+              title={b.name}
+              subtitle={<span className="font-mono">{b.code}</span>}
+              badge={
+                <Badge variant={b.isActive ? "default" : "secondary"}>
+                  {b.isActive ? "Active" : "Inactive"}
+                </Badge>
+              }
+              fields={[
+                { label: "Code", value: <span className="font-mono">{b.code}</span> },
+                { label: "Contact", value: b.phone || b.email || "—" },
+                { label: "Address", value: b.address || "—" },
+              ]}
+            />
+          ))}
+        </MobileList>
+      )}
+      {activeTab === "branches" && (
+        <Card className={cn("border-border/60 shadow-xs", listCard)}>
+          <TableContainer className="hidden md:block">
             <Table>
               <TableHead>
                 <tr>
@@ -607,8 +630,30 @@ export default function TenantDetailPage() {
       )}
 
       {activeTab === "users" && (
-        <Card className="border-border/60 shadow-xs overflow-hidden">
-          <TableContainer>
+        <MobileList loading={false} empty={<MobileEmpty icon={Users} title="No staff accounts" />}>
+          {tenant.users.map((u) => (
+            <MobileRow
+              key={u.id}
+              title={u.name}
+              subtitle={u.roleName}
+              badge={
+                <Badge variant={u.isActive ? "default" : "destructive"}>
+                  {u.isActive ? "Active" : "Locked"}
+                </Badge>
+              }
+              fields={[
+                { label: "Email", value: <span className="font-mono">{u.email || "—"}</span> },
+                { label: "Role", value: <span className="capitalize">{u.roleName}</span> },
+                { label: "Branch", value: u.branchName || "All Branches" },
+                { label: "Last login", value: u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : "Never" },
+              ]}
+            />
+          ))}
+        </MobileList>
+      )}
+      {activeTab === "users" && (
+        <Card className={cn("border-border/60 shadow-xs", listCard)}>
+          <TableContainer className="hidden md:block">
             <Table>
               <TableHead>
                 <tr>
@@ -659,8 +704,24 @@ export default function TenantDetailPage() {
       )}
 
       {activeTab === "audit" && (
-        <Card className="border-border/60 shadow-xs overflow-hidden">
-          <TableContainer>
+        <MobileList loading={false} empty={<MobileEmpty icon={ScrollText} title="No audit entries" />}>
+          {tenant.auditLogs.map((a) => (
+            <MobileRow
+              key={a.id}
+              title={<span className="capitalize">{a.action}</span>}
+              subtitle={<span className="font-mono">{a.entityType}</span>}
+              fields={[
+                { label: "Entity", value: <span className="font-mono">{a.entityType}</span> },
+                { label: "Reason", value: a.reason || "—" },
+                { label: "When", value: new Date(a.createdAt).toLocaleString() },
+              ]}
+            />
+          ))}
+        </MobileList>
+      )}
+      {activeTab === "audit" && (
+        <Card className={cn("border-border/60 shadow-xs", listCard)}>
+          <TableContainer className="hidden md:block">
             <Table>
               <TableHead>
                 <tr>

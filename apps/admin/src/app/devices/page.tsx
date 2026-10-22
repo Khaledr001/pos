@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   SortableTh, Table, TableBody, TableContainer, TableEmpty, TableHead, Th,
 } from "@/components/ui/data-table";
+import { MobileEmpty, MobileList, MobileRow, MobileSort, listCard } from "@/components/ui/mobile-list";
 import type { SortOrder } from "@/lib/use-list-query";
 import {
   Dialog,
@@ -176,8 +177,49 @@ export default function DevicesPage() {
         </div>
       )}
 
-      <Card className="overflow-hidden">
-        <TableContainer>
+      <MobileSort
+        options={[{ column: "name", label: "Name" }]}
+        sortBy="name"
+        sortOrder={nameOrder}
+        onChange={(_, order) => setNameOrder(order)}
+      />
+
+      <MobileList
+        loading={loading && devices.length === 0}
+        empty={
+          <MobileEmpty
+            icon={Tablet}
+            title="No terminals registered"
+            description="Register the first one to let a till sign in and sync."
+          />
+        }
+      >
+        {sortedDevices.map((device) => (
+          <MobileRow
+            key={device.id}
+            title={device.name}
+            subtitle={branchName(device.branchId)}
+            badge={
+              <Badge variant={device.isActive ? "success" : "secondary"}>
+                {device.isActive ? "Active" : "Deactivated"}
+              </Badge>
+            }
+            fields={[
+              { label: "Branch", value: branchName(device.branchId) },
+              { label: "App version", value: <span className="font-mono">{device.appVersion ?? "—"}</span> },
+              { label: "Last seen", value: timeAgo(device.lastSeenAt) },
+            ]}
+            actions={
+              <Button variant="outline" size="sm" onClick={() => toggleActive(device)}>
+                {device.isActive ? "Deactivate" : "Reactivate"}
+              </Button>
+            }
+          />
+        ))}
+      </MobileList>
+
+      <Card className={listCard}>
+        <TableContainer className="hidden md:block">
           <Table>
             <TableHead>
               <tr>

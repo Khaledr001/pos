@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card";
 import {
   Table, TableBody, TableContainer, TableEmpty, TableHead, Th,
 } from "@/components/ui/data-table";
+import { MobileEmpty, MobileList, MobileRow } from "@/components/ui/mobile-list";
 import { Notice, PageHeader, StatusBadge, errorText, selectClass } from "../shared";
 
 interface Application {
@@ -86,7 +87,62 @@ export default function TradeApplicationsPage() {
       {success && <Notice kind="success" message={success} onClose={() => setSuccess(null)} />}
       {error && <Notice kind="error" message={error} onClose={() => setError(null)} />}
 
-      <Card className="overflow-hidden">
+      <MobileList
+        loading={loading && apps.length === 0}
+        empty={<MobileEmpty icon={Briefcase} title="No trade applications" />}
+      >
+        {apps.map((a) => {
+          const picked = choice[a.accountId] ?? { priceListId: tradeList?.id ?? "", customerType: "wholesale" };
+          const who = `${a.firstName} ${a.lastName}`;
+          const deciding = mayWrite && a.tradeStatus === "PENDING";
+          return (
+            <MobileRow
+              key={a.accountId}
+              title={who}
+              subtitle={a.companyName ?? undefined}
+              badge={<StatusBadge status={a.tradeStatus} />}
+              fields={[
+                { label: "Email", value: a.email },
+                { label: "Phone", value: a.phone || "—" },
+                { label: "Company", value: a.companyName ?? "—" },
+                { label: "TRN", value: a.trn ? <span className="font-mono">{a.trn}</span> : "—" },
+                ...(a.tradeNote ? [{ label: "Note", value: <span className="italic">“{a.tradeNote}”</span> }] : []),
+                ...(deciding
+                  ? [
+                      {
+                        label: "Price list",
+                        value: (
+                          <select aria-label={`Price list for ${who}`} className={`${selectClass} w-40`} value={picked.priceListId} onChange={(e) => setChoice({ ...choice, [a.accountId]: { ...picked, priceListId: e.target.value } })}>
+                            {lists.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                          </select>
+                        ),
+                      },
+                      {
+                        label: "Customer type",
+                        value: (
+                          <select aria-label={`Customer type for ${who}`} className={`${selectClass} w-40`} value={picked.customerType} onChange={(e) => setChoice({ ...choice, [a.accountId]: { ...picked, customerType: e.target.value } })}>
+                            <option value="wholesale">Wholesale</option>
+                            <option value="vip">VIP</option>
+                          </select>
+                        ),
+                      },
+                    ]
+                  : []),
+              ]}
+              actions={
+                deciding ? (
+                  <>
+                    <Button size="sm" onClick={() => void decide(a, true)}>Approve</Button>
+                    <Button size="sm" variant="outline" onClick={() => void decide(a, false)}>Reject</Button>
+                  </>
+                ) : undefined
+              }
+            />
+          );
+        })}
+      </MobileList>
+
+      <Card className="hidden overflow-hidden md:block">
         <TableContainer>
           <Table>
             <TableHead>

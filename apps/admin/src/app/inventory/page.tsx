@@ -22,6 +22,7 @@ import {
   SortableTh, Table, TableBody, TableContainer, TableEmpty, TableHead,
   TablePagination, TableSearch, Th, numericCell,
 } from "@/components/ui/data-table";
+import { MobileEmpty, MobileList, MobileRow, MobileSort, listCard } from "@/components/ui/mobile-list";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -287,6 +288,10 @@ export default function InventoryPage() {
 
   const refreshing = stockList.loading || txList.loading;
 
+  // Below md the card frame comes off (listCard); its header goes with it, so
+  // the search and filters line up with the phone cards under them.
+  const listCardHeader = "pb-4 border-b border-border bg-secondary/30 max-md:border-0 max-md:bg-transparent max-md:px-0 max-md:pt-0";
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -343,8 +348,8 @@ export default function InventoryPage() {
       )}
 
       {/* Stock Table */}
-      <Card className="overflow-hidden">
-        <CardHeader className="pb-4 border-b border-border bg-secondary/30">
+      <Card className={listCard}>
+        <CardHeader className={listCardHeader}>
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-linear-to-br from-emerald-500 to-teal-600 text-white">
               <Boxes className="h-4 w-4" />
@@ -354,13 +359,24 @@ export default function InventoryPage() {
               <CardDescription className="text-[11px]">Live quantities per variant per branch</CardDescription>
             </div>
           </div>
-          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
             <TableSearch
               value={list.search}
               onChange={list.setSearch}
               label="Search stock"
               placeholder="Search by product name, SKU, or barcode..."
-              className="flex-1"
+              className="flex-1 sm:min-w-56"
+            />
+            <MobileSort
+              options={[
+                { column: "productName", label: "Product" },
+                { column: "sku", label: "SKU" },
+                { column: "available", label: "Available" },
+                { column: "branchName", label: "Branch" },
+              ]}
+              sortBy={sortBy}
+              sortOrder={sortOrder}
+              onChange={list.setSort}
             />
             <Select
               value={branchFilter || "all"}
@@ -390,7 +406,62 @@ export default function InventoryPage() {
           </div>
         </CardHeader>
 
-        <TableContainer>
+        <MobileList
+          loading={stockList.initialLoading}
+          empty={
+            <MobileEmpty
+              icon={Boxes}
+              title="No stock found"
+              description={
+                list.q || branchFilter || lowOnly
+                  ? "Nothing matches this filter."
+                  : "Add products and record opening stock to get started."
+              }
+            />
+          }
+        >
+          {stock.map((row) => {
+            const isLow = Number(row.minStock) > 0 && Number(row.available) <= Number(row.minStock);
+            return (
+              <MobileRow
+                key={`${row.variantId}-${row.branchId}`}
+                title={row.sku}
+                subtitle={row.productName}
+                badge={
+                  isLow ? (
+                    <Badge variant="warning" className="gap-1">
+                      <AlertTriangle className="h-3 w-3" aria-hidden="true" />Low
+                    </Badge>
+                  ) : (
+                    <Badge variant="success">In Stock</Badge>
+                  )
+                }
+                fields={[
+                  {
+                    label: "Product",
+                    value:
+                      row.variantName && row.variantName !== "Default"
+                        ? `${row.productName} · ${row.variantName}`
+                        : row.productName,
+                  },
+                  {
+                    label: "Available",
+                    value: (
+                      <span className={cn("font-bold", isLow ? "text-amber-500" : "text-emerald-500")}>
+                        {formatQty(row.available)} {row.unitAbbr}
+                      </span>
+                    ),
+                    numeric: true,
+                  },
+                  { label: "Min stock", value: formatQty(row.minStock), numeric: true },
+                  { label: "Branch", value: row.branchName },
+                ]}
+              />
+            );
+          })}
+        </MobileList>
+
+        <TableContainer className="hidden md:block">
           <Table>
             <TableHead>
               <tr>
@@ -480,8 +551,8 @@ export default function InventoryPage() {
       </Card>
 
       {/* Ledger */}
-      <Card className="overflow-hidden">
-        <CardHeader className="pb-4 border-b border-border bg-secondary/30">
+      <Card className={listCard}>
+        <CardHeader className={listCardHeader}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-linear-to-br from-violet-500 to-purple-600 text-white">
@@ -496,7 +567,41 @@ export default function InventoryPage() {
           </div>
         </CardHeader>
 
-        <TableContainer>
+        <MobileList
+          loading={txList.initialLoading}
+          empty={
+            <MobileEmpty
+              icon={History}
+              title="No transactions yet"
+              description="Transactions are created automatically when sales, adjustments, or transfers occur."
+            />
+          }
+        >
+          {transactions.map((tx) => {
+            const outgoing = tx.quantity.trim().startsWith("-");
+            return (
+              <MobileRow
+                key={tx.id}
+                title={<span className="font-mono">{tx.sku}</span>}
+                subtitle={tx.type}
+                badge={
+                  <Badge variant={outgoing ? "destructive" : "success"} className="font-mono tabular-nums">
+                    {outgoing ? formatQty(tx.quantity) : `+${formatQty(tx.quantity)}`}
+                  </Badge>
+                }
+                fields={[
+                  { label: "Time", value: formatTime(tx.createdAt) },
+                  { label: "Product", value: tx.productName },
+                  { label: "Branch", value: tx.branchName },
+                  { label: "Balance after", value: formatQty(tx.balanceAfter), numeric: true },
+                  { label: "Reference", value: tx.notes ?? tx.referenceType ?? "—" },
+                ]}
+              />
+            );
+          })}
+        </MobileList>
+
+        <TableContainer className="hidden md:block">
           <Table className="font-mono">
             <TableHead>
               <tr>

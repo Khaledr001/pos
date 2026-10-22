@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Table, TableBody, TableContainer, TableEmpty, TableHead, Th,
 } from "@/components/ui/data-table";
+import { MobileEmpty, MobileList, MobileRow, listCard } from "@/components/ui/mobile-list";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogDescription, DialogFooter,
@@ -36,6 +37,9 @@ interface Category {
   productCount: number;
   children?: Category[];
 }
+
+/** Whole classes, not built strings, so Tailwind sees them; depth past three shares the last. */
+const MOBILE_INDENT = ["", "ml-4", "ml-8", "ml-12"];
 
 /** Depth-first, so the tree's own order (sortOrder within each parent) is preserved. */
 function flatten(cats: Category[]): Category[] {
@@ -86,6 +90,7 @@ export default function CategoriesPage() {
   }, [fetchTree]);
 
   const flat = flatten(tree);
+  const nameById = new Map(flat.map((c) => [c.id, c.name]));
 
   function openCreate() {
     setEditing(null);
@@ -194,8 +199,53 @@ export default function CategoriesPage() {
         </div>
       )}
 
-      <Card className="overflow-hidden">
-        <TableContainer>
+      <MobileList
+        loading={loading && flat.length === 0}
+        empty={
+          <MobileEmpty
+            icon={FolderTree}
+            title="No categories yet"
+            action={
+              <Button size="sm" onClick={openCreate}>
+                <Plus className="h-3.5 w-3.5" /> Add Category
+              </Button>
+            }
+          />
+        }
+      >
+        {flat.map((cat) => (
+          <MobileRow
+            key={cat.id}
+            // Indented by depth and kept in tree order, so a subcategory still
+            // reads as sitting under its parent card.
+            className={MOBILE_INDENT[Math.min(cat.depth, MOBILE_INDENT.length - 1)]}
+            title={cat.name}
+            subtitle={cat.parentId ? `in ${nameById.get(cat.parentId) ?? "…"}` : undefined}
+            badge={
+              <Badge variant={cat.isActive ? "success" : "secondary"}>
+                {cat.isActive ? "Active" : "Inactive"}
+              </Badge>
+            }
+            fields={[
+              { label: "SKU prefix", value: <span className="font-mono">{cat.skuPrefix || "—"}</span> },
+              { label: "Products", value: cat.productCount, numeric: true },
+            ]}
+            actions={
+              <>
+                <Button variant="outline" size="sm" onClick={() => openEdit(cat)}>
+                  <Pencil className="h-3.5 w-3.5" /> Edit
+                </Button>
+                <Button variant="outline" size="sm" className="text-destructive" onClick={() => void handleDelete(cat)}>
+                  <Trash2 className="h-3.5 w-3.5" /> Delete
+                </Button>
+              </>
+            }
+          />
+        ))}
+      </MobileList>
+
+      <Card className={listCard}>
+        <TableContainer className="hidden md:block">
           <Table>
             <TableHead>
               <tr>

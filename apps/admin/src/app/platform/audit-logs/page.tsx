@@ -23,6 +23,7 @@ import {
   Table, TableBody, TableContainer, TableEmpty, TableHead, TablePagination, Th,
 } from "@/components/ui/data-table";
 import { cn } from "@/lib/utils";
+import { MobileEmpty, MobileList, MobileRow, listCard } from "@/components/ui/mobile-list";
 import { readListResult, useListData, useListQuery } from "@/lib/use-list-query";
 
 interface AuditLogItem {
@@ -146,8 +147,59 @@ export default function PlatformAuditLogsPage() {
       )}
 
       {/* ── Audit Log Table ── */}
-      <Card className="border-border/60 shadow-xs overflow-hidden">
-        <TableContainer>
+      <MobileList
+        loading={initialLoading}
+        empty={
+          <MobileEmpty
+            icon={ScrollText}
+            title={selectedAction ? `No "${selectedAction}" events` : "No platform audit events logged yet."}
+          />
+        }
+      >
+        {items.map((log) => (
+          <MobileRow
+            key={log.id}
+            title={<span className="text-xs">{log.tenantName ?? `${log.tenantId.slice(0, 8)}…`}</span>}
+            badge={
+              <Badge variant={getActionBadgeVariant(log.action)} className="font-mono text-[10px] uppercase">
+                {log.action}
+              </Badge>
+            }
+            fields={[
+              { label: "When", value: new Date(log.createdAt).toLocaleString() },
+              { label: "By", value: log.userName || "Platform Operator" },
+              { label: "Reason", value: log.reason || "—" },
+              { label: "IP address", value: <span className="font-mono text-xs">{log.ipAddress || "Internal"}</span> },
+              { label: "Entity", value: <span className="font-mono text-xs">{log.entityType} ({log.entityId || "N/A"})</span> },
+              { label: "Request ID", value: <span className="font-mono text-xs">{log.requestId || "N/A"}</span> },
+              { label: "Audit ID", value: <span className="font-mono text-xs">{log.id}</span> },
+              ...(log.changes && Object.keys(log.changes).length > 0
+                ? [{
+                    label: "Changes",
+                    value: (
+                      <pre className="max-w-full overflow-x-auto rounded-lg bg-background/70 p-2 text-left font-mono text-[11px]">
+                        {JSON.stringify(log.changes, null, 2)}
+                      </pre>
+                    ),
+                  }]
+                : []),
+            ]}
+            actions={
+              log.tenantName ? (
+                <Button asChild variant="outline" size="sm">
+                  <Link href={`/platform/tenants/${log.tenantId}`}>
+                    <Building2 className="h-3.5 w-3.5" />
+                    Open business
+                  </Link>
+                </Button>
+              ) : undefined
+            }
+          />
+        ))}
+      </MobileList>
+
+      <Card className={cn(listCard, "md:border-border/60 md:shadow-xs")}>
+        <TableContainer className="hidden md:block">
           <Table className="border-collapse">
             <TableHead>
               <tr>

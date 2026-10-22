@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import {
   Table, TableBody, TableContainer, TableEmpty, TableHead, Th, numericCell,
 } from "@/components/ui/data-table";
+import { MobileEmpty, MobileList, MobileRow } from "@/components/ui/mobile-list";
 import { Field, Notice, PageHeader, errorText, humanize, selectClass, textareaClass } from "../shared";
 
 interface PageRow {
@@ -165,6 +166,19 @@ export default function ContentPage() {
     }
   }
 
+  const editBanner = (b: Banner) =>
+    setBannerForm({
+      id: b.id,
+      placement: b.placement,
+      title: b.title,
+      subtitle: b.subtitle ?? "",
+      imageUrl: b.imageUrl ?? "",
+      linkUrl: b.linkUrl ?? "",
+      ctaLabel: b.ctaLabel ?? "",
+      sortOrder: b.sortOrder,
+      isActive: b.isActive,
+    });
+
   return (
     <div className="space-y-6">
       <PageHeader title="Website Content" description="Pages, guides and the home page banners.">
@@ -192,7 +206,53 @@ export default function ContentPage() {
         ))}
       </div>
 
-      <Card className="overflow-hidden">
+      {tab === "pages" ? (
+        <MobileList loading={loading && pages.length === 0} empty={<MobileEmpty icon={FileText} title="No pages yet" />}>
+          {pages.map((p) => (
+            <MobileRow
+              key={p.id}
+              title={p.title}
+              subtitle={p.kind === "blog" ? "Guide" : "Page"}
+              badge={<Badge variant={p.isPublished ? "success" : "secondary"}>{p.isPublished ? "Published" : "Draft"}</Badge>}
+              fields={[{ label: "Address", value: <span className="font-mono">{p.kind === "blog" ? `/blog/${p.slug}` : `/pages/${p.slug}`}</span> }]}
+              actions={
+                mayWrite ? (
+                  <>
+                    <Button variant="outline" size="sm" onClick={() => void editPage(p.id)}><Pencil className="h-3.5 w-3.5" /> Edit</Button>
+                    <Button variant="outline" size="sm" className="text-destructive" onClick={() => void remove("pages", p.id, p.title)}><Trash2 className="h-3.5 w-3.5" /> Delete</Button>
+                  </>
+                ) : undefined
+              }
+            />
+          ))}
+        </MobileList>
+      ) : (
+        <MobileList loading={loading && banners.length === 0} empty={<MobileEmpty icon={ImageIcon} title="No banners yet" />}>
+          {banners.map((b) => (
+            <MobileRow
+              key={b.id}
+              title={b.title}
+              subtitle={humanize(b.placement)}
+              badge={<Badge variant={b.isActive ? "success" : "secondary"}>{b.isActive ? "Showing" : "Off"}</Badge>}
+              fields={[
+                { label: "Subtitle", value: b.subtitle || "—" },
+                { label: "Where", value: humanize(b.placement) },
+                { label: "Order", value: b.sortOrder, numeric: true },
+              ]}
+              actions={
+                mayWrite ? (
+                  <>
+                    <Button variant="outline" size="sm" onClick={() => editBanner(b)}><Pencil className="h-3.5 w-3.5" /> Edit</Button>
+                    <Button variant="outline" size="sm" className="text-destructive" onClick={() => void remove("banners", b.id, b.title)}><Trash2 className="h-3.5 w-3.5" /> Delete</Button>
+                  </>
+                ) : undefined
+              }
+            />
+          ))}
+        </MobileList>
+      )}
+
+      <Card className="hidden overflow-hidden md:block">
         <TableContainer>
           {tab === "pages" ? (
             <Table>
@@ -251,19 +311,7 @@ export default function ContentPage() {
                       <button
                         className="cursor-pointer text-muted-foreground hover:text-foreground"
                         aria-label={`Edit ${b.title}`}
-                        onClick={() =>
-                          setBannerForm({
-                            id: b.id,
-                            placement: b.placement,
-                            title: b.title,
-                            subtitle: b.subtitle ?? "",
-                            imageUrl: b.imageUrl ?? "",
-                            linkUrl: b.linkUrl ?? "",
-                            ctaLabel: b.ctaLabel ?? "",
-                            sortOrder: b.sortOrder,
-                            isActive: b.isActive,
-                          })
-                        }
+                        onClick={() => editBanner(b)}
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </button>

@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card";
 import {
   Table, TableBody, TableContainer, TableEmpty, TableHead, Th, numericCell,
 } from "@/components/ui/data-table";
+import { MobileEmpty, MobileList, MobileRow } from "@/components/ui/mobile-list";
 import { Notice, PageHeader, errorText } from "../shared";
 
 interface Demand {
@@ -52,7 +53,25 @@ export default function StockAlertsPage() {
         </Button>
       </PageHeader>
       {error && <Notice kind="error" message={error} onClose={() => setError(null)} />}
-      <Card className="overflow-hidden">
+      <MobileList
+        loading={loading && items.length === 0}
+        empty={<MobileEmpty icon={BellRing} title="Nobody is waiting for a product" />}
+      >
+        {items.map((d) => (
+          <MobileRow
+            key={d.productId}
+            title={d.productName}
+            subtitle={`${d.waiting} waiting`}
+            fields={[
+              { label: "Waiting", value: d.waiting, numeric: true },
+              { label: "Options", value: d.variants, numeric: true },
+              { label: "Oldest request", value: d.oldest ? new Date(d.oldest).toLocaleDateString("en-AE") : "—" },
+            ]}
+          />
+        ))}
+      </MobileList>
+
+      <Card className="hidden overflow-hidden md:block">
         <TableContainer>
           <Table>
             <TableHead>

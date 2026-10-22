@@ -20,6 +20,7 @@ import {
   SortableTh, Table, TableBody, TableContainer, TableEmpty, TableHead,
   TablePagination, TableSearch, Th,
 } from "@/components/ui/data-table";
+import { MobileEmpty, MobileList, MobileRow, MobileSort, listCard } from "@/components/ui/mobile-list";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -200,15 +201,67 @@ export default function TransfersPage() {
         </div>
       )}
 
-      <TableSearch
-        value={list.search}
-        onChange={list.setSearch}
-        label="Search transfers"
-        placeholder="Search by transfer number or notes..."
-      />
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <TableSearch
+          value={list.search}
+          onChange={list.setSearch}
+          label="Search transfers"
+          placeholder="Search by transfer number or notes..."
+          className="flex-1"
+        />
+        <MobileSort
+          options={[
+            { column: "createdAt", label: "Requested", firstOrder: "desc" },
+            { column: "transferNumber", label: "Transfer #" },
+          ]}
+          sortBy={sortBy}
+          sortOrder={sortOrder}
+          onChange={list.setSort}
+        />
+      </div>
 
-      <Card className="overflow-hidden">
-        <TableContainer>
+      <MobileList
+        loading={initialLoading}
+        empty={
+          <MobileEmpty
+            icon={Truck}
+            title="No transfers found"
+            description={q || statusFilter ? "No transfers match your search or filter." : "Request stock from another branch to get started."}
+          />
+        }
+      >
+        {transfers.map((t) => {
+          const next =
+            t.status === "requested" ? { action: "approve" as const, label: "Approve" }
+            : t.status === "approved" ? { action: "ship" as const, label: "Ship" }
+            : t.status === "shipped" ? { action: "receive" as const, label: "Receive" }
+            : null;
+          return (
+            <MobileRow
+              key={t.id}
+              title={<span className="font-mono">{t.transferNumber}</span>}
+              subtitle={`${branchLabel(t.fromBranchId)} → ${branchLabel(t.toBranchId)}`}
+              badge={<Badge variant={STATUS_TONE[t.status]} className="text-[10px] capitalize">{t.status}</Badge>}
+              fields={[
+                { label: "From", value: branchLabel(t.fromBranchId) },
+                { label: "To", value: branchLabel(t.toBranchId) },
+                { label: "Items", value: `${t.items.length} line${t.items.length === 1 ? "" : "s"}`, numeric: true },
+                { label: "Requested", value: new Date(t.createdAt).toLocaleDateString(undefined, { dateStyle: "medium" }) },
+              ]}
+              actions={
+                next ? (
+                  <Button size="sm" variant="outline" disabled={busyId === t.id} onClick={() => runAction(t, next.action)}>
+                    {next.label}
+                  </Button>
+                ) : undefined
+              }
+            />
+          );
+        })}
+      </MobileList>
+
+      <Card className={listCard}>
+        <TableContainer className="hidden md:block">
           <Table>
             <TableHead>
               <tr>

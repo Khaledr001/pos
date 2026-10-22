@@ -294,10 +294,12 @@ export default function OnlineStorePage() {
             )}
           </Card>
 
-          <Card className="space-y-3 p-5">
+          {/* min-w-0: a wide table inside would otherwise stretch the card,
+              and the page with it, instead of scrolling inside. */}
+          <Card className="min-w-0 space-y-3 p-5">
             <h2 className="text-sm font-semibold">Courier rates (net of {taxLabel})</h2>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+            <div className="-mx-5 overflow-x-auto px-5">
+              <table className="w-full min-w-160 whitespace-nowrap text-left text-xs">
                 <thead className="text-muted-foreground"><tr><th scope="col" className="py-2">Emirate</th><th scope="col">Delivers</th><th scope="col">Base fee</th><th scope="col">Up to kg</th><th scope="col">Per extra kg</th><th scope="col">Free over</th><th scope="col">Max kg</th><th scope="col">Days</th></tr></thead>
                 <tbody>
                   {draft.shipping.rates.map((r) => (
@@ -317,7 +319,7 @@ export default function OnlineStorePage() {
             </div>
           </Card>
 
-          <Card className="space-y-4 p-5">
+          <Card className="min-w-0 space-y-4 p-5">
             <h2 className="text-sm font-semibold">Branches on the website</h2>
             <div className="grid gap-4 md:grid-cols-5">
               <Field label="Pickup slot (minutes)"><Input type="number" value={draft.pickup.slotMinutes} onChange={(e) => setDraft({ ...draft, pickup: { ...draft.pickup, slotMinutes: Number(e.target.value) } })} /></Field>
@@ -326,7 +328,8 @@ export default function OnlineStorePage() {
               <Field label="Opens"><Input type="time" value={draft.pickup.opensAt} onChange={(e) => setDraft({ ...draft, pickup: { ...draft.pickup, opensAt: e.target.value } })} /></Field>
               <Field label="Closes"><Input type="time" value={draft.pickup.closesAt} onChange={(e) => setDraft({ ...draft, pickup: { ...draft.pickup, closesAt: e.target.value } })} /></Field>
             </div>
-            <table className="w-full text-left text-xs">
+            <div className="-mx-5 overflow-x-auto px-5">
+            <table className="w-full min-w-120 whitespace-nowrap text-left text-xs">
               <thead className="text-muted-foreground"><tr><th scope="col" className="py-2">Branch</th><th scope="col">Shown</th><th scope="col">Emirate</th><th scope="col">Pickup</th></tr></thead>
               <tbody>
                 {branches.map((b) => {
@@ -348,6 +351,7 @@ export default function OnlineStorePage() {
                 })}
               </tbody>
             </table>
+            </div>
           </Card>
 
           <Card className="space-y-3 p-5">

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useState } from "react";
-import { Globe, RefreshCw, Truck, Store, Undo2 } from "lucide-react";
+import { Eye, Globe, RefreshCw, Truck, Store, Undo2 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api-client";
 import { usePermission } from "@/lib/require-auth";
@@ -14,6 +14,7 @@ import {
   SortableTh, Table, TableBody, TableContainer, TableEmpty, TableHead,
   TablePagination, TableSearch, Th, numericCell,
 } from "@/components/ui/data-table";
+import { MobileEmpty, MobileList, MobileRow, MobileSort, listCard } from "@/components/ui/mobile-list";
 import { formatMoney } from "@/lib/format";
 import { useTenantSettings } from "@/lib/tenant-settings";
 import { readListResult, useListData, useListQuery } from "@/lib/use-list-query";
@@ -221,16 +222,62 @@ export default function OnlineOrdersPage() {
         ))}
       </div>
 
-      <TableSearch
-        className="max-w-sm"
-        value={list.search}
-        onChange={list.setSearch}
-        label="Search online orders"
-        placeholder="Order number, name, email or phone"
-      />
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <TableSearch
+          className="sm:max-w-sm sm:flex-1"
+          value={list.search}
+          onChange={list.setSearch}
+          label="Search online orders"
+          placeholder="Order number, name, email or phone"
+        />
+        <MobileSort
+          options={[
+            { column: "createdAt", label: "Placed", firstOrder: "desc" },
+            { column: "orderNumber", label: "Order" },
+            { column: "total", label: "Total", firstOrder: "desc" },
+          ]}
+          sortBy={sortBy}
+          sortOrder={sortOrder}
+          onChange={list.setSort}
+        />
+      </div>
 
-      <Card className="overflow-hidden">
-        <TableContainer>
+      <MobileList
+        loading={initialLoading}
+        empty={
+          <MobileEmpty
+            icon={Globe}
+            title={q ? "No matching online orders" : `No online orders ${status ? `that are ${humanize(status).toLowerCase()}` : "yet"}`}
+            description={q ? `Nothing matches "${q}".` : undefined}
+          />
+        }
+      >
+        {rows.map((r) => (
+          <MobileRow
+            key={r.id}
+            title={<span className="font-mono">{r.orderNumber}</span>}
+            subtitle={r.contactName}
+            badge={<StatusBadge status={r.status} />}
+            fields={[
+              { label: "Total", value: formatMoney(r.total, { currency }), numeric: true },
+              { label: "Phone", value: r.contactPhone },
+              { label: "Placed", value: new Date(r.placedAt ?? r.createdAt).toLocaleString("en-AE") },
+              { label: "Delivery", value: r.deliveryMethod === "PICKUP" ? `Pickup · ${r.branchName}` : "Courier" },
+              { label: "Payment", value: humanize(r.paymentMethod) },
+              { label: "Payment status", value: <StatusBadge status={r.paymentStatus} /> },
+            ]}
+            actions={
+              <Button variant="outline" size="sm" onClick={() => void open(r.id)}>
+                <Eye className="h-3.5 w-3.5" />
+                View
+              </Button>
+            }
+          />
+        ))}
+      </MobileList>
+
+      <Card className={listCard}>
+        <TableContainer className="hidden md:block">
           <Table>
             <TableHead>
               <tr>

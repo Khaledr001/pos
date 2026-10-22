@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   SortableTh, Table, TableBody, TableContainer, TableEmpty, TableHead, Th,
 } from "@/components/ui/data-table";
+import { MobileEmpty, MobileList, MobileRow, MobileSort, listCard } from "@/components/ui/mobile-list";
 import type { SortOrder } from "@/lib/use-list-query";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -167,8 +168,59 @@ export default function UnitsPage() {
         </div>
       )}
 
-      <Card className="overflow-hidden">
-        <TableContainer>
+      <MobileSort
+        options={[{ column: "name", label: "Name" }]}
+        sortBy="name"
+        sortOrder={nameOrder}
+        onChange={(_, order) => setNameOrder(order)}
+      />
+
+      <MobileList
+        loading={loading && units.length === 0}
+        empty={
+          <MobileEmpty
+            icon={Ruler}
+            title="No units yet"
+            action={
+              <Button size="sm" onClick={openCreate}>
+                <Plus className="h-3.5 w-3.5" /> Add Unit
+              </Button>
+            }
+          />
+        }
+      >
+        {sortedUnits.map((unit) => (
+          <MobileRow
+            key={unit.id}
+            title={unit.name}
+            subtitle={<span className="font-mono uppercase">{unit.abbreviation}</span>}
+            fields={[
+              { label: "Abbreviation", value: <span className="font-mono uppercase">{unit.abbreviation}</span> },
+              {
+                label: "Fractional qty",
+                value: (
+                  <Badge variant={unit.allowsFractions ? "success" : "secondary"}>
+                    {unit.allowsFractions ? "Yes" : "Whole only"}
+                  </Badge>
+                ),
+              },
+            ]}
+            actions={
+              <>
+                <Button variant="outline" size="sm" onClick={() => openEdit(unit)}>
+                  <Pencil className="h-3.5 w-3.5" /> Edit
+                </Button>
+                <Button variant="outline" size="sm" className="text-destructive" onClick={() => void handleDelete(unit)}>
+                  <Trash2 className="h-3.5 w-3.5" /> Delete
+                </Button>
+              </>
+            }
+          />
+        ))}
+      </MobileList>
+
+      <Card className={listCard}>
+        <TableContainer className="hidden md:block">
           <Table>
             <TableHead>
               <tr>

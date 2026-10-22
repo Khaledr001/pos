@@ -29,6 +29,7 @@ import {
   SortableTh, Table, TableBody, TableContainer, TableEmpty, TableHead,
   TablePagination, TableSearch, Th,
 } from "@/components/ui/data-table";
+import { MobileEmpty, MobileList, MobileRow, MobileSort, listCard } from "@/components/ui/mobile-list";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -267,13 +268,22 @@ export default function PlatformTenantsPage() {
               placeholder="Search by business name, slug..."
               className="flex-1"
             />
+            <MobileSort
+              options={[
+                { column: "createdAt", label: "Created", firstOrder: "desc" },
+                { column: "name", label: "Name" },
+              ]}
+              sortBy={sortBy}
+              sortOrder={sortOrder}
+              onChange={list.setSort}
+            />
 
             <div className="flex flex-wrap items-center gap-2">
               <select
                 value={selectedPlan}
                 onChange={(e) => list.setFilter("plan", e.target.value)}
                 aria-label="Filter by plan"
-                className="h-10 rounded-xl border border-input bg-background px-3 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                className="h-10 min-w-0 flex-1 rounded-xl border border-input bg-background px-3 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 md:flex-none"
               >
                 <option value="">All Subscription Plans</option>
                 {PLAN_IDS.map((p) => (
@@ -287,7 +297,7 @@ export default function PlatformTenantsPage() {
                 value={selectedStatus}
                 onChange={(e) => list.setFilter("status", e.target.value)}
                 aria-label="Filter by status"
-                className="h-10 rounded-xl border border-input bg-background px-3 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                className="h-10 min-w-0 flex-1 rounded-xl border border-input bg-background px-3 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 md:flex-none"
               >
                 <option value="">All Statuses</option>
                 <option value="active">Active Only</option>
@@ -305,9 +315,97 @@ export default function PlatformTenantsPage() {
         </div>
       )}
 
+      <MobileList
+        loading={initialLoading}
+        empty={
+          <MobileEmpty
+            icon={Building2}
+            title="No businesses found"
+            description={q || selectedPlan || selectedStatus ? "No tenants match your search or filters." : "Provision the first business to get started."}
+          />
+        }
+      >
+        {tenants.map((tenant) => (
+          <MobileRow
+            key={tenant.id}
+            title={tenant.name}
+            subtitle={tenant.plan.name}
+            badge={
+              <Badge variant={tenant.isActive ? "default" : "destructive"} className="text-[10px] font-semibold">
+                {tenant.isActive ? "Active" : "Suspended"}
+              </Badge>
+            }
+            fields={[
+              { label: "Slug", value: <span className="font-mono">t/{tenant.slug}</span> },
+              {
+                label: "Plan",
+                value: `${tenant.plan.name} · ${tenant.plan.monthlyPrice === null ? "Custom" : `$${tenant.plan.monthlyPrice}/mo`}`,
+              },
+              ...(tenant.suspendedReason ? [{ label: "Reason", value: tenant.suspendedReason }] : []),
+              { label: "Branches", value: String(tenant.branchCount ?? 0), numeric: true },
+              { label: "Users", value: String(tenant.userCount ?? 0), numeric: true },
+              {
+                label: "Created",
+                value: new Date(tenant.createdAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }),
+              },
+            ]}
+            actions={
+              <>
+                <Button asChild variant="outline" size="sm">
+                  <Link href={`/platform/tenants/${tenant.id}`}>
+                    <Building2 className="h-3.5 w-3.5" /> Details
+                  </Link>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setPlanModalTenant(tenant);
+                    setNewPlanId(tenant.planId as PlanId);
+                  }}
+                >
+                  <Layers className="h-3.5 w-3.5" /> Change plan
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setImpersonateTarget(tenant)}
+                  disabled={!tenant.isActive}
+                  className="text-amber-600 dark:text-amber-400"
+                >
+                  <ShieldAlert className="h-3.5 w-3.5" /> Impersonate
+                </Button>
+                {tenant.isActive ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSuspendModalTenant(tenant);
+                      setSuspendReason("");
+                    }}
+                    className="text-destructive hover:text-destructive"
+                  >
+                    <XCircle className="h-3.5 w-3.5" /> Suspend
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleActivate(tenant.id)}
+                    className="text-emerald-600"
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Reactivate
+                  </Button>
+                )}
+              </>
+            }
+          />
+        ))}
+      </MobileList>
+
       {/* ── Tenants Data Table ── */}
-      <Card className="border-border/60 shadow-xs overflow-hidden">
-        <TableContainer>
+      <Card className={cn("border-border/60 shadow-xs", listCard)}>
+        <TableContainer className="hidden md:block">
           <Table>
             <TableHead>
               <tr>

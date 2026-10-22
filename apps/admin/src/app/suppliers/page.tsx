@@ -22,6 +22,7 @@ import {
   SortableTh, Table, TableBody, TableContainer, TableEmpty, TableHead,
   TablePagination, TableSearch, Th,
 } from "@/components/ui/data-table";
+import { MobileEmpty, MobileList, MobileRow, MobileSort, listCard } from "@/components/ui/mobile-list";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -196,16 +197,72 @@ export default function SuppliersPage() {
         </div>
       )}
 
-      <TableSearch
-        value={list.search}
-        onChange={list.setSearch}
-        label="Search suppliers"
-        placeholder="Search by supplier name, company, TRN, or mobile..."
-      />
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <TableSearch
+          value={list.search}
+          onChange={list.setSearch}
+          label="Search suppliers"
+          placeholder="Search by supplier name, company, TRN, or mobile..."
+          className="flex-1"
+        />
+        <MobileSort
+          options={[{ column: "name", label: "Name" }]}
+          sortBy={sortBy}
+          sortOrder={sortOrder}
+          onChange={list.setSort}
+        />
+      </div>
+
+      <MobileList
+        loading={initialLoading}
+        empty={
+          <MobileEmpty
+            icon={Truck}
+            title="No suppliers found"
+            description={q ? "No suppliers match your search query." : "Add your primary trade vendors to get started."}
+            action={!q ? (
+              <Button size="sm" onClick={() => setIsModalOpen(true)}>
+                <Plus className="h-3.5 w-3.5" /> Add Supplier
+              </Button>
+            ) : undefined}
+          />
+        }
+      >
+        {suppliers.map((s) => (
+          <MobileRow
+            key={s.id}
+            title={s.name}
+            subtitle={s.company ?? undefined}
+            badge={
+              <Badge variant={s.isActive ? "success" : "secondary"}>
+                {s.isActive ? "Active" : "Inactive"}
+              </Badge>
+            }
+            fields={[
+              { label: "Contact", value: s.phone ?? s.email ?? "No direct contact" },
+              { label: "Company", value: s.company ?? "Individual Vendor" },
+              ...(s.trn ? [{ label: "TRN", value: s.trn }] : []),
+              { label: "Location", value: s.address ?? "—" },
+              { label: "Terms", value: s.paymentTermDays === 0 ? "COD (Immediate)" : `${s.paymentTermDays} Days Credit` },
+            ]}
+            actions={
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleDelete(s.id, s.name)}
+                className="text-destructive hover:text-destructive"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Remove
+              </Button>
+            }
+          />
+        ))}
+      </MobileList>
 
       {/* Table */}
-      <Card className="overflow-hidden">
-        <TableContainer>
+      <Card className={listCard}>
+        <TableContainer className="hidden md:block">
           <Table>
             <TableHead>
               <tr>

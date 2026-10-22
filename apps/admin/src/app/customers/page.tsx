@@ -13,6 +13,7 @@ import {
   SortableTh, Table, TableBody, TableContainer, TableEmpty, TableHead,
   TablePagination, TableSearch, Th, numericCell,
 } from "@/components/ui/data-table";
+import { MobileEmpty, MobileList, MobileRow, MobileSort, listCard } from "@/components/ui/mobile-list";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -195,7 +196,7 @@ export default function CustomersPage() {
 
       {/* Filters */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center">
-        <div className="flex items-center gap-1.5" role="group" aria-label="Customer type">
+        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Customer type">
           {(["", ...CUSTOMER_TYPES] as const).map((t) => (
             <Button
               key={t}
@@ -209,18 +210,84 @@ export default function CustomersPage() {
             </Button>
           ))}
         </div>
-        <TableSearch
-          value={list.search}
-          onChange={list.setSearch}
-          label="Search customers"
-          placeholder="Search by name, company, phone..."
-          className="flex-1"
-        />
+        <div className="flex flex-1 flex-col gap-2 sm:flex-row">
+          <TableSearch
+            value={list.search}
+            onChange={list.setSearch}
+            label="Search customers"
+            placeholder="Search by name, company, phone..."
+            className="flex-1"
+          />
+          <MobileSort
+            options={[
+              { column: "name", label: "Name" },
+              { column: "creditLimit", label: "Credit limit", firstOrder: "desc" },
+              { column: "creditBalance", label: "Outstanding", firstOrder: "desc" },
+            ]}
+            sortBy={sortBy}
+            sortOrder={sortOrder}
+            onChange={list.setSort}
+          />
+        </div>
       </div>
 
+      <MobileList
+        loading={initialLoading}
+        empty={
+          <MobileEmpty
+            icon={Users}
+            title="No customers found"
+            description={q || typeFilter ? "No customers match your filters." : "Add your first customer to get started."}
+            action={!q && !typeFilter ? (
+              <Button size="sm" onClick={() => setIsModalOpen(true)}>
+                <Plus className="h-3.5 w-3.5" /> Add Customer
+              </Button>
+            ) : undefined}
+          />
+        }
+      >
+        {customers.map((c) => {
+          const limit = Number(c.creditLimit ?? "0") || 0;
+          const balance = Number(c.creditBalance ?? "0") || 0;
+          return (
+            <MobileRow
+              key={c.id}
+              title={c.name}
+              subtitle={c.company ?? c.phone ?? undefined}
+              badge={
+                <Badge
+                  variant={c.type === "wholesale" ? "default" : c.type === "vip" ? "warning" : "secondary"}
+                  className="text-[10px] capitalize"
+                >
+                  {c.type}
+                </Badge>
+              }
+              fields={[
+                { label: "Phone", value: c.phone ?? c.email ?? "—" },
+                { label: "Company", value: c.company ?? "—" },
+                ...(c.trn ? [{ label: "TRN", value: c.trn }] : []),
+                { label: "Credit limit", value: formatMoney(c.creditLimit ?? "0", { currency }), numeric: true },
+                { label: "Outstanding", value: formatMoney(c.creditBalance ?? "0", { currency }), numeric: true },
+                {
+                  label: "Usage",
+                  value: limit > 0 ? `${Math.round(Math.min((balance / limit) * 100, 100))}%` : "No credit",
+                  numeric: limit > 0,
+                },
+              ]}
+              actions={
+                <Button variant="outline" size="sm" onClick={() => router.push(`/customers/${c.id}`)}>
+                  <Eye className="h-3.5 w-3.5" />
+                  Details
+                </Button>
+              }
+            />
+          );
+        })}
+      </MobileList>
+
       {/* Table */}
-      <Card className="overflow-hidden">
-        <TableContainer>
+      <Card className={listCard}>
+        <TableContainer className="hidden md:block">
           <Table>
             <TableHead>
               <tr>

@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import {
   Package, Search, Plus, RefreshCw, X, AlertCircle, CheckCircle2, Boxes, Trash2,
-  Pencil, Image as ImageIcon, Upload, Star, FileUp, Layers,
+  Pencil, Image as ImageIcon, Upload, Star, FileUp, Layers, Eye,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api-client";
@@ -16,6 +16,7 @@ import {
   SortableTh, Table, TableBody, TableContainer, TableEmpty, TableHead,
   TablePagination, TableSearch, Th, numericCell,
 } from "@/components/ui/data-table";
+import { MobileEmpty, MobileList, MobileRow, MobileSort, listCard } from "@/components/ui/mobile-list";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -530,16 +531,96 @@ export default function ProductsPage() {
         </div>
       )}
 
-      <TableSearch
-        value={list.search}
-        onChange={list.setSearch}
-        label="Search products"
-        placeholder="Search by product name, SKU, or barcode..."
-      />
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <TableSearch
+          value={list.search}
+          onChange={list.setSearch}
+          label="Search products"
+          placeholder="Search by product name, SKU, or barcode..."
+          className="flex-1"
+        />
+        <MobileSort
+          options={[
+            { column: "name", label: "Name" },
+            { column: "sku", label: "SKU" },
+          ]}
+          sortBy={sortBy}
+          sortOrder={sortOrder}
+          onChange={list.setSort}
+        />
+      </div>
+
+      <MobileList
+        loading={initialLoading}
+        empty={
+          <MobileEmpty
+            icon={Package}
+            title="No products found"
+            description={list.q ? `No products match "${list.q}".` : "Add your first product to get started."}
+            action={
+              !list.q && (
+                <Button size="sm" onClick={() => setIsModalOpen(true)}>
+                  <Plus className="h-3.5 w-3.5" /> Add Product
+                </Button>
+              )
+            }
+          />
+        }
+      >
+        {products.map((product) => {
+          const priceDisplay = product.minPrice
+            ? product.minPrice === product.maxPrice
+              ? formatMoney(product.minPrice, { currency })
+              : `${currency} ${formatMoney(product.minPrice)} – ${formatMoney(product.maxPrice || "0")}`
+            : "—";
+          return (
+            <MobileRow
+              key={product.id}
+              title={product.sku}
+              subtitle={product.name}
+              badge={
+                <Badge variant={product.isActive ? "success" : "secondary"}>
+                  {product.isActive ? "Active" : "Inactive"}
+                </Badge>
+              }
+              fields={[
+                { label: "Name", value: product.name },
+                ...(product.brandName ? [{ label: "Brand", value: product.brandName }] : []),
+                { label: "Category", value: product.categoryName || product.category?.name || "—" },
+                { label: "Unit", value: <span className="uppercase">{product.unitAbbr || product.unit?.name || "pcs"}</span> },
+                { label: "Price", value: priceDisplay, numeric: true },
+                { label: "Variants", value: String(product.variantCount ?? 1) },
+              ]}
+              actions={
+                <>
+                  <Button variant="outline" size="sm" onClick={() => setViewingProduct(product)}>
+                    <Eye className="h-3.5 w-3.5" /> View
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setEditingProduct(product)}>
+                    <Pencil className="h-3.5 w-3.5" /> Edit
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setPackagingProduct(product)} aria-label={`Packagings for ${product.name}`}>
+                    <Boxes className="h-3.5 w-3.5" /> Packs
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void handleDelete(product)}
+                    aria-label={`Delete ${product.name}`}
+                    className="text-destructive hover:text-destructive"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </>
+              }
+            />
+          );
+        })}
+      </MobileList>
 
       {/* Table */}
-      <Card className="overflow-hidden">
-        <TableContainer>
+      <Card className={listCard}>
+        <TableContainer className="hidden md:block">
           <Table>
             <TableHead>
               <tr>

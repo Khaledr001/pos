@@ -15,6 +15,7 @@ import {
   SortableTh, Table, TableBody, TableContainer, TableEmpty, TableHead,
   TablePagination, TableSearch, Th,
 } from "@/components/ui/data-table";
+import { MobileEmpty, MobileList, MobileRow, MobileSort, listCard } from "@/components/ui/mobile-list";
 import { readListResult, useListData, useListQuery } from "@/lib/use-list-query";
 import { Field, Notice, PageHeader, errorText, textareaClass } from "../shared";
 
@@ -213,6 +214,17 @@ export default function ListingsPage() {
           label="Search products"
           placeholder="Name or SKU"
         />
+        <MobileSort
+          className="w-full"
+          options={[
+            { column: "updatedAt", label: "Last changed", firstOrder: "desc" },
+            { column: "name", label: "Product" },
+            { column: "sku", label: "SKU" },
+          ]}
+          sortBy={sortBy}
+          sortOrder={sortOrder}
+          onChange={list.setSort}
+        />
         <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by website status">
           {STATUSES.map(([value, label]) => (
             <button
@@ -231,8 +243,57 @@ export default function ListingsPage() {
         </div>
       </div>
 
-      <Card className="overflow-hidden">
-        <TableContainer>
+      <MobileList
+        loading={initialLoading}
+        empty={<MobileEmpty icon={Package} title="Nothing here" description={q ? `No products match "${q}".` : undefined} />}
+      >
+        {rows.map((r) => (
+          <MobileRow
+            key={r.productId}
+            title={<span className="font-mono">{r.sku}</span>}
+            subtitle={r.name}
+            badge={
+              r.listing?.isPublished
+                ? <Badge variant="success">Online</Badge>
+                : <Badge variant="secondary">Hidden</Badge>
+            }
+            fields={[
+              { label: "Product", value: r.name },
+              { label: "Brand", value: r.brandName || "—" },
+              { label: "Category", value: r.categoryName || "—" },
+              { label: "Web address", value: r.listing ? <span className="font-mono">/product/{r.listing.slug}</span> : "—" },
+              {
+                label: "Flags",
+                value:
+                  r.listing?.isFeatured || r.listing?.pickupOnly || !r.isActive ? (
+                    <span className="inline-flex flex-wrap justify-end gap-1">
+                      {r.listing?.isFeatured && <Badge variant="warning">Featured</Badge>}
+                      {r.listing?.pickupOnly && <Badge variant="secondary">Pickup only</Badge>}
+                      {!r.isActive && <Badge variant="destructive">Inactive in POS</Badge>}
+                    </span>
+                  ) : "—",
+              },
+            ]}
+            actions={
+              mayWrite ? (
+                <>
+                  <Button variant="outline" size="sm" onClick={() => void togglePublished(r)}>
+                    {r.listing?.isPublished ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                    {r.listing?.isPublished ? "Hide" : "Show online"}
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => void edit(r.productId)}>
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit
+                  </Button>
+                </>
+              ) : undefined
+            }
+          />
+        ))}
+      </MobileList>
+
+      <Card className={listCard}>
+        <TableContainer className="hidden md:block">
           <Table>
             <TableHead>
               <tr>
