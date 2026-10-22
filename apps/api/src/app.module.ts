@@ -35,6 +35,7 @@ import { DayCloseModule } from "./modules/day-close/day-close.module.js";
 import { ExpensesModule } from "./modules/expenses/expenses.module.js";
 import { HeldCartsModule } from "./modules/held-carts/held-carts.module.js";
 import { PurchasesModule } from "./modules/purchases/purchases.module.js";
+import { ReorderModule } from "./modules/reorder/reorder.module.js";
 import { AuditModule } from "./modules/audit/audit.module.js";
 import { OrdersModule } from "./modules/orders/orders.module.js";
 import { RolesModule } from "./modules/roles/roles.module.js";
@@ -163,6 +164,7 @@ import { StorefrontModule } from "./modules/storefront/storefront.module.js";
     ExpensesModule,
     SuppliersModule,
     PurchasesModule,
+    ReorderModule,
     StockTakeModule,
     QuotationsModule,
     OrdersModule,

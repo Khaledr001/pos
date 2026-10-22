@@ -10,3 +10,4 @@
  */
 
 export * from "./tax-document.js";
+export * from "./statement-document.js";

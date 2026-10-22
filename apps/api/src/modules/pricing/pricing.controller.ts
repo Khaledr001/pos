@@ -16,6 +16,8 @@ import { Audited, RequirePermissions } from "../../common/decorators/index.js";
 import { zodPipe } from "../../common/pipes/zod-validation.pipe.js";
 import { PricingService } from "./pricing.service.js";
 import {
+  BulkPriceApplySchema,
+  BulkPricePreviewSchema,
   BulkSetProductPricesSchema,
   CreatePriceListSchema,
   ListPriceHistorySchema,
@@ -23,6 +25,8 @@ import {
   SetCustomerPriceSchema,
   SetProductPriceSchema,
   UpdatePriceListSchema,
+  type BulkPriceApplyDto,
+  type BulkPricePreviewDto,
   type BulkSetProductPricesDto,
   type CreatePriceListDto,
   type ListPriceHistoryDto,
@@ -98,6 +102,27 @@ export class PricingController {
   @ApiOperation({ summary: "Set many variants' prices in one transaction" })
   bulkSetProductPrices(@Body(zodPipe(BulkSetProductPricesSchema)) dto: BulkSetProductPricesDto) {
     return this.pricing.bulkSetProductPrices(dto);
+  }
+
+  /**
+   * A POST because its body is a filter and a change, not a resource. It
+   * writes nothing.
+   */
+  @Post("bulk/preview")
+  @RequirePermissions("price:write")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Preview a bulk re-price by category, brand or supplier" })
+  previewBulkPrice(@Body(zodPipe(BulkPricePreviewSchema)) dto: BulkPricePreviewDto) {
+    return this.pricing.previewBulkPrice(dto);
+  }
+
+  @Post("bulk/apply")
+  @RequirePermissions("price:write")
+  @Audited("product_prices", "bulk_update")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Apply a previewed bulk re-price in one transaction" })
+  applyBulkPrice(@Body(zodPipe(BulkPriceApplySchema)) dto: BulkPriceApplyDto) {
+    return this.pricing.applyBulkPrice(dto);
   }
 
   @Get("customers/:customerId")

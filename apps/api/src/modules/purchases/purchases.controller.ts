@@ -9,18 +9,23 @@ import {
   Patch,
   Post,
   Query,
+  Res,
 } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
+import type { Response } from "express";
 import { Audited, RequirePermissions } from "../../common/decorators/index.js";
+import { exportFilename, sendExport } from "../../common/http/send-export.js";
 import { zodPipe } from "../../common/pipes/zod-validation.pipe.js";
 import { PurchasesService } from "./purchases.service.js";
 import {
   CreatePurchaseOrderSchema,
+  ExportPurchaseOrdersSchema,
   ListPurchaseOrdersSchema,
   ReceiveGoodsSchema,
   SupplierLookupSchema,
   UpdatePurchaseOrderSchema,
   type CreatePurchaseOrderDto,
+  type ExportPurchaseOrdersDto,
   type ListPurchaseOrdersDto,
   type ReceiveGoodsDto,
   type SupplierLookupDto,
@@ -37,6 +42,23 @@ export class PurchasesController {
   @ApiOperation({ summary: "Purchase orders" })
   list(@Query(zodPipe(ListPurchaseOrdersSchema)) query: ListPurchaseOrdersDto) {
     return this.purchases.list(query);
+  }
+
+  /** Declared before `:id`, which would otherwise take "export" as an id. */
+  @Get("export")
+  @RequirePermissions("purchase:read")
+  @ApiOperation({ summary: "Export the filtered purchase orders (CSV or Excel)" })
+  async export(
+    @Query(zodPipe(ExportPurchaseOrdersSchema)) query: ExportPurchaseOrdersDto,
+    @Res() res: Response,
+  ): Promise<void> {
+    const file = await this.purchases.exportRows(query);
+    await sendExport(res, {
+      format: query.format,
+      filename: exportFilename("purchase-orders", query.format, query),
+      timeZone: file.timeZone,
+      sheets: file.sheets,
+    });
   }
 
   /**

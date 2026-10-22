@@ -3,15 +3,18 @@ import type { Response } from "express";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Audited, RequirePermissions } from "../../common/decorators/index.js";
 import { zodPipe } from "../../common/pipes/zod-validation.pipe.js";
+import { exportFilename, sendExport } from "../../common/http/send-export.js";
 import { sendPdf } from "../../common/http/send-pdf.js";
 import { SalesService } from "./sales.service.js";
 import {
   CreateReturnSchema,
   CreateSaleSchema,
+  ExportSalesSchema,
   ListSalesSchema,
   VoidSaleSchema,
   type CreateReturnDto,
   type CreateSaleDto,
+  type ExportSalesDto,
   type ListSalesDto,
   type VoidSaleDto,
 } from "./dto.js";
@@ -26,6 +29,26 @@ export class SalesController {
   @ApiOperation({ summary: "Sales history" })
   list(@Query(zodPipe(ListSalesSchema)) query: ListSalesDto) {
     return this.sales.list(query);
+  }
+
+  /**
+   * Every sale the list's filters match, as CSV or Excel. Declared before
+   * `:id`, which would otherwise swallow "export" as an id.
+   */
+  @Get("export")
+  @RequirePermissions("sale:read")
+  @ApiOperation({ summary: "Export the filtered sales list (CSV or Excel)" })
+  async export(
+    @Query(zodPipe(ExportSalesSchema)) query: ExportSalesDto,
+    @Res() res: Response,
+  ): Promise<void> {
+    const file = await this.sales.exportRows(query);
+    await sendExport(res, {
+      format: query.format,
+      filename: exportFilename("sales", query.format, query),
+      timeZone: file.timeZone,
+      sheets: file.sheets,
+    });
   }
 
   /**

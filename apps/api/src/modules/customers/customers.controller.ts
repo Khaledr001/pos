@@ -15,6 +15,7 @@ import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Audited, RequirePermissions } from "../../common/decorators/index.js";
 import { zodPipe } from "../../common/pipes/zod-validation.pipe.js";
 import { CustomersService } from "./customers.service.js";
+import { StatementShareService } from "./statement-share.service.js";
 import {
   AdjustLoyaltySchema,
   CreateCustomerSchema,
@@ -22,6 +23,7 @@ import {
   ListCustomersSchema,
   RecordPaymentSchema,
   SetCreditSchema,
+  ShareStatementSchema,
   UpdateCustomerSchema,
   type AdjustLoyaltyDto,
   type CreateCustomerDto,
@@ -29,13 +31,17 @@ import {
   type ListCustomersDto,
   type RecordPaymentDto,
   type SetCreditDto,
+  type ShareStatementDto,
   type UpdateCustomerDto,
 } from "./dto.js";
 
 @ApiTags("customers")
 @Controller("customers")
 export class CustomersController {
-  constructor(private readonly customers: CustomersService) {}
+  constructor(
+    private readonly customers: CustomersService,
+    private readonly statements: StatementShareService,
+  ) {}
 
   @Get()
   @RequirePermissions("customer:read")
@@ -65,6 +71,17 @@ export class CustomersController {
     @Query(zodPipe(CustomerStatementSchema)) query: CustomerStatementDto,
   ) {
     return this.customers.statement(id, query);
+  }
+
+  @Post(":id/statement/share")
+  @RequirePermissions("customer:read", "sale:read")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "A signed, expiring link to the statement as a PDF, for staff to send" })
+  shareStatement(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body(zodPipe(ShareStatementSchema)) dto: ShareStatementDto,
+  ) {
+    return this.statements.share(id, dto);
   }
 
   @Get(":id/payments")

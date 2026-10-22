@@ -38,6 +38,7 @@ import {
   Coins,
   ChevronRight,
   Info,
+  Share2,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { usePermission } from "@/lib/require-auth";
@@ -63,7 +64,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Money } from "@devsfleet/shared-utils";
+import { Money, normalizePhone } from "@devsfleet/shared-utils";
 import { formatMoney as formatAmount, timeAgo } from "@/lib/format";
 import { readListResult, useListData, type SortOrder } from "@/lib/use-list-query";
 import { useTenantSettings } from "@/lib/tenant-settings";
@@ -306,6 +307,11 @@ export default function ClientDetailPage() {
   const canWriteCustomer = usePermission("customer:write");
   const canCreditCustomer = usePermission("customer:credit");
   const canRecordPayment = usePermission("payment:write");
+  // The statement itself needs both; a link to it cannot need less.
+  const canReadSales = usePermission("sale:read");
+  const canReadCustomer = usePermission("customer:read");
+  const canShareStatement = canReadSales && canReadCustomer;
+  const [isShareOpen, setIsShareOpen] = useState(false);
 
   // State
   const [customer, setCustomer] = useState<Customer | null>(null);
@@ -925,6 +931,13 @@ export default function ClientDetailPage() {
             <Printer className="h-3.5 w-3.5 mr-1.5" />
             Statement
           </Button>
+
+          {canShareStatement && (
+            <Button variant="outline" size="sm" onClick={() => setIsShareOpen(true)} className="h-9">
+              <Share2 className="h-3.5 w-3.5 mr-1.5" />
+              Share statement
+            </Button>
+          )}
 
           {canCreditCustomer && (
             <Button variant="outline" size="sm" onClick={openCreditModal} className="h-9">
@@ -1802,6 +1815,12 @@ export default function ClientDetailPage() {
                 <Printer className="h-3.5 w-3.5 mr-1.5" />
                 Print Formal Statement
               </Button>
+              {canShareStatement && (
+                <Button variant="outline" size="sm" onClick={() => setIsShareOpen(true)} className="h-8">
+                  <Share2 className="h-3.5 w-3.5 mr-1.5" />
+                  Share
+                </Button>
+              )}
             </div>
           </div>
 
@@ -2370,6 +2389,15 @@ export default function ClientDetailPage() {
       </Dialog>
 
       {/* ── Record Payment Modal ─────────────────────────────────────────────── */}
+      <ShareStatementDialog
+        open={isShareOpen}
+        onOpenChange={setIsShareOpen}
+        customer={customer}
+        businessName={settings.legalName || user?.tenantName || "Our business"}
+        currency={settings.currency.base}
+        accessToken={tokens?.accessToken}
+      />
+
       <Dialog open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -2957,5 +2985,261 @@ function QuoteStatusBadge({ quote }: { quote: CustomerQuotation }) {
     >
       {status}
     </Badge>
+  );
+}
+
+// ── Share statement ─────────────────────────────────────────────────────────
+
+type SharePeriod = "all" | "this-month" | "last-month" | "custom";
+
+interface ShareResult {
+  path: string;
+  expiresAt: string;
+  closingBalance: string;
+}
+
+/** A local calendar day as YYYY-MM-DD — the business's day, not UTC's. */
+function isoDay(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function periodRange(period: SharePeriod, custom: { from: string; to: string }): { from?: string; to?: string } {
+  const now = new Date();
+  if (period === "this-month") return { from: isoDay(new Date(now.getFullYear(), now.getMonth(), 1)), to: isoDay(now) };
+  if (period === "last-month") {
+    return {
+      from: isoDay(new Date(now.getFullYear(), now.getMonth() - 1, 1)),
+      to: isoDay(new Date(now.getFullYear(), now.getMonth(), 0)),
+    };
+  }
+  if (period === "custom") return { ...(custom.from ? { from: custom.from } : {}), ...(custom.to ? { to: custom.to } : {}) };
+  return {};
+}
+
+/**
+ * Make a statement link and hand it to the staff member's own WhatsApp or
+ * mail app. Nothing is sent by the system — there is no mail server or
+ * WhatsApp sender to configure — so the person presses Send themselves, from
+ * the number or address the customer already knows.
+ */
+function ShareStatementDialog({
+  open,
+  onOpenChange,
+  customer,
+  businessName,
+  currency,
+  accessToken,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  customer: Customer;
+  businessName: string;
+  currency: string;
+  accessToken: string | undefined;
+}) {
+  const [period, setPeriod] = useState<SharePeriod>("all");
+  const [custom, setCustom] = useState({ from: "", to: "" });
+  const [expiresInDays, setExpiresInDays] = useState("14");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<ShareResult | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setResult(null);
+      setError(null);
+      setCopied(false);
+    }
+  }, [open]);
+
+  // A link made for one period must not be sent as if it were another.
+  useEffect(() => {
+    setResult(null);
+  }, [period, custom.from, custom.to, expiresInDays]);
+
+  const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1";
+  const url = result ? `${apiBase}${result.path}` : "";
+  const expiry = result
+    ? new Date(result.expiresAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })
+    : "";
+
+  const message = result
+    ? [
+        `Dear ${customer.name},`,
+        "",
+        `Please find your statement of account from ${businessName}.`,
+        `Closing balance: ${currency} ${formatAmount(result.closingBalance)}`,
+        "",
+        url,
+        "",
+        `The link is valid until ${expiry}. Please let us know if anything does not match your records.`,
+        "",
+        "Thank you,",
+        businessName,
+      ].join("\n")
+    : "";
+
+  // WhatsApp number first, then phone; wa.me wants international digits only.
+  const waNumber = (() => {
+    const raw = customer.whatsappPhone || customer.phone;
+    if (!raw) return "";
+    return (normalizePhone(raw) ?? "").replace(/\D/g, "");
+  })();
+  const waHref = `https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`;
+  const mailHref =
+    `mailto:${customer.email ? encodeURIComponent(customer.email) : ""}` +
+    `?subject=${encodeURIComponent(`Statement of account — ${businessName}`)}` +
+    `&body=${encodeURIComponent(message)}`;
+
+  const invalidCustom = period === "custom" && custom.from !== "" && custom.to !== "" && custom.from > custom.to;
+
+  async function createLink() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await api.post<ShareResult>(
+        `/customers/${customer.id}/statement/share`,
+        { ...periodRange(period, custom), expiresInDays: Number(expiresInDays) },
+        { accessToken },
+      );
+      setResult(res);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create the link.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setError("Copy is blocked in this browser — select the link and copy it by hand.");
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Share statement</DialogTitle>
+          <DialogDescription>
+            Creates a secure link to {customer.name}&apos;s statement as a PDF. You send it from your own
+            WhatsApp or email — it expires on its own.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-medium" htmlFor="share-period">Period</label>
+              <Select value={period} onValueChange={(v) => setPeriod(v as SharePeriod)}>
+                <SelectTrigger id="share-period" className="h-10">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All time</SelectItem>
+                  <SelectItem value="this-month">This month</SelectItem>
+                  <SelectItem value="last-month">Last month</SelectItem>
+                  <SelectItem value="custom">Custom dates</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium" htmlFor="share-expiry">Link valid for</label>
+              <Select value={expiresInDays} onValueChange={setExpiresInDays}>
+                <SelectTrigger id="share-expiry" className="h-10">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="7">7 days</SelectItem>
+                  <SelectItem value="14">14 days</SelectItem>
+                  <SelectItem value="30">30 days</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {period === "custom" && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium" htmlFor="share-from">From</label>
+                <Input id="share-from" type="date" value={custom.from} onChange={(e) => setCustom((c) => ({ ...c, from: e.target.value }))} className="h-10" />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium" htmlFor="share-to">To</label>
+                <Input id="share-to" type="date" value={custom.to} onChange={(e) => setCustom((c) => ({ ...c, to: e.target.value }))} className="h-10" />
+              </div>
+              {invalidCustom && (
+                <p className="col-span-2 text-[11px] text-destructive">The period ends before it starts.</p>
+              )}
+            </div>
+          )}
+
+          {error && (
+            <p role="alert" className="flex items-start gap-1.5 rounded-lg border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              {error}
+            </p>
+          )}
+
+          {result ? (
+            <div className="space-y-3 rounded-lg border border-border bg-secondary/40 p-3">
+              <div className="flex items-baseline justify-between gap-2 text-xs">
+                <span className="text-muted-foreground">Closing balance</span>
+                <span className="font-mono text-sm font-bold tabular-nums">
+                  {currency} {formatAmount(result.closingBalance)}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Input readOnly value={url} onFocus={(e) => e.currentTarget.select()} aria-label="Statement link" className="h-9 font-mono text-[11px]" />
+                <Button type="button" variant="outline" size="sm" onClick={() => void copyLink()} className="h-9 shrink-0" aria-label="Copy link">
+                  {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                  <span className="hidden sm:inline">{copied ? "Copied" : "Copy"}</span>
+                </Button>
+              </div>
+              <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <Clock className="h-3 w-3" /> Valid until {expiry}
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <a href={waHref} target="_blank" rel="noreferrer" className="contents">
+                  <Button type="button" className="h-10 w-full bg-emerald-600 text-white hover:bg-emerald-700">
+                    <MessageCircle className="h-4 w-4" />
+                    WhatsApp
+                  </Button>
+                </a>
+                <a href={mailHref} className="contents">
+                  <Button type="button" variant="outline" className="h-10 w-full">
+                    <Mail className="h-4 w-4" />
+                    Email
+                  </Button>
+                </a>
+              </div>
+              {!waNumber && (
+                <p className="text-[11px] text-muted-foreground">No WhatsApp number on file — WhatsApp will ask you to pick the contact.</p>
+              )}
+              {!customer.email && (
+                <p className="text-[11px] text-muted-foreground">No email address on file — add the recipient in your mail app.</p>
+              )}
+            </div>
+          ) : null}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Close
+          </Button>
+          {!result && (
+            <Button onClick={() => void createLink()} disabled={busy || invalidCustom}>
+              {busy ? "Creating…" : "Create link"}
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

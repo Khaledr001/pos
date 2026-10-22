@@ -1,10 +1,22 @@
-import { and, eq, schema, sql, type Transaction } from "@devsfleet/db";
+import { and, asc, eq, ilike, isNull, or, schema, sql, type Transaction } from "@devsfleet/db";
 import type { PriceList, ProductPrice } from "@devsfleet/db";
+import { hasPermission } from "@devsfleet/shared-types";
 import { AppError, ERROR_CODES, Money } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
+import { randomUUID } from "node:crypto";
 import { RequestContext } from "../../common/context/request-context.js";
+import { containsPattern } from "../../common/db/list-query.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
+import {
+  bulkPriceFingerprint,
+  evaluateBulkPrice,
+  type BulkPriceOutcome,
+  type BulkPriceSkip,
+  type CurrentPrices,
+} from "./bulk-price.js";
 import type {
+  BulkPriceApplyDto,
+  BulkPricePreviewDto,
   BulkSetProductPricesDto,
   CreatePriceListDto,
   ListPriceHistoryDto,
@@ -17,6 +29,30 @@ import type {
 function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
+
+/**
+ * The most rows one bulk re-price may touch. It is one transaction, and every
+ * row is a read, a history insert and a price write — past this the lock is
+ * held long enough to stall the tills.
+ */
+const BULK_PRICE_CAP = 10_000;
+
+interface BulkPriceRow {
+  priceId: string;
+  variantId: string;
+  sku: string;
+  productName: string;
+  variantName: string;
+  effectiveFrom: string;
+  current: CurrentPrices;
+}
+
+type EvaluatedRow = BulkPriceRow & { outcome: BulkPriceOutcome };
+
+type BulkPriceFilter = Pick<
+  BulkPricePreviewDto,
+  "priceListId" | "categoryId" | "brandId" | "supplierId" | "q" | "field" | "mode" | "direction" | "value" | "rounding" | "allowBelowFloor"
+>;
 
 /**
  * "10.00" vs "10" are the same amount but different strings — comparing them
@@ -163,6 +199,8 @@ export class PricingService {
     tenantId: string,
     dto: SetProductPriceDto,
     changedBy: string,
+    /** Ties every history row of one bulk re-price together. */
+    batchId: string | null = null,
   ): Promise<ProductPrice> {
     const effectiveFrom = dto.effectiveFrom ?? today();
     const sellingPrice = String(dto.sellingPrice);
@@ -212,6 +250,7 @@ export class PricingService {
         newMinSellingPrice: minSellingPrice,
         changedBy,
         reason: dto.reason ?? null,
+        importBatchId: batchId,
       });
     } else {
       // A first price is still worth a history row — "how did we arrive at
@@ -227,6 +266,7 @@ export class PricingService {
         newMinSellingPrice: minSellingPrice,
         changedBy,
         reason: dto.reason ?? null,
+        importBatchId: batchId,
       });
     }
 
@@ -265,6 +305,262 @@ export class PricingService {
 
     if (!created) throw new AppError(ERROR_CODES.INTERNAL_ERROR, "Could not create the price");
     return created;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Bulk re-price
+  // ---------------------------------------------------------------------------
+
+  /**
+   * What a bulk re-price would do, without doing it. Counts cover every
+   * matching row; only `items` is paged.
+   */
+  async previewBulkPrice(dto: BulkPricePreviewDto): Promise<unknown> {
+    this.assertMayBreachFloor(dto.allowBelowFloor);
+
+    return this.db.run(async (tx) => {
+      const { priceList, rows } = await this.bulkPriceRows(tx, dto);
+      const changing = rows.filter((r) => !r.outcome.skip && !r.outcome.unchanged);
+
+      const shown =
+        dto.show === "changing"
+          ? changing
+          : dto.show === "skipped"
+            ? rows.filter((r) => r.outcome.skip)
+            : rows;
+      const start = (dto.page - 1) * dto.pageSize;
+
+      return {
+        priceList,
+        totals: this.bulkPriceTotals(rows, changing),
+        expectedCount: changing.length,
+        fingerprint: bulkPriceFingerprint(changing),
+        canOverrideFloor: this.mayOverrideFloor(),
+        items: shown.slice(start, start + dto.pageSize).map((r) => ({
+          variantId: r.variantId,
+          sku: r.sku,
+          productName: r.productName,
+          variantName: r.variantName,
+          current: r.current,
+          old: r.outcome.old,
+          new: r.outcome.new,
+          difference:
+            r.outcome.skip === "no_current_value"
+              ? null
+              : Money.toDecimalString(
+                  Money.subtract(Money.toMinor(r.outcome.new), Money.toMinor(r.outcome.old)),
+                  4,
+                ),
+          unchanged: r.outcome.unchanged,
+          belowFloor: r.outcome.belowFloor,
+          belowCost: r.outcome.belowCost,
+          skip: r.outcome.skip,
+        })),
+        total: shown.length,
+        page: dto.page,
+        pageSize: dto.pageSize,
+      };
+    });
+  }
+
+  /**
+   * Write what the preview showed — and only that.
+   *
+   * The set is recomputed here, inside the transaction, and must match the
+   * preview the user confirmed in both size and content. Someone else
+   * re-pricing in between, or a product joining the category, changes the
+   * fingerprint, and the apply is refused rather than run against rows the
+   * user never looked at.
+   */
+  async applyBulkPrice(dto: BulkPriceApplyDto): Promise<unknown> {
+    this.assertMayBreachFloor(dto.allowBelowFloor);
+    const tenantId = RequestContext.requireTenantId();
+    const userId = RequestContext.requireUser().id;
+    const batchId = randomUUID();
+
+    return this.db.run(async (tx) => {
+      const { priceList, rows } = await this.bulkPriceRows(tx, dto);
+      const changing = rows.filter((r) => !r.outcome.skip && !r.outcome.unchanged);
+
+      if (changing.length !== dto.expectedCount || bulkPriceFingerprint(changing) !== dto.fingerprint) {
+        throw new AppError(
+          ERROR_CODES.CONFLICT,
+          "These prices have changed since the preview. Preview again before applying.",
+        );
+      }
+
+      for (const row of changing) {
+        const next = row.outcome.next;
+        await this.applyProductPrice(
+          tx,
+          tenantId,
+          {
+            variantId: row.variantId,
+            priceListId: priceList.id,
+            sellingPrice: next.sellingPrice,
+            // applyProductPrice writes what it is given; an omitted field
+            // becomes NULL, so the untouched ones are passed through.
+            ...(next.purchasePrice !== null ? { purchasePrice: next.purchasePrice } : {}),
+            ...(next.minSellingPrice !== null ? { minSellingPrice: next.minSellingPrice } : {}),
+            minQuantity: 1,
+            reason: dto.reason,
+          },
+          userId,
+          batchId,
+        );
+      }
+
+      return {
+        batchId,
+        priceList,
+        changed: changing.length,
+        totals: this.bulkPriceTotals(rows, changing),
+      };
+    });
+  }
+
+  private mayOverrideFloor(): boolean {
+    return hasPermission(RequestContext.requireUser().permissions, "price:override_floor");
+  }
+
+  private assertMayBreachFloor(requested: boolean): void {
+    if (requested && !this.mayOverrideFloor()) {
+      throw new AppError(
+        ERROR_CODES.INSUFFICIENT_PERMISSIONS,
+        "Pricing below the minimum selling price needs price:override_floor.",
+      );
+    }
+  }
+
+  private bulkPriceTotals(rows: EvaluatedRow[], changing: EvaluatedRow[]) {
+    const skipped: Record<BulkPriceSkip, number> = {
+      no_current_value: 0,
+      not_positive: 0,
+      below_floor: 0,
+      scheduled: 0,
+    };
+    let unchanged = 0;
+    for (const r of rows) {
+      if (r.outcome.skip) skipped[r.outcome.skip] += 1;
+      else if (r.outcome.unchanged) unchanged += 1;
+    }
+    return {
+      matched: rows.length,
+      changing: changing.length,
+      unchanged,
+      skipped,
+      skippedTotal: Object.values(skipped).reduce((a, b) => a + b, 0),
+      /** Of the lines that will be written. */
+      belowCost: changing.filter((r) => r.outcome.belowCost).length,
+      belowFloor: changing.filter((r) => r.outcome.belowFloor).length,
+    };
+  }
+
+  /**
+   * The base-tier current prices the filters select, each already evaluated.
+   * Read through RLS like everything else; the category filter walks the
+   * tree by `parent_id` so a parent category brings its subcategories.
+   */
+  private async bulkPriceRows(
+    tx: Transaction,
+    filter: BulkPriceFilter,
+  ): Promise<{ priceList: { id: string; name: string }; rows: EvaluatedRow[] }> {
+    const priceList = await tx.query.priceLists.findFirst({
+      where: (t, { and: a, eq: e }) =>
+        filter.priceListId ? e(t.id, filter.priceListId) : a(e(t.isDefault, true), e(t.isActive, true)),
+      columns: { id: true, name: true },
+    });
+    if (!priceList) {
+      throw new AppError(
+        ERROR_CODES.NOT_FOUND,
+        filter.priceListId ? "That price list does not exist." : "There is no default price list.",
+      );
+    }
+
+    const term = containsPattern(filter.q);
+    const found = await tx
+      .select({
+        priceId: schema.productPrices.id,
+        variantId: schema.productVariants.id,
+        sku: schema.productVariants.sku,
+        productName: schema.products.name,
+        variantName: schema.productVariants.variantName,
+        effectiveFrom: schema.productPrices.effectiveFrom,
+        sellingPrice: schema.productPrices.sellingPrice,
+        purchasePrice: schema.productPrices.purchasePrice,
+        minSellingPrice: schema.productPrices.minSellingPrice,
+      })
+      .from(schema.productPrices)
+      .innerJoin(schema.productVariants, eq(schema.productVariants.id, schema.productPrices.variantId))
+      .innerJoin(schema.products, eq(schema.products.id, schema.productVariants.productId))
+      .where(
+        and(
+          eq(schema.productPrices.priceListId, priceList.id),
+          sql`${schema.productPrices.minQuantity} = 1`,
+          isNull(schema.productPrices.effectiveTo),
+          isNull(schema.productVariants.deletedAt),
+          isNull(schema.products.deletedAt),
+          filter.categoryId
+            ? sql`${schema.products.categoryId} IN (
+                WITH RECURSIVE sub AS (
+                  SELECT id FROM categories WHERE id = ${filter.categoryId}
+                  UNION ALL
+                  SELECT c.id FROM categories c JOIN sub ON c.parent_id = sub.id
+                )
+                SELECT id FROM sub
+              )`
+            : undefined,
+          filter.brandId ? eq(schema.products.brandId, filter.brandId) : undefined,
+          filter.supplierId
+            ? sql`EXISTS (
+                SELECT 1 FROM ${schema.productSupplierLinks}
+                WHERE ${schema.productSupplierLinks.variantId} = ${schema.productVariants.id}
+                  AND ${schema.productSupplierLinks.supplierId} = ${filter.supplierId}
+              )`
+            : undefined,
+          term
+            ? or(ilike(schema.products.name, term), ilike(schema.productVariants.sku, term))
+            : undefined,
+        ),
+      )
+      .orderBy(asc(schema.products.name), asc(schema.productVariants.sku), asc(schema.productPrices.id))
+      .limit(BULK_PRICE_CAP + 1);
+
+    if (found.length > BULK_PRICE_CAP) {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_FAILED,
+        `That matches more than ${BULK_PRICE_CAP.toLocaleString("en")} prices. Narrow it by category, brand or supplier and apply in parts.`,
+      );
+    }
+
+    const day = today();
+    const change = {
+      field: filter.field,
+      mode: filter.mode,
+      direction: filter.direction,
+      value: filter.value,
+      rounding: filter.rounding,
+    };
+    const rows = found.map((f): EvaluatedRow => {
+      const current: CurrentPrices = {
+        sellingPrice: f.sellingPrice,
+        purchasePrice: f.purchasePrice ?? null,
+        minSellingPrice: f.minSellingPrice ?? null,
+      };
+      const outcome = evaluateBulkPrice(current, change, { allowBelowFloor: filter.allowBelowFloor });
+      return {
+        priceId: f.priceId,
+        variantId: f.variantId,
+        sku: f.sku,
+        productName: f.productName,
+        variantName: f.variantName,
+        effectiveFrom: f.effectiveFrom,
+        current,
+        outcome: f.effectiveFrom > day ? { ...outcome, skip: "scheduled" } : outcome,
+      };
+    });
+
+    return { priceList, rows };
   }
 
   async listPriceHistory(query: ListPriceHistoryDto): Promise<{ items: unknown[]; total: number }> {

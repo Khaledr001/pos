@@ -149,6 +149,8 @@ export const ERROR_CODES = {
   QUOTE_INVALID_STATUS: "QUOTE_INVALID_STATUS",
   /** The quote's validity date has passed; ask for a fresh one. */
   QUOTE_EXPIRED: "QUOTE_EXPIRED",
+  /** A shared link (a customer statement) was genuine but its time is up. 410, not 404: ask for a new one. */
+  LINK_EXPIRED: "LINK_EXPIRED",
 
   // generic
   VALIDATION_FAILED: "VALIDATION_FAILED",

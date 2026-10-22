@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import {
   Package, Search, Plus, RefreshCw, X, AlertCircle, CheckCircle2, Boxes, Trash2,
-  Pencil, Image as ImageIcon, Upload, Star, FileUp, Layers, Eye,
+  Pencil, Image as ImageIcon, Upload, Star, FileUp, Layers, Eye, Tags,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api-client";
@@ -510,6 +510,12 @@ export default function ProductsPage() {
             <Link href="/products/import">
               <FileUp className="h-4 w-4" />
               Import
+            </Link>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/products/bulk-price">
+              <Tags className="h-4 w-4" />
+              Bulk price update
             </Link>
           </Button>
           <Button size="sm" onClick={() => { setActionError(null); setIsModalOpen(true); }}>

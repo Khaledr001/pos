@@ -2,6 +2,7 @@ import { DEFAULT_PAGE_SIZE, DOCUMENT_SOURCES, MAX_PAGE_SIZE, PAYMENT_METHODS, SA
 import { z } from "zod";
 import { zMoney } from "../../common/validation/money.js";
 import { sortSchema } from "../../common/db/list-query.js";
+import { ExportFormatSchema } from "../../common/http/send-export.js";
 
 const SaleLineSchema = z.object({
   variantId: z.string().uuid(),
@@ -163,3 +164,9 @@ export const ListSalesSchema = z.object({
   ...sortSchema(["occurredAt", "saleNumber", "total"], { sortBy: "occurredAt", sortOrder: "desc" }),
 });
 export type ListSalesDto = z.infer<typeof ListSalesSchema>;
+
+/** The list's filters and sort, minus paging: an export is every match. */
+export const ExportSalesSchema = ListSalesSchema.omit({ page: true, limit: true }).extend({
+  format: ExportFormatSchema,
+});
+export type ExportSalesDto = z.infer<typeof ExportSalesSchema>;

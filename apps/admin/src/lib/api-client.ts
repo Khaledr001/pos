@@ -246,10 +246,14 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
  */
 export async function apiDownload(
   path: string,
-  options: { accessToken?: string } = {},
+  options: { accessToken?: string; query?: Record<string, string | number | boolean | undefined> } = {},
 ): Promise<{ blob: Blob; filename: string | null }> {
   let token = options.accessToken ?? readTokens()?.accessToken;
-  const url = `${getBaseUrl()}${path.startsWith("/") ? path : `/${path}`}`;
+  const target = new URL(`${getBaseUrl()}${path.startsWith("/") ? path : `/${path}`}`);
+  for (const [key, value] of Object.entries(options.query ?? {})) {
+    if (value !== undefined && value !== "") target.searchParams.set(key, String(value));
+  }
+  const url = target.toString();
 
   const send = (bearer: string | undefined) =>
     fetch(url, { headers: bearer ? { authorization: `Bearer ${bearer}` } : {} });

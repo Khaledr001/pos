@@ -20,6 +20,8 @@ import { cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/format";
 import { useTenantSettings } from "@/lib/tenant-settings";
 import { readListResult, useListData, useListQuery } from "@/lib/use-list-query";
+import { DateRangeFilter } from "../_components/date-range-filter";
+import { ExportMenu } from "../_components/export-menu";
 import {
   SortableTh, Table, TableBody, TableContainer, TableEmpty, TableHead,
   TablePagination, TableSearch, Th, numericCell,
@@ -121,9 +123,20 @@ export default function PurchasesPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
 
   const PAGE_SIZE = 50;
-  const list = useListQuery({ sortBy: "createdAt", sortOrder: "desc", filters: { status: "" } });
+  const list = useListQuery({ sortBy: "createdAt", sortOrder: "desc", filters: { status: "", from: "", to: "" } });
   const { q, page, sortBy, sortOrder } = list;
   const statusFilter = list.filters.status;
+  const { from, to } = list.filters;
+
+  /** What the list shows, minus paging — the export downloads exactly this. */
+  const filterQuery = {
+    q: q.trim() || undefined,
+    status: statusFilter || undefined,
+    from: from || undefined,
+    to: to || undefined,
+    sortBy,
+    sortOrder,
+  };
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -137,17 +150,11 @@ export default function PurchasesPage() {
         await api.get<unknown>("/purchases", {
           accessToken: tokens?.accessToken,
           signal,
-          query: {
-            q: q.trim() || undefined,
-            status: statusFilter || undefined,
-            page,
-            pageSize: PAGE_SIZE,
-            sortBy,
-            sortOrder,
-          },
+          query: { ...filterQuery, page, pageSize: PAGE_SIZE },
         }),
       ),
-    [tokens?.accessToken, q, statusFilter, page, sortBy, sortOrder],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tokens?.accessToken, q, statusFilter, page, sortBy, sortOrder, from, to],
   );
   const {
     items: orders, total, loading, initialLoading, error: loadError, reload: fetchOrders,
@@ -205,6 +212,7 @@ export default function PurchasesPage() {
               ))}
             </SelectContent>
           </Select>
+          <ExportMenu path="/purchases/export" query={filterQuery} filenameBase="purchase-orders" onError={setActionError} />
           <Button variant="outline" size="sm" onClick={fetchOrders} disabled={loading}>
             <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
             Refresh
@@ -254,6 +262,15 @@ export default function PurchasesPage() {
           onChange={list.setSort}
         />
       </div>
+
+      <DateRangeFilter
+        from={from}
+        to={to}
+        onChange={(range) => {
+          list.setFilter("from", range.from);
+          list.setFilter("to", range.to);
+        }}
+      />
 
       <MobileList
         loading={initialLoading}

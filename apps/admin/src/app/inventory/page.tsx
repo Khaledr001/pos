@@ -18,6 +18,8 @@ import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { readListResult, useListData, useListQuery } from "@/lib/use-list-query";
+import { DateRangeFilter } from "../_components/date-range-filter";
+import { ExportMenu } from "../_components/export-menu";
 import {
   SortableTh, Table, TableBody, TableContainer, TableEmpty, TableHead,
   TablePagination, TableSearch, Th, numericCell,
@@ -106,23 +108,25 @@ export default function InventoryPage() {
   const branchFilter = list.filters.branch;
   const lowOnly = list.filters.low === "1";
 
+  /** The stock table's filters, minus paging — what the stock export downloads. */
+  const stockQuery = {
+    q: q.trim() || undefined,
+    sortBy,
+    sortOrder,
+    branchId: branchFilter || undefined,
+    lowStockOnly: lowOnly || undefined,
+  };
+
   const loadStock = useCallback(
     async (signal: AbortSignal) =>
       readListResult<StockRow>(
         await api.get<unknown>("/inventory", {
           accessToken: tokens?.accessToken,
           signal,
-          query: {
-            q: q.trim() || undefined,
-            page,
-            limit: STOCK_PAGE_SIZE,
-            sortBy,
-            sortOrder,
-            branchId: branchFilter || undefined,
-            lowStockOnly: lowOnly || undefined,
-          },
+          query: { ...stockQuery, page, limit: STOCK_PAGE_SIZE },
         }),
       ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [tokens?.accessToken, q, page, sortBy, sortOrder, branchFilter, lowOnly],
   );
   const stockList = useListData(loadStock, list.ready && Boolean(tokens?.accessToken));
@@ -131,16 +135,19 @@ export default function InventoryPage() {
   // The ledger pages on its own, outside the URL: it is a feed beside the
   // table, and two page numbers in one query string would be ambiguous.
   const [txPage, setTxPage] = useState(1);
+  const [txRange, setTxRange] = useState({ from: "", to: "" });
+  const txQuery = { from: txRange.from || undefined, to: txRange.to || undefined };
   const loadTx = useCallback(
     async (signal: AbortSignal) =>
       readListResult<TxRow>(
         await api.get<unknown>("/inventory/transactions", {
           accessToken: tokens?.accessToken,
           signal,
-          query: { limit: TX_PAGE_SIZE, page: txPage },
+          query: { ...txQuery, limit: TX_PAGE_SIZE, page: txPage },
         }),
       ),
-    [tokens?.accessToken, txPage],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tokens?.accessToken, txPage, txRange],
   );
   const txList = useListData(loadTx, Boolean(tokens?.accessToken));
   const transactions = txList.items;
@@ -306,6 +313,7 @@ export default function InventoryPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
+          <ExportMenu path="/inventory/export" query={stockQuery} filenameBase="stock" onError={setActionError} />
           <Button variant="outline" size="sm" onClick={fetchAll} disabled={refreshing}>
             <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />
             Refresh
@@ -563,8 +571,22 @@ export default function InventoryPage() {
                 <CardDescription className="text-[11px]">Every inventory transaction, newest first (immutable)</CardDescription>
               </div>
             </div>
-            <Badge variant="outline" className="text-[10px] font-mono hidden md:inline-flex">inventory_transactions</Badge>
+            <ExportMenu
+              path="/inventory/transactions/export"
+              query={txQuery}
+              filenameBase="stock-movements"
+              onError={setActionError}
+            />
           </div>
+          <DateRangeFilter
+            className="mt-3"
+            from={txRange.from}
+            to={txRange.to}
+            onChange={(range) => {
+              setTxRange(range);
+              setTxPage(1);
+            }}
+          />
         </CardHeader>
 
         <MobileList

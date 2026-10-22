@@ -46,6 +46,8 @@ import {
   ScanBarcode,
   Banknote,
   Receipt,
+  Percent,
+  ListRestart,
 } from "lucide-react";
 import { hasPermission, type Permission } from "@devsfleet/shared-types";
 import { useAuth } from "@/lib/auth-context";
@@ -195,6 +197,7 @@ const NAV_SECTIONS: NavSection[] = [
         permission: "product:read",
         children: [
           { label: "Products List", href: "/products", icon: Package, permission: "product:read" },
+          { label: "Bulk Price Update", href: "/products/bulk-price", icon: Percent, permission: "price:write" },
           { label: "Image Review", href: "/products/image-review", icon: ImageIcon, permission: "product:read" },
           { label: "Categories", href: "/categories", icon: FolderTree, permission: "product:read" },
           { label: "Brands", href: "/brands", icon: Tag, permission: "product:read" },
@@ -224,6 +227,7 @@ const NAV_SECTIONS: NavSection[] = [
         permission: "purchase:read",
         children: [
           { label: "Purchase Orders", href: "/purchases", icon: FileText, permission: "purchase:read" },
+          { label: "Reorder Suggestions", href: "/purchases/reorder", icon: ListRestart, permission: "purchase:read" },
           { label: "Stock Transfers", href: "/transfers", icon: Truck, permission: "transfer:read" },
           { label: "Suppliers", href: "/suppliers", icon: Users, permission: "supplier:read" },
         ],
@@ -248,6 +252,23 @@ const NAV_SECTIONS: NavSection[] = [
 function isRouteActive(currentPath: string, targetHref: string): boolean {
   if (targetHref === "/") return currentPath === "/";
   return currentPath === targetHref || currentPath.startsWith(`${targetHref}/`);
+}
+
+/**
+ * The one child of a group that the current page belongs to.
+ *
+ * Prefix matching alone lights up two siblings at once — on
+ * /purchases/reorder both "Purchase Orders" (/purchases) and "Reorder
+ * Suggestions" match. The longest matching href is the page you are on.
+ */
+function activeChildHref(children: NavItem["children"], currentPath: string): string | null {
+  let best: string | null = null;
+  for (const child of children ?? []) {
+    if (isRouteActive(currentPath, child.href) && child.href.length > (best?.length ?? -1)) {
+      best = child.href;
+    }
+  }
+  return best;
 }
 
 function itemContainsRoute(item: NavItem, currentPath: string): boolean {
@@ -420,7 +441,7 @@ export function Sidebar({
             <DropdownMenuLabel>{item.label}</DropdownMenuLabel>
             <DropdownMenuSeparator />
             {item.children?.map((child) => {
-              const isChildActive = isRouteActive(pathname, child.href);
+              const isChildActive = child.href === activeChildHref(item.children, pathname);
               return (
                 <DropdownMenuItem key={child.href} asChild>
                   <Link
@@ -481,7 +502,7 @@ export function Sidebar({
           <div className="min-h-0">
             <ul className="ml-[1.15rem] space-y-0.5 border-l border-sidebar-border py-1 pl-2">
               {item.children?.map((child) => {
-                const isChildActive = isRouteActive(pathname, child.href);
+                const isChildActive = child.href === activeChildHref(item.children, pathname);
                 return (
                   <li key={child.href}>
                     <Link

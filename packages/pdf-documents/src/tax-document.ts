@@ -33,7 +33,7 @@ import PDFDocument from "pdfkit";
 
 // ── Arabic support ──────────────────────────────────────────────────────────
 
-const FONT_FILES = {
+export const FONT_FILES = {
   arabic: "NotoSansArabic-Regular.ttf",
   arabicBold: "NotoSansArabic-SemiBold.ttf",
 } as const;
@@ -51,7 +51,7 @@ const FONT_FILES = {
  * Returns null if the files are somehow absent, and the caller then omits
  * the Arabic rather than printing tofu.
  */
-function resolveFont(file: string): string | null {
+export function resolveFont(file: string): string | null {
   const candidates = [
     join(__dirname, "../assets/fonts", file),
     join(process.cwd(), "assets/fonts", file),
@@ -60,7 +60,7 @@ function resolveFont(file: string): string | null {
 }
 
 /** Logical Arabic → the order and spacing pdfkit will actually render correctly. */
-function rtl(text: string): string {
+export function rtl(text: string): string {
   return text.trim().split(/\s+/).reverse().join(" ");
 }
 
@@ -81,14 +81,14 @@ const L = {
 
 // ── Palette & metrics ───────────────────────────────────────────────────────
 
-const ACCENT = "#4F46E5";
-const ACCENT_SOFT = "#EEF0FB";
-const ACCENT_BAND = "#EDE9FE";
-const INK = "#111827";
-const MUTED = "#6B7280";
-const LINE = "#E5E7EB";
+export const ACCENT = "#4F46E5";
+export const ACCENT_SOFT = "#EEF0FB";
+export const ACCENT_BAND = "#EDE9FE";
+export const INK = "#111827";
+export const MUTED = "#6B7280";
+export const LINE = "#E5E7EB";
 
-const MARGIN = 36;
+export const MARGIN = 36;
 
 /** Ruled but empty rows left under the last item, page space permitting. */
 const BLANK_ROWS = 3;
@@ -191,7 +191,7 @@ function qty(value: string): string {
 }
 
 /** An unknown timezone must not throw mid-render; the UTC fallback is visible, not silent. */
-function safeZone(timezone: string): string | undefined {
+export function safeZone(timezone: string): string | undefined {
   try {
     new Intl.DateTimeFormat("en-US", { timeZone: timezone });
     return timezone;
@@ -200,7 +200,7 @@ function safeZone(timezone: string): string | undefined {
   }
 }
 
-function formatDate(date: Date, timezone: string): string {
+export function formatDate(date: Date, timezone: string): string {
   return date.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",

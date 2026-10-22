@@ -1,6 +1,7 @@
 import { DEFAULT_PAGE_SIZE, INVENTORY_TX_TYPES, MAX_PAGE_SIZE } from "@devsfleet/shared-types";
 import { z } from "zod";
 import { sortSchema } from "../../common/db/list-query.js";
+import { ExportFormatSchema } from "../../common/http/send-export.js";
 import { zQueryBoolean } from "../../common/pipes/zod-validation.pipe.js";
 
 export const ListStockSchema = z.object({
@@ -28,6 +29,17 @@ export const ListTransactionsSchema = z.object({
   to: z.string().date().optional(),
 });
 export type ListTransactionsDto = z.infer<typeof ListTransactionsSchema>;
+
+/** The lists' filters and sort, minus paging: an export is every match. */
+export const ExportStockSchema = ListStockSchema.omit({ page: true, limit: true }).extend({
+  format: ExportFormatSchema,
+});
+export type ExportStockDto = z.infer<typeof ExportStockSchema>;
+
+export const ExportTransactionsSchema = ListTransactionsSchema.omit({ page: true, limit: true }).extend({
+  format: ExportFormatSchema,
+});
+export type ExportTransactionsDto = z.infer<typeof ExportTransactionsSchema>;
 
 export const AdjustStockSchema = z.object({
   variantId: z.string().uuid(),

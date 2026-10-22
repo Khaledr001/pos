@@ -14,7 +14,8 @@ import {
 } from "@devsfleet/shared-utils";
 import { Injectable, Logger } from "@nestjs/common";
 import { assertBranchInScope, branchScope } from "../../common/context/branch-scope.js";
-import { containsPattern } from "../../common/db/list-query.js";
+import { containsPattern, localDateRange } from "../../common/db/list-query.js";
+import { assertExportSize, type ExportSheet } from "../../common/http/send-export.js";
 import { RequestContext } from "../../common/context/request-context.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import { StockService } from "../inventory/stock.service.js";
@@ -25,7 +26,9 @@ import {
 import { OverrideGrantsService } from "../auth/override-grants.service.js";
 import { SerialsService } from "../serials/serials.service.js";
 import { renderInvoicePdf } from "./invoice-pdf.js";
-import type { CreateReturnDto, CreateSaleDto, ListSalesDto, VoidSaleDto } from "./dto.js";
+import type { CreateReturnDto, CreateSaleDto, ExportSalesDto, ListSalesDto, VoidSaleDto } from "./dto.js";
+
+type Transaction = Parameters<Parameters<TenantDatabase["run"]>[0]>[0];
 
 /**
  * Creating a sale — the most consequential write in the system.
@@ -1288,10 +1291,12 @@ export class SalesService {
     return { filename: `${sale.saleNumber}.pdf`, body };
   }
 
-  async list(query: ListSalesDto): Promise<unknown> {
-    const offset = (query.page - 1) * query.limit;
+  /**
+   * The WHERE for a sales list, shared by the page and the export so the two
+   * can never disagree about which sales a filter means.
+   */
+  private salesWhere(query: Omit<ListSalesDto, "page" | "limit">, timeZone: string) {
     const term = containsPattern(query.q);
-
     if (query.branchId) assertBranchInScope(query.branchId);
 
     // The UI's default call names no branch. Unfiltered, that returned every
@@ -1299,29 +1304,40 @@ export class SalesService {
     // to anybody with `sale:read` at one shop.
     const scope = branchScope();
 
-    return this.db.run(async (tx) => {
-      const where = and(
-        scope ? inArray(schema.sales.branchId, scope) : undefined,
-        query.branchId ? eq(schema.sales.branchId, query.branchId) : undefined,
-        query.customerId ? eq(schema.sales.customerId, query.customerId) : undefined,
-        query.cashSessionId ? eq(schema.sales.cashSessionId, query.cashSessionId) : undefined,
-        query.from ? sql`${schema.sales.occurredAt} >= ${query.from}::date` : undefined,
-        query.to ? sql`${schema.sales.occurredAt} < (${query.to}::date + 1)` : undefined,
-        query.status ? eq(schema.sales.status, query.status) : undefined,
-        query.kind === "sale"
-          ? isNull(schema.sales.returnOfSaleId)
-          : query.kind === "return"
-            ? isNotNull(schema.sales.returnOfSaleId)
-            : undefined,
-        term
-          ? or(
-              ilike(schema.sales.saleNumber, term),
-              ilike(schema.customers.name, term),
-              ilike(schema.branches.name, term),
-              ilike(schema.branches.code, term),
-            )
+    return and(
+      scope ? inArray(schema.sales.branchId, scope) : undefined,
+      query.branchId ? eq(schema.sales.branchId, query.branchId) : undefined,
+      query.customerId ? eq(schema.sales.customerId, query.customerId) : undefined,
+      query.cashSessionId ? eq(schema.sales.cashSessionId, query.cashSessionId) : undefined,
+      localDateRange(schema.sales.occurredAt, query, timeZone),
+      query.status ? eq(schema.sales.status, query.status) : undefined,
+      query.kind === "sale"
+        ? isNull(schema.sales.returnOfSaleId)
+        : query.kind === "return"
+          ? isNotNull(schema.sales.returnOfSaleId)
           : undefined,
-      );
+      term
+        ? or(
+            ilike(schema.sales.saleNumber, term),
+            ilike(schema.customers.name, term),
+            ilike(schema.branches.name, term),
+            ilike(schema.branches.code, term),
+          )
+        : undefined,
+    );
+  }
+
+  private async tenantSettings(tx: Transaction) {
+    const tenant = await tx.query.tenants.findFirst({ columns: { settings: true } });
+    return resolveTenantSettings(tenant?.settings);
+  }
+
+  async list(query: ListSalesDto): Promise<unknown> {
+    const offset = (query.page - 1) * query.limit;
+
+    return this.db.run(async (tx) => {
+      const settings = await this.tenantSettings(tx);
+      const where = this.salesWhere(query, settings.locale.timezone);
 
       const sortColumn = {
         occurredAt: schema.sales.occurredAt,
@@ -1389,6 +1405,146 @@ export class SalesService {
           hasPrev: query.page > 1,
         },
       };
+    });
+  }
+
+  /**
+   * Every sale the list's filter matches — not one page — for an accountant.
+   * One row per document, with the customer's TRN for the VAT return; Excel
+   * also gets the lines, which a CSV has no second sheet for.
+   */
+  async exportRows(query: ExportSalesDto): Promise<{ timeZone: string; taxLabel: string; currency: string; sheets: ExportSheet<any>[] }> {
+    return this.db.run(async (tx) => {
+      const settings = await this.tenantSettings(tx);
+      const where = this.salesWhere(query, settings.locale.timezone);
+
+      const [counted] = await tx
+        .select({ value: count() })
+        .from(schema.sales)
+        .innerJoin(schema.branches, eq(schema.sales.branchId, schema.branches.id))
+        .leftJoin(schema.customers, eq(schema.sales.customerId, schema.customers.id))
+        .where(where);
+      assertExportSize(counted?.value ?? 0);
+
+      const sortColumn = {
+        occurredAt: schema.sales.occurredAt,
+        saleNumber: schema.sales.saleNumber,
+        total: schema.sales.total,
+      }[query.sortBy];
+
+      const sales = await tx
+        .select({
+          occurredAt: schema.sales.occurredAt,
+          saleNumber: schema.sales.saleNumber,
+          returnOfSaleId: schema.sales.returnOfSaleId,
+          branchCode: schema.branches.code,
+          branchName: schema.branches.name,
+          customerName: schema.customers.name,
+          customerTrn: schema.customers.trn,
+          paymentMethods: sql<string[]>`coalesce((
+            select array_agg(distinct ${schema.payments.method} order by ${schema.payments.method})
+            from ${schema.payments}
+            where ${schema.payments.saleId} = ${schema.sales.id}
+          ), '{}')`,
+          subtotal: schema.sales.subtotal,
+          discountAmount: schema.sales.discountAmount,
+          taxAmount: schema.sales.taxAmount,
+          total: schema.sales.total,
+          paidAmount: schema.sales.paidAmount,
+          dueAmount: schema.sales.dueAmount,
+          status: schema.sales.status,
+        })
+        .from(schema.sales)
+        .innerJoin(schema.branches, eq(schema.sales.branchId, schema.branches.id))
+        .leftJoin(schema.customers, eq(schema.sales.customerId, schema.customers.id))
+        .where(where)
+        .orderBy(
+          query.sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn),
+          desc(schema.sales.id),
+        );
+
+      const tax = settings.tax.label;
+      const sheets: ExportSheet<any>[] = [
+        {
+          name: "Sales",
+          rows: sales,
+          columns: [
+            { header: "Date", kind: "datetime", value: (r: (typeof sales)[number]) => r.occurredAt, width: 18 },
+            { header: "Invoice No", value: (r: (typeof sales)[number]) => r.saleNumber, width: 22 },
+            { header: "Type", value: (r: (typeof sales)[number]) => (r.returnOfSaleId ? "Return" : "Sale") },
+            { header: "Branch", value: (r: (typeof sales)[number]) => r.branchCode },
+            { header: "Customer", value: (r: (typeof sales)[number]) => r.customerName ?? "Walk-in", width: 28 },
+            { header: "Customer TRN", value: (r: (typeof sales)[number]) => r.customerTrn, width: 18 },
+            { header: "Payment", value: (r: (typeof sales)[number]) => (r.paymentMethods.length ? r.paymentMethods.join(" + ") : "on account") },
+            { header: `Subtotal (${settings.currency.base})`, kind: "money", value: (r: (typeof sales)[number]) => r.subtotal },
+            { header: `Discount (${settings.currency.base})`, kind: "money", value: (r: (typeof sales)[number]) => r.discountAmount },
+            { header: `${tax} (${settings.currency.base})`, kind: "money", value: (r: (typeof sales)[number]) => r.taxAmount },
+            { header: `Total (${settings.currency.base})`, kind: "money", value: (r: (typeof sales)[number]) => r.total },
+            { header: `Paid (${settings.currency.base})`, kind: "money", value: (r: (typeof sales)[number]) => r.paidAmount },
+            { header: `Due (${settings.currency.base})`, kind: "money", value: (r: (typeof sales)[number]) => r.dueAmount },
+            { header: "Status", value: (r: (typeof sales)[number]) => r.status },
+          ],
+        },
+      ];
+
+      if (query.format === "xlsx") {
+        const [lineCount] = await tx
+          .select({ value: count() })
+          .from(schema.saleItems)
+          .innerJoin(schema.sales, eq(schema.saleItems.saleId, schema.sales.id))
+          .innerJoin(schema.branches, eq(schema.sales.branchId, schema.branches.id))
+          .leftJoin(schema.customers, eq(schema.sales.customerId, schema.customers.id))
+          .where(where);
+        assertExportSize(lineCount?.value ?? 0);
+
+        const lines = await tx
+          .select({
+            occurredAt: schema.sales.occurredAt,
+            saleNumber: schema.sales.saleNumber,
+            branchCode: schema.branches.code,
+            sku: schema.saleItems.productSku,
+            product: schema.saleItems.productName,
+            quantity: schema.saleItems.quantity,
+            unitPrice: schema.saleItems.unitPrice,
+            discountPercent: schema.saleItems.discountPercent,
+            lineSubtotal: schema.saleItems.lineSubtotal,
+            taxPercent: schema.saleItems.taxPercent,
+            taxAmount: schema.saleItems.taxAmount,
+            total: schema.saleItems.total,
+          })
+          .from(schema.saleItems)
+          .innerJoin(schema.sales, eq(schema.saleItems.saleId, schema.sales.id))
+          .innerJoin(schema.branches, eq(schema.sales.branchId, schema.branches.id))
+          .leftJoin(schema.customers, eq(schema.sales.customerId, schema.customers.id))
+          .where(where)
+          .orderBy(
+            query.sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn),
+            desc(schema.sales.id),
+            asc(schema.saleItems.sortOrder),
+          );
+
+        type Line = (typeof lines)[number];
+        sheets.push({
+          name: "Lines",
+          rows: lines,
+          columns: [
+            { header: "Date", kind: "datetime", value: (r: Line) => r.occurredAt, width: 18 },
+            { header: "Invoice No", value: (r: Line) => r.saleNumber, width: 22 },
+            { header: "Branch", value: (r: Line) => r.branchCode },
+            { header: "SKU", value: (r: Line) => r.sku, width: 18 },
+            { header: "Product", value: (r: Line) => r.product, width: 36 },
+            { header: "Qty", kind: "quantity", value: (r: Line) => r.quantity },
+            { header: "Unit Price", kind: "money", value: (r: Line) => r.unitPrice },
+            { header: "Discount %", kind: "quantity", value: (r: Line) => r.discountPercent },
+            { header: "Net", kind: "money", value: (r: Line) => r.lineSubtotal },
+            { header: `${tax} %`, kind: "quantity", value: (r: Line) => r.taxPercent },
+            { header: tax, kind: "money", value: (r: Line) => r.taxAmount },
+            { header: "Total", kind: "money", value: (r: Line) => r.total },
+          ],
+        });
+      }
+
+      return { timeZone: settings.locale.timezone, taxLabel: tax, currency: settings.currency.base, sheets };
     });
   }
 }

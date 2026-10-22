@@ -254,6 +254,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
       case ERROR_CODES.QUOTE_INVALID_STATUS:
       case ERROR_CODES.QUOTE_EXPIRED:
         return HttpStatus.CONFLICT;
+      case ERROR_CODES.LINK_EXPIRED:
+        return HttpStatus.GONE;
       case ERROR_CODES.VALIDATION_FAILED:
         return HttpStatus.BAD_REQUEST;
       case ERROR_CODES.LLM_NOT_CONFIGURED:

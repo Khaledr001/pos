@@ -2,6 +2,7 @@ import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, PURCHASE_ORDER_STATUSES } from "@devs
 import { z } from "zod";
 import { ZERO_MONEY, zMoney } from "../../common/validation/money.js";
 import { sortSchema } from "../../common/db/list-query.js";
+import { ExportFormatSchema } from "../../common/http/send-export.js";
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a YYYY-MM-DD date");
 
@@ -156,3 +157,9 @@ export const ListPurchaseOrdersSchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
 });
 export type ListPurchaseOrdersDto = z.infer<typeof ListPurchaseOrdersSchema>;
+
+/** The list's filters and sort, minus paging: an export is every match. */
+export const ExportPurchaseOrdersSchema = ListPurchaseOrdersSchema.omit({ page: true, pageSize: true }).extend({
+  format: ExportFormatSchema,
+});
+export type ExportPurchaseOrdersDto = z.infer<typeof ExportPurchaseOrdersSchema>;

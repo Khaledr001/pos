@@ -39,6 +39,7 @@ Copying its shape is what keeps twenty modules looking like one codebase.
 | `stock-take` | 2 | ✅ done | Count sheet → count → submit → approve, posts variances |
 | `suppliers` | 2 | ✅ done | Supplier CRUD, outstanding balance |
 | `purchases` | 2 | ✅ done | Purchase orders, goods receipts, landed cost |
+| `reorder` | 2 | ✅ done | Low-stock suggestions → one draft purchase order per supplier |
 | `transfers` | 2 | ✅ done | Inter-branch request → approve → ship → receive, implemented and registered |
 | `notifications` | — | 🟡 partial | Per-user inbox, REST list/unread-count/mark-read, WebSocket push — see D17. Low-stock crossing is the only emitter; sale/order/system/due-reminder triggers, retention and a `/notifications` page are not built. |
 | `devices` | 3 | ✅ done | Terminal registration, activation, `device:manage` |

@@ -11,11 +11,13 @@ import {
 import { Injectable } from "@nestjs/common";
 import { assertBranchInScope, branchFilter, requireBranchId } from "../../common/context/branch-scope.js";
 import { RequestContext } from "../../common/context/request-context.js";
-import { containsPattern } from "../../common/db/list-query.js";
+import { containsPattern, localDateRange } from "../../common/db/list-query.js";
+import { assertExportSize, type ExportSheet } from "../../common/http/send-export.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import { StockService } from "../inventory/stock.service.js";
 import { SerialsService } from "../serials/serials.service.js";
 import type {
+  ExportPurchaseOrdersDto,
   CreatePurchaseOrderDto,
   ListPurchaseOrdersDto,
   ReceiveGoodsDto,
@@ -49,6 +51,9 @@ export class PurchasesService {
     const tenantId = RequestContext.requireTenantId();
     const user = RequestContext.requireUser();
     const branchId = requireBranchId(dto.branchId);
+    // A branch-scoped buyer raising an order for another shop would commit
+    // that shop's money and, on receipt, its stock.
+    assertBranchInScope(branchId);
 
     return this.db.run(async (tx) => {
       const supplier = await tx.query.suppliers.findFirst({
@@ -247,6 +252,9 @@ export class PurchasesService {
         : null;
 
       const branchId = requireBranchId(dto.branchId ?? order?.branchId);
+      // `requireOrder` checks the order's branch; a direct receipt has no
+      // order, and a named branch could differ from it — check what is used.
+      assertBranchInScope(branchId);
       const supplierId = order?.supplierId ?? dto.supplierId;
 
       if (!supplierId) {
@@ -769,25 +777,30 @@ export class PurchasesService {
     return existing ? read(existing) : this.db.run(read);
   }
 
-  async list(query: ListPurchaseOrdersDto): Promise<{ items: unknown[]; total: number }> {
+  /** Shared by the list and the export, so a filter means the same orders in both. */
+  private ordersWhere(query: Omit<ListPurchaseOrdersDto, "page" | "pageSize">, timeZone: string) {
     if (query.branchId) assertBranchInScope(query.branchId);
     const term = containsPattern(query.q);
+    return and(
+      branchFilter(schema.purchaseOrders.branchId, query.branchId),
+      query.supplierId ? eq(schema.purchaseOrders.supplierId, query.supplierId) : undefined,
+      query.status ? eq(schema.purchaseOrders.status, query.status) : undefined,
+      localDateRange(schema.purchaseOrders.createdAt, query, timeZone),
+      term
+        ? or(ilike(schema.purchaseOrders.poNumber, term), ilike(schema.suppliers.name, term))
+        : undefined,
+    );
+  }
 
+  private async tenantSettings(tx: Transaction) {
+    const tenant = await tx.query.tenants.findFirst({ columns: { settings: true } });
+    return resolveTenantSettings(tenant?.settings);
+  }
+
+  async list(query: ListPurchaseOrdersDto): Promise<{ items: unknown[]; total: number }> {
     return this.db.run(async (tx) => {
-      const where = and(
-        branchFilter(schema.purchaseOrders.branchId, query.branchId),
-        query.supplierId ? eq(schema.purchaseOrders.supplierId, query.supplierId) : undefined,
-        query.status ? eq(schema.purchaseOrders.status, query.status) : undefined,
-        query.from
-          ? gte(schema.purchaseOrders.createdAt, new Date(`${query.from}T00:00:00Z`))
-          : undefined,
-        query.to
-          ? lte(schema.purchaseOrders.createdAt, new Date(`${query.to}T23:59:59.999Z`))
-          : undefined,
-        term
-          ? or(ilike(schema.purchaseOrders.poNumber, term), ilike(schema.suppliers.name, term))
-          : undefined,
-      );
+      const settings = await this.tenantSettings(tx);
+      const where = this.ordersWhere(query, settings.locale.timezone);
 
       const sortColumn = {
         createdAt: schema.purchaseOrders.createdAt,
@@ -1057,6 +1070,80 @@ export class PurchasesService {
         (seq as { next_document_number?: number })?.next_document_number ?? 1,
       ),
       ...(branch?.code ? { branchCode: branch.code } : {}),
+    });
+  }
+
+  /** Every purchase order the list's filters match, for the books. */
+  async exportRows(query: ExportPurchaseOrdersDto): Promise<{ timeZone: string; sheets: ExportSheet<any>[] }> {
+    return this.db.run(async (tx) => {
+      const settings = await this.tenantSettings(tx);
+      const where = this.ordersWhere(query, settings.locale.timezone);
+
+      const [counted] = await tx
+        .select({ value: count() })
+        .from(schema.purchaseOrders)
+        .innerJoin(schema.suppliers, eq(schema.purchaseOrders.supplierId, schema.suppliers.id))
+        .where(where);
+      assertExportSize(counted?.value ?? 0);
+
+      const sortColumn = {
+        createdAt: schema.purchaseOrders.createdAt,
+        poNumber: schema.purchaseOrders.poNumber,
+        total: schema.purchaseOrders.total,
+        expectedDate: schema.purchaseOrders.expectedDate,
+      }[query.sortBy];
+
+      const rows = await tx
+        .select({
+          createdAt: schema.purchaseOrders.createdAt,
+          poNumber: schema.purchaseOrders.poNumber,
+          supplierName: schema.suppliers.name,
+          supplierTrn: schema.suppliers.trn,
+          supplierReference: schema.purchaseOrders.supplierReference,
+          branchCode: schema.branches.code,
+          expectedDate: schema.purchaseOrders.expectedDate,
+          status: schema.purchaseOrders.status,
+          subtotal: schema.purchaseOrders.subtotal,
+          discountAmount: schema.purchaseOrders.discountAmount,
+          taxAmount: schema.purchaseOrders.taxAmount,
+          shippingAmount: schema.purchaseOrders.shippingAmount,
+          total: schema.purchaseOrders.total,
+        })
+        .from(schema.purchaseOrders)
+        .innerJoin(schema.suppliers, eq(schema.purchaseOrders.supplierId, schema.suppliers.id))
+        .innerJoin(schema.branches, eq(schema.purchaseOrders.branchId, schema.branches.id))
+        .where(where)
+        .orderBy(
+          query.sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn),
+          desc(schema.purchaseOrders.id),
+        );
+
+      type Row = (typeof rows)[number];
+      const cur = settings.currency.base;
+      return {
+        timeZone: settings.locale.timezone,
+        sheets: [
+          {
+            name: "Purchase Orders",
+            rows,
+            columns: [
+              { header: "Created", kind: "datetime", value: (r: Row) => r.createdAt, width: 18 },
+              { header: "PO No", value: (r: Row) => r.poNumber, width: 22 },
+              { header: "Supplier", value: (r: Row) => r.supplierName, width: 28 },
+              { header: "Supplier TRN", value: (r: Row) => r.supplierTrn, width: 18 },
+              { header: "Supplier Ref", value: (r: Row) => r.supplierReference },
+              { header: "Branch", value: (r: Row) => r.branchCode },
+              { header: "Expected", kind: "date", value: (r: Row) => r.expectedDate },
+              { header: "Status", value: (r: Row) => r.status },
+              { header: `Subtotal (${cur})`, kind: "money", value: (r: Row) => r.subtotal },
+              { header: `Discount (${cur})`, kind: "money", value: (r: Row) => r.discountAmount },
+              { header: `${settings.tax.label} (${cur})`, kind: "money", value: (r: Row) => r.taxAmount },
+              { header: `Shipping (${cur})`, kind: "money", value: (r: Row) => r.shippingAmount },
+              { header: `Total (${cur})`, kind: "money", value: (r: Row) => r.total },
+            ],
+          },
+        ],
+      };
     });
   }
 }

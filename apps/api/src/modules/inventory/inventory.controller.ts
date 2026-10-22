@@ -1,11 +1,15 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query, Res } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
+import type { Response } from "express";
 import { Audited, RequirePermissions } from "../../common/decorators/index.js";
+import { exportFilename, sendExport } from "../../common/http/send-export.js";
 import { zodPipe } from "../../common/pipes/zod-validation.pipe.js";
 import { InventoryService } from "./inventory.service.js";
 import {
-  AdjustStockSchema, ListStockSchema, ListTransactionsSchema, TransferStockSchema,
-  type AdjustStockDto, type ListStockDto, type ListTransactionsDto, type TransferStockDto,
+  AdjustStockSchema, ExportStockSchema, ExportTransactionsSchema, ListStockSchema,
+  ListTransactionsSchema, TransferStockSchema,
+  type AdjustStockDto, type ExportStockDto, type ExportTransactionsDto, type ListStockDto,
+  type ListTransactionsDto, type TransferStockDto,
 } from "./dto.js";
 
 @ApiTags("inventory")
@@ -18,6 +22,43 @@ export class InventoryController {
   @ApiOperation({ summary: "Stock per variant per branch" })
   listStock(@Query(zodPipe(ListStockSchema)) query: ListStockDto) {
     return this.inventory.listStock(query);
+  }
+
+  /**
+   * Stock on hand as CSV or Excel, with the list's filters. Cost columns only
+   * for a user allowed to see cost. `inventory:read` like the list, not the
+   * financial permission valuation needs: without cost it is a count sheet.
+   */
+  @Get("export")
+  @RequirePermissions("inventory:read")
+  @ApiOperation({ summary: "Export stock levels (CSV or Excel)" })
+  async exportStock(
+    @Query(zodPipe(ExportStockSchema)) query: ExportStockDto,
+    @Res() res: Response,
+  ): Promise<void> {
+    const file = await this.inventory.exportStock(query);
+    await sendExport(res, {
+      format: query.format,
+      filename: exportFilename("stock", query.format),
+      timeZone: file.timeZone,
+      sheets: file.sheets,
+    });
+  }
+
+  @Get("transactions/export")
+  @RequirePermissions("inventory:read")
+  @ApiOperation({ summary: "Export stock movements (CSV or Excel)" })
+  async exportTransactions(
+    @Query(zodPipe(ExportTransactionsSchema)) query: ExportTransactionsDto,
+    @Res() res: Response,
+  ): Promise<void> {
+    const file = await this.inventory.exportTransactions(query);
+    await sendExport(res, {
+      format: query.format,
+      filename: exportFilename("stock-movements", query.format, query),
+      timeZone: file.timeZone,
+      sheets: file.sheets,
+    });
   }
 
   @Get("transactions")

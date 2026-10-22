@@ -1,18 +1,24 @@
 import { and, asc, count, desc, eq, gte, ilike, isNull, lte, or, schema, sql } from "@devsfleet/db";
-import type { Paginated } from "@devsfleet/shared-types";
+import { resolveTenantSettings, type Paginated } from "@devsfleet/shared-types";
 import { AppError, ERROR_CODES, Money } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import { assertBranchInScope, branchFilter } from "../../common/context/branch-scope.js";
-import { containsPattern } from "../../common/db/list-query.js";
+import { RequestContext } from "../../common/context/request-context.js";
+import { containsPattern, localDateRange } from "../../common/db/list-query.js";
+import { assertExportSize, type ExportColumn, type ExportSheet } from "../../common/http/send-export.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import { StockService } from "./stock.service.js";
 import type {
   AdjustStockDto,
+  ExportStockDto,
+  ExportTransactionsDto,
   ListStockDto,
   ListTransactionsDto,
   TransferStockDto,
 } from "./dto.js";
+
+type Transaction = Parameters<Parameters<TenantDatabase["run"]>[0]>[0];
 
 /**
  * Reading stock, and the HTTP-facing operations that change it.
@@ -35,13 +41,13 @@ export class InventoryService {
    * variant's threshold. Comparing on-hand alone would hide an item whose
    * entire shelf is already promised to a confirmed order.
    */
-  async listStock(query: ListStockDto): Promise<Paginated<unknown>> {
-    const { page, limit, q, branchId, categoryId, lowStockOnly, sortBy, sortOrder } = query;
-    const offset = (page - 1) * limit;
+  /** Shared by the stock list and its export. */
+  private stockWhere(query: Omit<ListStockDto, "page" | "limit">) {
+    const { q, branchId, categoryId, lowStockOnly } = query;
     assertBranchInScope(branchId);
     const term = containsPattern(q);
 
-    const where = and(
+    return and(
       branchFilter(schema.inventory.branchId, branchId),
       categoryId ? eq(schema.products.categoryId, categoryId) : undefined,
       isNull(schema.productVariants.deletedAt),
@@ -56,15 +62,30 @@ export class InventoryService {
         ? sql`${schema.inventory.quantity} - ${schema.inventory.reservedQuantity} <= ${schema.productVariants.minStock}`
         : undefined,
     );
+  }
 
+  private stockOrder(query: Pick<ListStockDto, "sortBy" | "sortOrder">) {
     const available = sql`${schema.inventory.quantity} - ${schema.inventory.reservedQuantity}`;
     const sortColumn = {
       productName: schema.products.name,
       sku: schema.productVariants.sku,
       available,
       branchName: schema.branches.name,
-    }[sortBy];
-    const direction = sortOrder === "asc" ? asc : desc;
+    }[query.sortBy];
+    const direction = query.sortOrder === "asc" ? asc : desc;
+    return [
+      direction(sortColumn),
+      asc(schema.productVariants.sortOrder),
+      // Tiebreak: one variant held at two branches is two rows with the same
+      // name, and they must not swap places between pages.
+      asc(schema.inventory.id),
+    ];
+  }
+
+  async listStock(query: ListStockDto): Promise<Paginated<unknown>> {
+    const { page, limit } = query;
+    const offset = (page - 1) * limit;
+    const where = this.stockWhere(query);
 
     return this.db.run(async (tx) => {
       const [items, [totals]] = await Promise.all([
@@ -96,13 +117,7 @@ export class InventoryService {
           .innerJoin(schema.branches, eq(schema.inventory.branchId, schema.branches.id))
           .leftJoin(schema.categories, eq(schema.products.categoryId, schema.categories.id))
           .where(where)
-          .orderBy(
-            direction(sortColumn),
-            asc(schema.productVariants.sortOrder),
-            // Tiebreak: one variant held at two branches is two rows with
-            // the same name, and they must not swap places between pages.
-            asc(schema.inventory.id),
-          )
+          .orderBy(...this.stockOrder(query))
           .limit(limit)
           .offset(offset),
         tx
@@ -132,20 +147,29 @@ export class InventoryService {
    * This is the answer to "where did those twelve go?", so it shows the
    * reference document and the person, not just the number.
    */
-  async listTransactions(query: ListTransactionsDto): Promise<Paginated<unknown>> {
-    const { page, limit, variantId, branchId, type, from, to } = query;
-    const offset = (page - 1) * limit;
+  /** Shared by the movement list and its export. Days are the business's days. */
+  private transactionsWhere(query: Omit<ListTransactionsDto, "page" | "limit">, timeZone: string) {
+    const { variantId, branchId, type } = query;
     assertBranchInScope(branchId);
-
-    const where = and(
+    return and(
       variantId ? eq(schema.inventoryTransactions.variantId, variantId) : undefined,
       branchFilter(schema.inventoryTransactions.branchId, branchId),
       type ? eq(schema.inventoryTransactions.type, type) : undefined,
-      from ? gte(schema.inventoryTransactions.createdAt, new Date(from)) : undefined,
-      to ? lte(schema.inventoryTransactions.createdAt, new Date(`${to}T23:59:59.999Z`)) : undefined,
+      localDateRange(schema.inventoryTransactions.createdAt, query, timeZone),
     );
+  }
+
+  private async timeZone(tx: Transaction): Promise<string> {
+    const tenant = await tx.query.tenants.findFirst({ columns: { settings: true } });
+    return resolveTenantSettings(tenant?.settings).locale.timezone;
+  }
+
+  async listTransactions(query: ListTransactionsDto): Promise<Paginated<unknown>> {
+    const { page, limit } = query;
+    const offset = (page - 1) * limit;
 
     return this.db.run(async (tx) => {
+      const where = this.transactionsWhere(query, await this.timeZone(tx));
       const [items, [totals]] = await Promise.all([
         tx
           .select({
@@ -309,5 +333,126 @@ export class InventoryService {
 
     const total = rows.reduce<bigint>((sum, r) => sum + Money.toMinor(r.value), 0n);
     return { branches: rows, total: Money.toDecimalString(total, 2) };
+  }
+
+  /**
+   * Stock on hand, every line the filter matches. Cost and value only for a
+   * user allowed to see cost — the same rule as the screen.
+   */
+  async exportStock(query: ExportStockDto): Promise<{ timeZone: string; sheets: ExportSheet<any>[] }> {
+    const where = this.stockWhere(query);
+    const canViewCost = RequestContext.get()?.user?.abac.canViewCost ?? false;
+
+    return this.db.run(async (tx) => {
+      const timeZone = await this.timeZone(tx);
+      const [counted] = await tx
+        .select({ value: count() })
+        .from(schema.inventory)
+        .innerJoin(schema.productVariants, eq(schema.inventory.variantId, schema.productVariants.id))
+        .innerJoin(schema.products, eq(schema.productVariants.productId, schema.products.id))
+        .where(where);
+      assertExportSize(counted?.value ?? 0);
+
+      const rows = await tx
+        .select({
+          sku: schema.productVariants.sku,
+          barcode: schema.productVariants.barcode,
+          productName: schema.products.name,
+          variantName: schema.productVariants.variantName,
+          categoryName: schema.categories.name,
+          unitAbbr: schema.units.abbreviation,
+          branchCode: schema.branches.code,
+          quantity: schema.inventory.quantity,
+          reservedQuantity: schema.inventory.reservedQuantity,
+          available: sql<string>`(${schema.inventory.quantity} - ${schema.inventory.reservedQuantity})::text`,
+          minStock: schema.productVariants.minStock,
+          binLocation: schema.inventory.binLocation,
+          averageCost: schema.inventory.averageCost,
+          value: sql<string>`(${schema.inventory.quantity} * coalesce(${schema.inventory.averageCost}, 0))::text`,
+        })
+        .from(schema.inventory)
+        .innerJoin(schema.productVariants, eq(schema.inventory.variantId, schema.productVariants.id))
+        .innerJoin(schema.products, eq(schema.productVariants.productId, schema.products.id))
+        .leftJoin(schema.units, eq(schema.products.unitId, schema.units.id))
+        .innerJoin(schema.branches, eq(schema.inventory.branchId, schema.branches.id))
+        .leftJoin(schema.categories, eq(schema.products.categoryId, schema.categories.id))
+        .where(where)
+        .orderBy(...this.stockOrder(query));
+
+      type Row = (typeof rows)[number];
+      const columns: ExportColumn<Row>[] = [
+        { header: "SKU", value: (r) => r.sku, width: 18 },
+        { header: "Barcode", value: (r) => r.barcode, width: 16 },
+        { header: "Product", value: (r) => r.productName, width: 36 },
+        { header: "Variant", value: (r) => r.variantName, width: 18 },
+        { header: "Category", value: (r) => r.categoryName, width: 18 },
+        { header: "Unit", value: (r) => r.unitAbbr },
+        { header: "Branch", value: (r) => r.branchCode },
+        { header: "Bin", value: (r) => r.binLocation },
+        { header: "On Hand", kind: "quantity", value: (r) => r.quantity },
+        { header: "Reserved", kind: "quantity", value: (r) => r.reservedQuantity },
+        { header: "Available", kind: "quantity", value: (r) => r.available },
+        { header: "Min Stock", kind: "quantity", value: (r) => r.minStock },
+      ];
+      if (canViewCost) {
+        columns.push(
+          { header: "Average Cost", kind: "money", value: (r) => r.averageCost },
+          { header: "Stock Value", kind: "money", value: (r) => r.value },
+        );
+      }
+      return { timeZone, sheets: [{ name: "Stock", rows, columns }] };
+    });
+  }
+
+  /** Every stock movement the filter matches, oldest first — a ledger reads forwards. */
+  async exportTransactions(query: ExportTransactionsDto): Promise<{ timeZone: string; sheets: ExportSheet<any>[] }> {
+    return this.db.run(async (tx) => {
+      const timeZone = await this.timeZone(tx);
+      const where = this.transactionsWhere(query, timeZone);
+
+      const [counted] = await tx
+        .select({ value: count() })
+        .from(schema.inventoryTransactions)
+        .where(where);
+      assertExportSize(counted?.value ?? 0);
+
+      const rows = await tx
+        .select({
+          createdAt: schema.inventoryTransactions.createdAt,
+          type: schema.inventoryTransactions.type,
+          sku: schema.productVariants.sku,
+          productName: schema.products.name,
+          variantName: schema.productVariants.variantName,
+          branchCode: schema.branches.code,
+          quantity: schema.inventoryTransactions.quantity,
+          balanceAfter: schema.inventoryTransactions.balanceAfter,
+          referenceType: schema.inventoryTransactions.referenceType,
+          notes: schema.inventoryTransactions.notes,
+          userName: schema.users.name,
+        })
+        .from(schema.inventoryTransactions)
+        .innerJoin(schema.productVariants, eq(schema.inventoryTransactions.variantId, schema.productVariants.id))
+        .innerJoin(schema.products, eq(schema.productVariants.productId, schema.products.id))
+        .innerJoin(schema.branches, eq(schema.inventoryTransactions.branchId, schema.branches.id))
+        .leftJoin(schema.users, eq(schema.inventoryTransactions.createdBy, schema.users.id))
+        .where(where)
+        .orderBy(asc(schema.inventoryTransactions.createdAt), asc(schema.inventoryTransactions.id));
+
+      type Row = (typeof rows)[number];
+      const columns: ExportColumn<Row>[] = [
+        { header: "Date", kind: "datetime", value: (r) => r.createdAt, width: 18 },
+        { header: "Type", value: (r) => r.type },
+        { header: "SKU", value: (r) => r.sku, width: 18 },
+        { header: "Product", value: (r) => r.productName, width: 36 },
+        { header: "Variant", value: (r) => r.variantName, width: 18 },
+        { header: "Branch", value: (r) => r.branchCode },
+        { header: "Quantity", kind: "quantity", value: (r) => r.quantity },
+        { header: "Balance After", kind: "quantity", value: (r) => r.balanceAfter },
+        { header: "Reference", value: (r) => r.referenceType },
+        { header: "By", value: (r) => r.userName },
+        { header: "Notes", value: (r) => r.notes, width: 30 },
+      ];
+      return { timeZone, sheets: [{ name: "Stock Movements", rows, columns }] };
+    });
   }
 }

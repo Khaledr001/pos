@@ -33,6 +33,8 @@ import {
   ScanBarcode,
   Banknote,
   Receipt,
+  Percent,
+  ListRestart,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/lib/theme-context";
@@ -70,6 +72,8 @@ const STATIC_NAVIGATION: NavAction[] = [
   { id: "expenses", category: "Navigation", title: "Expenses", subtitle: "Record and review branch spending", icon: Receipt, href: "/expenses", keywords: ["costs", "spending", "bills", "petty cash"] },
   { id: "customers", category: "Navigation", title: "Customers", subtitle: "Client database, loyalty points and credit ledgers", icon: Users, href: "/customers", keywords: ["clients", "buyers", "credit"] },
   { id: "purchases", category: "Navigation", title: "Purchase Orders", subtitle: "Procurement, goods receipts and vendor billing", icon: FileText, href: "/purchases", keywords: ["po", "procurement", "buy"] },
+  { id: "reorder", category: "Navigation", title: "Reorder Suggestions", subtitle: "Low stock turned into draft purchase orders", icon: ListRestart, href: "/purchases/reorder", keywords: ["low stock", "replenish", "restock", "min stock"] },
+  { id: "bulkprice", category: "Navigation", title: "Bulk Price Update", subtitle: "Raise or lower prices by category, brand or supplier", icon: Percent, href: "/products/bulk-price", keywords: ["price increase", "markup", "repricing", "percent"] },
   { id: "suppliers", category: "Navigation", title: "Suppliers", subtitle: "Vendor records and contacts", icon: Truck, href: "/suppliers", keywords: ["vendors", "distributors"] },
   { id: "reports", category: "Navigation", title: "Reports & KPIs", subtitle: "Sales analytics, profitability and inventory valuations", icon: BarChart3, href: "/reports", keywords: ["analytics", "metrics", "financial"] },
   { id: "whatsapp", category: "Navigation", title: "WhatsApp AI Assistant", subtitle: "Automated quotes, catalog chats and inquiries", icon: MessageSquare, href: "/whatsapp", keywords: ["bot", "chat", "messages"] },

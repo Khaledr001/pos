@@ -120,3 +120,16 @@ export const CustomerStatementSchema = z.object({
   order: z.enum(["asc", "desc"]).default("desc"),
 });
 export type CustomerStatementDto = z.infer<typeof CustomerStatementSchema>;
+
+const isoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a YYYY-MM-DD date");
+
+export const ShareStatementSchema = z
+  .object({
+    /** Inclusive. Omit both for the whole history. */
+    from: isoDay.optional(),
+    to: isoDay.optional(),
+    /** A link cannot be revoked once sent, so it does not live long. */
+    expiresInDays: z.coerce.number().int().min(1).max(30).default(14),
+  })
+  .refine((v) => !v.from || !v.to || v.from <= v.to, { message: "The period ends before it starts", path: ["to"] });
+export type ShareStatementDto = z.infer<typeof ShareStatementSchema>;

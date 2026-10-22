@@ -11,6 +11,8 @@ import { cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/format";
 import { useTenantSettings } from "@/lib/tenant-settings";
 import { readListResult, useListData, useListQuery } from "@/lib/use-list-query";
+import { DateRangeFilter } from "../_components/date-range-filter";
+import { ExportMenu } from "../_components/export-menu";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -105,10 +107,21 @@ export default function SalesPage() {
   const list = useListQuery({
     sortBy: "occurredAt",
     sortOrder: "desc",
-    filters: { cashSessionId: "", drawer: "" },
+    filters: { cashSessionId: "", drawer: "", from: "", to: "" },
   });
   const drawerFilter = list.filters.cashSessionId;
   const { q, page, sortBy, sortOrder } = list;
+  const { from, to } = list.filters;
+
+  /** What the list shows, minus paging — the export downloads exactly this. */
+  const filterQuery = {
+    q: q.trim() || undefined,
+    cashSessionId: drawerFilter || undefined,
+    from: from || undefined,
+    to: to || undefined,
+    sortBy,
+    sortOrder,
+  };
 
   const loadSales = useCallback(
     async (signal: AbortSignal) =>
@@ -116,17 +129,11 @@ export default function SalesPage() {
         await api.get<unknown>("/sales", {
           accessToken: tokens?.accessToken,
           signal,
-          query: {
-            q: q.trim() || undefined,
-            cashSessionId: drawerFilter || undefined,
-            page,
-            limit: LIMIT,
-            sortBy,
-            sortOrder,
-          },
+          query: { ...filterQuery, page, limit: LIMIT },
         }),
       ),
-    [tokens?.accessToken, q, page, sortBy, sortOrder, drawerFilter],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tokens?.accessToken, q, page, sortBy, sortOrder, drawerFilter, from, to],
   );
   const { items: sales, total, loading, initialLoading, error: loadError, reload: fetchSales } =
     useListData(loadSales, list.ready);
@@ -241,10 +248,13 @@ export default function SalesPage() {
             Finalized sales from POS terminals with snapshot pricing, VAT calculation, and payment splits.
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => { setError(null); fetchSales(); }} disabled={loading}>
-          <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <ExportMenu path="/sales/export" query={filterQuery} filenameBase="sales" onError={setError} />
+          <Button variant="outline" size="sm" onClick={() => { setError(null); fetchSales(); }} disabled={loading}>
+            <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {error && (
@@ -270,6 +280,15 @@ export default function SalesPage() {
           onChange={list.setSort}
         />
       </div>
+
+      <DateRangeFilter
+        from={from}
+        to={to}
+        onChange={(range) => {
+          list.setFilter("from", range.from);
+          list.setFilter("to", range.to);
+        }}
+      />
 
       {drawerFilter && (
         <div className="flex items-center gap-2 text-xs">

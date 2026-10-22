@@ -1,3 +1,4 @@
+import { and, eq, sql, type SQL } from "@devsfleet/db";
 import { z } from "zod";
 
 /**
@@ -27,4 +28,24 @@ export function sortSchema<const K extends readonly [string, ...string[]]>(
     sortBy: z.enum(keys).default(defaults.sortBy),
     sortOrder: z.enum(["asc", "desc"]).default(defaults.sortOrder),
   };
+}
+
+/**
+ * A `from`/`to` date range on the business's own calendar.
+ *
+ * Comparing a timestamp with a bare date cuts days in the DATABASE's zone —
+ * UTC — so for a Dubai shop the four hours after local midnight belonged to
+ * the previous day, and a VAT return for October lost the early hours of the
+ * 1st to September. Local midnight is converted to an instant instead, which
+ * also leaves the column bare and an index on it usable.
+ */
+export function localDateRange(
+  column: Parameters<typeof eq>[0],
+  range: { from?: string | null; to?: string | null },
+  timeZone: string,
+): SQL | undefined {
+  return and(
+    range.from ? sql`${column} >= (${range.from}::date::timestamp AT TIME ZONE ${timeZone})` : undefined,
+    range.to ? sql`${column} < ((${range.to}::date + 1)::timestamp AT TIME ZONE ${timeZone})` : undefined,
+  );
 }
