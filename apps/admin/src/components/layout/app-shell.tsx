@@ -88,7 +88,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div
           className={cn(
             "flex flex-1 flex-col min-w-0 w-full transition-all duration-300 ease-in-out",
-            collapsed ? "lg:pl-22" : "lg:pl-66",
+            collapsed ? "lg:pl-18" : "lg:pl-56",
             "pl-0",
           )}
         >

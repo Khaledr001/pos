@@ -95,8 +95,8 @@ type NavItem = {
   /**
    * What the collapsed rail prints under the icon.
    *
-   * The full label is written for a 264px panel — "Products & Catalog",
-   * "Day Close Registers" — and simply cannot be read in an 88px rail. Rather
+   * The full label is written for a 224px panel — "Products & Catalog",
+   * "Day Close Registers" — and simply cannot be read in a 72px rail. Rather
    * than truncate it to "Produc…", each item carries a one-word form. Falls
    * back to `label` when the label is already short enough.
    */
@@ -317,10 +317,10 @@ export function Sidebar({
    * loses children does not change height, indent or hit area.
    */
   const ROW =
-    "group relative flex w-full items-center gap-3 rounded-lg px-3 text-sm transition-colors " +
+    "group relative flex w-full items-center gap-2.5 rounded-lg px-2.5 text-[13px] transition-colors " +
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset";
-  /** 40px — comfortably past the 24×24 CSS px pointer-target minimum. */
-  const ROW_H = "h-10";
+  /** 36px — still well past the 24×24 CSS px pointer-target minimum. */
+  const ROW_H = "h-8";
 
   /**
    * A rail tile — icon over a VISIBLE label.
@@ -393,7 +393,7 @@ export function Sidebar({
               )}
             >
               {isParentActive && <ActiveBar />}
-              <Icon className="size-4.5 shrink-0" aria-hidden="true" />
+              <Icon className="size-4 shrink-0" aria-hidden="true" />
               <span aria-hidden="true" className="w-full truncate text-center text-[10px] leading-none">
                 {railLabel(item)}
               </span>
@@ -439,12 +439,12 @@ export function Sidebar({
           className={cn(ROW, ROW_H, "text-left", rowTone(isParentActive))}
         >
           {isParentActive && <ActiveBar />}
-          <Icon className="size-4.5 shrink-0" aria-hidden="true" />
+          <Icon className="size-4 shrink-0" aria-hidden="true" />
           <span className="flex-1 truncate">{item.label}</span>
           <ChevronDown
             aria-hidden="true"
             className={cn(
-              "size-4 shrink-0 text-muted-foreground/70 transition-transform duration-200 motion-reduce:transition-none",
+              "size-3.5 shrink-0 text-muted-foreground/70 transition-transform duration-200 motion-reduce:transition-none",
               isOpen && "rotate-180",
             )}
           />
@@ -463,7 +463,7 @@ export function Sidebar({
           )}
         >
           <div className="min-h-0">
-            <ul className="ml-[1.4rem] space-y-0.5 border-l border-sidebar-border py-1 pl-2">
+            <ul className="ml-[1.15rem] space-y-0.5 border-l border-sidebar-border py-1 pl-2">
               {item.children?.map((child) => {
                 const isChildActive = isRouteActive(pathname, child.href);
                 return (
@@ -474,7 +474,7 @@ export function Sidebar({
                       aria-current={isChildActive ? "page" : undefined}
                       tabIndex={isOpen ? undefined : -1}
                       className={cn(
-                        "flex h-8 items-center rounded-md px-2.5 text-xs transition-colors",
+                        "flex h-7.5 items-center rounded-md px-2.5 text-xs transition-colors",
                         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
                         isChildActive
                           ? "bg-primary/10 font-semibold text-primary"
@@ -511,7 +511,7 @@ export function Sidebar({
         )}
       >
         {isActive && <ActiveBar />}
-        <Icon className="size-4.5 shrink-0" aria-hidden="true" />
+        <Icon className="size-4 shrink-0" aria-hidden="true" />
         {showLabel ? (
           <span className="truncate">{item.label}</span>
         ) : (
@@ -558,10 +558,10 @@ export function Sidebar({
           isImpersonating ? "top-10.5" : "top-0",
           // Mobile: slide-out drawer
           mobileOpen
-            ? "translate-x-0 w-70 max-w-[85vw] shadow-2xl"
+            ? "translate-x-0 w-64 max-w-[85vw] shadow-2xl"
             : "-translate-x-full lg:translate-x-0",
           // Desktop: collapsed vs expanded
-          collapsed ? "lg:w-22" : "lg:w-66",
+          collapsed ? "lg:w-18" : "lg:w-56",
         )}
       >
         {/*
@@ -677,8 +677,8 @@ export function Sidebar({
              *
              * The rail is deliberately tighter than the panel: with a label
              * under every icon, the tiles already read as separate blocks, so
-             * the generous rhythm that stops a 264px panel feeling cramped
-             * just pushes the lower half of the nav off-screen at 88px.
+             * the generous rhythm that stops a 224px panel feeling cramped
+             * just pushes the lower half of the nav off-screen at 72px.
              */
             isRail ? "gap-1 py-2" : "gap-5 py-4",
           )}
@@ -691,13 +691,13 @@ export function Sidebar({
               className="flex flex-col gap-1"
             >
               {isRail ? (
-                /* Short and centred: a full-bleed rule across an 88px rail
+                /* Short and centred: a full-bleed rule across a 72px rail
                    reads as heavier than the items it is separating. */
                 index > 0 && (
                   <Separator className="mx-auto my-0.5 w-8 opacity-60" aria-hidden="true" />
                 )
               ) : (
-                <h2 className="px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
+                <h2 className="px-2.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
                   {section.label}
                 </h2>
               )}
