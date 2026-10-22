@@ -14,10 +14,11 @@ import {
   Table, TableBody, TableContainer, TableEmpty, TableHead, Th, numericCell,
 } from "@/components/ui/data-table";
 import { MobileEmpty, MobileList, MobileRow } from "@/components/ui/mobile-list";
+import { SelectField } from "@/components/ui/select";
 import { formatMoney } from "@/lib/format";
 import { useTenantSettings } from "@/lib/tenant-settings";
 import { cn } from "@/lib/utils";
-import { Field, Notice, PageHeader, errorText, selectClass } from "../shared";
+import { Field, Notice, PageHeader, errorText } from "../shared";
 
 interface Coupon {
   id: string;
@@ -198,10 +199,13 @@ export default function CouponsPage() {
                 <Field label="Code"><Input required value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} placeholder="WELCOME10" /></Field>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Field label="Gives">
-                    <select className={selectClass} value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-                      <option value="percent">A percentage off</option>
-                      <option value="free_shipping">Free delivery</option>
-                    </select>
+                    <SelectField
+                      size="sm"
+                      label="Gives"
+                      value={form.type}
+                      onValueChange={(v) => setForm({ ...form, type: v })}
+                      options={[{ value: "percent", label: "A percentage off" }, { value: "free_shipping", label: "Free delivery" }]}
+                    />
                   </Field>
                   {form.type === "percent" && <Field label="Percent off"><Input required inputMode="decimal" value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} /></Field>}
                 </div>

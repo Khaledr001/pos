@@ -255,7 +255,82 @@ const SelectSeparator = React.forwardRef<
 ));
 SelectSeparator.displayName = SelectPrimitive.Separator.displayName;
 
+/** Radix reserves "" (it means "no value"), but an "All …" filter option is "" everywhere else. */
+const EMPTY = "__empty__";
+
+export interface SelectOption {
+  value: string;
+  label: React.ReactNode;
+  disabled?: boolean;
+}
+
+/**
+ * The one-line select: an options array in, a value out — the shape a native
+ * `<select>` had, so a page swaps one for the other without restructuring.
+ *
+ * An option may use `""` for "All"/"None"; it is mapped to and from a
+ * sentinel here, because Radix refuses an empty item value.
+ */
+function SelectField({
+  value,
+  onValueChange,
+  options,
+  placeholder,
+  label,
+  size = "md",
+  disabled,
+  className,
+  contentClassName,
+  id,
+}: {
+  value: string;
+  onValueChange: (value: string) => void;
+  options: SelectOption[];
+  placeholder?: string;
+  /** The accessible name when there is no visible <label htmlFor={id}>. */
+  label?: string;
+  /** "sm" matches the compact form inputs (h-9, text-xs); "md" the filter bars (h-10, text-sm). */
+  size?: "sm" | "md";
+  disabled?: boolean;
+  className?: string;
+  contentClassName?: string;
+  id?: string;
+}) {
+  const toRadix = (v: string) => (v === "" ? EMPTY : v);
+  const hasEmptyOption = options.some((o) => o.value === "");
+  return (
+    <Select
+      // With no "" option, an empty value means "nothing chosen yet": leave
+      // Radix unset so the placeholder shows instead of a blank trigger.
+      value={value === "" && !hasEmptyOption ? undefined : toRadix(value)}
+      onValueChange={(v) => onValueChange(v === EMPTY ? "" : v)}
+      disabled={disabled}
+    >
+      <SelectTrigger
+        id={id}
+        aria-label={label}
+        className={cn(size === "md" ? "h-10 text-sm" : "h-9 text-xs", className)}
+      >
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent className={contentClassName}>
+        {options.map((o) => (
+          <SelectItem
+            key={o.value}
+            value={toRadix(o.value)}
+            disabled={o.disabled}
+            className={size === "md" ? "text-sm" : undefined}
+          >
+            {o.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 export {
+  SelectField,
   Select,
   SelectGroup,
   SelectValue,

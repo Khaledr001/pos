@@ -39,13 +39,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SelectField, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface Branch { id: string; name: string; code: string; }
 interface Supplier { id: string; name: string; company?: string | null; }
@@ -673,20 +667,21 @@ function CreateOrderDialog({
                       className="w-20 font-mono" placeholder="Qty"
                       aria-label={`Quantity for ${item.productName}`}
                     />
-                    <select
+                    <SelectField
+                      size="sm"
                       value={item.unitId}
-                      onChange={(e) => { const v = e.target.value; setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, unitId: v } : it))); }}
+                      onValueChange={(v) => setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, unitId: v } : it)))}
                       disabled={item.packagings.length === 0}
-                      aria-label={`Unit for ${item.productName}`}
-                      className="h-9 w-24 rounded-lg border border-border bg-background px-2 text-xs disabled:opacity-50"
-                    >
-                      <option value="">Base unit</option>
-                      {item.packagings.map((p) => (
-                        <option key={p.unitId} value={p.unitId}>
-                          {p.unitAbbr} ×{Number(p.conversionFactor).toLocaleString()}
-                        </option>
-                      ))}
-                    </select>
+                      label={`Unit for ${item.productName}`}
+                      className="w-24 shrink-0"
+                      options={[
+                        { value: "", label: "Base unit" },
+                        ...item.packagings.map((p) => ({
+                          value: p.unitId,
+                          label: `${p.unitAbbr} ×${Number(p.conversionFactor).toLocaleString()}`,
+                        })),
+                      ]}
+                    />
                     <Input
                       type="number" min="0" step="0.01" value={item.unitPrice}
                       onChange={(e) => { const v = e.target.value; setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, unitPrice: v } : it))); }}

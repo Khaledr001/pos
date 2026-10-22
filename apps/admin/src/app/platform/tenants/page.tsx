@@ -33,6 +33,7 @@ import { MobileEmpty, MobileList, MobileRow, MobileSort, listCard } from "@/comp
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SelectField } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -279,30 +280,28 @@ export default function PlatformTenantsPage() {
             />
 
             <div className="flex flex-wrap items-center gap-2">
-              <select
+              <SelectField
                 value={selectedPlan}
-                onChange={(e) => list.setFilter("plan", e.target.value)}
-                aria-label="Filter by plan"
-                className="h-10 min-w-0 flex-1 rounded-xl border border-input bg-background px-3 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 md:flex-none"
-              >
-                <option value="">All Subscription Plans</option>
-                {PLAN_IDS.map((p) => (
-                  <option key={p} value={p}>
-                    {p.charAt(0).toUpperCase() + p.slice(1)} Plan
-                  </option>
-                ))}
-              </select>
+                onValueChange={(v) => list.setFilter("plan", v)}
+                label="Filter by plan"
+                className="min-w-0 flex-1 rounded-xl bg-background md:w-52 md:flex-none"
+                options={[
+                  { value: "", label: "All Subscription Plans" },
+                  ...PLAN_IDS.map((p) => ({ value: p, label: `${p.charAt(0).toUpperCase() + p.slice(1)} Plan` })),
+                ]}
+              />
 
-              <select
+              <SelectField
                 value={selectedStatus}
-                onChange={(e) => list.setFilter("status", e.target.value)}
-                aria-label="Filter by status"
-                className="h-10 min-w-0 flex-1 rounded-xl border border-input bg-background px-3 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 md:flex-none"
-              >
-                <option value="">All Statuses</option>
-                <option value="active">Active Only</option>
-                <option value="suspended">Suspended Only</option>
-              </select>
+                onValueChange={(v) => list.setFilter("status", v)}
+                label="Filter by status"
+                className="min-w-0 flex-1 rounded-xl bg-background md:w-44 md:flex-none"
+                options={[
+                  { value: "", label: "All Statuses" },
+                  { value: "active", label: "Active Only" },
+                  { value: "suspended", label: "Suspended Only" },
+                ]}
+              />
             </div>
           </div>
         </CardContent>
@@ -702,22 +701,19 @@ export default function PlatformTenantsPage() {
                 <label className="block text-xs font-semibold text-foreground mb-1">
                   Commercial Plan Tier
                 </label>
-                <select
+                <SelectField
+                  size="sm"
                   value={provisionForm.planId}
-                  onChange={(e) =>
+                  onValueChange={(v) =>
                     setProvisionForm((prev) => ({
                       ...prev,
-                      planId: e.target.value as PlanId,
+                      planId: v as PlanId,
                     }))
                   }
-                  className="w-full h-9 rounded-xl border border-input bg-background px-3 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
-                >
-                  {PLAN_IDS.map((p) => (
-                    <option key={p} value={p}>
-                      {p.toUpperCase()} Plan
-                    </option>
-                  ))}
-                </select>
+                  label="Commercial plan tier"
+                  className="rounded-xl bg-background"
+                  options={PLAN_IDS.map((p) => ({ value: p, label: `${p.toUpperCase()} Plan` }))}
+                />
               </div>
             </div>
 
@@ -789,17 +785,13 @@ export default function PlatformTenantsPage() {
               <label className="block text-xs font-semibold text-foreground mb-1.5">
                 Target Plan
               </label>
-              <select
+              <SelectField
                 value={newPlanId}
-                onChange={(e) => setNewPlanId(e.target.value as PlanId)}
-                className="w-full h-10 rounded-xl border border-input bg-background px-3 text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
-              >
-                {PLAN_IDS.map((p) => (
-                  <option key={p} value={p}>
-                    {p.toUpperCase()} Tier
-                  </option>
-                ))}
-              </select>
+                onValueChange={(v) => setNewPlanId(v as PlanId)}
+                label="Target plan"
+                className="rounded-xl bg-background text-xs font-medium"
+                options={PLAN_IDS.map((p) => ({ value: p, label: `${p.toUpperCase()} Tier` }))}
+              />
             </div>
 
             <div>

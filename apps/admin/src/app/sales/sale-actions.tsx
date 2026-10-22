@@ -16,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { SelectField } from "@/components/ui/select";
 
 /**
  * Undoing a sale from the back office: void, or return part of it.
@@ -524,18 +525,13 @@ export function ReturnSaleDialog({
                 <label htmlFor="refund-method" className="mb-1 block text-xs font-medium">
                   Refund by
                 </label>
-                <select
+                <SelectField
                   id="refund-method"
+                  size="sm"
                   value={refundMethod}
-                  onChange={(e) => setRefundMethod(e.target.value as PaymentMethod)}
-                  className="h-9 w-full cursor-pointer rounded-lg border border-input bg-transparent px-3 text-sm"
-                >
-                  {REFUND_METHODS.map((m) => (
-                    <option key={m.method} value={m.method}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
+                  onValueChange={(v) => setRefundMethod(v as PaymentMethod)}
+                  options={REFUND_METHODS.map((m) => ({ value: m.method, label: m.label }))}
+                />
               </div>
               <div>
                 <label htmlFor="refund-ref" className="mb-1 block text-xs font-medium">

@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { ArrowDownUp, ChevronDown, type LucideIcon } from "lucide-react";
+import { SelectField } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import type { SortOrder } from "@/lib/use-list-query";
 
@@ -186,29 +187,26 @@ export function MobileSort({
 }) {
   const value = `${sortBy}:${sortOrder}`;
   return (
-    <label className={cn("relative flex items-center md:hidden", className)}>
-      <span className="sr-only">Sort by</span>
-      <ArrowDownUp aria-hidden="true" className="pointer-events-none absolute left-3 h-3.5 w-3.5 text-muted-foreground" />
-      <select
+    <div className={cn("relative md:hidden", className)}>
+      <ArrowDownUp
+        aria-hidden="true"
+        className="pointer-events-none absolute left-3 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+      />
+      <SelectField
         value={value}
-        onChange={(e) => {
-          const [column, order] = e.target.value.split(":") as [string, SortOrder];
+        onValueChange={(next) => {
+          const [column, order] = next.split(":") as [string, SortOrder];
           onChange(column, order);
         }}
-        className="h-10 w-full cursor-pointer appearance-none rounded-lg border border-input bg-secondary/30 pl-9 pr-8 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        {options.flatMap((o) => {
+        label="Sort by"
+        className="bg-secondary/30 pl-9"
+        options={options.flatMap((o) => {
           const first = o.firstOrder ?? "asc";
           const second: SortOrder = first === "asc" ? "desc" : "asc";
           const word = (d: SortOrder) => (d === "asc" ? "ascending" : "descending");
-          return [first, second].map((d) => (
-            <option key={`${o.column}:${d}`} value={`${o.column}:${d}`}>
-              {o.label} · {word(d)}
-            </option>
-          ));
+          return [first, second].map((d) => ({ value: `${o.column}:${d}`, label: `${o.label} · ${word(d)}` }));
         })}
-      </select>
-      <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-3 h-3.5 w-3.5 text-muted-foreground" />
-    </label>
+      />
+    </div>
   );
 }

@@ -10,8 +10,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { SelectField } from "@/components/ui/select";
 import { useTenantSettings } from "@/lib/tenant-settings";
-import { Field, Loading, Notice, PageHeader, errorText, humanize, selectClass, textareaClass } from "./shared";
+import { Field, Loading, Notice, PageHeader, errorText, humanize, textareaClass } from "./shared";
 
 const EMIRATES = ["ABU_DHABI", "DUBAI", "SHARJAH", "AJMAN", "UMM_AL_QUWAIN", "RAS_AL_KHAIMAH", "FUJAIRAH"];
 
@@ -263,9 +264,16 @@ export default function OnlineStorePage() {
               <Field label={`Cash on delivery up to (incl. ${taxLabel})`}><Input inputMode="decimal" value={draft.checkout.cod.maxTotal} onChange={(e) => setDraft({ ...draft, checkout: { ...draft.checkout, cod: { ...draft.checkout.cod, maxTotal: e.target.value } } })} /></Field>
               <Field label="Stock held back from the website" hint="Units per branch the counter keeps, so both cannot sell the last one."><Input type="number" min={0} value={draft.checkout.stockSafetyBuffer} onChange={(e) => setDraft({ ...draft, checkout: { ...draft.checkout, stockSafetyBuffer: Number(e.target.value) } })} /></Field>
               <Field label="Courier orders ship from">
-                <select className={selectClass} value={draft.checkout.fulfilmentBranchId ?? ""} onChange={(e) => setDraft({ ...draft, checkout: { ...draft.checkout, fulfilmentBranchId: e.target.value || null } })}>
-                  {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-                </select>
+                {/* With none set, the placeholder says so — the native select showed
+                    the first branch as if it were chosen while saving null. */}
+                <SelectField
+                  size="sm"
+                  label="Courier orders ship from"
+                  placeholder="Choose a branch"
+                  value={draft.checkout.fulfilmentBranchId ?? ""}
+                  onValueChange={(v) => setDraft({ ...draft, checkout: { ...draft.checkout, fulfilmentBranchId: v || null } })}
+                  options={branches.map((b) => ({ value: b.id, label: b.name }))}
+                />
               </Field>
             </div>
           </Card>
@@ -342,9 +350,14 @@ export default function OnlineStorePage() {
                       <td><input type="checkbox" aria-label={`Show ${b.name} on the website`} className="h-4 w-4" checked={!!online} onChange={(e) => setBranch(b.id, e.target.checked ? {} : null)} /></td>
                       <td>
                         {online && (
-                          <select aria-label={`${b.name} emirate`} className={`${selectClass} h-8 w-40`} value={online.emirate} onChange={(e) => setBranch(b.id, { emirate: e.target.value })}>
-                            {EMIRATES.map((em) => <option key={em} value={em}>{humanize(em)}</option>)}
-                          </select>
+                          <SelectField
+                            size="sm"
+                            label={`${b.name} emirate`}
+                            className="h-8 w-40"
+                            value={online.emirate}
+                            onValueChange={(v) => setBranch(b.id, { emirate: v })}
+                            options={EMIRATES.map((em) => ({ value: em, label: humanize(em) }))}
+                          />
                         )}
                       </td>
                       <td>{online && <input type="checkbox" aria-label={`${b.name} offers pickup`} className="h-4 w-4" checked={online.pickupEnabled} onChange={(e) => setBranch(b.id, { pickupEnabled: e.target.checked })} />}</td>

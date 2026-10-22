@@ -28,6 +28,7 @@ import {
 import { MobileEmpty, MobileList, MobileRow, MobileSort, listCard } from "@/components/ui/mobile-list";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SelectField } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -587,31 +588,25 @@ export default function ExpensesPage() {
             <div className="grid gap-3 sm:grid-cols-2">
               {!editing && (
                 <Field label="Branch" htmlFor="ex-branch" required>
-                  <select
+                  {/* No native `required` on a custom select — save() refuses a missing branch itself. */}
+                  <SelectField
                     id="ex-branch"
-                    required
+                    size="sm"
                     value={form.branchId}
-                    onChange={(e) => setForm({ ...form, branchId: e.target.value })}
-                    className="h-9 w-full cursor-pointer rounded-lg border border-input bg-transparent px-3 text-sm"
-                  >
-                    <option value="" disabled>Choose a branch</option>
-                    {branches.map((b) => (
-                      <option key={b.id} value={b.id}>{b.name}</option>
-                    ))}
-                  </select>
+                    onValueChange={(v) => setForm({ ...form, branchId: v })}
+                    placeholder="Choose a branch"
+                    options={branches.map((b) => ({ value: b.id, label: b.name }))}
+                  />
                 </Field>
               )}
               <Field label="Paid by" htmlFor="ex-method">
-                <select
+                <SelectField
                   id="ex-method"
+                  size="sm"
                   value={form.paymentMethod}
-                  onChange={(e) => setForm({ ...form, paymentMethod: e.target.value as PaymentMethod })}
-                  className="h-9 w-full cursor-pointer rounded-lg border border-input bg-transparent px-3 text-sm"
-                >
-                  {EXPENSE_METHODS.map((m) => (
-                    <option key={m.value} value={m.value}>{m.label}</option>
-                  ))}
-                </select>
+                  onValueChange={(v) => setForm({ ...form, paymentMethod: v as PaymentMethod })}
+                  options={EXPENSE_METHODS.map((m) => ({ value: m.value, label: m.label }))}
+                />
               </Field>
             </div>
 
@@ -719,17 +714,15 @@ function FilterSelect({
   options: Array<{ value: string; label: string }>;
 }) {
   return (
-    <label className="flex flex-col gap-1">
+    <div className="flex flex-col gap-1">
       <span className="text-[11px] font-medium text-muted-foreground">{label}</span>
-      <select
+      <SelectField
         value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="h-10 w-full cursor-pointer rounded-lg border border-input bg-secondary/30 px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>{o.label}</option>
-        ))}
-      </select>
-    </label>
+        onValueChange={onChange}
+        label={label}
+        className="bg-secondary/30"
+        options={options}
+      />
+    </div>
   );
 }

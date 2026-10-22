@@ -44,6 +44,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { SelectField } from "@/components/ui/select";
 import { PLAN_IDS, UNLIMITED, type PlanId } from "@devsfleet/shared-types";
 
 interface TenantDetail {
@@ -776,17 +777,13 @@ export default function TenantDetailPage() {
               <label className="block text-xs font-semibold text-foreground mb-1.5">
                 Target Plan
               </label>
-              <select
+              <SelectField
                 value={newPlanId}
-                onChange={(e) => setNewPlanId(e.target.value as PlanId)}
-                className="w-full h-10 rounded-xl border border-input bg-background px-3 text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
-              >
-                {PLAN_IDS.map((p) => (
-                  <option key={p} value={p}>
-                    {p.toUpperCase()} Plan
-                  </option>
-                ))}
-              </select>
+                onValueChange={(v) => setNewPlanId(v as PlanId)}
+                label="Target plan"
+                className="rounded-xl bg-background text-xs font-medium"
+                options={PLAN_IDS.map((p) => ({ value: p, label: `${p.toUpperCase()} Plan` }))}
+              />
             </div>
           </div>
 

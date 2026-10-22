@@ -11,7 +11,8 @@ import {
   Table, TableBody, TableContainer, TableEmpty, TableHead, Th,
 } from "@/components/ui/data-table";
 import { MobileEmpty, MobileList, MobileRow } from "@/components/ui/mobile-list";
-import { Notice, PageHeader, StatusBadge, errorText, selectClass } from "../shared";
+import { SelectField } from "@/components/ui/select";
+import { Notice, PageHeader, StatusBadge, errorText } from "../shared";
 
 interface Application {
   accountId: string;
@@ -112,18 +113,13 @@ export default function TradeApplicationsPage() {
                       {
                         label: "Price list",
                         value: (
-                          <select aria-label={`Price list for ${who}`} className={`${selectClass} w-40`} value={picked.priceListId} onChange={(e) => setChoice({ ...choice, [a.accountId]: { ...picked, priceListId: e.target.value } })}>
-                            {lists.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-                          </select>
+                          <SelectField size="sm" label={`Price list for ${who}`} className="w-40" placeholder="Price list" value={picked.priceListId} onValueChange={(v) => setChoice({ ...choice, [a.accountId]: { ...picked, priceListId: v } })} options={lists.map((l) => ({ value: l.id, label: l.name }))} />
                         ),
                       },
                       {
                         label: "Customer type",
                         value: (
-                          <select aria-label={`Customer type for ${who}`} className={`${selectClass} w-40`} value={picked.customerType} onChange={(e) => setChoice({ ...choice, [a.accountId]: { ...picked, customerType: e.target.value } })}>
-                            <option value="wholesale">Wholesale</option>
-                            <option value="vip">VIP</option>
-                          </select>
+                          <SelectField size="sm" label={`Customer type for ${who}`} className="w-40" value={picked.customerType} onValueChange={(v) => setChoice({ ...choice, [a.accountId]: { ...picked, customerType: v } })} options={[{ value: "wholesale", label: "Wholesale" }, { value: "vip", label: "VIP" }]} />
                         ),
                       },
                     ]
@@ -169,13 +165,8 @@ export default function TradeApplicationsPage() {
                     <td className="px-4 py-3.5">
                       {mayWrite && a.tradeStatus === "PENDING" && (
                         <div className="flex flex-wrap items-center gap-2">
-                          <select aria-label={`Price list for ${who}`} className={`${selectClass} w-44`} value={picked.priceListId} onChange={(e) => setChoice({ ...choice, [a.accountId]: { ...picked, priceListId: e.target.value } })}>
-                            {lists.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-                          </select>
-                          <select aria-label={`Customer type for ${who}`} className={`${selectClass} w-32`} value={picked.customerType} onChange={(e) => setChoice({ ...choice, [a.accountId]: { ...picked, customerType: e.target.value } })}>
-                            <option value="wholesale">Wholesale</option>
-                            <option value="vip">VIP</option>
-                          </select>
+                          <SelectField size="sm" label={`Price list for ${who}`} className="w-44" placeholder="Price list" value={picked.priceListId} onValueChange={(v) => setChoice({ ...choice, [a.accountId]: { ...picked, priceListId: v } })} options={lists.map((l) => ({ value: l.id, label: l.name }))} />
+                          <SelectField size="sm" label={`Customer type for ${who}`} className="w-32" value={picked.customerType} onValueChange={(v) => setChoice({ ...choice, [a.accountId]: { ...picked, customerType: v } })} options={[{ value: "wholesale", label: "Wholesale" }, { value: "vip", label: "VIP" }]} />
                           <Button size="sm" onClick={() => void decide(a, true)}>Approve</Button>
                           <Button size="sm" variant="outline" onClick={() => void decide(a, false)}>Reject</Button>
                         </div>

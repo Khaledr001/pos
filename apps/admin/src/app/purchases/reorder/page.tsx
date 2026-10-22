@@ -25,6 +25,16 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
+  Select,
+  SelectContent,
+  SelectField,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -348,19 +358,15 @@ export default function ReorderPage() {
           </p>
         </div>
         <div className="flex w-full gap-2 md:w-auto">
-          <select
+          <SelectField
+            size="sm"
             value={branchId}
-            onChange={(e) => chooseBranch(e.target.value)}
-            aria-label="Branch"
-            className="h-9 min-w-0 flex-1 cursor-pointer rounded-lg border border-input bg-transparent px-3 text-sm md:flex-none"
-          >
-            <option value="">Choose a branch…</option>
-            {branches.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name} ({b.code})
-              </option>
-            ))}
-          </select>
+            onValueChange={chooseBranch}
+            label="Branch"
+            placeholder="Choose a branch…"
+            className="min-w-0 flex-1 text-sm md:w-64 md:flex-none"
+            options={branches.map((b) => ({ value: b.id, label: `${b.name} (${b.code})` }))}
+          />
           <Button variant="outline" size="sm" className="h-9 shrink-0" onClick={() => void load()} disabled={!branchId || loading}>
             <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
             Refresh
@@ -723,31 +729,42 @@ function SupplierSelect({
   const linked = new Set(line.suppliers.map((s) => s.supplierId));
   const others = suppliers.filter((s) => !linked.has(s.id));
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      aria-label={`Supplier for ${line.sku}`}
-      className={cn(
-        "h-8 w-full max-w-48 cursor-pointer rounded-lg border bg-transparent px-2 text-xs",
-        value ? "border-input" : "border-amber-500/60",
-      )}
+    // The lower-level parts rather than SelectField: this list is grouped, and
+    // the built-in search (over 8 suppliers) filters within the groups.
+    <Select
+      value={value || undefined}
+      onValueChange={(v) => onChange(v === CLEAR_SUPPLIER ? "" : v)}
     >
-      <option value="">Choose…</option>
-      {line.suppliers.length > 0 && (
-        <optgroup label="Supplies this item">
-          {line.suppliers.map((s) => (
-            <option key={s.supplierId} value={s.supplierId}>
+      <SelectTrigger
+        aria-label={`Supplier for ${line.sku}`}
+        className={cn("h-8 w-full max-w-48", value ? "border-input" : "border-amber-500/60")}
+      >
+        <SelectValue placeholder="Choose…" />
+      </SelectTrigger>
+      <SelectContent searchPlaceholder="Search suppliers…">
+        {value && <SelectItem value={CLEAR_SUPPLIER}>No supplier</SelectItem>}
+        {line.suppliers.length > 0 && (
+          <SelectGroup>
+            <SelectLabel>Supplies this item</SelectLabel>
+            {line.suppliers.map((s) => (
+              <SelectItem key={s.supplierId} value={s.supplierId}>
+                {`${s.name}${s.lastCost ? ` · last ${qty(s.lastCost)}` : ""}`}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        )}
+        <SelectGroup>
+          <SelectLabel>{line.suppliers.length > 0 ? "Other suppliers" : "Suppliers"}</SelectLabel>
+          {others.map((s) => (
+            <SelectItem key={s.id} value={s.id}>
               {s.name}
-              {s.lastCost ? ` · last ${qty(s.lastCost)}` : ""}
-            </option>
+            </SelectItem>
           ))}
-        </optgroup>
-      )}
-      <optgroup label={line.suppliers.length > 0 ? "Other suppliers" : "Suppliers"}>
-        {others.map((s) => (
-          <option key={s.id} value={s.id}>{s.name}</option>
-        ))}
-      </optgroup>
-    </select>
+        </SelectGroup>
+      </SelectContent>
+    </Select>
   );
 }
+
+/** Radix reserves "" for "no value", so clearing the supplier needs its own item. */
+const CLEAR_SUPPLIER = "__none__";

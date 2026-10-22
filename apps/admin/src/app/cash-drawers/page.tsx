@@ -47,6 +47,7 @@ import {
 } from "@/components/ui/data-table";
 import { MobileEmpty, MobileList, MobileRow, MobileSort, listCard } from "@/components/ui/mobile-list";
 import { DateRangeFilter } from "../_components/date-range-filter";
+import { SelectField } from "@/components/ui/select";
 
 /**
  * Cash drawers — the back office's reconciliation view.
@@ -271,21 +272,19 @@ export default function CashDrawersPage() {
             ))}
           </div>
 
-          <label className="flex flex-col gap-1 text-[11px] font-medium text-muted-foreground">
+          <div className="flex flex-col gap-1 text-[11px] font-medium text-muted-foreground">
             Branch
-            <select
+            <SelectField
               value={filters.branchId}
-              onChange={(e) => list.setFilter("branchId", e.target.value)}
-              className="h-9 cursor-pointer rounded-lg border border-input bg-transparent px-2 text-sm text-foreground"
-            >
-              <option value="">All branches</option>
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name} ({b.code})
-                </option>
-              ))}
-            </select>
-          </label>
+              onValueChange={(v) => list.setFilter("branchId", v)}
+              label="Branch"
+              className="w-full sm:w-56"
+              options={[
+                { value: "", label: "All branches" },
+                ...branches.map((b) => ({ value: b.id, label: `${b.name} (${b.code})` })),
+              ]}
+            />
+          </div>
 
           <div className="flex flex-col gap-1 text-[11px] font-medium text-muted-foreground">
             Opened

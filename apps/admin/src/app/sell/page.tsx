@@ -56,6 +56,7 @@ import { HeldCartsDialog, type ResumeMode } from "./held-carts-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SelectField } from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -1950,21 +1951,21 @@ function CartRow({
 
         {/* Packaging. Only offered when the product actually has one. */}
         {units.length > 0 ? (
-          <select
+          <SelectField
+            size="sm"
             value={line.unit?.unitId ?? ""}
-            onChange={(e) =>
-              onUnit(e.target.value ? (units.find((u) => u.unitId === e.target.value) ?? null) : null)
-            }
-            aria-label="Unit"
-            className="h-7 cursor-pointer rounded-lg border border-input bg-transparent px-1.5 text-xs"
-          >
-            <option value="">{line.variant.unitAbbr}</option>
-            {units.map((u) => (
-              <option key={u.id} value={u.unitId}>
-                {u.unitAbbr} ({u.conversionFactor} {line.variant.unitAbbr})
-              </option>
-            ))}
-          </select>
+            onValueChange={(v) => onUnit(v ? (units.find((u) => u.unitId === v) ?? null) : null)}
+            label="Unit"
+            // Kept as compact as the quantity and price controls beside it.
+            className="h-7 w-auto gap-1 px-1.5"
+            options={[
+              { value: "", label: line.variant.unitAbbr },
+              ...units.map((u) => ({
+                value: u.unitId,
+                label: `${u.unitAbbr} (${u.conversionFactor} ${line.variant.unitAbbr})`,
+              })),
+            ]}
+          />
         ) : (
           <span className="px-1 text-xs text-muted-foreground">{unitLabel}</span>
         )}
@@ -2516,16 +2517,17 @@ function CustomerPicker({
               <div className="grid gap-3 sm:grid-cols-3">
                 <div>
                   <label htmlFor="nc-type" className="mb-1.5 block text-xs font-medium text-foreground">Customer type</label>
-                  <select
+                  <SelectField
                     id="nc-type"
+                    size="sm"
                     value={form.type}
-                    onChange={(e) => setForm((f) => ({ ...f, type: e.target.value as "retail" | "wholesale" | "vip" }))}
-                    className="h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm"
-                  >
-                    <option value="retail">Retail</option>
-                    <option value="wholesale">Wholesale</option>
-                    <option value="vip">VIP</option>
-                  </select>
+                    onValueChange={(v) => setForm((f) => ({ ...f, type: v as "retail" | "wholesale" | "vip" }))}
+                    options={[
+                      { value: "retail", label: "Retail" },
+                      { value: "wholesale", label: "Wholesale" },
+                      { value: "vip", label: "VIP" },
+                    ]}
+                  />
                 </div>
                 <div>
                   <label htmlFor="nc-credit" className="mb-1.5 block text-xs font-medium text-foreground">Credit limit ({currency})</label>

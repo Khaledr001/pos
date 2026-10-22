@@ -13,7 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TableSearch } from "@/components/ui/data-table";
-import { Loading, Notice, PageHeader, errorText, selectClass } from "../../online-store/shared";
+import { Loading, Notice, PageHeader, errorText } from "../../online-store/shared";
+import { SelectField } from "@/components/ui/select";
 
 interface Candidate {
   id: string;
@@ -309,7 +310,13 @@ export default function ImageReviewPage() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
-      if (target.closest("input, select, textarea") || e.metaKey || e.ctrlKey || e.altKey) return;
+      // The filter dropdowns are custom (a button + a listbox of options), not
+      // native selects: without these roles, Enter on an option approved the
+      // photo and the arrows changed product while the list was open.
+      if (
+        target.closest('input, select, textarea, [role="combobox"], [role="listbox"], [role="option"]') ||
+        e.metaKey || e.ctrlKey || e.altKey
+      ) return;
       const candidate = selected?.candidates[activeCandidate];
       if (e.key === "ArrowDown" || e.key === "j") { e.preventDefault(); select(selectedIndex + 1); }
       else if (e.key === "ArrowUp" || e.key === "k") { e.preventDefault(); select(selectedIndex - 1); }
@@ -362,14 +369,20 @@ export default function ImageReviewPage() {
           <div className="space-y-2 border-b border-border p-3">
             <TableSearch value={search} onChange={setSearch} placeholder="Search name or SKU" label="Search products" />
             <div className="grid grid-cols-2 gap-2">
-              <select aria-label="Category" className={selectClass} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-                <option value="">All categories</option>
-                {categories.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
-              </select>
-              <select aria-label="Brand" className={selectClass} value={brandId} onChange={(e) => setBrandId(e.target.value)}>
-                <option value="">All brands</option>
-                {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-              </select>
+              <SelectField
+                size="sm"
+                label="Category"
+                value={categoryId}
+                onValueChange={setCategoryId}
+                options={[{ value: "", label: "All categories" }, ...categories.map((c) => ({ value: c.id, label: c.label }))]}
+              />
+              <SelectField
+                size="sm"
+                label="Brand"
+                value={brandId}
+                onValueChange={setBrandId}
+                options={[{ value: "", label: "All brands" }, ...brands.map((b) => ({ value: b.id, label: b.name }))]}
+              />
             </div>
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
               <input type="checkbox" checked={onlyWithoutImage} onChange={(e) => setOnlyWithoutImage(e.target.checked)} />

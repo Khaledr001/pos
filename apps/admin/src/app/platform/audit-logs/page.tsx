@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/data-table";
 import { cn } from "@/lib/utils";
 import { MobileEmpty, MobileList, MobileRow, listCard } from "@/components/ui/mobile-list";
+import { SelectField } from "@/components/ui/select";
 import { readListResult, useListData, useListQuery } from "@/lib/use-list-query";
 
 interface AuditLogItem {
@@ -117,20 +118,20 @@ export default function PlatformAuditLogsPage() {
         <CardContent className="p-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <label htmlFor="audit-action-filter" className="font-semibold text-muted-foreground">Action Filter:</label>
-            <select
+            <SelectField
               id="audit-action-filter"
+              size="sm"
               value={selectedAction}
-              onChange={(e) => list.setFilter("action", e.target.value)}
-              className="h-9 rounded-xl border border-input bg-background px-3 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
-            >
-              <option value="">All Platform Actions</option>
-              <option value="create_tenant">create_tenant</option>
-              <option value="update_tenant">update_tenant</option>
-              <option value="change_plan">change_plan</option>
-              <option value="suspend">suspend</option>
-              <option value="activate">activate</option>
-              <option value="impersonate">impersonate</option>
-            </select>
+              onValueChange={(v) => list.setFilter("action", v)}
+              className="w-52 rounded-xl bg-background"
+              options={[
+                { value: "", label: "All Platform Actions" },
+                ...["create_tenant", "update_tenant", "change_plan", "suspend", "activate", "impersonate"].map((a) => ({
+                  value: a,
+                  label: a,
+                })),
+              ]}
+            />
           </div>
 
           <div className="text-xs text-muted-foreground">

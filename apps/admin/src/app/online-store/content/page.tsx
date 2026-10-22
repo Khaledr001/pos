@@ -15,7 +15,8 @@ import {
   Table, TableBody, TableContainer, TableEmpty, TableHead, Th, numericCell,
 } from "@/components/ui/data-table";
 import { MobileEmpty, MobileList, MobileRow } from "@/components/ui/mobile-list";
-import { Field, Notice, PageHeader, errorText, humanize, selectClass, textareaClass } from "../shared";
+import { SelectField } from "@/components/ui/select";
+import { Field, Notice, PageHeader, errorText, humanize, textareaClass } from "../shared";
 
 interface PageRow {
   id: string;
@@ -337,10 +338,13 @@ export default function ContentPage() {
                   <Field label="Title"><Input required value={pageForm.title} onChange={(e) => setPageForm({ ...pageForm, title: e.target.value })} /></Field>
                   <Field label="Address"><Input required value={pageForm.slug} onChange={(e) => setPageForm({ ...pageForm, slug: e.target.value })} placeholder="delivery-returns" /></Field>
                   <Field label="Kind">
-                    <select className={selectClass} value={pageForm.kind} onChange={(e) => setPageForm({ ...pageForm, kind: e.target.value })}>
-                      <option value="page">Page</option>
-                      <option value="blog">Guide / blog post</option>
-                    </select>
+                    <SelectField
+                      size="sm"
+                      label="Kind"
+                      value={pageForm.kind}
+                      onValueChange={(v) => setPageForm({ ...pageForm, kind: v })}
+                      options={[{ value: "page", label: "Page" }, { value: "blog", label: "Guide / blog post" }]}
+                    />
                   </Field>
                 </div>
                 <Field label="Body" hint="Markdown: ## headings, **bold**, lists.">
@@ -381,10 +385,13 @@ export default function ContentPage() {
                 <Field label="Subtitle"><Input value={bannerForm.subtitle} onChange={(e) => setBannerForm({ ...bannerForm, subtitle: e.target.value })} /></Field>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Field label="Where">
-                    <select className={selectClass} value={bannerForm.placement} onChange={(e) => setBannerForm({ ...bannerForm, placement: e.target.value })}>
-                      <option value="home_hero">Home — hero slider</option>
-                      <option value="home_strip">Home — announcement strip</option>
-                    </select>
+                    <SelectField
+                      size="sm"
+                      label="Where"
+                      value={bannerForm.placement}
+                      onValueChange={(v) => setBannerForm({ ...bannerForm, placement: v })}
+                      options={[{ value: "home_hero", label: "Home — hero slider" }, { value: "home_strip", label: "Home — announcement strip" }]}
+                    />
                   </Field>
                   <Field label="Order"><Input type="number" min={0} value={bannerForm.sortOrder} onChange={(e) => setBannerForm({ ...bannerForm, sortOrder: Number(e.target.value) })} /></Field>
                 </div>

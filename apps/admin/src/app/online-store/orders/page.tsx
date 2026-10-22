@@ -15,10 +15,11 @@ import {
   TablePagination, TableSearch, Th, numericCell,
 } from "@/components/ui/data-table";
 import { MobileEmpty, MobileList, MobileRow, MobileSort, listCard } from "@/components/ui/mobile-list";
+import { SelectField } from "@/components/ui/select";
 import { formatMoney } from "@/lib/format";
 import { useTenantSettings } from "@/lib/tenant-settings";
 import { readListResult, useListData, useListQuery } from "@/lib/use-list-query";
-import { Field, Notice, PageHeader, StatusBadge, errorText, humanize, selectClass } from "../shared";
+import { Field, Notice, PageHeader, StatusBadge, errorText, humanize } from "../shared";
 
 interface WebOrderRow {
   id: string;
@@ -434,11 +435,13 @@ export default function OnlineOrdersPage() {
                   <div className="text-xs font-semibold text-foreground">How was this {formatMoney(selected.totals.total.amount, { currency })} cash-on-delivery order paid?</div>
                   <div className="grid gap-3 sm:grid-cols-3">
                     <Field label="Method">
-                      <select className={selectClass} value={payMethod} onChange={(e) => setPayMethod(e.target.value)}>
-                        <option value="cash">Cash (into a till)</option>
-                        <option value="card">Card at the counter</option>
-                        <option value="bank_transfer">Bank transfer (courier remittance)</option>
-                      </select>
+                      <SelectField
+                        size="sm"
+                        label="Method"
+                        value={payMethod}
+                        onValueChange={(v) => setPayMethod(v)}
+                        options={[{ value: "cash", label: "Cash (into a till)" }, { value: "card", label: "Card at the counter" }, { value: "bank_transfer", label: "Bank transfer (courier remittance)" }]}
+                      />
                     </Field>
                     {payMethod === "cash" && (
                       <Field label="Cash session" hint="The open drawer the cash goes into.">
