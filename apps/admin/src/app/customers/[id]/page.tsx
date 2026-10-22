@@ -70,6 +70,7 @@ import { readListResult, useListData, type SortOrder } from "@/lib/use-list-quer
 import { useTenantSettings } from "@/lib/tenant-settings";
 import { SortableTh, TableContainer, TableHead, TablePagination, TableSearch, TableSkeletonRows } from "@/components/ui/data-table";
 import { MobileList, MobileRow } from "@/components/ui/mobile-list";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -3165,17 +3166,17 @@ function ShareStatementDialog({
           </div>
 
           {period === "custom" && (
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="mb-1 block text-xs font-medium" htmlFor="share-from">From</label>
-                <Input id="share-from" type="date" value={custom.from} onChange={(e) => setCustom((c) => ({ ...c, from: e.target.value }))} className="h-10" />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium" htmlFor="share-to">To</label>
-                <Input id="share-to" type="date" value={custom.to} onChange={(e) => setCustom((c) => ({ ...c, to: e.target.value }))} className="h-10" />
-              </div>
+            <div className="min-w-0">
+              <span className="mb-1 block text-xs font-medium">Custom period</span>
+              <DateRangePicker
+                value={custom}
+                onChange={(r) => setCustom(r)}
+                label="Statement period"
+                placeholder="Pick the period"
+                inline
+              />
               {invalidCustom && (
-                <p className="col-span-2 text-[11px] text-destructive">The period ends before it starts.</p>
+                <p className="mt-1 text-[11px] text-destructive">The period ends before it starts.</p>
               )}
             </div>
           )}

@@ -25,7 +25,6 @@ import { readListResult, useListData, useListQuery } from "@/lib/use-list-query"
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import {
   Sheet,
   SheetBody,
@@ -47,6 +46,7 @@ import {
   numericCell,
 } from "@/components/ui/data-table";
 import { MobileEmpty, MobileList, MobileRow, MobileSort, listCard } from "@/components/ui/mobile-list";
+import { DateRangeFilter } from "../_components/date-range-filter";
 
 /**
  * Cash drawers — the back office's reconciliation view.
@@ -287,26 +287,18 @@ export default function CashDrawersPage() {
             </select>
           </label>
 
-          <label className="flex flex-col gap-1 text-[11px] font-medium text-muted-foreground">
-            Opened from
-            <Input
-              type="date"
-              value={filters.from}
-              max={filters.to || undefined}
-              onChange={(e) => list.setFilter("from", e.target.value)}
-              className="h-9 w-40"
+          <div className="flex flex-col gap-1 text-[11px] font-medium text-muted-foreground">
+            Opened
+            <DateRangeFilter
+              from={filters.from}
+              to={filters.to}
+              label="Opened"
+              onChange={(r) => {
+                list.setFilter("from", r.from);
+                list.setFilter("to", r.to);
+              }}
             />
-          </label>
-          <label className="flex flex-col gap-1 text-[11px] font-medium text-muted-foreground">
-            to
-            <Input
-              type="date"
-              value={filters.to}
-              min={filters.from || undefined}
-              onChange={(e) => list.setFilter("to", e.target.value)}
-              className="h-9 w-40"
-            />
-          </label>
+          </div>
         </div>
       </div>
 

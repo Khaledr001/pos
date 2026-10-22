@@ -38,6 +38,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { DateRangeFilter } from "../_components/date-range-filter";
 
 interface Expense {
   id: string;
@@ -408,26 +409,18 @@ export default function ExpensesPage() {
             onChange={(v) => list.setFilter("category", v)}
             options={[{ value: "", label: "All categories" }, ...categories.map((c) => ({ value: c, label: titleCase(c) }))]}
           />
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-medium text-muted-foreground">From</span>
-            <Input
-              type="date"
-              value={filters.from}
-              max={filters.to || undefined}
-              onChange={(e) => list.setFilter("from", e.target.value)}
-              className="h-10"
+          <div className="flex flex-col gap-1">
+            <span className="text-[11px] font-medium text-muted-foreground">Period</span>
+            <DateRangeFilter
+              from={filters.from}
+              to={filters.to}
+              className="sm:w-full"
+              onChange={(r) => {
+                list.setFilter("from", r.from);
+                list.setFilter("to", r.to);
+              }}
             />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-medium text-muted-foreground">To</span>
-            <Input
-              type="date"
-              value={filters.to}
-              min={filters.from || undefined}
-              onChange={(e) => list.setFilter("to", e.target.value)}
-              className="h-10"
-            />
-          </label>
+          </div>
         </div>
       </div>
 
