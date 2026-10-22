@@ -63,7 +63,9 @@ export type WebhookVerifyDto = z.infer<typeof WebhookVerifySchema>;
 // ── Admin-facing DTOs ────────────────────────────────────────────────────────
 
 /**
- * The three secrets are REQUIRED on create and optional on update.
+ * The access token and app secret are REQUIRED on create and optional on
+ * update. The verify token is optional on create too: when omitted the server
+ * generates a strong one, which is what the setup wizard relies on.
  *
  * On update an omitted secret means "leave it alone", which is what lets an
  * admin change the display number without re-pasting a 200-character access
@@ -76,7 +78,7 @@ export const CreateWhatsappAccountSchema = z.object({
   displayPhoneNumber: z.string().trim().max(20).optional(),
   businessAccountId: z.string().trim().max(64).optional(),
   accessToken: z.string().trim().min(1),
-  verifyToken: z.string().trim().min(1).max(128),
+  verifyToken: z.string().trim().min(1).max(128).optional(),
   appSecret: z.string().trim().min(1).max(128),
   defaultBranchId: z.string().uuid().optional(),
   isActive: z.boolean().optional(),
@@ -93,6 +95,49 @@ export const UpdateWhatsappAccountSchema = z.object({
   isActive: z.boolean().optional(),
 });
 export type UpdateWhatsappAccountDto = z.infer<typeof UpdateWhatsappAccountSchema>;
+
+/** Credentials to check against Meta before saving. Nothing here is stored. */
+export const TestWhatsappConnectionSchema = z.object({
+  accessToken: z.string().trim().min(1),
+  phoneNumberId: z
+    .string()
+    .trim()
+    .min(1)
+    .max(64)
+    .regex(/^\d+$/, "The Phone number ID is digits only — copy it from WhatsApp → API Setup, not the phone number itself."),
+  appSecret: z.string().trim().min(1).max(128),
+  businessAccountId: z
+    .string()
+    .trim()
+    .regex(/^\d+$/, "The WhatsApp Business Account ID is digits only.")
+    .max(64)
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
+});
+export type TestWhatsappConnectionDto = z.infer<typeof TestWhatsappConnectionSchema>;
+
+/**
+ * Re-check a SAVED number with replacement credentials. Anything omitted
+ * falls back to what is stored, so rotating only the token never means
+ * re-pasting the app secret.
+ */
+export const RetestWhatsappAccountSchema = z.object({
+  accessToken: z.string().trim().min(1).optional(),
+  appSecret: z.string().trim().min(1).max(128).optional(),
+  businessAccountId: z
+    .string()
+    .trim()
+    .regex(/^\d+$/, "The WhatsApp Business Account ID is digits only.")
+    .max(64)
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
+});
+export type RetestWhatsappAccountDto = z.infer<typeof RetestWhatsappAccountSchema>;
+
+export const ConnectWebhookSchema = z.object({
+  callbackUrl: z.string().trim().url().max(500),
+});
+export type ConnectWebhookDto = z.infer<typeof ConnectWebhookSchema>;
 
 export const ListConversationsSchema = z.object({
   status: z.enum(["active", "resolved", "escalated"]).optional(),
