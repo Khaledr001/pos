@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ZERO_MONEY, zMoney } from "../../common/validation/money.js";
 
 export const HoldCartSchema = z.object({
   branchId: z.string().uuid().optional(),
@@ -18,7 +19,7 @@ export const HoldCartSchema = z.object({
 
   /** Shown in the list so a cashier can choose without restoring each one. */
   lineCount: z.coerce.number().int().min(0).default(0),
-  total: z.coerce.number().min(0).default(0),
+  total: zMoney().default(ZERO_MONEY),
 
   /** Minted by the terminal. Holding a cart twice on a flaky link is one cart. */
   localId: z.string().uuid().optional(),

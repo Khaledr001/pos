@@ -1,5 +1,6 @@
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, QUOTATION_STATUSES } from "@devsfleet/shared-types";
 import { z } from "zod";
+import { zMoney } from "../../common/validation/money.js";
 import { sortSchema } from "../../common/db/list-query.js";
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a YYYY-MM-DD date");
@@ -54,7 +55,7 @@ export const ConvertQuotationSchema = z.object({
     .array(
       z.object({
         method: z.string(),
-        amount: z.coerce.number().positive(),
+        amount: zMoney({ positive: true }),
         reference: z.string().trim().max(100).optional(),
       }),
     )

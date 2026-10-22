@@ -18,12 +18,14 @@ import { CustomersService } from "./customers.service.js";
 import {
   AdjustLoyaltySchema,
   CreateCustomerSchema,
+  CustomerStatementSchema,
   ListCustomersSchema,
   RecordPaymentSchema,
   SetCreditSchema,
   UpdateCustomerSchema,
   type AdjustLoyaltyDto,
   type CreateCustomerDto,
+  type CustomerStatementDto,
   type ListCustomersDto,
   type RecordPaymentDto,
   type SetCreditDto,
@@ -45,6 +47,24 @@ export class CustomersController {
   @RequirePermissions("customer:read")
   findById(@Param("id", ParseUUIDPipe) id: string) {
     return this.customers.findById(id);
+  }
+
+  /** Sales figures as well as the customer's, so both permissions. */
+  @Get(":id/summary")
+  @RequirePermissions("customer:read", "sale:read")
+  @ApiOperation({ summary: "Lifetime invoiced, paid and owed, over every document" })
+  summary(@Param("id", ParseUUIDPipe) id: string) {
+    return this.customers.summary(id);
+  }
+
+  @Get(":id/statement")
+  @RequirePermissions("customer:read", "sale:read")
+  @ApiOperation({ summary: "Account statement, paginated, with a server-side running balance" })
+  statement(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Query(zodPipe(CustomerStatementSchema)) query: CustomerStatementDto,
+  ) {
+    return this.customers.statement(id, query);
   }
 
   @Get(":id/payments")

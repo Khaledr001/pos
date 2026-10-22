@@ -532,11 +532,11 @@ function CreateOrderDialog({
           lines: items.map((i) => ({
             variantId: i.variantId,
             quantity: Number(i.quantity),
-            unitPrice: Number(i.unitPrice),
+            unitPrice: i.unitPrice.trim() || "0",
             // Omitted = the product's base unit, matching the API contract.
             ...(i.unitId ? { unitId: i.unitId } : {}),
           })),
-          shippingAmount: Number(shippingAmount) || 0,
+          shippingAmount: shippingAmount.trim() || "0",
           expectedDate: expectedDate || undefined,
           notes: notes || undefined,
         },
@@ -805,7 +805,7 @@ function ReceiveDialog({
               quantity: Number(l.quantity),
               damagedQuantity: Number(l.damagedQuantity) || 0,
             })),
-          ...(shippingAmount ? { shippingAmount: Number(shippingAmount) } : {}),
+          ...(shippingAmount.trim() ? { shippingAmount: shippingAmount.trim() } : {}),
           ...(invoiceNumber ? { supplierInvoiceNumber: invoiceNumber } : {}),
         },
         { accessToken: tokens?.accessToken },

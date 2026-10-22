@@ -1,9 +1,10 @@
 import { z } from "zod";
+import { zMoney } from "../../common/validation/money.js";
 
 export const OpenSessionSchema = z.object({
   branchId: z.string().uuid(),
   deviceId: z.string().uuid().optional(),
-  openingAmount: z.coerce.number().min(0),
+  openingAmount: zMoney(),
   notes: z.string().trim().max(500).optional(),
   /**
    * Minted by the terminal when the drawer was opened offline. The server
@@ -17,7 +18,7 @@ export type OpenSessionDto = z.infer<typeof OpenSessionSchema>;
 
 export const CloseSessionSchema = z.object({
   /** What was physically counted. The expected figure is revealed after. */
-  countedAmount: z.coerce.number().min(0),
+  countedAmount: zMoney(),
   /** Required when the drawer is short — enforced in the service. */
   notes: z.string().trim().max(500).optional(),
 });
@@ -25,7 +26,7 @@ export type CloseSessionDto = z.infer<typeof CloseSessionSchema>;
 
 export const CashMovementSchema = z.object({
   type: z.enum(["cash_in", "cash_out"]),
-  amount: z.coerce.number().positive(),
+  amount: zMoney({ positive: true }),
   /** Mandatory — an unexplained drawer movement is what shrinkage hides behind. */
   reason: z.string().trim().min(3, "Explain the movement").max(500),
 });

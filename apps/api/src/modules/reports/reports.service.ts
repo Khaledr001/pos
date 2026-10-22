@@ -1,7 +1,7 @@
 import { and, eq, schema, sql } from "@devsfleet/db";
 import { Money } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
-import { assertBranchInScope } from "../../common/context/branch-scope.js";
+import { assertBranchInScope, branchFilter } from "../../common/context/branch-scope.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import type { InventoryReportDto, ReportRangeDto, TopProductsDto } from "./dto.js";
 
@@ -88,7 +88,7 @@ export class ReportsService {
         .from(schema.payments)
         .where(
           and(
-            query.branchId ? eq(schema.payments.branchId, query.branchId) : undefined,
+            branchFilter(schema.payments.branchId, query.branchId),
             sql`(${schema.payments.occurredAt} AT TIME ZONE 'UTC')::date BETWEEN ${from}::date AND ${to}::date`,
           ),
         )
@@ -151,9 +151,7 @@ export class ReportsService {
     if (query.branchId) assertBranchInScope(query.branchId);
 
     return this.db.run(async (tx) => {
-      const branchFilter = query.branchId
-        ? eq(schema.inventory.branchId, query.branchId)
-        : undefined;
+      const inBranch = branchFilter(schema.inventory.branchId, query.branchId);
 
       const [totals] = await tx
         .select({
@@ -167,7 +165,7 @@ export class ReportsService {
           outOfStock: sql<number>`count(*) FILTER (WHERE ${schema.inventory.quantity} <= 0)::int`,
         })
         .from(schema.inventory)
-        .where(branchFilter);
+        .where(inBranch);
 
       const lowStock = await tx
         .select({
@@ -188,7 +186,7 @@ export class ReportsService {
         .innerJoin(schema.branches, eq(schema.inventory.branchId, schema.branches.id))
         .where(
           and(
-            branchFilter,
+            inBranch,
             sql`${schema.productVariants.deletedAt} IS NULL`,
             // A variant with no minimum set has no opinion about being low.
             sql`${schema.productVariants.minStock} IS NOT NULL`,
@@ -243,7 +241,7 @@ export class ReportsService {
         .from(schema.expenses)
         .where(
           and(
-            query.branchId ? eq(schema.expenses.branchId, query.branchId) : undefined,
+            branchFilter(schema.expenses.branchId, query.branchId),
             sql`${schema.expenses.expenseDate} BETWEEN ${from}::date AND ${to}::date`,
             sql`${schema.expenses.deletedAt} IS NULL`,
           ),
@@ -285,7 +283,7 @@ export class ReportsService {
    */
   private saleScope(branchId: string | undefined, from: string, to: string) {
     return and(
-      branchId ? eq(schema.sales.branchId, branchId) : undefined,
+      branchFilter(schema.sales.branchId, branchId),
       sql`(${schema.sales.occurredAt} AT TIME ZONE 'UTC')::date BETWEEN ${from}::date AND ${to}::date`,
       sql`${schema.sales.status} <> 'voided'`,
     );

@@ -1,5 +1,6 @@
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from "@devsfleet/shared-types";
 import { z } from "zod";
+import { ZERO_MONEY, zMoney } from "../../common/validation/money.js";
 import { zQueryBoolean } from "../../common/pipes/zod-validation.pipe.js";
 
 /**
@@ -16,11 +17,11 @@ const VariantInputSchema = z.object({
   barcode: z.string().trim().max(64).nullable().optional(),
   attributes: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).default({}),
 
-  sellingPrice: z.coerce.number().positive("A selling price is required"),
-  purchasePrice: z.coerce.number().min(0).default(0),
-  wholesalePrice: z.coerce.number().min(0).optional(),
+  sellingPrice: zMoney({ positive: "A selling price is required" }),
+  purchasePrice: zMoney().default(ZERO_MONEY),
+  wholesalePrice: zMoney().optional(),
   /** Floor. Staff cannot sell below it without `price:override_floor`. */
-  minSellingPrice: z.coerce.number().min(0).optional(),
+  minSellingPrice: zMoney().optional(),
 
   minStock: z.coerce.number().min(0).default(0),
   reorderQuantity: z.coerce.number().min(0).default(0),
@@ -120,7 +121,7 @@ export const CreateVariantUnitSchema = z.object({
   conversionFactor: z.coerce.number().positive(),
   barcode: z.string().trim().max(64).optional(),
   /** Flat price for the pack. Omit to use base price x conversionFactor. */
-  priceOverride: z.coerce.number().positive().optional(),
+  priceOverride: zMoney({ positive: true }).optional(),
   /** Offer it in the POS unit picker. */
   isSellable: z.boolean().default(true),
   /**
@@ -135,7 +136,7 @@ export const UpdateVariantUnitSchema = CreateVariantUnitSchema.omit({ unitId: tr
   .partial()
   .extend({
     /** Explicit null clears an existing flat price back to the computed default. */
-    priceOverride: z.coerce.number().positive().nullable().optional(),
+    priceOverride: zMoney({ positive: true }).nullable().optional(),
   });
 export type UpdateVariantUnitDto = z.infer<typeof UpdateVariantUnitSchema>;
 
@@ -150,7 +151,7 @@ const ProductSupplierLinkShape = z.object({
   supplierSku: z.string().trim().min(1).max(100).optional(),
   supplierBarcode: z.string().trim().min(1).max(64).optional(),
   leadTimeDays: z.coerce.number().int().min(0).optional(),
-  lastCost: z.coerce.number().min(0).optional(),
+  lastCost: zMoney().optional(),
   notes: z.string().trim().max(1000).optional(),
 });
 

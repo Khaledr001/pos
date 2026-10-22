@@ -1,3 +1,4 @@
+import { eq, inArray, type SQL } from "@devsfleet/db";
 import { AppError, ERROR_CODES } from "@devsfleet/shared-utils";
 import { RequestContext } from "./request-context.js";
 
@@ -70,4 +71,30 @@ export function requireBranchId(explicit?: string | null): string {
 
   assertBranchInScope(branchId);
   return branchId;
+}
+
+/**
+ * The branch condition for a LIST query, in one call.
+ *
+ * Every list used to write `branchId ? eq(col, branchId) : undefined`, which
+ * is right when the caller names a branch and wrong when they do not: no
+ * branch named — the UI's default — meant no branch condition at all, and a
+ * manager scoped to one shop saw quotations, stock, purchase orders and the
+ * audit trail of every shop in the business. This applies the named branch
+ * (after checking it) or, failing that, the caller's own scope.
+ *
+ * Rows with a NULL branch (tenant-wide audit events, say) drop out for a
+ * scoped caller. That is deliberate: a branch manager has no business reading
+ * the owner's settings changes.
+ */
+export function branchFilter(
+  column: Parameters<typeof eq>[0],
+  named?: string | null,
+): SQL | undefined {
+  if (named) {
+    assertBranchInScope(named);
+    return eq(column, named);
+  }
+  const scope = branchScope();
+  return scope ? inArray(column, scope) : undefined;
 }

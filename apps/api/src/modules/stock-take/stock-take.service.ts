@@ -7,7 +7,7 @@ import {
   sequenceKey,
 } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
-import { assertBranchInScope, requireBranchId } from "../../common/context/branch-scope.js";
+import { assertBranchInScope, branchFilter, requireBranchId } from "../../common/context/branch-scope.js";
 import { RequestContext } from "../../common/context/request-context.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import { StockService } from "../inventory/stock.service.js";
@@ -318,7 +318,7 @@ export class StockTakeService {
 
     return this.db.run(async (tx) => {
       const where = and(
-        query.branchId ? eq(schema.stockCounts.branchId, query.branchId) : undefined,
+        branchFilter(schema.stockCounts.branchId, query.branchId),
         query.status ? eq(schema.stockCounts.status, query.status) : undefined,
       );
 

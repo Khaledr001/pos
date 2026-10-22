@@ -1,7 +1,7 @@
 import { and, eq, schema } from "@devsfleet/db";
 import { AppError, ERROR_CODES, Money } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
-import { assertBranchInScope } from "../../common/context/branch-scope.js";
+import { assertBranchInScope, branchFilter } from "../../common/context/branch-scope.js";
 import { RequestContext } from "../../common/context/request-context.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import { StockService } from "../inventory/stock.service.js";
@@ -155,7 +155,7 @@ export class SerialsService {
           and(
             query.variantId ? eq(schema.serialNumbers.variantId, query.variantId) : undefined,
             query.status ? eq(schema.serialNumbers.status, query.status) : undefined,
-            query.branchId ? eq(schema.serialNumbers.branchId, query.branchId) : undefined,
+            branchFilter(schema.serialNumbers.branchId, query.branchId),
           ),
         )
         .orderBy(schema.serialNumbers.serial)

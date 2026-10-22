@@ -1,11 +1,18 @@
-import { and, asc, count, desc, eq, ilike, isNull, or, schema, sql } from "@devsfleet/db";
+import { and, asc, count, desc, eq, ilike, inArray, isNull, or, schema, sql } from "@devsfleet/db";
 import type { Customer } from "@devsfleet/db";
 import { AppError, ERROR_CODES, Money } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
-import { requireBranchId } from "../../common/context/branch-scope.js";
+import { branchScope, requireBranchId } from "../../common/context/branch-scope.js";
 import { RequestContext } from "../../common/context/request-context.js";
 import { containsPattern } from "../../common/db/list-query.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
+import {
+  ledgerQuery,
+  openingBalance,
+  summariseLedger,
+  type CustomerSummary,
+  type LedgerAggregates,
+} from "./statement.js";
 import type {
   AdjustLoyaltyDto,
   CreateCustomerDto,
@@ -13,6 +20,7 @@ import type {
   RecordPaymentDto,
   SetCreditDto,
   UpdateCustomerDto,
+  CustomerStatementDto,
 } from "./dto.js";
 
 type Transaction = Parameters<Parameters<TenantDatabase["run"]>[0]>[0];
@@ -291,6 +299,142 @@ export class CustomersService {
         .orderBy(desc(schema.loyaltyTransactions.createdAt))
         .limit(100),
     );
+  }
+
+  /**
+   * Lifetime figures for the profile, over every document rather than the
+   * latest page of them. Branch-scoped like the sales list: someone limited
+   * to one shop sees that shop's dealings with the customer.
+   */
+  async summary(id: string): Promise<CustomerSummary> {
+    await this.findById(id);
+    const scope = branchScope();
+    const s = schema.sales;
+    const p = schema.customerPayments;
+    const pm = schema.payments;
+
+    return this.db.run(async (tx) => {
+      const saleScope = scope ? sql`and ${inArray(s.branchId, scope)}` : sql``;
+      const payScope = scope ? sql`and ${inArray(p.branchId, scope)}` : sql``;
+
+      const [sales] = (
+        await tx.execute(sql`
+          select
+            count(*) filter (where ${s.returnOfSaleId} is null) as "invoiceCount",
+            sum(${s.total}) filter (where ${s.returnOfSaleId} is null) as "invoiced",
+            sum(${s.total} - ${s.dueAmount}) filter (where ${s.returnOfSaleId} is null) as "paidAtSale",
+            -sum(${s.total}) filter (where ${s.returnOfSaleId} is not null) as "returned",
+            sum((select -sum(${pm.amount}) from ${pm} where ${pm.saleId} = ${s.id}))
+              filter (where ${s.returnOfSaleId} is not null) as "refunded",
+            count(*) as "saleRows"
+          from ${s}
+          where ${s.customerId} = ${id} and ${s.status} <> 'voided' ${saleScope}
+        `)
+      ) as unknown as Array<Record<string, string | number | null>>;
+
+      const [payments] = (
+        await tx.execute(sql`
+          select sum(${p.amount}) as "accountPayments", count(*) as "paymentRows"
+          from ${p}
+          where ${p.customerId} = ${id} ${payScope}
+        `)
+      ) as unknown as Array<Record<string, string | number | null>>;
+
+      return summariseLedger({
+        invoiceCount: sales?.invoiceCount ?? 0,
+        invoiced: (sales?.invoiced as string | null) ?? null,
+        paidAtSale: (sales?.paidAtSale as string | null) ?? null,
+        returned: (sales?.returned as string | null) ?? null,
+        refunded: (sales?.refunded as string | null) ?? null,
+        accountPayments: (payments?.accountPayments as string | null) ?? null,
+        entryCount: Number(sales?.saleRows ?? 0) + Number(payments?.paymentRows ?? 0),
+      } satisfies LedgerAggregates);
+    });
+  }
+
+  /**
+   * One page of the account statement, with the running balance worked out
+   * over the WHOLE ledger before paging — so page 2 carries on from where
+   * page 1 left off, whichever way it is sorted. Ties on the same instant are
+   * broken by id, or two rows could swap between pages and the running
+   * balance would jump.
+   */
+  async statement(id: string, query: CustomerStatementDto) {
+    await this.findById(id);
+    const scope = branchScope();
+    const direction = query.order === "asc" ? sql`asc` : sql`desc`;
+
+    return this.db.run(async (tx) => {
+      const ledger = ledgerQuery(id, scope);
+      const result = await tx.execute(sql`
+        with ledger as (${ledger}),
+        running as (
+          select ledger.*,
+            sum(debit - credit) over (
+              order by date asc, id asc rows between unbounded preceding and current row
+            ) as balance
+          from ledger
+        )
+        select
+          id, kind, date, doc_number as "docNumber", status, method, notes,
+          branch_name as "branchName",
+          debit::text as debit, credit::text as credit, balance::text as balance,
+          count(*) over () as "totalRows",
+          (select coalesce(sum(debit - credit), 0) from ledger)::text as "closingBalance"
+        from running
+        order by date ${direction}, id ${direction}
+        limit ${query.pageSize} offset ${(query.page - 1) * query.pageSize}
+      `);
+
+      type Row = {
+        id: string;
+        kind: "invoice" | "return" | "payment";
+        date: string;
+        docNumber: string | null;
+        status: string | null;
+        method: string | null;
+        notes: string | null;
+        branchName: string | null;
+        debit: string;
+        credit: string;
+        balance: string;
+        totalRows: string | number;
+        closingBalance: string;
+      };
+      const rows = result as unknown as Row[];
+
+      let total = Number(rows[0]?.totalRows ?? 0);
+      let closing = rows[0]?.closingBalance ?? "0";
+      if (rows.length === 0) {
+        // Past the last page the window functions have nothing to report on.
+        const [agg] = (
+          await tx.execute(sql`
+            with ledger as (${ledger})
+            select count(*) as n, coalesce(sum(debit - credit), 0)::text as closing from ledger
+          `)
+        ) as unknown as Array<{ n: string | number; closing: string }>;
+        total = Number(agg?.n ?? 0);
+        closing = agg?.closing ?? "0";
+      }
+
+      const items = rows.map(({ totalRows: _t, closingBalance: _c, ...row }) => row);
+      const oldest = query.order === "asc" ? items[0] : items[items.length - 1];
+      const totalPages = Math.max(1, Math.ceil(total / query.pageSize));
+
+      return {
+        items,
+        meta: {
+          page: query.page,
+          limit: query.pageSize,
+          total,
+          totalPages,
+          hasNext: query.page < totalPages,
+          hasPrev: query.page > 1,
+          openingBalance: openingBalance(oldest, closing),
+          closingBalance: Money.toDecimalString(Money.toMinor(closing), 4),
+        },
+      };
+    });
   }
 
   async findById(id: string): Promise<Customer> {

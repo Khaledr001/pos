@@ -386,7 +386,7 @@ export function ReturnSaleDialog({
             ? [
                 {
                   method: refundMethod,
-                  amount: Number(Money.toDecimalString(refund, 2)),
+                  amount: Money.toDecimalString(refund, 2),
                   ...(refundReference.trim() ? { reference: refundReference.trim() } : {}),
                 },
               ]

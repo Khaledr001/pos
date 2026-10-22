@@ -1,5 +1,6 @@
-import { DEFAULT_PAGE_SIZE, DOCUMENT_SOURCES, MAX_PAGE_SIZE, PAYMENT_METHODS } from "@devsfleet/shared-types";
+import { DEFAULT_PAGE_SIZE, DOCUMENT_SOURCES, MAX_PAGE_SIZE, PAYMENT_METHODS, SALE_STATUSES } from "@devsfleet/shared-types";
 import { z } from "zod";
+import { zMoney } from "../../common/validation/money.js";
 import { sortSchema } from "../../common/db/list-query.js";
 
 const SaleLineSchema = z.object({
@@ -26,7 +27,7 @@ const SaleLineSchema = z.object({
 
 const PaymentSchema = z.object({
   method: z.enum(PAYMENT_METHODS),
-  amount: z.coerce.number().positive(),
+  amount: zMoney({ positive: true }),
   reference: z.string().trim().max(100).optional(),
 });
 
@@ -72,7 +73,7 @@ export type CreateSaleDto = z.infer<typeof CreateSaleSchema>;
 
 export const RefundSchema = z.object({
   method: z.enum(PAYMENT_METHODS),
-  amount: z.coerce.number().positive(),
+  amount: zMoney({ positive: true }),
   reference: z.string().trim().max(100).optional(),
 });
 
@@ -154,6 +155,9 @@ export const ListSalesSchema = z.object({
   to: z.string().date().optional(),
   /** Invoice number, customer name or branch name/code. */
   q: z.string().trim().max(100).optional(),
+  status: z.enum(SALE_STATUSES).optional(),
+  /** A sale, or a return document raised against one. */
+  kind: z.enum(["sale", "return"]).optional(),
   ...sortSchema(["occurredAt", "saleNumber", "total"], { sortBy: "occurredAt", sortOrder: "desc" }),
 });
 export type ListSalesDto = z.infer<typeof ListSalesSchema>;

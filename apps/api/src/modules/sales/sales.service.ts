@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, ilike, inArray, or, schema, sql } from "@devsfleet/db";
+import { and, asc, count, desc, eq, ilike, inArray, isNotNull, isNull, or, schema, sql } from "@devsfleet/db";
 import {
   hasPermission,
   resolveTenantSettings,
@@ -1306,6 +1306,12 @@ export class SalesService {
         query.customerId ? eq(schema.sales.customerId, query.customerId) : undefined,
         query.from ? sql`${schema.sales.occurredAt} >= ${query.from}::date` : undefined,
         query.to ? sql`${schema.sales.occurredAt} < (${query.to}::date + 1)` : undefined,
+        query.status ? eq(schema.sales.status, query.status) : undefined,
+        query.kind === "sale"
+          ? isNull(schema.sales.returnOfSaleId)
+          : query.kind === "return"
+            ? isNotNull(schema.sales.returnOfSaleId)
+            : undefined,
         term
           ? or(
               ilike(schema.sales.saleNumber, term),
@@ -1343,6 +1349,7 @@ export class SalesService {
           paidAmount: schema.sales.paidAmount,
           dueAmount: schema.sales.dueAmount,
           status: schema.sales.status,
+          returnOfSaleId: schema.sales.returnOfSaleId,
           branchName: schema.branches.name,
           branchCode: schema.branches.code,
           customerName: schema.customers.name,

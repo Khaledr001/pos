@@ -1,5 +1,6 @@
 import { PRICE_LIST_TYPES, CURRENCIES } from "@devsfleet/shared-types";
 import { z } from "zod";
+import { zMoney } from "../../common/validation/money.js";
 import { zQueryBoolean } from "../../common/pipes/zod-validation.pipe.js";
 
 const DATE_STRING = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
@@ -32,9 +33,9 @@ export type ListPriceListsDto = z.infer<typeof ListPriceListsSchema>;
 export const SetProductPriceSchema = z.object({
   variantId: z.string().uuid(),
   priceListId: z.string().uuid(),
-  sellingPrice: z.coerce.number().positive("A selling price is required"),
-  purchasePrice: z.coerce.number().min(0).optional(),
-  minSellingPrice: z.coerce.number().min(0).optional(),
+  sellingPrice: zMoney({ positive: "A selling price is required" }),
+  purchasePrice: zMoney().optional(),
+  minSellingPrice: zMoney().optional(),
   /**
    * Quantity break: 1 (the default) is the ordinary, untiered price. A
    * second row at e.g. 10 applies once the sold quantity reaches 10 —
@@ -59,7 +60,7 @@ export type BulkSetProductPricesDto = z.infer<typeof BulkSetProductPricesSchema>
 export const SetCustomerPriceSchema = z.object({
   customerId: z.string().uuid(),
   variantId: z.string().uuid(),
-  specialPrice: z.coerce.number().positive("A price is required"),
+  specialPrice: zMoney({ positive: "A price is required" }),
   notes: z.string().trim().max(1000).optional(),
   effectiveFrom: DATE_STRING.optional(),
 });

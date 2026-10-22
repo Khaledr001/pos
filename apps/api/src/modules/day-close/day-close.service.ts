@@ -1,7 +1,7 @@
 import { and, count, desc, eq, gte, isNull, lte, schema, sql } from "@devsfleet/db";
 import { AppError, ERROR_CODES, Money } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
-import { assertBranchInScope, requireBranchId } from "../../common/context/branch-scope.js";
+import { assertBranchInScope, branchFilter, requireBranchId } from "../../common/context/branch-scope.js";
 import { RequestContext } from "../../common/context/request-context.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import type { CloseDayDto, ListDaysDto, OpenDayDto, PreviewDayDto } from "./dto.js";
@@ -219,7 +219,7 @@ export class DayCloseService {
 
     return this.db.run(async (tx) => {
       const where = and(
-        query.branchId ? eq(schema.dailyClosings.branchId, query.branchId) : undefined,
+        branchFilter(schema.dailyClosings.branchId, query.branchId),
         query.from ? gte(schema.dailyClosings.closingDate, query.from) : undefined,
         query.to ? lte(schema.dailyClosings.closingDate, query.to) : undefined,
       );

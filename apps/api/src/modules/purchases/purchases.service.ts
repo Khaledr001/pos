@@ -9,7 +9,7 @@ import {
   sequenceKey,
 } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
-import { assertBranchInScope, requireBranchId } from "../../common/context/branch-scope.js";
+import { assertBranchInScope, branchFilter, requireBranchId } from "../../common/context/branch-scope.js";
 import { RequestContext } from "../../common/context/request-context.js";
 import { containsPattern } from "../../common/db/list-query.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
@@ -775,7 +775,7 @@ export class PurchasesService {
 
     return this.db.run(async (tx) => {
       const where = and(
-        query.branchId ? eq(schema.purchaseOrders.branchId, query.branchId) : undefined,
+        branchFilter(schema.purchaseOrders.branchId, query.branchId),
         query.supplierId ? eq(schema.purchaseOrders.supplierId, query.supplierId) : undefined,
         query.status ? eq(schema.purchaseOrders.status, query.status) : undefined,
         query.from

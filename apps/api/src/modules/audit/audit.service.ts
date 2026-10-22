@@ -1,6 +1,6 @@
 import { and, asc, count, desc, eq, gte, ilike, lte, or, schema } from "@devsfleet/db";
 import { Injectable } from "@nestjs/common";
-import { assertBranchInScope } from "../../common/context/branch-scope.js";
+import { assertBranchInScope, branchFilter } from "../../common/context/branch-scope.js";
 import { containsPattern } from "../../common/db/list-query.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import type { ListAuditLogDto } from "./dto.js";
@@ -24,7 +24,7 @@ export class AuditService {
 
     return this.db.run(async (tx) => {
       const where = and(
-        query.branchId ? eq(schema.auditLog.branchId, query.branchId) : undefined,
+        branchFilter(schema.auditLog.branchId, query.branchId),
         query.userId ? eq(schema.auditLog.userId, query.userId) : undefined,
         query.entityType ? eq(schema.auditLog.entityType, query.entityType) : undefined,
         query.from ? gte(schema.auditLog.createdAt, new Date(`${query.from}T00:00:00Z`)) : undefined,

@@ -1,5 +1,6 @@
 import { DEFAULT_PAGE_SIZE, LOCALES, MAX_PAGE_SIZE } from "@devsfleet/shared-types";
 import { z } from "zod";
+import { zMoney } from "../../common/validation/money.js";
 import { sortSchema } from "../../common/db/list-query.js";
 import { zQueryBoolean } from "../../common/pipes/zod-validation.pipe.js";
 
@@ -14,7 +15,7 @@ const AbacSchema = z.object({
   /** 0-100. A cashier at 5 cannot discount 6%, regardless of their role. */
   maxDiscountPercent: z.coerce.number().min(0).max(100).optional(),
   /** null = no ceiling. Omit to leave unchanged. */
-  maxSaleAmount: z.coerce.number().min(0).nullable().optional(),
+  maxSaleAmount: zMoney().nullable().optional(),
   canApproveRefund: z.boolean().optional(),
   /** Gates cost and margin everywhere, server-side. */
   canViewCost: z.boolean().optional(),

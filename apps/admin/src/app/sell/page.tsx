@@ -1046,10 +1046,10 @@ export default function SellPage() {
               : {}),
           })),
           payments: tenders
-            .filter((t) => Number(t.amount) > 0)
+            .filter((t) => Money.isPositive(Money.toMinor(t.amount || "0")))
             .map((t) => ({
               method: t.method,
-              amount: Number(t.amount),
+              amount: t.amount,
               ...(t.reference.trim() ? { reference: t.reference.trim() } : {}),
             })),
           ...(Number(documentDiscount) > 0
@@ -2405,7 +2405,7 @@ function CustomerPicker({
           trn: form.trn.trim() || undefined,
           address: form.address.trim() || undefined,
           type: form.type,
-          creditLimit: Number.parseFloat(form.creditLimit) || 0,
+          creditLimit: form.creditLimit.trim() || "0",
           paymentTermDays: Number.parseInt(form.paymentTermDays, 10) || 0,
           notes: form.notes.trim() || undefined,
         },

@@ -65,8 +65,9 @@ import {
 } from "@/components/ui/select";
 import { Money } from "@devsfleet/shared-utils";
 import { formatMoney as formatAmount, timeAgo } from "@/lib/format";
+import { readListResult, useListData, type SortOrder } from "@/lib/use-list-query";
 import { useTenantSettings } from "@/lib/tenant-settings";
-import { TableContainer, TableHead, TableSearch } from "@/components/ui/data-table";
+import { SortableTh, TableContainer, TableHead, TablePagination, TableSearch, TableSkeletonRows } from "@/components/ui/data-table";
 import { MobileList, MobileRow } from "@/components/ui/mobile-list";
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -115,6 +116,8 @@ interface SalePayment {
 
 interface CustomerSale {
   id: string;
+  /** Set on a return document — it credits the account rather than charging it. */
+  returnOfSaleId?: string | null;
   saleNumber?: string;
   invoiceNumber?: string;
   occurredAt?: string;
@@ -153,9 +156,8 @@ interface CustomerQuotation {
   total: string;
   status: "draft" | "sent" | "accepted" | "converted" | "expired";
   createdAt: string;
-  expiresAt?: string | null;
-  branchName?: string;
-  itemsCount?: number;
+  validUntil?: string | null;
+  expired?: boolean;
 }
 
 interface LoyaltyRecord {
@@ -171,6 +173,79 @@ interface Branch {
   id: string;
   name: string;
   code: string;
+}
+
+/** `GET /customers/:id/summary` — lifetime figures over every document. */
+interface CustomerSummary {
+  invoiceCount: number;
+  invoiced: string;
+  returned: string;
+  paid: string;
+  balance: string;
+  entryCount: number;
+}
+
+/** One row of `GET /customers/:id/statement`, running balance worked out server-side. */
+interface StatementRow {
+  id: string;
+  kind: "invoice" | "return" | "payment";
+  date: string;
+  docNumber: string | null;
+  status: string | null;
+  method: string | null;
+  notes: string | null;
+  branchName: string | null;
+  debit: string;
+  credit: string;
+  balance: string;
+}
+
+interface StatementPage {
+  items: StatementRow[];
+  total: number;
+  openingBalance: string;
+  closingBalance: string;
+}
+
+const INVOICE_PAGE_SIZE = 20;
+const STATEMENT_PAGE_SIZE = 25;
+const QUOTE_PAGE_SIZE = 20;
+
+/** The status filter's choices, as the sales list's own query parameters. */
+const INVOICE_FILTERS: Record<string, { status?: string; kind?: "sale" | "return" }> = {
+  all: {},
+  completed: { status: "completed", kind: "sale" },
+  partially_returned: { status: "partially_returned" },
+  returned: { status: "returned" },
+  voided: { status: "voided" },
+  return: { kind: "return" },
+};
+
+function useDebounced<T>(value: T, ms = 300): T {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(value), ms);
+    return () => clearTimeout(timer);
+  }, [value, ms]);
+  return settled;
+}
+
+function statementDescription(row: StatementRow): string {
+  if (row.kind === "payment") {
+    return `Settlement via ${(row.method ?? "").replace("_", " ")}${row.notes ? ` - ${row.notes}` : ""}`;
+  }
+  if (row.kind === "return") return "Goods returned (credit note)";
+  return `Tax Invoice (${(row.status ?? "").replace("_", " ")})`;
+}
+
+function statementDoc(row: StatementRow): string {
+  if (row.kind === "payment") return row.docNumber ? `Ref: ${row.docNumber}` : "Account Payment";
+  return row.docNumber ?? "—";
+}
+
+/** A sale row's figures say how a statement line opens its bill. */
+function rowAsSale(row: StatementRow): CustomerSale {
+  return { id: row.id, saleNumber: row.docNumber ?? undefined, total: row.debit, status: row.status ?? "" };
 }
 
 const TYPE_GRADIENT: Record<string, string> = {
@@ -234,9 +309,8 @@ export default function ClientDetailPage() {
 
   // State
   const [customer, setCustomer] = useState<Customer | null>(null);
-  const [sales, setSales] = useState<CustomerSale[]>([]);
+  const [summary, setSummary] = useState<CustomerSummary | null>(null);
   const [payments, setPayments] = useState<CustomerPaymentRecord[]>([]);
-  const [quotations, setQuotations] = useState<CustomerQuotation[]>([]);
   const [loyaltyHistory, setLoyaltyHistory] = useState<LoyaltyRecord[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
 
@@ -254,9 +328,29 @@ export default function ClientDetailPage() {
   type TabKey = "invoices" | "payments" | "statement" | "quotations" | "loyalty";
   const [activeTab, setActiveTab] = useState<TabKey>("invoices");
 
-  // Invoices filters
+  /**
+   * Invoices, quotations and the statement page on the server, each with its
+   * own search and page. Kept in component state rather than the URL: three
+   * lists on one page would fight over the same `page` and `q` parameters.
+   */
   const [invoiceSearch, setInvoiceSearch] = useState("");
+  const invoiceQ = useDebounced(invoiceSearch.trim());
   const [invoiceStatusFilter, setInvoiceStatusFilter] = useState<string>("all");
+  const [invoicePage, setInvoicePage] = useState(1);
+  const [invoiceSort, setInvoiceSort] = useState<{ by: string; order: SortOrder }>({
+    by: "occurredAt",
+    order: "desc",
+  });
+  useEffect(() => setInvoicePage(1), [invoiceQ, invoiceStatusFilter, invoiceSort]);
+
+  const [quoteSearch, setQuoteSearch] = useState("");
+  const quoteQ = useDebounced(quoteSearch.trim());
+  const [quotePage, setQuotePage] = useState(1);
+  useEffect(() => setQuotePage(1), [quoteQ]);
+
+  const [statementPage, setStatementPage] = useState(1);
+  /** Bumped after anything that moves the balance, so the open lists re-read. */
+  const [ledgerVersion, setLedgerVersion] = useState(0);
 
   // Bill Details Modal
   const [selectedSale, setSelectedSale] = useState<CustomerSale | null>(null);
@@ -321,15 +415,16 @@ export default function ClientDetailPage() {
         });
         setCustomer(custData);
 
-        // Fetch sales/invoices for customer
-        const salesRes = await api.get<any>(`/sales`, {
-          accessToken: tokens.accessToken,
-          query: { customerId, limit: 100 },
-        });
-        const salesList: CustomerSale[] = Array.isArray(salesRes)
-          ? salesRes
-          : salesRes?.items ?? [];
-        setSales(salesList);
+        // Lifetime figures over every document, not the latest page of them.
+        try {
+          setSummary(
+            await api.get<CustomerSummary>(`/customers/${customerId}/summary`, {
+              accessToken: tokens.accessToken,
+            }),
+          );
+        } catch {
+          setSummary(null);
+        }
 
         // Fetch payments history
         try {
@@ -340,18 +435,6 @@ export default function ClientDetailPage() {
           setPayments(Array.isArray(payRes) ? payRes : []);
         } catch {
           setPayments([]);
-        }
-
-        // Fetch quotations
-        try {
-          const quotesRes = await api.get<any>(`/quotations`, {
-            accessToken: tokens.accessToken,
-            query: { customerId, pageSize: 100 },
-          });
-          const quotesList = Array.isArray(quotesRes) ? quotesRes : quotesRes?.items ?? [];
-          setQuotations(quotesList);
-        } catch {
-          setQuotations([]);
         }
 
         // Fetch loyalty history
@@ -383,10 +466,111 @@ export default function ClientDetailPage() {
       } finally {
         setLoading(false);
         setRefreshing(false);
+        setLedgerVersion((v) => v + 1);
       }
     },
     [customerId, tokens?.accessToken, payBranchId],
   );
+
+  const loadInvoices = useCallback(
+    async (signal: AbortSignal) => {
+      void ledgerVersion;
+      return readListResult<CustomerSale>(
+        await api.get<unknown>("/sales", {
+          accessToken: tokens?.accessToken,
+          signal,
+          query: {
+            customerId,
+            q: invoiceQ || undefined,
+            page: invoicePage,
+            limit: INVOICE_PAGE_SIZE,
+            sortBy: invoiceSort.by,
+            sortOrder: invoiceSort.order,
+            ...INVOICE_FILTERS[invoiceStatusFilter],
+          },
+        }),
+      );
+    },
+    [tokens?.accessToken, customerId, invoiceQ, invoicePage, invoiceSort, invoiceStatusFilter, ledgerVersion],
+  );
+  const invoices = useListData(loadInvoices, Boolean(customerId && tokens?.accessToken && activeTab === "invoices"));
+
+  const loadQuotes = useCallback(
+    async (signal: AbortSignal) =>
+      readListResult<CustomerQuotation>(
+        await api.get<unknown>("/quotations", {
+          accessToken: tokens?.accessToken,
+          signal,
+          query: { customerId, q: quoteQ || undefined, page: quotePage, pageSize: QUOTE_PAGE_SIZE },
+        }),
+      ),
+    [tokens?.accessToken, customerId, quoteQ, quotePage],
+  );
+  const quotes = useListData(loadQuotes, Boolean(customerId && tokens?.accessToken && activeTab === "quotations"));
+
+  /** Fetches one page of the statement; also used, page after page, to print it in full. */
+  const fetchStatement = useCallback(
+    async (page: number, pageSize: number, order: "asc" | "desc", signal?: AbortSignal): Promise<StatementPage> => {
+      const res = await api.get<StatementRow[] & { meta?: { total: number; openingBalance: string; closingBalance: string } }>(
+        `/customers/${customerId}/statement`,
+        { accessToken: tokens?.accessToken, signal, query: { page, pageSize, order } },
+      );
+      return {
+        items: Array.isArray(res) ? [...res] : [],
+        total: res?.meta?.total ?? 0,
+        openingBalance: res?.meta?.openingBalance ?? "0",
+        closingBalance: res?.meta?.closingBalance ?? "0",
+      };
+    },
+    [customerId, tokens?.accessToken],
+  );
+
+  const [statement, setStatement] = useState<StatementPage | null>(null);
+  const [statementLoading, setStatementLoading] = useState(false);
+  useEffect(() => {
+    if (activeTab !== "statement" || !customerId || !tokens?.accessToken) return;
+    const controller = new AbortController();
+    setStatementLoading(true);
+    fetchStatement(statementPage, STATEMENT_PAGE_SIZE, "desc", controller.signal)
+      .then((page) => !controller.signal.aborted && setStatement(page))
+      .catch((err: unknown) => {
+        if (!controller.signal.aborted) setPageError(err instanceof Error ? err.message : "Failed to load the statement.");
+      })
+      .finally(() => !controller.signal.aborted && setStatementLoading(false));
+    return () => controller.abort();
+  }, [activeTab, statementPage, customerId, tokens?.accessToken, fetchStatement, ledgerVersion]);
+
+  /**
+   * The printed statement is the WHOLE ledger, oldest first — read in
+   * server-sized pages until there are no more, so it never stops at
+   * whatever the screen happened to be showing.
+   */
+  const [printRows, setPrintRows] = useState<StatementRow[] | null>(null);
+  const [printLoading, setPrintLoading] = useState(false);
+  useEffect(() => {
+    if (!isStatementModalOpen || !customerId) return;
+    let cancelled = false;
+    setPrintRows(null);
+    setPrintLoading(true);
+    void (async () => {
+      try {
+        const all: StatementRow[] = [];
+        for (let page = 1; ; page++) {
+          const chunk = await fetchStatement(page, 200, "asc");
+          all.push(...chunk.items);
+          if (cancelled || chunk.items.length === 0 || all.length >= chunk.total) break;
+        }
+        if (!cancelled) setPrintRows(all);
+      } catch (err: unknown) {
+        if (!cancelled) setPageError(err instanceof Error ? err.message : "Failed to load the full statement.");
+      } finally {
+        if (!cancelled) setPrintLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isStatementModalOpen, customerId, fetchStatement]);
 
   useEffect(() => {
     loadCustomerData();
@@ -466,8 +650,8 @@ export default function ClientDetailPage() {
 
   const openPaymentModal = () => {
     if (!customer) return;
-    const debt = parseFloat(customer.creditBalance || "0");
-    setPayAmount(debt > 0 ? debt.toFixed(2) : "0.00");
+    const debt = Money.toMinor(customer.creditBalance || "0");
+    setPayAmount(Money.isPositive(debt) ? Money.toDecimalString(debt, 2) : "0.00");
     setPayMethod("cash");
     setPayRef("");
     setPayNotes("");
@@ -515,8 +699,16 @@ export default function ClientDetailPage() {
     setPaySubmitting(true);
     setPageError(null);
 
-    const amountNum = parseFloat(payAmount);
-    if (!amountNum || amountNum <= 0) {
+    // Sent as the typed decimal string — the API reads it with Money, and a
+    // float in between is exactly how 0.1 + 0.2 ends up on a receipt.
+    const amount = payAmount.trim();
+    let amountMinor: bigint;
+    try {
+      amountMinor = Money.toMinor(amount || "0");
+    } catch {
+      amountMinor = 0n;
+    }
+    if (!Money.isPositive(amountMinor)) {
       setPageError("Payment amount must be greater than 0.");
       setPaySubmitting(false);
       return;
@@ -526,7 +718,7 @@ export default function ClientDetailPage() {
       await api.post(
         `/customers/${customer.id}/payments`,
         {
-          amount: amountNum,
+          amount,
           method: payMethod,
           branchId: payBranchId || branches[0]?.id || undefined,
           referenceNumber: payRef || undefined,
@@ -535,7 +727,7 @@ export default function ClientDetailPage() {
         { accessToken: tokens?.accessToken },
       );
 
-      setSuccessMsg(`Payment of ${currency} ${formatMoney(amountNum)} recorded successfully.`);
+      setSuccessMsg(`Payment of ${currency} ${formatMoney(amount)} recorded successfully.`);
       setIsPaymentModalOpen(false);
       await loadCustomerData(true);
     } catch (err: any) {
@@ -590,7 +782,7 @@ export default function ClientDetailPage() {
       await api.patch(
         `/customers/${customer.id}/credit`,
         {
-          creditLimit: parseFloat(creditLimitInput) || 0,
+          creditLimit: creditLimitInput.trim() || "0",
           creditOnHold: creditOnHoldInput,
         },
         { accessToken: tokens?.accessToken },
@@ -637,127 +829,15 @@ export default function ClientDetailPage() {
     }
   };
 
-  // ── Filtered Sales ────────────────────────────────────────────────────────
-
-  const filteredSales = useMemo(() => {
-    return sales.filter((s) => {
-      const matchSearch =
-        !invoiceSearch ||
-        (s.saleNumber && s.saleNumber.toLowerCase().includes(invoiceSearch.toLowerCase())) ||
-        (s.invoiceNumber && s.invoiceNumber.toLowerCase().includes(invoiceSearch.toLowerCase())) ||
-        (s.cashierName && s.cashierName.toLowerCase().includes(invoiceSearch.toLowerCase()));
-      const matchStatus =
-        invoiceStatusFilter === "all" ||
-        s.status?.toLowerCase() === invoiceStatusFilter.toLowerCase();
-      return matchSearch && matchStatus;
-    });
-  }, [sales, invoiceSearch, invoiceStatusFilter]);
-
-  // ── Combined Statement / Ledger ───────────────────────────────────────────
-
-  interface LedgerRow {
-    id: string;
-    date: string;
-    type: "invoice" | "payment";
-    docNumber: string;
-    description: string;
-    branchName?: string;
-    debit: bigint; // Invoice increase owed
-    credit: bigint; // Payment decreases owed
-    runningBalance: bigint;
-    raw: any;
-  }
-
-  const statementLedger = useMemo(() => {
-    const list: Array<{
-      id: string;
-      date: Date;
-      type: "invoice" | "payment";
-      docNumber: string;
-      description: string;
-      branchName?: string;
-      debit: bigint;
-      credit: bigint;
-      raw: any;
-    }> = [];
-
-    // Add Sales (Invoices)
-    sales.forEach((s) => {
-      if (s.status === "void") return; // exclude voided from balance
-      const totalNum = Money.toMinor(s.total || "0");
-      list.push({
-        id: `sale-${s.id}`,
-        date: new Date(s.occurredAt || s.createdAt || Date.now()),
-        type: "invoice",
-        docNumber: s.saleNumber || s.invoiceNumber || "Invoice",
-        description: `Tax Invoice (${s.status})`,
-        branchName: s.branchName,
-        debit: totalNum,
-        credit: Money.ZERO,
-        raw: s,
-      });
-    });
-
-    // Add Customer Payments
-    payments.forEach((p) => {
-      const amountNum = Money.toMinor(p.amount || "0");
-      list.push({
-        id: `pay-${p.id}`,
-        date: new Date(p.createdAt || Date.now()),
-        type: "payment",
-        docNumber: p.referenceNumber ? `Ref: ${p.referenceNumber}` : "Account Payment",
-        description: `Settlement via ${p.method.replace("_", " ")}${p.notes ? ` - ${p.notes}` : ""}`,
-        branchName: branches.find((b) => b.id === p.branchId)?.name,
-        debit: Money.ZERO,
-        credit: amountNum,
-        raw: p,
-      });
-    });
-
-    // Sort ascending chronologically to compute running balance
-    list.sort((a, b) => a.date.getTime() - b.date.getTime());
-
-    // In Money, not floats: a running balance adds every row to the last, so
-    // float error accumulates down the statement instead of washing out.
-    let currentBalance = Money.ZERO;
-    const computed: LedgerRow[] = list.map((item) => {
-      currentBalance = Money.subtract(Money.add(currentBalance, item.debit), item.credit);
-      return {
-        id: item.id,
-        date: item.date.toISOString(),
-        type: item.type,
-        docNumber: item.docNumber,
-        description: item.description,
-        branchName: item.branchName,
-        debit: item.debit,
-        credit: item.credit,
-        runningBalance: currentBalance,
-        raw: item.raw,
-      };
-    });
-
-    // Return reversed so latest is top
-    return computed.reverse();
-  }, [sales, payments, branches]);
-
-  // Total Lifetime Invoiced
-  const totalLifetimeInvoiced = useMemo(() => {
-    return sales
-      .filter((s) => s.status !== "void")
-      .reduce((sum, s) => Money.add(sum, Money.toMinor(s.total || "0")), Money.ZERO);
-  }, [sales]);
-
-  // Total Lifetime Payments
-  const totalLifetimePaid = useMemo(() => {
-    return payments.reduce((sum, p) => Money.add(sum, Money.toMinor(p.amount || "0")), Money.ZERO);
-  }, [payments]);
-
-  // Credit metrics
-  const creditLimit = parseFloat(customer?.creditLimit || "0");
-  const creditBalance = parseFloat(customer?.creditBalance || "0");
-  const availableCredit = Math.max(0, creditLimit - creditBalance);
-  const creditUsagePct = creditLimit > 0 ? Math.min((creditBalance / creditLimit) * 100, 100) : 0;
-  const isOverLimit = creditLimit > 0 && creditBalance > creditLimit;
+  // Credit metrics, in Money — these drive the "over limit" warning and the
+  // pay-in-full button, and a float there is a balance off by a fils.
+  const creditLimit = Money.toMinor(customer?.creditLimit || "0");
+  const creditBalance = Money.toMinor(customer?.creditBalance || "0");
+  const availableCredit = Money.max(Money.subtract(creditLimit, creditBalance), Money.ZERO);
+  /** For the bar's width only. */
+  const creditUsagePct =
+    creditLimit > 0n ? Math.min(Number((creditBalance * 10000n) / creditLimit) / 100, 100) : 0;
+  const isOverLimit = creditLimit > 0n && creditBalance > creditLimit;
 
   // ── Render Loading / Error ────────────────────────────────────────────────
 
@@ -863,7 +943,7 @@ export default function ClientDetailPage() {
             <Button
               size="sm"
               onClick={openPaymentModal}
-              disabled={creditBalance <= 0}
+              disabled={creditBalance <= 0n}
               className="h-9 bg-linear-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-medium shadow-xs"
             >
               <Banknote className="h-4 w-4 mr-1.5" />
@@ -1016,19 +1096,19 @@ export default function ClientDetailPage() {
                 <span
                   className={cn(
                     "text-2xl font-bold font-mono tracking-tight",
-                    creditBalance > 0 ? "text-amber-500 dark:text-amber-400" : "text-emerald-500",
+                    creditBalance > 0n ? "text-amber-500 dark:text-amber-400" : "text-emerald-500",
                   )}
                 >
                   {currency} {formatMoney(creditBalance)}
                 </span>
                 <span className="text-[10px] text-muted-foreground block mt-0.5">
-                  {creditBalance > 0 ? "Requires Settlement" : "Zero Outstanding Balance"}
+                  {creditBalance > 0n ? "Requires Settlement" : "Zero Outstanding Balance"}
                 </span>
               </div>
               <div
                 className={cn(
                   "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl",
-                  creditBalance > 0
+                  creditBalance > 0n
                     ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
                     : "bg-emerald-500/15 text-emerald-500",
                 )}
@@ -1198,11 +1278,11 @@ export default function ClientDetailPage() {
           </p>
           <div className="mt-2 flex items-center justify-between text-[11px]">
             <span className="text-muted-foreground">
-              {creditLimit > 0
+              {creditLimit > 0n
                 ? `${Math.round(creditUsagePct)}% of credit limit`
                 : "No credit facility"}
             </span>
-            {creditBalance > 0 && (
+            {creditBalance > 0n && (
               <Badge variant="warning" className="text-[10px] px-1.5">
                 Unsettled
               </Badge>
@@ -1243,12 +1323,12 @@ export default function ClientDetailPage() {
             <TrendingUp className="h-4 w-4 text-emerald-500" />
           </div>
           <p className="mt-2 text-2xl font-bold font-mono tracking-tight text-foreground">
-            {currency} {formatMoney(totalLifetimeInvoiced)}
+            {currency} {formatMoney(summary?.invoiced)}
           </p>
           <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
-            <span>{sales.length} total orders/bills</span>
+            <span>{summary?.invoiceCount ?? 0} total orders/bills</span>
             <span className="font-mono text-emerald-600 dark:text-emerald-400">
-              Paid: {currency} {formatMoney(totalLifetimePaid)}
+              Paid: {currency} {formatMoney(summary?.paid)}
             </span>
           </div>
         </Card>
@@ -1284,7 +1364,7 @@ export default function ClientDetailPage() {
             <FileText className="h-4 w-4" />
             <span>Bills & Invoices</span>
             <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
-              {sales.length}
+              {summary?.invoiceCount ?? 0}
             </Badge>
           </button>
 
@@ -1316,7 +1396,7 @@ export default function ClientDetailPage() {
             <Receipt className="h-4 w-4" />
             <span>Account Statement</span>
             <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
-              {statementLedger.length}
+              {summary?.entryCount ?? 0}
             </Badge>
           </button>
 
@@ -1331,9 +1411,11 @@ export default function ClientDetailPage() {
           >
             <FileCheck className="h-4 w-4" />
             <span>Quotations</span>
-            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
-              {quotations.length}
-            </Badge>
+            {activeTab === "quotations" && !quotes.initialLoading && (
+              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                {quotes.total}
+              </Badge>
+            )}
           </button>
 
           <button
@@ -1374,35 +1456,38 @@ export default function ClientDetailPage() {
                 <SelectContent>
                   <SelectItem value="all">All Statuses</SelectItem>
                   <SelectItem value="completed">Completed</SelectItem>
-                  <SelectItem value="return">Return</SelectItem>
-                  <SelectItem value="void">Void</SelectItem>
+                  <SelectItem value="partially_returned">Partly returned</SelectItem>
+                  <SelectItem value="returned">Returned</SelectItem>
+                  <SelectItem value="voided">Voided</SelectItem>
+                  <SelectItem value="return">Return documents</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
 
-          {filteredSales.length === 0 ? (
+          {invoices.error && (
+            <p role="alert" className="border-b border-border bg-destructive/10 px-4 py-2 text-xs text-destructive">
+              {invoices.error}
+            </p>
+          )}
+          {!invoices.initialLoading && invoices.items.length === 0 ? (
             <div className="py-16 text-center">
               <FileText className="mx-auto h-10 w-10 text-muted-foreground/30" />
               <h3 className="mt-3 text-sm font-semibold text-foreground">No Invoices Found</h3>
               <p className="mt-1 text-xs text-muted-foreground">
-                {invoiceSearch || invoiceStatusFilter !== "all"
+                {invoiceQ || invoiceStatusFilter !== "all"
                   ? "No bills match the search filter."
                   : "This customer has no recorded sales or bills yet."}
               </p>
             </div>
           ) : (
             <>
-            <MobileList loading={false} empty={null} className="p-3">
-              {filteredSales.map((s) => (
+            <MobileList loading={invoices.initialLoading} empty={null} className="p-3">
+              {invoices.items.map((s) => (
                 <MobileRow
                   key={s.id}
                   title={s.saleNumber || s.invoiceNumber || s.id.slice(0, 8)}
-                  badge={
-                    <Badge variant={s.status === "completed" ? "success" : s.status === "void" ? "destructive" : "secondary"} className="capitalize">
-                      {s.status}
-                    </Badge>
-                  }
+                  badge={<SaleStatusBadge sale={s} />}
                   fields={[
                     { label: `Total`, value: `${currency} ${formatMoney(s.total)}`, numeric: true },
                     { label: "Paid", value: formatMoney(s.paidAmount), numeric: true },
@@ -1441,115 +1526,159 @@ export default function ClientDetailPage() {
               <table className="w-full text-left text-xs">
                 <TableHead className="font-medium">
                   <tr>
-                    <th className="px-4 py-3">Invoice #</th>
-                    <th className="px-4 py-3">Date & Time</th>
+                    <SortableTh
+                      column="saleNumber"
+                      sortBy={invoiceSort.by}
+                      sortOrder={invoiceSort.order}
+                      onSort={(by, first = "asc") =>
+                        setInvoiceSort((cur) =>
+                          cur.by === by ? { by, order: cur.order === "asc" ? "desc" : "asc" } : { by, order: first },
+                        )
+                      }
+                    >
+                      Invoice #
+                    </SortableTh>
+                    <SortableTh
+                      column="occurredAt"
+                      firstOrder="desc"
+                      sortBy={invoiceSort.by}
+                      sortOrder={invoiceSort.order}
+                      onSort={(by, first = "asc") =>
+                        setInvoiceSort((cur) =>
+                          cur.by === by ? { by, order: cur.order === "asc" ? "desc" : "asc" } : { by, order: first },
+                        )
+                      }
+                    >
+                      Date & Time
+                    </SortableTh>
                     <th className="px-4 py-3">Branch</th>
                     <th className="px-4 py-3">Cashier</th>
-                    <th className="px-4 py-3 text-right">Total ({currency})</th>
+                    <SortableTh
+                      column="total"
+                      firstOrder="desc"
+                      align="right"
+                      sortBy={invoiceSort.by}
+                      sortOrder={invoiceSort.order}
+                      onSort={(by, first = "asc") =>
+                        setInvoiceSort((cur) =>
+                          cur.by === by ? { by, order: cur.order === "asc" ? "desc" : "asc" } : { by, order: first },
+                        )
+                      }
+                    >
+                      Total ({currency})
+                    </SortableTh>
                     <th className="px-4 py-3 text-right">Paid</th>
                     <th className="px-4 py-3 text-right">Balance Due</th>
                     <th className="px-4 py-3 text-center">Status</th>
                     <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
                 </TableHead>
-                <tbody className="divide-y divide-border">
-                  {filteredSales.map((s) => {
-                    const dueNum = parseFloat(s.dueAmount || "0");
-                    const totalNum = parseFloat(s.total || "0");
-                    const paidNum = parseFloat(s.paidAmount || "0");
-                    const isVoid = s.status === "void";
-
-                    return (
-                      <tr
-                        key={s.id}
-                        onClick={() => openBill(s)}
-                        className="hover:bg-secondary/30 transition-colors cursor-pointer group"
-                      >
-                        <td className="px-4 py-3.5 font-mono font-semibold text-foreground group-hover:text-primary transition-colors">
-                          <div className="flex items-center gap-1.5">
-                            <FileText className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary" />
-                            <span>{s.saleNumber || s.invoiceNumber || s.id.slice(0, 8)}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3.5 text-muted-foreground whitespace-nowrap">
-                          {formatDateTime(s.occurredAt || s.createdAt)}
-                        </td>
-                        <td className="px-4 py-3.5 text-foreground font-medium">
-                          {s.branchName || "Main HQ"}
-                        </td>
-                        <td className="px-4 py-3.5 text-muted-foreground font-mono">
-                          {s.cashierName || "—"}
-                        </td>
-                        <td className="px-4 py-3.5 text-right font-mono tabular-nums font-bold text-foreground">
-                          {formatMoney(totalNum)}
-                        </td>
-                        <td className="px-4 py-3.5 text-right font-mono tabular-nums text-emerald-600 dark:text-emerald-400">
-                          {formatMoney(paidNum)}
-                        </td>
-                        <td className="px-4 py-3.5 text-right font-mono tabular-nums font-semibold">
-                          {dueNum > 0 ? (
-                            <span className="text-amber-500">{currency} {formatMoney(dueNum)}</span>
-                          ) : (
-                            <span className="text-muted-foreground">0.00</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3.5 text-center">
-                          <Badge
-                            variant={
-                              s.status === "completed"
-                                ? "success"
-                                : s.status === "void"
-                                  ? "destructive"
-                                  : "secondary"
+                <tbody className="divide-y divide-border" aria-busy={invoices.loading || undefined}>
+                  {invoices.initialLoading ? (
+                    <TableSkeletonRows columns={9} rows={6} />
+                  ) : (
+                    invoices.items.map((s) => {
+                      const due = Money.toMinor(s.dueAmount || "0");
+                      return (
+                        <tr
+                          key={s.id}
+                          onClick={() => openBill(s)}
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
+                              e.preventDefault();
+                              void openBill(s);
                             }
-                            className="text-[10px] capitalize"
-                          >
-                            {s.status}
-                          </Badge>
-                        </td>
-                        <td className="px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-end gap-1.5">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-7 text-xs px-2"
-                              onClick={() => openBill(s)}
-                              title="View Bill Lines & Details"
-                            >
-                              <Eye className="h-3.5 w-3.5 mr-1" />
-                              View
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-7 px-2"
-                              onClick={() => handlePrintInvoice(s.id, s.saleNumber)}
-                              disabled={printingSaleId === s.id}
-                              title="Print A4 Tax Invoice"
-                            >
-                              <Printer className="h-3.5 w-3.5" />
-                              {printingSaleId === s.id && "..."}
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-7 px-2"
-                              onClick={() => handleDownloadInvoice(s.id, s.saleNumber)}
-                              disabled={downloadingSaleId === s.id}
-                              title="Download PDF"
-                            >
-                              <Download className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                          }}
+                          className={cn(
+                            "hover:bg-secondary/30 transition-colors cursor-pointer group focus:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                            invoices.loading && "opacity-60",
+                          )}
+                        >
+                          <td className="px-4 py-3.5 font-mono font-semibold text-foreground group-hover:text-primary transition-colors">
+                            <div className="flex items-center gap-1.5">
+                              <FileText className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary" />
+                              <span>{s.saleNumber || s.invoiceNumber || s.id.slice(0, 8)}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3.5 text-muted-foreground whitespace-nowrap">
+                            {formatDateTime(s.occurredAt || s.createdAt)}
+                          </td>
+                          <td className="px-4 py-3.5 text-foreground font-medium">
+                            {s.branchName || "Main HQ"}
+                          </td>
+                          <td className="px-4 py-3.5 text-muted-foreground font-mono">
+                            {s.cashierName || "—"}
+                          </td>
+                          <td className="px-4 py-3.5 text-right font-mono tabular-nums font-bold text-foreground">
+                            {formatMoney(s.total)}
+                          </td>
+                          <td className="px-4 py-3.5 text-right font-mono tabular-nums text-emerald-600 dark:text-emerald-400">
+                            {formatMoney(s.paidAmount)}
+                          </td>
+                          <td className="px-4 py-3.5 text-right font-mono tabular-nums font-semibold">
+                            {Money.isPositive(due) ? (
+                              <span className="text-amber-500">{currency} {formatMoney(due)}</span>
+                            ) : (
+                              <span className="text-muted-foreground">0.00</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3.5 text-center">
+                            <SaleStatusBadge sale={s} />
+                          </td>
+                          <td className="px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-end gap-1.5">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs px-2"
+                                onClick={() => openBill(s)}
+                                title="View Bill Lines & Details"
+                              >
+                                <Eye className="h-3.5 w-3.5 mr-1" />
+                                View
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 px-2"
+                                onClick={() => handlePrintInvoice(s.id, s.saleNumber)}
+                                disabled={printingSaleId === s.id}
+                                title="Print A4 Tax Invoice"
+                                aria-label={`Print invoice ${s.saleNumber ?? ""}`}
+                              >
+                                <Printer className="h-3.5 w-3.5" />
+                                {printingSaleId === s.id && "..."}
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 px-2"
+                                onClick={() => handleDownloadInvoice(s.id, s.saleNumber)}
+                                disabled={downloadingSaleId === s.id}
+                                title="Download PDF"
+                                aria-label={`Download invoice ${s.saleNumber ?? ""} as PDF`}
+                              >
+                                <Download className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
             </TableContainer>
             </>
           )}
+          <TablePagination
+            page={invoicePage}
+            pageSize={INVOICE_PAGE_SIZE}
+            total={invoices.total}
+            onPageChange={setInvoicePage}
+            noun="bills"
+          />
         </Card>
       )}
 
@@ -1676,7 +1805,7 @@ export default function ClientDetailPage() {
             </div>
           </div>
 
-          {statementLedger.length === 0 ? (
+          {!statementLoading && statement && statement.items.length === 0 ? (
             <div className="py-16 text-center">
               <Receipt className="mx-auto h-10 w-10 text-muted-foreground/30" />
               <h3 className="mt-3 text-sm font-semibold text-foreground">No Transactions</h3>
@@ -1686,27 +1815,27 @@ export default function ClientDetailPage() {
             </div>
           ) : (
             <>
-            <MobileList loading={false} empty={null} className="p-3">
-              {statementLedger.map((row) => (
+            <MobileList loading={!statement} empty={null} className="p-3">
+              {(statement?.items ?? []).map((row) => (
                 <MobileRow
-                  key={row.id}
-                  title={row.docNumber}
-                  subtitle={row.description}
+                  key={`${row.kind}-${row.id}`}
+                  title={statementDoc(row)}
+                  subtitle={statementDescription(row)}
                   badge={
                     <span className="font-mono text-xs font-bold tabular-nums text-foreground">
-                      {formatMoney(row.runningBalance)}
+                      {formatMoney(row.balance)}
                     </span>
                   }
                   fields={[
                     { label: "Date", value: formatDateTime(row.date) },
-                    { label: "Debit (+)", value: row.debit > 0n ? formatMoney(row.debit) : "—", numeric: true },
-                    { label: "Credit (−)", value: row.credit > 0n ? formatMoney(row.credit) : "—", numeric: true },
-                    { label: "Balance", value: `${currency} ${formatMoney(row.runningBalance)}`, numeric: true },
+                    { label: "Debit (+)", value: Money.isPositive(Money.toMinor(row.debit)) ? formatMoney(row.debit) : "—", numeric: true },
+                    { label: "Credit (−)", value: Money.isPositive(Money.toMinor(row.credit)) ? formatMoney(row.credit) : "—", numeric: true },
+                    { label: "Balance", value: `${currency} ${formatMoney(row.balance)}`, numeric: true },
                     { label: "Branch", value: row.branchName || "Main HQ" },
                   ]}
                   actions={
-                    row.type === "invoice" ? (
-                      <Button variant="outline" size="sm" onClick={() => openBill(row.raw)}>
+                    row.kind !== "payment" ? (
+                      <Button variant="outline" size="sm" onClick={() => openBill(rowAsSale(row))}>
                         <Eye className="h-3.5 w-3.5" /> View bill
                       </Button>
                     ) : undefined
@@ -1727,50 +1856,77 @@ export default function ClientDetailPage() {
                     <th className="px-4 py-3 text-right">Running Balance ({currency})</th>
                   </tr>
                 </TableHead>
-                <tbody className="divide-y divide-border">
-                  {statementLedger.map((row) => (
-                    <tr
-                      key={row.id}
-                      onClick={() => {
-                        if (row.type === "invoice") openBill(row.raw);
-                      }}
-                      className={cn(
-                        "hover:bg-secondary/30 transition-colors",
-                        row.type === "invoice" && "cursor-pointer",
-                      )}
-                    >
-                      <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                        {formatDateTime(row.date)}
-                      </td>
-                      <td className="px-4 py-3 font-mono font-medium text-foreground">
-                        <div className="flex items-center gap-1.5">
-                          {row.type === "invoice" ? (
-                            <FileText className="h-3.5 w-3.5 text-blue-500" />
-                          ) : (
-                            <Banknote className="h-3.5 w-3.5 text-emerald-500" />
+                <tbody className="divide-y divide-border" aria-busy={statementLoading || undefined}>
+                  {!statement ? (
+                    <TableSkeletonRows columns={7} rows={6} />
+                  ) : (
+                    <>
+                      {statement.items.map((row) => (
+                        <tr
+                          key={`${row.kind}-${row.id}`}
+                          onClick={() => {
+                            if (row.kind !== "payment") void openBill(rowAsSale(row));
+                          }}
+                          className={cn(
+                            "hover:bg-secondary/30 transition-colors",
+                            row.kind !== "payment" && "cursor-pointer",
+                            statementLoading && "opacity-60",
                           )}
-                          <span>{row.docNumber}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-foreground">{row.description}</td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {row.branchName || "Main HQ"}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono tabular-nums text-foreground font-medium">
-                        {row.debit > 0n ? `${currency} ${formatMoney(row.debit)}` : "—"}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono tabular-nums text-emerald-600 dark:text-emerald-400 font-medium">
-                        {row.credit > 0n ? `${currency} ${formatMoney(row.credit)}` : "—"}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono tabular-nums font-bold text-foreground">
-                        {currency} {formatMoney(row.runningBalance)}
-                      </td>
-                    </tr>
-                  ))}
+                        >
+                          <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                            {formatDateTime(row.date)}
+                          </td>
+                          <td className="px-4 py-3 font-mono font-medium text-foreground">
+                            <div className="flex items-center gap-1.5">
+                              {row.kind === "payment" ? (
+                                <Banknote className="h-3.5 w-3.5 text-emerald-500" />
+                              ) : (
+                                <FileText className={cn("h-3.5 w-3.5", row.kind === "return" ? "text-amber-500" : "text-blue-500")} />
+                              )}
+                              <span>{statementDoc(row)}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-foreground">{statementDescription(row)}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{row.branchName || "Main HQ"}</td>
+                          <td className="px-4 py-3 text-right font-mono tabular-nums text-foreground font-medium">
+                            {Money.isPositive(Money.toMinor(row.debit)) ? `${currency} ${formatMoney(row.debit)}` : "—"}
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono tabular-nums text-emerald-600 dark:text-emerald-400 font-medium">
+                            {Money.isPositive(Money.toMinor(row.credit)) ? `${currency} ${formatMoney(row.credit)}` : "—"}
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono tabular-nums font-bold text-foreground">
+                            {currency} {formatMoney(row.balance)}
+                          </td>
+                        </tr>
+                      ))}
+                      {/* Newest first, so what this page carries in sits at the bottom. */}
+                      {statement.items.length > 0 && (
+                        <tr className="bg-secondary/30">
+                          <td colSpan={6} className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">
+                            {statementPage === Math.ceil(statement.total / STATEMENT_PAGE_SIZE)
+                              ? "Opening balance"
+                              : "Balance brought forward from earlier pages"}
+                          </td>
+                          <td className="px-4 py-2.5 text-right font-mono tabular-nums font-semibold text-foreground">
+                            {currency} {formatMoney(statement.openingBalance)}
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  )}
                 </tbody>
               </table>
             </TableContainer>
             </>
+          )}
+          {statement && (
+            <TablePagination
+              page={statementPage}
+              pageSize={STATEMENT_PAGE_SIZE}
+              total={statement.total}
+              onPageChange={setStatementPage}
+              noun="entries"
+            />
           )}
         </Card>
       )}
@@ -1793,30 +1949,40 @@ export default function ClientDetailPage() {
             </Link>
           </div>
 
-          {quotations.length === 0 ? (
+          <div className="border-b border-border px-4 py-3">
+            <TableSearch
+              value={quoteSearch}
+              onChange={setQuoteSearch}
+              label="Search this customer's quotations"
+              placeholder="Search by quote number..."
+              className="max-w-sm"
+            />
+          </div>
+          {quotes.error && (
+            <p role="alert" className="border-b border-border bg-destructive/10 px-4 py-2 text-xs text-destructive">
+              {quotes.error}
+            </p>
+          )}
+          {!quotes.initialLoading && quotes.items.length === 0 ? (
             <div className="py-16 text-center">
               <FileCheck className="mx-auto h-10 w-10 text-muted-foreground/30" />
               <h3 className="mt-3 text-sm font-semibold text-foreground">No Quotations Found</h3>
               <p className="mt-1 text-xs text-muted-foreground">
-                No quotations have been prepared for this client.
+                {quoteQ ? `No quotations match "${quoteQ}".` : "No quotations have been prepared for this client."}
               </p>
             </div>
           ) : (
             <>
-            <MobileList loading={false} empty={null} className="p-3">
-              {quotations.map((q) => (
+            <MobileList loading={quotes.initialLoading} empty={null} className="p-3">
+              {quotes.items.map((q) => (
                 <MobileRow
                   key={q.id}
                   title={q.quotationNumber}
-                  badge={
-                    <Badge variant={q.status === "accepted" || q.status === "converted" ? "success" : q.status === "expired" ? "destructive" : "secondary"} className="capitalize">
-                      {q.status}
-                    </Badge>
-                  }
+                  badge={<QuoteStatusBadge quote={q} />}
                   fields={[
                     { label: "Total", value: `${currency} ${formatMoney(q.total)}`, numeric: true },
                     { label: "Date", value: formatDate(q.createdAt) },
-                    { label: "Valid until", value: q.expiresAt ? formatDate(q.expiresAt) : "—" },
+                    { label: "Valid until", value: q.validUntil ? formatDate(q.validUntil) : "—" },
                   ]}
                   actions={
                     <Button variant="outline" size="sm" onClick={() => void handlePrintQuote(q)}>
@@ -1838,52 +2004,52 @@ export default function ClientDetailPage() {
                     <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
                 </TableHead>
-                <tbody className="divide-y divide-border">
-                  {quotations.map((q) => (
-                    <tr key={q.id} className="hover:bg-secondary/30 transition-colors">
-                      <td className="px-4 py-3.5 font-mono font-semibold text-foreground">
-                        {q.quotationNumber}
-                      </td>
-                      <td className="px-4 py-3.5 text-muted-foreground whitespace-nowrap">
-                        {formatDate(q.createdAt)}
-                      </td>
-                      <td className="px-4 py-3.5 text-muted-foreground whitespace-nowrap">
-                        {q.expiresAt ? formatDate(q.expiresAt) : "—"}
-                      </td>
-                      <td className="px-4 py-3.5 text-right font-mono tabular-nums font-bold text-foreground">
-                        {currency} {formatMoney(q.total)}
-                      </td>
-                      <td className="px-4 py-3.5 text-center">
-                        <Badge
-                          variant={
-                            q.status === "accepted" || q.status === "converted"
-                              ? "success"
-                              : q.status === "expired"
-                                ? "destructive"
-                                : "secondary"
-                          }
-                          className="capitalize text-[10px]"
-                        >
-                          {q.status}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3.5 text-right">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-xs"
-                          onClick={() => void handlePrintQuote(q)}
-                        >
-                          <Printer className="h-3 w-3 mr-1" /> Print
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
+                <tbody className="divide-y divide-border" aria-busy={quotes.loading || undefined}>
+                  {quotes.initialLoading ? (
+                    <TableSkeletonRows columns={6} rows={4} />
+                  ) : (
+                    quotes.items.map((q) => (
+                      <tr key={q.id} className={cn("hover:bg-secondary/30 transition-colors", quotes.loading && "opacity-60")}>
+                        <td className="px-4 py-3.5 font-mono font-semibold text-foreground">
+                          {q.quotationNumber}
+                        </td>
+                        <td className="px-4 py-3.5 text-muted-foreground whitespace-nowrap">
+                          {formatDate(q.createdAt)}
+                        </td>
+                        <td className="px-4 py-3.5 text-muted-foreground whitespace-nowrap">
+                          {q.validUntil ? formatDate(q.validUntil) : "—"}
+                        </td>
+                        <td className="px-4 py-3.5 text-right font-mono tabular-nums font-bold text-foreground">
+                          {currency} {formatMoney(q.total)}
+                        </td>
+                        <td className="px-4 py-3.5 text-center">
+                          <QuoteStatusBadge quote={q} />
+                        </td>
+                        <td className="px-4 py-3.5 text-right">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() => void handlePrintQuote(q)}
+                          >
+                            <Printer className="h-3 w-3 mr-1" /> Print
+                          </Button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </TableContainer>
             </>
           )}
+          <TablePagination
+            page={quotePage}
+            pageSize={QUOTE_PAGE_SIZE}
+            total={quotes.total}
+            onPageChange={setQuotePage}
+            noun="quotations"
+          />
         </Card>
       )}
 
@@ -2152,7 +2318,7 @@ export default function ClientDetailPage() {
                   {currency} {formatMoney(selectedSale?.subtotal)}
                 </span>
               </div>
-              {selectedSale?.discountAmount && parseFloat(selectedSale.discountAmount) > 0 && (
+              {selectedSale?.discountAmount && Money.isPositive(Money.toMinor(selectedSale.discountAmount)) && (
                 <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
                   <span>Document Discount:</span>
                   <span className="font-mono">-{currency} {formatMoney(selectedSale.discountAmount)}</span>
@@ -2174,7 +2340,7 @@ export default function ClientDetailPage() {
                   {currency} {formatMoney(selectedSale?.paidAmount)}
                 </span>
               </div>
-              {selectedSale?.dueAmount && parseFloat(selectedSale.dueAmount) > 0 && (
+              {selectedSale?.dueAmount && Money.isPositive(Money.toMinor(selectedSale.dueAmount)) && (
                 <div className="flex justify-between text-amber-500 font-semibold border-t border-border pt-1">
                   <span>Balance Due:</span>
                   <span className="font-mono">{currency} {formatMoney(selectedSale.dueAmount)}</span>
@@ -2234,21 +2400,21 @@ export default function ClientDetailPage() {
                 type="number"
                 step="0.01"
                 min="0.01"
-                max={creditBalance > 0 ? creditBalance : undefined}
+                max={creditBalance > 0n ? Money.toDecimalString(creditBalance, 2) : undefined}
                 required
                 value={payAmount}
                 onChange={(e) => setPayAmount(e.target.value)}
                 placeholder="0.00"
                 className="font-mono text-base font-bold"
               />
-              {creditBalance > 0 && (
+              {creditBalance > 0n && (
                 <div className="mt-1.5 flex items-center gap-2">
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
                     className="h-6 text-[11px] px-2"
-                    onClick={() => setPayAmount(creditBalance.toFixed(2))}
+                    onClick={() => setPayAmount(Money.toDecimalString(creditBalance, 2))}
                   >
                     Full Balance ({currency} {formatMoney(creditBalance)})
                   </Button>
@@ -2257,7 +2423,7 @@ export default function ClientDetailPage() {
                     variant="outline"
                     size="sm"
                     className="h-6 text-[11px] px-2"
-                    onClick={() => setPayAmount((creditBalance / 2).toFixed(2))}
+                    onClick={() => setPayAmount(Money.toDecimalString(Money.divideBy(creditBalance, 2), 2))}
                   >
                     50%
                   </Button>
@@ -2633,7 +2799,7 @@ export default function ClientDetailPage() {
                 Generated on {new Date().toLocaleDateString("en-AE")}
               </DialogDescription>
             </div>
-            <Button size="sm" onClick={() => window.print()} className="h-8">
+            <Button size="sm" onClick={() => window.print()} className="h-8" disabled={printLoading}>
               <Printer className="h-3.5 w-3.5 mr-1.5" />
               Print
             </Button>
@@ -2675,7 +2841,7 @@ export default function ClientDetailPage() {
                   Total Invoiced
                 </span>
                 <p className="text-sm font-bold font-mono text-foreground mt-1">
-                  {currency} {formatMoney(totalLifetimeInvoiced)}
+                  {currency} {formatMoney(summary?.invoiced)}
                 </p>
               </div>
               <div className="rounded-lg border border-border p-3">
@@ -2683,7 +2849,7 @@ export default function ClientDetailPage() {
                   Total Payments
                 </span>
                 <p className="text-sm font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-1">
-                  {currency} {formatMoney(totalLifetimePaid)}
+                  {currency} {formatMoney(summary?.paid)}
                 </p>
               </div>
               <div className="rounded-lg border border-border p-3">
@@ -2710,26 +2876,38 @@ export default function ClientDetailPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border font-mono">
-                  {statementLedger.slice(0, 50).map((row) => (
-                    <tr key={row.id}>
-                      <td className="px-3.5 py-2 text-muted-foreground">
-                        {formatDate(row.date)}
-                      </td>
-                      <td className="px-3.5 py-2 text-foreground font-medium">{row.docNumber}</td>
-                      <td className="px-3.5 py-2 font-sans text-muted-foreground">
-                        {row.description}
-                      </td>
-                      <td className="px-3.5 py-2 text-right text-foreground">
-                        {row.debit > 0n ? formatMoney(row.debit) : "—"}
-                      </td>
-                      <td className="px-3.5 py-2 text-right text-emerald-600 dark:text-emerald-400">
-                        {row.credit > 0n ? formatMoney(row.credit) : "—"}
-                      </td>
-                      <td className="px-3.5 py-2 text-right font-bold text-foreground">
-                        {formatMoney(row.runningBalance)}
+                  {printLoading || !printRows ? (
+                    <tr>
+                      <td colSpan={6} className="px-3.5 py-6 text-center font-sans text-muted-foreground">
+                        Loading the full statement…
                       </td>
                     </tr>
-                  ))}
+                  ) : printRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-3.5 py-6 text-center font-sans text-muted-foreground">
+                        No transactions on this account.
+                      </td>
+                    </tr>
+                  ) : (
+                    printRows.map((row) => (
+                      <tr key={`${row.kind}-${row.id}`}>
+                        <td className="px-3.5 py-2 text-muted-foreground">{formatDate(row.date)}</td>
+                        <td className="px-3.5 py-2 text-foreground font-medium">{statementDoc(row)}</td>
+                        <td className="px-3.5 py-2 font-sans text-muted-foreground">
+                          {statementDescription(row)}
+                        </td>
+                        <td className="px-3.5 py-2 text-right text-foreground">
+                          {Money.isPositive(Money.toMinor(row.debit)) ? formatMoney(row.debit) : "—"}
+                        </td>
+                        <td className="px-3.5 py-2 text-right text-emerald-600 dark:text-emerald-400">
+                          {Money.isPositive(Money.toMinor(row.credit)) ? formatMoney(row.credit) : "—"}
+                        </td>
+                        <td className="px-3.5 py-2 text-right font-bold text-foreground">
+                          {formatMoney(row.balance)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -2742,5 +2920,42 @@ export default function ClientDetailPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+/** Voided, returned, partly returned, or a return document itself. */
+function SaleStatusBadge({ sale }: { sale: CustomerSale }) {
+  if (sale.returnOfSaleId) {
+    return (
+      <Badge variant="secondary" className="text-[10px]">
+        return
+      </Badge>
+    );
+  }
+  return (
+    <Badge
+      variant={sale.status === "completed" ? "success" : sale.status === "voided" ? "destructive" : "secondary"}
+      className="text-[10px] capitalize"
+    >
+      {sale.status.replace("_", " ")}
+    </Badge>
+  );
+}
+
+function QuoteStatusBadge({ quote }: { quote: CustomerQuotation }) {
+  const status = quote.expired && quote.status !== "converted" ? "expired" : quote.status;
+  return (
+    <Badge
+      variant={
+        status === "accepted" || status === "converted"
+          ? "success"
+          : status === "expired"
+            ? "destructive"
+            : "secondary"
+      }
+      className="capitalize text-[10px]"
+    >
+      {status}
+    </Badge>
   );
 }

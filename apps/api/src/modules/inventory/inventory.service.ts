@@ -3,7 +3,7 @@ import type { Paginated } from "@devsfleet/shared-types";
 import { AppError, ERROR_CODES, Money } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
-import { assertBranchInScope } from "../../common/context/branch-scope.js";
+import { assertBranchInScope, branchFilter } from "../../common/context/branch-scope.js";
 import { containsPattern } from "../../common/db/list-query.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import { StockService } from "./stock.service.js";
@@ -42,7 +42,7 @@ export class InventoryService {
     const term = containsPattern(q);
 
     const where = and(
-      branchId ? eq(schema.inventory.branchId, branchId) : undefined,
+      branchFilter(schema.inventory.branchId, branchId),
       categoryId ? eq(schema.products.categoryId, categoryId) : undefined,
       isNull(schema.productVariants.deletedAt),
       term
@@ -139,7 +139,7 @@ export class InventoryService {
 
     const where = and(
       variantId ? eq(schema.inventoryTransactions.variantId, variantId) : undefined,
-      branchId ? eq(schema.inventoryTransactions.branchId, branchId) : undefined,
+      branchFilter(schema.inventoryTransactions.branchId, branchId),
       type ? eq(schema.inventoryTransactions.type, type) : undefined,
       from ? gte(schema.inventoryTransactions.createdAt, new Date(from)) : undefined,
       to ? lte(schema.inventoryTransactions.createdAt, new Date(`${to}T23:59:59.999Z`)) : undefined,
@@ -268,7 +268,7 @@ export class InventoryService {
         .innerJoin(schema.branches, eq(schema.inventory.branchId, schema.branches.id))
         .where(
           and(
-            branchId ? eq(schema.inventory.branchId, branchId) : undefined,
+            branchFilter(schema.inventory.branchId, branchId),
             isNull(schema.productVariants.deletedAt),
             eq(schema.productVariants.isActive, true),
             sql`${schema.productVariants.minStock} > 0`,
@@ -303,7 +303,7 @@ export class InventoryService {
         })
         .from(schema.inventory)
         .innerJoin(schema.branches, eq(schema.inventory.branchId, schema.branches.id))
-        .where(branchId ? eq(schema.inventory.branchId, branchId) : undefined)
+        .where(branchFilter(schema.inventory.branchId, branchId))
         .groupBy(schema.inventory.branchId, schema.branches.name),
     );
 

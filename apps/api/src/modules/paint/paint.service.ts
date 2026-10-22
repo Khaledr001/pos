@@ -1,7 +1,7 @@
 import { and, asc, eq, ilike, isNull, or, schema } from "@devsfleet/db";
 import { AppError, ERROR_CODES, Money } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
-import { assertBranchInScope, requireBranchId } from "../../common/context/branch-scope.js";
+import { assertBranchInScope, branchFilter, requireBranchId } from "../../common/context/branch-scope.js";
 import { RequestContext } from "../../common/context/request-context.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import { StockService } from "../inventory/stock.service.js";
@@ -265,7 +265,7 @@ export class PaintService {
         .from(schema.paintOrders)
         .leftJoin(schema.paintFormulas, eq(schema.paintOrders.formulaId, schema.paintFormulas.id))
         .innerJoin(schema.users, eq(schema.paintOrders.userId, schema.users.id))
-        .where(query.branchId ? eq(schema.paintOrders.branchId, query.branchId) : undefined)
+        .where(branchFilter(schema.paintOrders.branchId, query.branchId))
         .orderBy(schema.paintOrders.createdAt),
     );
   }

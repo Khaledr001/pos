@@ -9,7 +9,7 @@ import {
   sequenceKey,
 } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
-import { assertBranchInScope, requireBranchId } from "../../common/context/branch-scope.js";
+import { assertBranchInScope, branchFilter, requireBranchId } from "../../common/context/branch-scope.js";
 import { RequestContext } from "../../common/context/request-context.js";
 import { containsPattern } from "../../common/db/list-query.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
@@ -501,7 +501,7 @@ export class QuotationsService {
 
     return this.db.run(async (tx) => {
       const where = and(
-        query.branchId ? eq(schema.quotations.branchId, query.branchId) : undefined,
+        branchFilter(schema.quotations.branchId, query.branchId),
         query.customerId ? eq(schema.quotations.customerId, query.customerId) : undefined,
         query.status ? eq(schema.quotations.status, query.status) : undefined,
         query.from

@@ -1,5 +1,6 @@
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, PURCHASE_ORDER_STATUSES } from "@devsfleet/shared-types";
 import { z } from "zod";
+import { ZERO_MONEY, zMoney } from "../../common/validation/money.js";
 import { sortSchema } from "../../common/db/list-query.js";
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a YYYY-MM-DD date");
@@ -24,7 +25,7 @@ const PurchaseLineSchema = z.object({
   /** A packaging from that variant's `variant_units`. Omit to order the base unit. */
   unitId: z.string().uuid().optional(),
   /** What the supplier charges FOR ONE OF `unitId` — per box, not per piece. */
-  unitPrice: z.coerce.number().min(0),
+  unitPrice: zMoney(),
   discountPercent: z.coerce.number().min(0).max(100).optional(),
   taxPercent: z.coerce.number().min(0).max(100).optional(),
   notes: z.string().trim().max(500).optional(),
@@ -40,7 +41,7 @@ export const CreatePurchaseOrderSchema = z.object({
    * value when the goods are received, so each unit carries what it really cost
    * to get onto the shelf.
    */
-  shippingAmount: z.coerce.number().min(0).default(0),
+  shippingAmount: zMoney().default(ZERO_MONEY),
   expectedDate: isoDate.optional(),
   supplierReference: z.string().trim().max(100).optional(),
   notes: z.string().trim().max(1000).optional(),
@@ -93,7 +94,7 @@ const ReceiptLineSchema = z
      * from the quote, which is common. Per RECEIVED unit — per box, not per
      * piece.
      */
-    unitPrice: z.coerce.number().min(0).optional(),
+    unitPrice: zMoney().optional(),
     /**
      * Arrived broken, in BASE UNITS — not in the received unit like `quantity`.
      *
@@ -124,7 +125,7 @@ export const ReceiveGoodsSchema = z.object({
    * a split delivery is shipped twice, and charging the whole order's freight
    * to the first half overstates the cost of everything in it.
    */
-  shippingAmount: z.coerce.number().min(0).optional(),
+  shippingAmount: zMoney().optional(),
 
   supplierInvoiceNumber: z.string().trim().max(100).optional(),
   supplierInvoiceDate: isoDate.optional(),

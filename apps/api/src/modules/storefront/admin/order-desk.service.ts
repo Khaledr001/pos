@@ -242,8 +242,8 @@ export class OrderDeskService {
       throw new AppError(ERROR_CODES.VALIDATION_FAILED, "Record how this cash-on-delivery order was paid.");
     }
     const payment = prepaid
-      ? { method: "card" as const, amount: Number(total), reference: providerRef ?? `web:${web.trackingToken}` }
-      : { method: dto.payment!.method, amount: Number(total), ...(dto.payment!.reference ? { reference: dto.payment!.reference } : {}) };
+      ? { method: "card" as const, amount: String(total), reference: providerRef ?? `web:${web.trackingToken}` }
+      : { method: dto.payment!.method, amount: String(total), ...(dto.payment!.reference ? { reference: dto.payment!.reference } : {}) };
 
     await this.withStorefront(() =>
       this.orders.fulfill(id, {

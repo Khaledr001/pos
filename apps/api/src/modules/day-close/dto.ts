@@ -1,5 +1,6 @@
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from "@devsfleet/shared-types";
 import { z } from "zod";
+import { zMoney } from "../../common/validation/money.js";
 
 /** ISO calendar date. The day is the unit of reconciliation, not a timestamp. */
 const isoDate = z
@@ -11,14 +12,14 @@ export const OpenDaySchema = z.object({
   /** Defaults to today at the branch. */
   date: isoDate.optional(),
   /** Cash physically in the drawer at open. */
-  openingFloat: z.coerce.number().min(0),
+  openingFloat: zMoney(),
   notes: z.string().trim().max(1000).optional(),
 });
 export type OpenDayDto = z.infer<typeof OpenDaySchema>;
 
 export const CloseDaySchema = z.object({
   /** What was physically counted. The expected figure is revealed after. */
-  countedCash: z.coerce.number().min(0),
+  countedCash: zMoney(),
   notes: z.string().trim().max(1000).optional(),
 });
 export type CloseDayDto = z.infer<typeof CloseDaySchema>;

@@ -142,3 +142,20 @@ export async function ping(db: Database): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * The role name when this connection ignores row-level security, else null.
+ *
+ * A superuser or BYPASSRLS role sees every tenant's rows, and nothing fails:
+ * a lookup "for this tenant" quietly returns another business's unit or
+ * branch, and the write that follows links to it. That is how 302 products
+ * ended up on another tenant's units in October 2026. Anything that relies on
+ * RLS to scope its reads — the API, the importer — should ask this first.
+ */
+export async function rlsBypassingRole(db: Database): Promise<string | null> {
+  const rows = await db.execute<{ role: string; bypass: boolean }>(
+    sql`select current_user as role, (rolsuper or rolbypassrls) as bypass from pg_roles where rolname = current_user`,
+  );
+  const row = [...rows][0];
+  return row?.bypass ? row.role : null;
+}

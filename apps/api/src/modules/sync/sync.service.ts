@@ -11,6 +11,7 @@ import { hasPermission, resolveTenantSettings, type Permission } from "@devsflee
 import { AppError, ERROR_CODES } from "@devsfleet/shared-utils";
 import { Injectable, Logger } from "@nestjs/common";
 import { z } from "zod";
+import { zMoney } from "../../common/validation/money.js";
 import { RequestContext } from "../../common/context/request-context.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import { CashMovementSchema, OpenSessionSchema } from "../cash-register/dto.js";
@@ -739,7 +740,7 @@ export class SyncService {
              * 8pm would stay open on the server overnight.
              */
             closedAt: z.string().datetime().optional(),
-            countedAmount: z.coerce.number().min(0).optional(),
+            countedAmount: zMoney().optional(),
           }),
           "cash_session",
           {
@@ -758,7 +759,7 @@ export class SyncService {
 
         if (dto.closedAt && session.status === "open") {
           await this.cash.close(session.id, {
-            countedAmount: dto.countedAmount ?? 0,
+            countedAmount: dto.countedAmount ?? "0",
             ...(dto.notes ? { notes: dto.notes } : {}),
           });
         }

@@ -442,9 +442,11 @@ export default function ProductsPage() {
           variants: [
             {
               variantName: "Default",
-              sellingPrice: parseFloat(fSellingPrice),
-              purchasePrice: fPurchasePrice ? parseFloat(fPurchasePrice) : 0,
-              wholesalePrice: fWholesalePrice ? parseFloat(fWholesalePrice) : undefined,
+              // Money goes over the wire as the decimal string typed, never
+              // through a float (rule 1) — the API validates and normalises it.
+              sellingPrice: fSellingPrice.trim(),
+              purchasePrice: fPurchasePrice.trim() || "0",
+              wholesalePrice: fWholesalePrice.trim() || undefined,
               openingStock: fOpeningStock ? parseFloat(fOpeningStock) : undefined,
               openingStockBranchId: fOpeningStock && parseFloat(fOpeningStock) > 0 && fBranchId ? fBranchId : undefined,
             },
@@ -1691,7 +1693,7 @@ function PackagingsDialog({
         {
           unitId: newUnitId,
           conversionFactor: parseFloat(newFactor),
-          ...(newPrice ? { priceOverride: parseFloat(newPrice) } : {}),
+          ...(newPrice.trim() ? { priceOverride: newPrice.trim() } : {}),
         },
         { accessToken },
       );

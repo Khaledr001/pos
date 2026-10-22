@@ -131,3 +131,116 @@ DROP TRIGGER IF EXISTS trg_audit_log_immutable ON public.audit_log;
 CREATE TRIGGER trg_audit_log_immutable
     BEFORE UPDATE OR DELETE ON public.audit_log
     FOR EACH ROW EXECUTE FUNCTION public.prevent_ledger_mutation();
+
+-- -----------------------------------------------------------------------------
+-- Same-tenant references
+--
+-- A foreign key proves the referenced row EXISTS. It does not prove it belongs
+-- to the same business, and Postgres checks foreign keys without row-level
+-- security — so a write naming another tenant's unit, brand, branch or variant
+-- is accepted as long as the id is real. Between 2026-10-01 and 10-09 a dev
+-- connection that bypassed RLS did exactly that: 302 products took another
+-- tenant's units, and one sale was booked against another tenant's branch.
+--
+-- So every foreign key from one tenant-scoped table to another gets a trigger
+-- that refuses a parent from a different tenant. It is generated from the
+-- catalogue, like RLS, so a new table is covered by the next migrate without
+-- anyone remembering to add it.
+--
+-- SECURITY DEFINER so the lookup can see the parent's real owner. With
+-- FORCE ROW LEVEL SECURITY a non-superuser owner is still filtered, and then a
+-- parent from another tenant is simply invisible — which is treated as the
+-- same refusal: the foreign key guarantees the row exists, so a row that
+-- exists and cannot be seen belongs to someone else.
+--
+-- Not applied to references to `users`. Those name a person who acted — the
+-- platform operator behind an impersonation, for one — and naming them leaks
+-- nothing of either business.
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.assert_same_tenant_ref()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    child_column  text := TG_ARGV[0];
+    parent_table  text := TG_ARGV[1];
+    parent_column text := TG_ARGV[2];
+    is_set        boolean;
+    found_row     boolean;
+    parent_tenant uuid;
+BEGIN
+    IF NEW.tenant_id IS NULL THEN
+        RETURN NEW;
+    END IF;
+
+    EXECUTE format('SELECT ($1).%I IS NOT NULL', child_column) INTO is_set USING NEW;
+    IF NOT is_set THEN
+        RETURN NEW;
+    END IF;
+
+    EXECUTE format(
+        'SELECT true, p.tenant_id FROM public.%I p WHERE p.%I = ($1).%I',
+        parent_table, parent_column, child_column
+    ) INTO found_row, parent_tenant USING NEW;
+
+    IF found_row IS NULL OR (parent_tenant IS NOT NULL AND parent_tenant <> NEW.tenant_id) THEN
+        RAISE EXCEPTION
+            '%.% points at a % row that belongs to a different business',
+            TG_TABLE_NAME, child_column, parent_table
+            USING ERRCODE = 'foreign_key_violation';
+    END IF;
+
+    RETURN NEW;
+END
+$$;
+
+DO $$
+DECLARE
+    old RECORD;
+    fk  RECORD;
+BEGIN
+    -- Dropped and rebuilt every run, so a foreign key that has since been
+    -- removed does not leave a trigger behind checking a column that moved.
+    FOR old IN
+        SELECT t.tgname, c.relname
+        FROM pg_trigger t
+        JOIN pg_class c ON c.oid = t.tgrelid
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public' AND t.tgname LIKE 'trg_same_tenant_%'
+    LOOP
+        EXECUTE format('DROP TRIGGER %I ON public.%I', old.tgname, old.relname);
+    END LOOP;
+
+    FOR fk IN
+        SELECT child.relname  AS child_table,
+               ca.attname     AS child_column,
+               parent.relname AS parent_table,
+               pa.attname     AS parent_column
+        FROM pg_constraint con
+        JOIN pg_class child   ON child.oid = con.conrelid
+        JOIN pg_class parent  ON parent.oid = con.confrelid
+        JOIN pg_namespace n   ON n.oid = child.relnamespace
+        JOIN pg_attribute ca  ON ca.attrelid = con.conrelid  AND ca.attnum = con.conkey[1]
+        JOIN pg_attribute pa  ON pa.attrelid = con.confrelid AND pa.attnum = con.confkey[1]
+        WHERE con.contype = 'f'
+          AND n.nspname = 'public'
+          AND array_length(con.conkey, 1) = 1
+          AND parent.relname <> 'users'
+          AND EXISTS (SELECT 1 FROM pg_attribute x
+                      WHERE x.attrelid = child.oid AND x.attname = 'tenant_id' AND NOT x.attisdropped)
+          AND EXISTS (SELECT 1 FROM pg_attribute x
+                      WHERE x.attrelid = parent.oid AND x.attname = 'tenant_id' AND NOT x.attisdropped)
+          -- A tenant row pointing at itself or its own tenant column is not a cross-reference.
+          AND ca.attname <> 'tenant_id'
+    LOOP
+        EXECUTE format(
+            'CREATE TRIGGER %I BEFORE INSERT OR UPDATE OF %I ON public.%I
+             FOR EACH ROW EXECUTE FUNCTION public.assert_same_tenant_ref(%L, %L, %L)',
+            left('trg_same_tenant_' || fk.child_column, 63),
+            fk.child_column, fk.child_table,
+            fk.child_column, fk.parent_table, fk.parent_column
+        );
+    END LOOP;
+END $$;

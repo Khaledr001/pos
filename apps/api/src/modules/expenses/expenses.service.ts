@@ -1,7 +1,7 @@
 import { and, count, desc, eq, gte, isNull, lte, schema, sql } from "@devsfleet/db";
 import { AppError, ERROR_CODES } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
-import { assertBranchInScope, requireBranchId } from "../../common/context/branch-scope.js";
+import { assertBranchInScope, branchFilter, requireBranchId } from "../../common/context/branch-scope.js";
 import { RequestContext } from "../../common/context/request-context.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import type { CreateExpenseDto, ListExpensesDto, UpdateExpenseDto } from "./dto.js";
@@ -109,7 +109,7 @@ export class ExpensesService {
     return this.db.run(async (tx) => {
       const where = and(
         isNull(schema.expenses.deletedAt),
-        query.branchId ? eq(schema.expenses.branchId, query.branchId) : undefined,
+        branchFilter(schema.expenses.branchId, query.branchId),
         query.from ? gte(schema.expenses.expenseDate, query.from) : undefined,
         query.to ? lte(schema.expenses.expenseDate, query.to) : undefined,
         category ? eq(schema.expenses.category, category) : undefined,

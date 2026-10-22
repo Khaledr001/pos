@@ -1,6 +1,7 @@
 import { CUSTOMER_TYPES, DEFAULT_PAGE_SIZE, LOCALES, MAX_PAGE_SIZE, PAYMENT_METHODS } from "@devsfleet/shared-types";
 import { normalizePhone } from "@devsfleet/shared-utils";
 import { z } from "zod";
+import { ZERO_MONEY, zMoney } from "../../common/validation/money.js";
 import { sortSchema } from "../../common/db/list-query.js";
 import { zQueryBoolean } from "../../common/pipes/zod-validation.pipe.js";
 
@@ -42,7 +43,7 @@ export const CreateCustomerSchema = z.object({
   type: z.enum(CUSTOMER_TYPES).default("retail"),
   locale: z.enum(LOCALES).default("en"),
   priceListId: z.string().uuid().nullable().optional(),
-  creditLimit: z.coerce.number().min(0).default(0),
+  creditLimit: zMoney().default(ZERO_MONEY),
   paymentTermDays: z.coerce.number().int().min(0).max(365).default(0),
   /** E.164. What the WhatsApp bot matches an inbound message against. */
   whatsappPhone: phoneField.optional(),
@@ -79,14 +80,14 @@ export type ListCustomersDto = z.infer<typeof ListCustomersSchema>;
  * may edit a phone number cannot also raise its own credit ceiling.
  */
 export const SetCreditSchema = z.object({
-  creditLimit: z.coerce.number().min(0),
+  creditLimit: zMoney(),
   creditOnHold: z.boolean().optional(),
 });
 export type SetCreditDto = z.infer<typeof SetCreditSchema>;
 
 export const RecordPaymentSchema = z.object({
   branchId: z.string().uuid().optional(),
-  amount: z.coerce.number().positive(),
+  amount: zMoney({ positive: true }),
   method: z.enum(PAYMENT_METHODS),
   /**
    * Which drawer the cash landed in. Not required — a manager settling an
@@ -111,3 +112,11 @@ export const AdjustLoyaltySchema = z.object({
   reason: z.string().trim().min(3, "Explain the adjustment").max(500),
 });
 export type AdjustLoyaltyDto = z.infer<typeof AdjustLoyaltySchema>;
+
+export const CustomerStatementSchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
+  /** Newest first on screen; a printed statement reads oldest first. */
+  order: z.enum(["asc", "desc"]).default("desc"),
+});
+export type CustomerStatementDto = z.infer<typeof CustomerStatementSchema>;

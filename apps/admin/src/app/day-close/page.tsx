@@ -160,7 +160,7 @@ export default function DayClosePage() {
     try {
       await api.post(
         "/day-close/open",
-        { branchId, openingFloat: Number(openingFloat), notes: notes || undefined },
+        { branchId, openingFloat: openingFloat.trim() || "0", notes: notes || undefined },
         { accessToken: tokens?.accessToken },
       );
       setSuccess("Day opened.");
@@ -181,7 +181,7 @@ export default function DayClosePage() {
     try {
       await api.post(
         `/day-close/${preview.id}/close`,
-        { countedCash: Number(countedCash), notes: notes || undefined },
+        { countedCash: countedCash.trim(), notes: notes || undefined },
         { accessToken: tokens?.accessToken },
       );
       setSuccess("Day closed and frozen.");

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { zMoney } from "../../../common/validation/money.js";
 
 export const PRODUCT_SORTS = ["relevance", "newest", "price_asc", "price_desc", "name"] as const;
 export type ProductSort = (typeof PRODUCT_SORTS)[number];
@@ -22,8 +23,8 @@ export const ListProductsSchema = z.object({
   brand: csv.optional(),
   q: z.string().trim().max(120).optional(),
   /** VAT-inclusive, in major units, as typed into a price filter. */
-  minPrice: z.coerce.number().min(0).optional(),
-  maxPrice: z.coerce.number().min(0).optional(),
+  minPrice: zMoney().optional(),
+  maxPrice: zMoney().optional(),
   inStock: z
     .union([z.boolean(), z.enum(["true", "false", "1", "0"])])
     .transform((v) => v === true || v === "true" || v === "1")

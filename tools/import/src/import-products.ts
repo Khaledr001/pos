@@ -53,7 +53,7 @@
  *  7. CHUNK the writes (500 rows per transaction). One transaction over
  *     5,000 rows holds locks long enough to stall the POS terminals.
  */
-import { createDbClient, eq, schema, sql, withPlatformAdmin, withTenant, type DbClient, type Transaction } from "@devsfleet/db";
+import { createDbClient, eq, rlsBypassingRole, schema, sql, withPlatformAdmin, withTenant, type DbClient, type Transaction } from "@devsfleet/db";
 import { Money, searchKey } from "@devsfleet/shared-utils";
 import { config } from "dotenv";
 import { randomUUID } from "node:crypto";
@@ -359,6 +359,19 @@ async function main() {
 
   const { db, close } = createDbClient({ url });
   try {
+    // Units, brands and categories are looked up by name and scoped by RLS
+    // alone. On a role that bypasses it, "pcs" resolves to whichever tenant's
+    // pcs comes last, and every imported product points at it.
+    const bypassing = await rlsBypassingRole(db);
+    if (bypassing) {
+      console.error(
+        `Refusing to import: the database role "${bypassing}" bypasses row-level security, so ` +
+          "lookups would match other businesses' units and brands. Use the devsfleet_app role.",
+      );
+      process.exitCode = 1;
+      return;
+    }
+
     const tenantId = await resolveTenantId(db, tenantArg);
 
     const tally = { created: 0, updated: 0, unchanged: 0, rejected: rejected.length };

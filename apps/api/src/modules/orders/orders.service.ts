@@ -10,7 +10,7 @@ import {
   sequenceKey,
 } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
-import { assertBranchInScope, requireBranchId } from "../../common/context/branch-scope.js";
+import { assertBranchInScope, branchFilter, requireBranchId } from "../../common/context/branch-scope.js";
 import { RequestContext } from "../../common/context/request-context.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import { StockService } from "../inventory/stock.service.js";
@@ -521,7 +521,7 @@ export class OrdersService {
 
     return this.db.run(async (tx) => {
       const where = and(
-        query.branchId ? eq(schema.orders.branchId, query.branchId) : undefined,
+        branchFilter(schema.orders.branchId, query.branchId),
         query.customerId ? eq(schema.orders.customerId, query.customerId) : undefined,
         query.status ? eq(schema.orders.status, query.status) : undefined,
         query.from ? gte(schema.orders.createdAt, new Date(`${query.from}T00:00:00Z`)) : undefined,
