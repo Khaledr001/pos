@@ -141,13 +141,6 @@ export default function LoginPage() {
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </form>
-
-            <div className="text-center text-[11px] text-muted-foreground">
-              Connected to API at{" "}
-              <code className="font-mono rounded bg-secondary px-1.5 py-0.5">
-                localhost:3001/api/v1
-              </code>
-            </div>
           </CardContent>
         </Card>
       </div>

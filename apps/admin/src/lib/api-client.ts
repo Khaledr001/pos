@@ -11,26 +11,11 @@ import { AppError, ERROR_CODES } from "@devsfleet/shared-utils";
 const DEFAULT_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1";
 const TOKEN_KEY = "devsfleet_auth_tokens";
 const USER_KEY = "devsfleet_auth_user";
-const BASE_URL_OVERRIDE_KEY = "devsfleet_api_base_url";
 /** Milliseconds before the access token expires at which we proactively refresh. */
 const PROACTIVE_REFRESH_LEAD_MS = 2 * 60 * 1000; // 2 minutes
 
-/**
- * Which API this admin build talks to — usually fixed at build time via
- * `NEXT_PUBLIC_API_URL`, but a self-hosted deploy needs to point one
- * already-built static bundle at a backend chosen after the fact (moving to
- * a VPS, a staging vs. production API). The settings page is the only writer
- * of the override; everything that calls the API reads through here so the
- * two can never disagree about which server "save" actually pointed at.
- */
 function getBaseUrl(): string {
-  if (typeof window === "undefined") return DEFAULT_BASE_URL;
-  return localStorage.getItem(BASE_URL_OVERRIDE_KEY)?.trim() || DEFAULT_BASE_URL;
-}
-
-export function getApiBaseUrlOverride(): string {
-  if (typeof window === "undefined") return "";
-  return localStorage.getItem(BASE_URL_OVERRIDE_KEY) ?? "";
+  return DEFAULT_BASE_URL;
 }
 
 /**
@@ -42,17 +27,6 @@ export function getApiBaseUrlOverride(): string {
  */
 export function getApiOrigin(): string {
   return new URL(getBaseUrl()).origin;
-}
-
-/** Empty or the default clears the override rather than storing it verbatim. */
-export function setApiBaseUrlOverride(url: string): void {
-  if (typeof window === "undefined") return;
-  const trimmed = url.trim();
-  if (!trimmed || trimmed === DEFAULT_BASE_URL) {
-    localStorage.removeItem(BASE_URL_OVERRIDE_KEY);
-  } else {
-    localStorage.setItem(BASE_URL_OVERRIDE_KEY, trimmed);
-  }
 }
 
 /**

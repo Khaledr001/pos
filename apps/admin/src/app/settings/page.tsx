@@ -1,15 +1,14 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import { ShieldCheck, Coins, Server, Save, CheckCircle2, Activity, AlertCircle, Receipt } from "lucide-react";
+import { ShieldCheck, Coins, Save, CheckCircle2, AlertCircle, Receipt } from "lucide-react";
 import type { TenantSettings } from "@devsfleet/shared-types";
 import { DEFAULT_TENANT_SETTINGS } from "@devsfleet/shared-types";
 import { useAuth } from "@/lib/auth-context";
-import { api, getApiBaseUrlOverride, setApiBaseUrlOverride } from "@/lib/api-client";
+import { api } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 
 interface TenantResponse {
   id: string;
@@ -24,8 +23,6 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [testingApi, setTestingApi] = useState(false);
-  const [apiStatus, setApiStatus] = useState<"idle" | "connected" | "failed">("idle");
 
   const [tenantName, setTenantName] = useState("");
   const [tenantSlug, setTenantSlug] = useState("");
@@ -53,8 +50,6 @@ export default function SettingsPage() {
   const [quotationValidityDays, setQuotationValidityDays] = useState(
     DEFAULT_TENANT_SETTINGS.sales.quotationValidityDays,
   );
-
-  const [apiUrl, setApiUrl] = useState("");
 
   const fetchSettings = useCallback(async () => {
     setLoading(true);
@@ -85,31 +80,13 @@ export default function SettingsPage() {
 
   useEffect(() => {
     void fetchSettings();
-    setApiUrl(getApiBaseUrlOverride());
   }, [fetchSettings]);
-
-  const handleTestApi = async () => {
-    setTestingApi(true);
-    setApiStatus("idle");
-    try {
-      await api.get("/health");
-      setApiStatus("connected");
-    } catch {
-      setApiStatus("failed");
-    } finally {
-      setTestingApi(false);
-    }
-  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setError(null);
     try {
-      // The API endpoint an already-built admin bundle talks to is a local
-      // connection setting, not tenant data — it lives in this browser only.
-      setApiBaseUrlOverride(apiUrl);
-
       await api.patch(
         "/tenant/settings",
         {
@@ -345,68 +322,6 @@ export default function SettingsPage() {
                     Block selling below floor price without approval
                   </label>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-4">
-              <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-linear-to-br from-emerald-500 to-teal-600 text-white">
-                  <Server className="h-4 w-4" />
-                </div>
-                <div>
-                  <CardTitle className="text-sm">Backend Server Connectivity</CardTitle>
-                  <CardDescription className="text-[11px]">
-                    This browser only — not a tenant setting
-                  </CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-foreground mb-1.5">
-                  Central API Endpoint
-                </label>
-                <Input
-                  value={apiUrl}
-                  onChange={(e) => setApiUrl(e.target.value)}
-                  placeholder={process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1"}
-                  className="font-mono"
-                />
-                <p className="mt-2 text-[11px] text-muted-foreground">
-                  Leave blank to use the build default. Change when pointing this same admin
-                  build at a different backend (e.g.{" "}
-                  <code className="font-mono rounded bg-secondary px-1.5 py-0.5">
-                    https://api.devsfleet.com/api/v1
-                  </code>
-                  ) — saved to this browser, applies after Save.
-                </p>
-              </div>
-              <div className="flex items-center gap-3 pt-1">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleTestApi}
-                  disabled={testingApi}
-                  className="text-xs"
-                >
-                  <Activity className="h-3.5 w-3.5" />
-                  {testingApi ? "Testing..." : "Test Connection"}
-                </Button>
-                {apiStatus === "connected" && (
-                  <Badge variant="success" className="text-xs gap-1">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    API is reachable & healthy
-                  </Badge>
-                )}
-                {apiStatus === "failed" && (
-                  <Badge variant="destructive" className="text-xs gap-1">
-                    <AlertCircle className="h-3.5 w-3.5" />
-                    Could not reach API endpoint
-                  </Badge>
-                )}
               </div>
             </CardContent>
           </Card>
