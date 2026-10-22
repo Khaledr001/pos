@@ -3,7 +3,9 @@ import type { Branch } from "@devsfleet/db";
 import type { Paginated } from "@devsfleet/shared-types";
 import { AppError, ERROR_CODES } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
+import { branchFilter } from "../../common/context/branch-scope.js";
 import { RequestContext } from "../../common/context/request-context.js";
+import { containsPattern } from "../../common/db/list-query.js";
 import { PlanLimitService } from "../../common/guards/plan-limit.service.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import type { CreateBranchDto, ListBranchesDto, UpdateBranchDto } from "./dto.js";
@@ -34,16 +36,18 @@ export class BranchesService {
   ) {}
 
   async list(query: ListBranchesDto): Promise<Paginated<Branch>> {
-    const { page, limit, q, includeInactive, sortBy, sortOrder } = query;
+    const { page, limit, q, includeInactive, includeOtherBranches, sortBy, sortOrder } = query;
+    const term = containsPattern(q);
     const offset = (page - 1) * limit;
 
     const where = and(
       isNull(schema.branches.deletedAt),
       includeInactive ? undefined : eq(schema.branches.isActive, true),
-      q
+      includeOtherBranches ? undefined : branchFilter(schema.branches.id),
+      term
         ? or(
-            ilike(schema.branches.name, `%${q}%`),
-            ilike(schema.branches.code, `%${q}%`),
+            ilike(schema.branches.name, term),
+            ilike(schema.branches.code, term),
           )
         : undefined,
     );

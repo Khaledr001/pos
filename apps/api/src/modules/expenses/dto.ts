@@ -1,5 +1,6 @@
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, PAYMENT_METHODS } from "@devsfleet/shared-types";
 import { z } from "zod";
+import { sortSchema } from "../../common/db/list-query.js";
 import { zMoney } from "../../common/validation/money.js";
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a YYYY-MM-DD date");
@@ -29,6 +30,9 @@ export const ListExpensesSchema = z.object({
   from: isoDate.optional(),
   to: isoDate.optional(),
   category: z.string().trim().max(80).optional(),
+  /** Title, category or notes. */
+  q: z.string().trim().max(100).optional(),
+  ...sortSchema(["expenseDate", "amount", "title"], { sortBy: "expenseDate", sortOrder: "desc" }),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
 });

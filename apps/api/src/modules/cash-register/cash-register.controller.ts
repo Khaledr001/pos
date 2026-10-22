@@ -4,14 +4,33 @@ import { Audited, RequirePermissions } from "../../common/decorators/index.js";
 import { zodPipe } from "../../common/pipes/zod-validation.pipe.js";
 import { CashRegisterService } from "./cash-register.service.js";
 import {
-  CashMovementSchema, CloseSessionSchema, OpenSessionSchema,
-  type CashMovementDto, type CloseSessionDto, type OpenSessionDto,
+  CashMovementSchema, CloseSessionSchema, ListSessionsSchema, OpenSessionSchema,
+  type CashMovementDto, type CloseSessionDto, type ListSessionsDto, type OpenSessionDto,
 } from "./dto.js";
 
 @ApiTags("cash-register")
 @Controller("cash-register")
 export class CashRegisterController {
   constructor(private readonly cash: CashRegisterService) {}
+
+  /**
+   * The back office's view of every drawer. `day_close:read`, not `cash:open`:
+   * reading drawer variances is a reconciliation job, and the till's own
+   * permission to open a drawer should not carry it.
+   */
+  @Get("sessions")
+  @RequirePermissions("day_close:read")
+  @ApiOperation({ summary: "Drawer sessions with their totals and variance" })
+  sessions(@Query(zodPipe(ListSessionsSchema)) query: ListSessionsDto) {
+    return this.cash.listSessions(query);
+  }
+
+  @Get("sessions/:id")
+  @RequirePermissions("day_close:read")
+  @ApiOperation({ summary: "One drawer session, with its pay-ins, pay-outs and cash sales" })
+  session(@Param("id", ParseUUIDPipe) id: string) {
+    return this.cash.getSession(id);
+  }
 
   @Get("current")
   @RequirePermissions("cash:open")

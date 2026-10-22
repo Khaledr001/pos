@@ -127,7 +127,9 @@ export default function TransfersPage() {
   useEffect(() => {
     if (!tokens?.accessToken) return;
     api
-      .get<Branch[]>("/branches", { accessToken: tokens.accessToken })
+      // Every branch, not just the caller's: a transfer names where stock is
+      // going, and incoming transfers have to say where they came from.
+      .get<Branch[]>("/branches", { accessToken: tokens.accessToken, query: { limit: 200, includeOtherBranches: true } })
       .then((res) => setBranches((res as any)?.items ?? res ?? []))
       .catch(() => undefined);
   }, [tokens]);

@@ -1,8 +1,9 @@
-import { and, eq, schema } from "@devsfleet/db";
+import { and, asc, count, desc, eq, ilike, or, schema } from "@devsfleet/db";
 import { AppError, ERROR_CODES, Money } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
 import { assertBranchInScope, branchFilter } from "../../common/context/branch-scope.js";
 import { RequestContext } from "../../common/context/request-context.js";
+import { containsPattern } from "../../common/db/list-query.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import { StockService } from "../inventory/stock.service.js";
 import type { ListSerialsDto, MarkDamagedDto } from "./dto.js";
@@ -103,64 +104,134 @@ export class SerialsService {
     }
   }
 
-  /** Warranty and provenance lookup: one serial, wherever it is in its life. */
+  /**
+   * Warranty and provenance lookup: one serial, wherever it is in its life.
+   *
+   * One joined read rather than ids to chase: the person at the counter with
+   * a customer's drill in hand needs the product, where it was, and which
+   * invoice it left on, not a uuid. The original fields are kept as they were.
+   */
   async findBySerial(serial: string): Promise<unknown> {
-    const found = await this.db.run(async (tx) =>
-      tx.query.serialNumbers.findFirst({
-        where: (t, { eq: e }) => e(t.serial, serial.trim()),
-      }),
+    const [found] = await this.db.run(async (tx) =>
+      tx
+        .select({
+          serial: schema.serialNumbers,
+          productId: schema.products.id,
+          productName: schema.products.name,
+          sku: schema.productVariants.sku,
+          variantName: schema.productVariants.variantName,
+          branchName: schema.branches.name,
+          branchCode: schema.branches.code,
+          saleId: schema.sales.id,
+          saleNumber: schema.sales.saleNumber,
+          soldAt: schema.sales.occurredAt,
+          saleStatus: schema.sales.status,
+          customerId: schema.customers.id,
+          customerName: schema.customers.name,
+        })
+        .from(schema.serialNumbers)
+        .innerJoin(schema.productVariants, eq(schema.serialNumbers.variantId, schema.productVariants.id))
+        .innerJoin(schema.products, eq(schema.productVariants.productId, schema.products.id))
+        .leftJoin(schema.branches, eq(schema.serialNumbers.branchId, schema.branches.id))
+        .leftJoin(schema.saleItems, eq(schema.serialNumbers.saleItemId, schema.saleItems.id))
+        .leftJoin(schema.sales, eq(schema.saleItems.saleId, schema.sales.id))
+        .leftJoin(schema.customers, eq(schema.sales.customerId, schema.customers.id))
+        .where(eq(schema.serialNumbers.serial, serial.trim()))
+        .limit(1),
     );
     if (!found) throw new AppError(ERROR_CODES.NOT_FOUND, `Serial ${serial} not found`);
-    if (found.branchId) assertBranchInScope(found.branchId);
+    if (found.serial.branchId) assertBranchInScope(found.serial.branchId);
 
-    const [variant, saleItem] = await Promise.all([
-      this.db.run(async (tx) =>
-        tx.query.productVariants.findFirst({
-          where: (t, { eq: e }) => e(t.id, found.variantId),
-          columns: { sku: true, variantName: true },
-        }),
-      ),
-      found.saleItemId
-        ? this.db.run(async (tx) =>
-            tx.query.saleItems.findFirst({
-              where: (t, { eq: e }) => e(t.id, found.saleItemId!),
-              columns: { saleId: true },
-            }),
-          )
-        : null,
-    ]);
-
-    return { ...found, variant, saleId: saleItem?.saleId ?? null };
+    const { serial: row, ...context } = found;
+    return {
+      ...row,
+      variant: { sku: context.sku, variantName: context.variantName },
+      ...context,
+      /** When it was checked in on a receipt — the row is written at receipt time. */
+      receivedAt: row.createdAt,
+    };
   }
 
-  async list(query: ListSerialsDto): Promise<unknown[]> {
-    if (query.branchId) assertBranchInScope(query.branchId);
+  async list(query: ListSerialsDto): Promise<unknown> {
+    const term = containsPattern(query.q);
 
-    return this.db.run(async (tx) =>
-      tx
+    const where = and(
+      query.variantId ? eq(schema.serialNumbers.variantId, query.variantId) : undefined,
+      query.productId ? eq(schema.productVariants.productId, query.productId) : undefined,
+      query.status ? eq(schema.serialNumbers.status, query.status) : undefined,
+      branchFilter(schema.serialNumbers.branchId, query.branchId),
+      term
+        ? or(
+            ilike(schema.serialNumbers.serial, term),
+            ilike(schema.productVariants.sku, term),
+            ilike(schema.products.name, term),
+          )
+        : undefined,
+    );
+
+    const sortColumn = {
+      createdAt: schema.serialNumbers.createdAt,
+      serial: schema.serialNumbers.serial,
+      status: schema.serialNumbers.status,
+      expiryDate: schema.serialNumbers.expiryDate,
+    }[query.sortBy];
+
+    return this.db.run(async (tx) => {
+      // Same joins as the page: the search and the product filter reach into
+      // variants and products, so a count without them counts the wrong rows.
+      const [counted] = await tx
+        .select({ value: count() })
+        .from(schema.serialNumbers)
+        .innerJoin(schema.productVariants, eq(schema.serialNumbers.variantId, schema.productVariants.id))
+        .innerJoin(schema.products, eq(schema.productVariants.productId, schema.products.id))
+        .where(where);
+      const total = counted?.value ?? 0;
+
+      const items = await tx
         .select({
           id: schema.serialNumbers.id,
           serial: schema.serialNumbers.serial,
           status: schema.serialNumbers.status,
           branchId: schema.serialNumbers.branchId,
+          branchName: schema.branches.name,
+          branchCode: schema.branches.code,
+          variantId: schema.serialNumbers.variantId,
+          productId: schema.products.id,
+          productName: schema.products.name,
           sku: schema.productVariants.sku,
           variantName: schema.productVariants.variantName,
+          expiryDate: schema.serialNumbers.expiryDate,
+          createdAt: schema.serialNumbers.createdAt,
+          saleId: schema.sales.id,
+          saleNumber: schema.sales.saleNumber,
         })
         .from(schema.serialNumbers)
-        .innerJoin(
-          schema.productVariants,
-          eq(schema.serialNumbers.variantId, schema.productVariants.id),
+        .innerJoin(schema.productVariants, eq(schema.serialNumbers.variantId, schema.productVariants.id))
+        .innerJoin(schema.products, eq(schema.productVariants.productId, schema.products.id))
+        .leftJoin(schema.branches, eq(schema.serialNumbers.branchId, schema.branches.id))
+        .leftJoin(schema.saleItems, eq(schema.serialNumbers.saleItemId, schema.saleItems.id))
+        .leftJoin(schema.sales, eq(schema.saleItems.saleId, schema.sales.id))
+        .where(where)
+        .orderBy(
+          query.sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn),
+          desc(schema.serialNumbers.id),
         )
-        .where(
-          and(
-            query.variantId ? eq(schema.serialNumbers.variantId, query.variantId) : undefined,
-            query.status ? eq(schema.serialNumbers.status, query.status) : undefined,
-            branchFilter(schema.serialNumbers.branchId, query.branchId),
-          ),
-        )
-        .orderBy(schema.serialNumbers.serial)
-        .limit(200),
-    );
+        .limit(query.limit)
+        .offset((query.page - 1) * query.limit);
+
+      const totalPages = Math.max(1, Math.ceil(total / query.limit));
+      return {
+        items,
+        meta: {
+          page: query.page,
+          limit: query.limit,
+          total,
+          totalPages,
+          hasNext: query.page < totalPages,
+          hasPrev: query.page > 1,
+        },
+      };
+    });
   }
 
   /**

@@ -103,7 +103,9 @@ export default function OnlineStorePage() {
     try {
       const [o, b] = await Promise.all([
         api.get<Overview>("/storefront-admin/settings", auth),
-        api.get<Branch[]>("/branches", { ...auth, query: { limit: 100 } }).catch(() => [] as Branch[]),
+        // All of them: pickup settings are the whole store's, and this page
+        // saves the full list back — a scoped subset would drop the rest.
+        api.get<Branch[]>("/branches", { ...auth, query: { limit: 100, includeOtherBranches: true } }).catch(() => [] as Branch[]),
       ]);
       apply(o);
       setBranches(b);

@@ -1,4 +1,4 @@
-import { and, count, desc, eq, isNull, schema, sql } from "@devsfleet/db";
+import { and, asc, count, desc, eq, ilike, or, schema, sql } from "@devsfleet/db";
 import {
   AppError,
   ERROR_CODES,
@@ -9,6 +9,7 @@ import {
 import { Injectable } from "@nestjs/common";
 import { assertBranchInScope, branchFilter, requireBranchId } from "../../common/context/branch-scope.js";
 import { RequestContext } from "../../common/context/request-context.js";
+import { containsPattern } from "../../common/db/list-query.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import { StockService } from "../inventory/stock.service.js";
 import type {
@@ -42,6 +43,10 @@ export class StockTakeService {
   /**
    * Generate a count sheet.
    *
+   * A category takes its whole subtree: counting "Adhesives & Sealants" means
+   * the contact adhesives and silicones under it too. Matching the category id
+   * alone produced an empty sheet for any parent, since products sit on leaves.
+   *
    * Every variant that could be on the shelf, including the ones the system
    * believes are at zero — a count that only lists what the system expects can
    * never find stock nobody knew about, which is half of what a count is for.
@@ -50,6 +55,10 @@ export class StockTakeService {
     const tenantId = RequestContext.requireTenantId();
     const user = RequestContext.requireUser();
     const branchId = requireBranchId(dto.branchId);
+    // requireBranchId only resolves a branch; it does not check the caller may
+    // act on it. Without this a manager scoped to one shop could open a count
+    // — and freeze the system quantities — at another.
+    assertBranchInScope(branchId);
 
     return this.db.run(async (tx) => {
       const open = await tx.query.stockCounts.findFirst({
@@ -102,7 +111,13 @@ export class StockTakeService {
           AND v.is_active = true
           AND p.deleted_at IS NULL
           AND p.is_stock_tracked = true
-          ${dto.categoryId ? sql`AND p.category_id = ${dto.categoryId}::uuid` : sql``}
+          ${dto.categoryId
+            ? sql`AND p.category_id IN (
+                SELECT c.id FROM categories c, categories root
+                WHERE root.id = ${dto.categoryId}::uuid
+                  AND (c.id = root.id OR left(c.path, length(root.path) + 1) = root.path || '/')
+              )`
+            : sql``}
         RETURNING id
       `);
 
@@ -285,18 +300,25 @@ export class StockTakeService {
   async findById(id: string, existing?: Transaction): Promise<unknown> {
     const read = async (tx: Transaction) => {
       const stockCount = await this.requireCount(tx, id);
+      // Cost turns a variance of "−11" into "−11 worth 330.00", which is what
+      // an approver actually weighs. It is withheld from anyone not allowed to
+      // see cost, the same rule the price resolver follows.
+      const showCost = RequestContext.get()?.user?.abac.canViewCost ?? false;
 
       const items = await tx
         .select({
           id: schema.stockCountItems.id,
           variantId: schema.stockCountItems.variantId,
           sku: schema.productVariants.sku,
+          barcode: schema.productVariants.barcode,
           productName: schema.products.name,
           variantName: schema.productVariants.variantName,
+          unitAbbr: schema.units.abbreviation,
           systemQuantity: schema.stockCountItems.systemQuantity,
           countedQuantity: schema.stockCountItems.countedQuantity,
           variance: schema.stockCountItems.variance,
           notes: schema.stockCountItems.notes,
+          ...(showCost ? { unitCost: schema.inventory.averageCost } : {}),
         })
         .from(schema.stockCountItems)
         .innerJoin(
@@ -304,10 +326,30 @@ export class StockTakeService {
           eq(schema.stockCountItems.variantId, schema.productVariants.id),
         )
         .innerJoin(schema.products, eq(schema.productVariants.productId, schema.products.id))
+        .leftJoin(schema.units, eq(schema.products.unitId, schema.units.id))
+        .leftJoin(
+          schema.inventory,
+          and(
+            eq(schema.inventory.variantId, schema.stockCountItems.variantId),
+            eq(schema.inventory.branchId, stockCount.branchId),
+          ),
+        )
         .where(eq(schema.stockCountItems.stockCountId, id))
         .orderBy(schema.products.name, schema.productVariants.sku);
 
-      return { ...stockCount, items };
+      const [names] = await tx
+        .select({ branchName: schema.branches.name, categoryName: schema.categories.name })
+        .from(schema.branches)
+        .leftJoin(schema.categories, eq(schema.categories.id, sql`${stockCount.categoryId}::uuid`))
+        .where(eq(schema.branches.id, stockCount.branchId));
+
+      return {
+        ...stockCount,
+        branchName: names?.branchName ?? null,
+        categoryName: names?.categoryName ?? null,
+        canViewCost: showCost,
+        items,
+      };
     };
 
     return existing ? read(existing) : this.db.run(read);
@@ -316,13 +358,28 @@ export class StockTakeService {
   async list(query: ListStockCountsDto): Promise<{ items: unknown[]; total: number }> {
     if (query.branchId) assertBranchInScope(query.branchId);
 
+    const term = containsPattern(query.q);
+
     return this.db.run(async (tx) => {
       const where = and(
         branchFilter(schema.stockCounts.branchId, query.branchId),
         query.status ? eq(schema.stockCounts.status, query.status) : undefined,
+        term
+          ? or(ilike(schema.stockCounts.countNumber, term), ilike(schema.branches.name, term))
+          : undefined,
       );
 
-      const [total] = await tx.select({ value: count() }).from(schema.stockCounts).where(where);
+      // Joined like the page below: the search reaches the branch name.
+      const [total] = await tx
+        .select({ value: count() })
+        .from(schema.stockCounts)
+        .innerJoin(schema.branches, eq(schema.stockCounts.branchId, schema.branches.id))
+        .where(where);
+
+      const sortColumn = {
+        createdAt: schema.stockCounts.createdAt,
+        countNumber: schema.stockCounts.countNumber,
+      }[query.sortBy];
 
       const items = await tx
         .select({
@@ -330,8 +387,13 @@ export class StockTakeService {
           countNumber: schema.stockCounts.countNumber,
           status: schema.stockCounts.status,
           branchName: schema.branches.name,
+          categoryName: schema.categories.name,
           createdAt: schema.stockCounts.createdAt,
           approvedAt: schema.stockCounts.approvedAt,
+          countedLines: sql<number>`(
+            SELECT count(*)::int FROM stock_count_items s
+            WHERE s.stock_count_id = stock_counts.id AND s.counted_quantity IS NOT NULL
+          )`,
           lineCount: sql<number>`(
             SELECT count(*)::int FROM stock_count_items s
             WHERE s.stock_count_id = stock_counts.id
@@ -343,8 +405,12 @@ export class StockTakeService {
         })
         .from(schema.stockCounts)
         .innerJoin(schema.branches, eq(schema.stockCounts.branchId, schema.branches.id))
+        .leftJoin(schema.categories, eq(schema.stockCounts.categoryId, schema.categories.id))
         .where(where)
-        .orderBy(desc(schema.stockCounts.createdAt))
+        .orderBy(
+          query.sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn),
+          desc(schema.stockCounts.id),
+        )
         .limit(query.pageSize)
         .offset((query.page - 1) * query.pageSize);
 

@@ -158,6 +158,8 @@ export const ListSalesSchema = z.object({
   status: z.enum(SALE_STATUSES).optional(),
   /** A sale, or a return document raised against one. */
   kind: z.enum(["sale", "return"]).optional(),
+  /** Sales rung up against one cash drawer session. */
+  cashSessionId: z.string().uuid().optional(),
   ...sortSchema(["occurredAt", "saleNumber", "total"], { sortBy: "occurredAt", sortOrder: "desc" }),
 });
 export type ListSalesDto = z.infer<typeof ListSalesSchema>;

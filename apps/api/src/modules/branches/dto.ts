@@ -56,6 +56,13 @@ export const ListBranchesSchema = z.object({
   q: z.string().trim().max(255).optional(),
   /** Defaults to active only — the common case is a picker, not an audit. */
   includeInactive: zQueryBoolean(false),
+  /**
+   * Off by default: a branch-scoped user gets the branches they may act on,
+   * which is what every picker wants. On for the few screens that must NAME
+   * other branches — a transfer's destination, the store's pickup settings.
+   * Names only; acting on one is still refused by `assertBranchInScope`.
+   */
+  includeOtherBranches: zQueryBoolean(false),
   sortBy: z.enum(["name", "code", "createdAt"]).default("name"),
   sortOrder: z.enum(["asc", "desc"]).default("asc"),
 });

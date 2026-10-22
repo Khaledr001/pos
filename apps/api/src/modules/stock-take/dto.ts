@@ -1,5 +1,6 @@
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from "@devsfleet/shared-types";
 import { z } from "zod";
+import { sortSchema } from "../../common/db/list-query.js";
 
 export const CreateStockCountSchema = z.object({
   branchId: z.string().uuid().optional(),
@@ -28,6 +29,9 @@ export type ApproveCountDto = z.infer<typeof ApproveCountSchema>;
 export const ListStockCountsSchema = z.object({
   branchId: z.string().uuid().optional(),
   status: z.enum(["draft", "counting", "pending_approval", "approved", "cancelled"]).optional(),
+  /** Count number or branch name. */
+  q: z.string().trim().max(100).optional(),
+  ...sortSchema(["createdAt", "countNumber"], { sortBy: "createdAt", sortOrder: "desc" }),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
 });

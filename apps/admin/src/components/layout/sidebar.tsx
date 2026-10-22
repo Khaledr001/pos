@@ -42,6 +42,10 @@ import {
   FileSignature,
   BellRing,
   Image as ImageIcon,
+  ClipboardCheck,
+  ScanBarcode,
+  Banknote,
+  Receipt,
 } from "lucide-react";
 import { hasPermission, type Permission } from "@devsfleet/shared-types";
 import { useAuth } from "@/lib/auth-context";
@@ -151,8 +155,10 @@ const NAV_SECTIONS: NavSection[] = [
           { label: "All Sales & Orders", href: "/sales", icon: ShoppingCart, permission: "sale:read" },
           { label: "Quotations", href: "/quotations", icon: FileText, permission: "quotation:read" },
           { label: "Day Close Registers", href: "/day-close", icon: Wallet, permission: "day_close:read" },
+          { label: "Cash Drawers", href: "/cash-drawers", icon: Banknote, permission: "day_close:read" },
         ],
       },
+      { label: "Expenses", href: "/expenses", icon: Receipt, permission: "expense:read" },
       { label: "Customers", href: "/customers", icon: Users, permission: "customer:read" },
     ],
   },
@@ -195,7 +201,17 @@ const NAV_SECTIONS: NavSection[] = [
           { label: "Units of Measure", href: "/units", icon: Ruler, permission: "product:read" },
         ],
       },
-      { label: "Inventory Stock", short: "Inventory", href: "/inventory", icon: Boxes, permission: "inventory:read" },
+      {
+        label: "Inventory",
+        href: "/inventory",
+        icon: Boxes,
+        permission: "inventory:read",
+        children: [
+          { label: "Stock Levels", href: "/inventory", icon: Boxes, permission: "inventory:read" },
+          { label: "Stock Takes", href: "/stock-take", icon: ClipboardCheck, permission: "inventory:read" },
+          { label: "Serial Numbers", href: "/serials", icon: ScanBarcode, permission: "inventory:read" },
+        ],
+      },
     ],
   },
   {

@@ -1,11 +1,13 @@
-import { and, desc, eq, inArray, isNull, schema, sql } from "@devsfleet/db";
+import { and, asc, count, desc, eq, gte, inArray, isNull, lt, schema, sql } from "@devsfleet/db";
 import { formatDocumentNumber, sequenceKey } from "@devsfleet/shared-utils";
 import { AppError, ERROR_CODES, Money } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
-import { assertBranchInScope, branchScope } from "../../common/context/branch-scope.js";
+import { assertBranchInScope, branchFilter, branchScope } from "../../common/context/branch-scope.js";
+import { containsPattern } from "../../common/db/list-query.js";
 import { RequestContext } from "../../common/context/request-context.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
-import type { CloseSessionDto, CashMovementDto, OpenSessionDto } from "./dto.js";
+import type { CloseSessionDto, CashMovementDto, ListSessionsDto, OpenSessionDto } from "./dto.js";
+import { expectedCash } from "./expected-cash.js";
 
 /**
  * The cash drawer.
@@ -273,6 +275,183 @@ export class CashRegisterService {
         .orderBy(desc(schema.cashSessions.openedAt))
         .limit(limit),
     );
+  }
+
+  /**
+   * Every drawer, for the back office — the reconciliation view.
+   *
+   * `history()` above serves the till and stops at 30 rows. This pages, filters
+   * and sorts, and carries each session's own totals so a manager can see a
+   * short drawer without opening it. A closed session shows the figures frozen
+   * at close; an open one shows what it should hold so far. That is not the
+   * count-before-you-see rule being broken: the cashier at the till still never
+   * sees it, and this is gated on `day_close:read`, not `cash:open`.
+   */
+  async listSessions(query: ListSessionsDto): Promise<{ items: unknown[]; total: number }> {
+    const term = containsPattern(query.q);
+
+    return this.db.run(async (tx) => {
+      const where = and(
+        branchFilter(schema.cashSessions.branchId, query.branchId),
+        query.status ? eq(schema.cashSessions.status, query.status) : undefined,
+        query.userId ? eq(schema.cashSessions.userId, query.userId) : undefined,
+        query.from ? gte(schema.cashSessions.openedAt, new Date(`${query.from}T00:00:00Z`)) : undefined,
+        query.to ? lt(schema.cashSessions.openedAt, sql`(${query.to}::date + 1)`) : undefined,
+        term ? sql`${schema.cashSessions.sessionNumber} ILIKE ${term}` : undefined,
+      );
+
+      const [counted] = await tx.select({ value: count() }).from(schema.cashSessions).where(where);
+
+      const cashSales = sql<string>`(
+        SELECT coalesce(sum(${schema.payments.amount}), 0) FROM ${schema.payments}
+        WHERE ${schema.payments.cashSessionId} = ${schema.cashSessions.id}
+          AND ${schema.payments.method} = 'cash'
+      )`;
+      // Sale and refund rows in cash_movements mirror `payments`; counting
+      // them here as well would double every sale.
+      const manual = sql`${schema.cashMovements.cashSessionId} = ${schema.cashSessions.id}
+        AND ${schema.cashMovements.type} NOT IN ('sale', 'refund')`;
+      const cashIn = sql<string>`(
+        SELECT coalesce(sum(${schema.cashMovements.amount}) FILTER (WHERE ${schema.cashMovements.amount} > 0), 0)
+        FROM ${schema.cashMovements} WHERE ${manual}
+      )`;
+      const cashOut = sql<string>`(
+        SELECT coalesce(abs(sum(${schema.cashMovements.amount}) FILTER (WHERE ${schema.cashMovements.amount} < 0)), 0)
+        FROM ${schema.cashMovements} WHERE ${manual}
+      )`;
+
+      const order =
+        query.sortBy === "difference"
+          ? sql`${schema.cashSessions.difference} ${sql.raw(query.sortOrder === "asc" ? "ASC" : "DESC")} NULLS LAST`
+          : query.sortOrder === "asc"
+            ? asc(schema.cashSessions.openedAt)
+            : desc(schema.cashSessions.openedAt);
+
+      const rows = await tx
+        .select({
+          id: schema.cashSessions.id,
+          sessionNumber: schema.cashSessions.sessionNumber,
+          status: schema.cashSessions.status,
+          openedAt: schema.cashSessions.openedAt,
+          closedAt: schema.cashSessions.closedAt,
+          branchId: schema.cashSessions.branchId,
+          branchName: schema.branches.name,
+          branchCode: schema.branches.code,
+          userId: schema.cashSessions.userId,
+          cashierName: schema.users.name,
+          deviceName: schema.devices.name,
+          openingAmount: schema.cashSessions.openingAmount,
+          closingAmount: schema.cashSessions.closingAmount,
+          expectedAmount: schema.cashSessions.expectedAmount,
+          difference: schema.cashSessions.difference,
+          cashSales: sql<string>`${cashSales}::text`,
+          cashIn: sql<string>`${cashIn}::text`,
+          cashOut: sql<string>`${cashOut}::text`,
+        })
+        .from(schema.cashSessions)
+        .innerJoin(schema.branches, eq(schema.cashSessions.branchId, schema.branches.id))
+        .innerJoin(schema.users, eq(schema.cashSessions.userId, schema.users.id))
+        .leftJoin(schema.devices, eq(schema.cashSessions.deviceId, schema.devices.id))
+        .where(where)
+        .orderBy(order, desc(schema.cashSessions.id))
+        .limit(query.pageSize)
+        .offset((query.page - 1) * query.pageSize);
+
+      const items = rows.map((r) => ({
+        ...r,
+        // Frozen at close; for a drawer still open, what it should hold so far.
+        expectedAmount:
+          r.status === "closed" && r.expectedAmount !== null
+            ? r.expectedAmount
+            : expectedCash({ opening: r.openingAmount, cashSales: r.cashSales, cashIn: r.cashIn, cashOut: r.cashOut }),
+      }));
+
+      return { items, total: counted?.value ?? 0 };
+    });
+  }
+
+  /** One drawer: its figures, every manual pay-in/out with who and why, and its cash sales. */
+  async getSession(sessionId: string): Promise<unknown> {
+    return this.db.run(async (tx) => {
+      const [session] = await tx
+        .select({
+          id: schema.cashSessions.id,
+          sessionNumber: schema.cashSessions.sessionNumber,
+          status: schema.cashSessions.status,
+          openedAt: schema.cashSessions.openedAt,
+          closedAt: schema.cashSessions.closedAt,
+          closedBy: schema.cashSessions.closedBy,
+          notes: schema.cashSessions.notes,
+          branchId: schema.cashSessions.branchId,
+          branchName: schema.branches.name,
+          branchCode: schema.branches.code,
+          cashierName: schema.users.name,
+          deviceName: schema.devices.name,
+          openingAmount: schema.cashSessions.openingAmount,
+          closingAmount: schema.cashSessions.closingAmount,
+          expectedAmount: schema.cashSessions.expectedAmount,
+          difference: schema.cashSessions.difference,
+        })
+        .from(schema.cashSessions)
+        .innerJoin(schema.branches, eq(schema.cashSessions.branchId, schema.branches.id))
+        .innerJoin(schema.users, eq(schema.cashSessions.userId, schema.users.id))
+        .leftJoin(schema.devices, eq(schema.cashSessions.deviceId, schema.devices.id))
+        .where(eq(schema.cashSessions.id, sessionId));
+
+      if (!session) throw new AppError(ERROR_CODES.NOT_FOUND, "Session not found");
+      // A session id in the path is the caller's claim; scope is what stops
+      // one branch reading another's drawer.
+      assertBranchInScope(session.branchId);
+
+      const totals = await this.movementTotals(tx, sessionId);
+
+      const closer = session.closedBy
+        ? await tx.query.users.findFirst({
+            where: (t, { eq: e }) => e(t.id, session.closedBy!),
+            columns: { name: true },
+          })
+        : null;
+
+      const movements = await tx
+        .select({
+          id: schema.cashMovements.id,
+          type: schema.cashMovements.type,
+          amount: schema.cashMovements.amount,
+          reason: schema.cashMovements.reason,
+          occurredAt: schema.cashMovements.occurredAt,
+          byName: schema.users.name,
+        })
+        .from(schema.cashMovements)
+        .leftJoin(schema.users, eq(schema.cashMovements.createdBy, schema.users.id))
+        .where(
+          and(
+            eq(schema.cashMovements.cashSessionId, sessionId),
+            sql`${schema.cashMovements.type} NOT IN ('sale', 'refund')`,
+          ),
+        )
+        .orderBy(asc(schema.cashMovements.occurredAt), asc(schema.cashMovements.id));
+
+      const [sales] = await tx
+        .select({
+          count: sql<number>`count(DISTINCT ${schema.payments.saleId})::int`,
+          refunds: sql<string>`coalesce(abs(sum(${schema.payments.amount}) FILTER (WHERE ${schema.payments.amount} < 0)), 0)::text`,
+        })
+        .from(schema.payments)
+        .where(and(eq(schema.payments.cashSessionId, sessionId), eq(schema.payments.method, "cash")));
+
+      return {
+        ...session,
+        closedByName: closer?.name ?? null,
+        ...totals,
+        cashSaleCount: sales?.count ?? 0,
+        cashRefunds: sales?.refunds ?? "0",
+        expectedAmount:
+          session.status === "closed" && session.expectedAmount !== null
+            ? session.expectedAmount
+            : expectedCash({ opening: session.openingAmount, ...totals }),
+        movements,
+      };
+    });
   }
 
   /**

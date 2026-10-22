@@ -29,6 +29,10 @@ import {
   Wallet,
   Building2,
   Sparkles,
+  ClipboardCheck,
+  ScanBarcode,
+  Banknote,
+  Receipt,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/lib/theme-context";
@@ -56,10 +60,14 @@ const STATIC_NAVIGATION: NavAction[] = [
   { id: "categories", category: "Navigation", title: "Categories", subtitle: "Manage product hierarchies", icon: FolderTree, href: "/categories" },
   { id: "brands", category: "Navigation", title: "Brands", subtitle: "Product brands and manufacturers", icon: Tag, href: "/brands" },
   { id: "inventory", category: "Navigation", title: "Inventory Stock", subtitle: "Stock levels, bin locations and adjustments", icon: Boxes, href: "/inventory", keywords: ["stock", "quantity", "warehouse"] },
+  { id: "stocktake", category: "Navigation", title: "Stock Takes", subtitle: "Count shelves and post the differences", icon: ClipboardCheck, href: "/stock-take", keywords: ["count", "stocktake", "cycle count", "audit"] },
+  { id: "serials", category: "Navigation", title: "Serial Numbers", subtitle: "Look up a serialised item's history and warranty", icon: ScanBarcode, href: "/serials", keywords: ["serial", "warranty", "imei"] },
   { id: "transfers", category: "Navigation", title: "Stock Transfers", subtitle: "Inter-branch stock movements", icon: Truck, href: "/transfers", keywords: ["move", "dispatch"] },
   { id: "sales", category: "Navigation", title: "Sales & Orders", subtitle: "Tax invoices, completed orders and receipts", icon: ShoppingCart, href: "/sales", keywords: ["invoices", "orders", "bills"] },
   { id: "quotations", category: "Navigation", title: "Quotations", subtitle: "Price quotes, estimates and conversions", icon: FileText, href: "/quotations", keywords: ["quotes", "proforma", "estimate"] },
   { id: "dayclose", category: "Navigation", title: "Day Close Registers", subtitle: "Cash registers, drawer counts and daily reconciliation", icon: Wallet, href: "/day-close", keywords: ["cash", "drawer", "shift", "reconciliation"] },
+  { id: "cashdrawers", category: "Navigation", title: "Cash Drawers", subtitle: "Drawer sessions, variances, pay-ins and pay-outs", icon: Banknote, href: "/cash-drawers", keywords: ["cash", "drawer", "till", "variance", "float"] },
+  { id: "expenses", category: "Navigation", title: "Expenses", subtitle: "Record and review branch spending", icon: Receipt, href: "/expenses", keywords: ["costs", "spending", "bills", "petty cash"] },
   { id: "customers", category: "Navigation", title: "Customers", subtitle: "Client database, loyalty points and credit ledgers", icon: Users, href: "/customers", keywords: ["clients", "buyers", "credit"] },
   { id: "purchases", category: "Navigation", title: "Purchase Orders", subtitle: "Procurement, goods receipts and vendor billing", icon: FileText, href: "/purchases", keywords: ["po", "procurement", "buy"] },
   { id: "suppliers", category: "Navigation", title: "Suppliers", subtitle: "Vendor records and contacts", icon: Truck, href: "/suppliers", keywords: ["vendors", "distributors"] },

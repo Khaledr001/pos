@@ -3,7 +3,7 @@
 import React, { useState, useCallback } from "react";
 import {
   RefreshCw, CreditCard, Banknote, Receipt, ShoppingCart,
-  Printer, AlertCircle, FileText, Ban, Undo2,
+  Printer, AlertCircle, FileText, Ban, Undo2, X,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { api, apiDownload, printBlob } from "@/lib/api-client";
@@ -100,7 +100,14 @@ export default function SalesPage() {
   const currency = settings.currency.base;
 
   const LIMIT = 50;
-  const list = useListQuery({ sortBy: "occurredAt", sortOrder: "desc" });
+  // `cashSessionId` arrives from the cash drawers page; `drawer` is only its
+  // session number, carried along so the chip can say which drawer it is.
+  const list = useListQuery({
+    sortBy: "occurredAt",
+    sortOrder: "desc",
+    filters: { cashSessionId: "", drawer: "" },
+  });
+  const drawerFilter = list.filters.cashSessionId;
   const { q, page, sortBy, sortOrder } = list;
 
   const loadSales = useCallback(
@@ -109,10 +116,17 @@ export default function SalesPage() {
         await api.get<unknown>("/sales", {
           accessToken: tokens?.accessToken,
           signal,
-          query: { q: q.trim() || undefined, page, limit: LIMIT, sortBy, sortOrder },
+          query: {
+            q: q.trim() || undefined,
+            cashSessionId: drawerFilter || undefined,
+            page,
+            limit: LIMIT,
+            sortBy,
+            sortOrder,
+          },
         }),
       ),
-    [tokens?.accessToken, q, page, sortBy, sortOrder],
+    [tokens?.accessToken, q, page, sortBy, sortOrder, drawerFilter],
   );
   const { items: sales, total, loading, initialLoading, error: loadError, reload: fetchSales } =
     useListData(loadSales, list.ready);
@@ -256,6 +270,26 @@ export default function SalesPage() {
           onChange={list.setSort}
         />
       </div>
+
+      {drawerFilter && (
+        <div className="flex items-center gap-2 text-xs">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 py-1 pl-3 pr-1 font-medium text-primary">
+            Drawer {list.filters.drawer || "session"}
+            <button
+              type="button"
+              onClick={() => {
+                list.setFilter("cashSessionId", "");
+                list.setFilter("drawer", "");
+              }}
+              aria-label="Show sales from every drawer"
+              className="flex size-5 cursor-pointer items-center justify-center rounded-full hover:bg-primary/20"
+            >
+              <X className="size-3" />
+            </button>
+          </span>
+          <span className="text-muted-foreground">Only sales rung up on this drawer session.</span>
+        </div>
+      )}
 
       <MobileList
         loading={initialLoading}

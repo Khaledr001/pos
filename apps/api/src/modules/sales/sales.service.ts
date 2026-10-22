@@ -1304,6 +1304,7 @@ export class SalesService {
         scope ? inArray(schema.sales.branchId, scope) : undefined,
         query.branchId ? eq(schema.sales.branchId, query.branchId) : undefined,
         query.customerId ? eq(schema.sales.customerId, query.customerId) : undefined,
+        query.cashSessionId ? eq(schema.sales.cashSessionId, query.cashSessionId) : undefined,
         query.from ? sql`${schema.sales.occurredAt} >= ${query.from}::date` : undefined,
         query.to ? sql`${schema.sales.occurredAt} < (${query.to}::date + 1)` : undefined,
         query.status ? eq(schema.sales.status, query.status) : undefined,

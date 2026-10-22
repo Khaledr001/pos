@@ -1,8 +1,9 @@
-import { and, count, desc, eq, gte, isNull, lte, schema, sql } from "@devsfleet/db";
+import { and, asc, count, desc, eq, gte, ilike, isNull, lte, or, schema, sql } from "@devsfleet/db";
 import { AppError, ERROR_CODES } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
 import { assertBranchInScope, branchFilter, requireBranchId } from "../../common/context/branch-scope.js";
 import { RequestContext } from "../../common/context/request-context.js";
+import { containsPattern } from "../../common/db/list-query.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import type { CreateExpenseDto, ListExpensesDto, UpdateExpenseDto } from "./dto.js";
 
@@ -99,12 +100,17 @@ export class ExpensesService {
     });
   }
 
-  async list(query: ListExpensesDto): Promise<{ items: unknown[]; total: number }> {
+  /**
+   * `sum` is the total of every expense the filters match, not of the page —
+   * a period's spending summed in the browser from page 1 was only page 1.
+   */
+  async list(query: ListExpensesDto): Promise<{ items: unknown[]; total: number; sum: string }> {
     if (query.branchId) assertBranchInScope(query.branchId);
 
     // Normalised the same way it was stored, or filtering on "Diesel" finds
     // nothing that was typed as "diesel".
     const category = normaliseCategory(query.category);
+    const term = containsPattern(query.q);
 
     return this.db.run(async (tx) => {
       const where = and(
@@ -112,10 +118,31 @@ export class ExpensesService {
         branchFilter(schema.expenses.branchId, query.branchId),
         query.from ? gte(schema.expenses.expenseDate, query.from) : undefined,
         query.to ? lte(schema.expenses.expenseDate, query.to) : undefined,
-        category ? eq(schema.expenses.category, category) : undefined,
+        // lower() on the column too: rows written before normalisation (the
+        // seed's "Logistics & Transport") would otherwise never match.
+        category ? sql`lower(${schema.expenses.category}) = ${category}` : undefined,
+        term
+          ? or(
+              ilike(schema.expenses.title, term),
+              ilike(schema.expenses.category, term),
+              ilike(schema.expenses.notes, term),
+            )
+          : undefined,
       );
 
-      const [total] = await tx.select({ value: count() }).from(schema.expenses).where(where);
+      const [totals] = await tx
+        .select({
+          value: count(),
+          sum: sql<string>`coalesce(sum(${schema.expenses.amount}), 0)::text`,
+        })
+        .from(schema.expenses)
+        .where(where);
+
+      const sortColumn = {
+        expenseDate: schema.expenses.expenseDate,
+        amount: schema.expenses.amount,
+        title: schema.expenses.title,
+      }[query.sortBy];
 
       const items = await tx
         .select({
@@ -128,17 +155,24 @@ export class ExpensesService {
           paymentMethod: schema.expenses.paymentMethod,
           notes: schema.expenses.notes,
           userName: schema.users.name,
+          branchName: schema.branches.name,
+          branchCode: schema.branches.code,
           dailyClosingId: schema.expenses.dailyClosingId,
           createdAt: schema.expenses.createdAt,
         })
         .from(schema.expenses)
         .innerJoin(schema.users, eq(schema.expenses.userId, schema.users.id))
+        .innerJoin(schema.branches, eq(schema.expenses.branchId, schema.branches.id))
         .where(where)
-        .orderBy(desc(schema.expenses.expenseDate), desc(schema.expenses.createdAt))
+        .orderBy(
+          query.sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn),
+          desc(schema.expenses.createdAt),
+          desc(schema.expenses.id),
+        )
         .limit(query.pageSize)
         .offset((query.page - 1) * query.pageSize);
 
-      return { items, total: total?.value ?? 0 };
+      return { items, total: totals?.value ?? 0, sum: totals?.sum ?? "0" };
     });
   }
 
