@@ -257,8 +257,16 @@ address" field with a live availability check
 
 1. **DNS (Cloudflare).** Add a record `*` → the VPS's IPv4 (`A`) and, if it
    has one, IPv6 (`AAAA`), proxied. SSL/TLS mode: **Full (strict)**.
-2. **Wildcard certificate** (DNS challenge — an HTTP challenge can't prove a
-   wildcard):
+2. **Wildcard certificate.** The production VPS already has one: a
+   Cloudflare Origin Certificate for `*.devsfleet.com, devsfleet.com` at
+   `/etc/ssl/cloudflare/devsfleet.{pem,key}`, which every site on it uses and
+   which `devsfleet-storefronts.conf` points at. Check a server with
+   `openssl x509 -in /etc/ssl/cloudflare/devsfleet.pem -noout -ext subjectAltName`.
+   It is trusted only by Cloudflare, so it needs the records proxied and SSL
+   mode Full (strict). On a host without one — or for DNS-only records — issue
+   a Let's Encrypt wildcard by DNS challenge (an HTTP challenge can't prove a
+   wildcard) and change the two `ssl_certificate` lines to
+   `/etc/letsencrypt/live/devsfleet.com/{fullchain,privkey}.pem`:
    ```bash
    sudo apt install python3-certbot-dns-cloudflare
    # Cloudflare → My Profile → API Tokens → Create token → "Edit zone DNS",

@@ -23,6 +23,9 @@ export const RESERVED_SUBDOMAINS: ReadonlySet<string> = new Set([
   "cdn",
   "admin",
   "app",
+  // DevsFleet's ISP product, served from the same VPS.
+  "isp",
+  "isp-api",
   // Reads as official to a shopper.
   "www",
   "devsfleet",
