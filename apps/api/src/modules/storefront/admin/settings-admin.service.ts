@@ -7,9 +7,12 @@ import {
 } from "@devsfleet/shared-types";
 import { AppError, ERROR_CODES, variantSearchKey } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { RequestContext } from "../../../common/context/request-context.js";
+import type { Env } from "../../../config/env.js";
 import { TenantDatabase } from "../../../database/tenant-database.service.js";
 import { StorefrontResolver } from "../context/storefront-resolver.service.js";
+import { checkStorefrontHostname, subdomainLabelProblem, suggestSubdomainLabel } from "../platform-subdomain.js";
 import type { DomainDto, PaymentAccountDto, SetupStorefrontDto, UpdateSettingsDto } from "./dto.js";
 
 const DELIVERY_SKU = "WEB-DELIVERY";
@@ -17,17 +20,31 @@ const DELIVERY_SKU = "WEB-DELIVERY";
 /** The store's own configuration: domains, delivery, payment, which branches it shows. */
 @Injectable()
 export class SettingsAdminService {
+  private readonly baseDomain: string | null;
+
   constructor(
     private readonly db: TenantDatabase,
     private readonly resolver: StorefrontResolver,
-  ) {}
+    config: ConfigService<Env, true>,
+  ) {
+    this.baseDomain = config.get("STOREFRONT_BASE_DOMAIN", { infer: true }) ?? null;
+  }
+
+  /** What the admin needs to offer a free `<name>.<base>` address, before and after setup. */
+  private platformDomain(tenantName: string | undefined) {
+    return {
+      baseDomain: this.baseDomain,
+      suggestedLabel: this.baseDomain && tenantName ? suggestSubdomainLabel(tenantName) || null : null,
+    };
+  }
 
   async get() {
     return this.db.run(async (tx) => {
       const storefront = await tx.query.storefronts.findFirst();
-      const tenant = await tx.query.tenants.findFirst({ columns: { planId: true } });
+      const tenant = await tx.query.tenants.findFirst({ columns: { planId: true, name: true } });
       const planAllows = resolvePlan(tenant?.planId).features.onlineStore;
-      if (!storefront) return { storefront: null, planAllows };
+      const platform = this.platformDomain(tenant?.name);
+      if (!storefront) return { storefront: null, planAllows, platform };
 
       const [domains, account] = await Promise.all([
         tx.query.storefrontDomains.findMany({ orderBy: (t, { desc }) => desc(t.isPrimary) }),
@@ -35,6 +52,7 @@ export class SettingsAdminService {
       ]);
       return {
         planAllows,
+        platform,
         storefront: { id: storefront.id, name: storefront.name, isActive: storefront.isActive },
         settings: resolveStorefrontSettings(storefront.settings),
         domains: domains.map((d) => ({ id: d.id, domain: d.domain, isPrimary: d.isPrimary })),
@@ -62,6 +80,7 @@ export class SettingsAdminService {
       if (await tx.query.storefronts.findFirst({ columns: { id: true } })) {
         throw new AppError(ERROR_CODES.CONFLICT, "This business already has an online store.");
       }
+      this.assertDomainAllowed(dto.domain);
       await this.assertDomainFree(dto.domain);
 
       const branches = await tx.query.branches.findMany({
@@ -124,6 +143,7 @@ export class SettingsAdminService {
 
   async addDomain(dto: DomainDto) {
     const tenantId = RequestContext.requireTenantId();
+    this.assertDomainAllowed(dto.domain);
     await this.assertDomainFree(dto.domain);
     await this.db.run(async (tx) => {
       const storefront = await this.requireStorefront(tx);
@@ -169,6 +189,40 @@ export class SettingsAdminService {
   // ---------------------------------------------------------------------------
 
   /** A hostname is unique across EVERY tenant — it is what routes a shopper to one. */
+  /**
+   * Whether `<label>.<base>` can be this store's free address: the same rules
+   * a save applies, plus whether another store already has it. Answers rather
+   * than throws, so the form can say why as the owner types.
+   */
+  async subdomainAvailability(rawLabel: string) {
+    const label = rawLabel.trim().toLowerCase();
+    if (!this.baseDomain) {
+      return { label, hostname: null, available: false, reason: "Free shop addresses aren't set up on this platform." };
+    }
+    const hostname = `${label}.${this.baseDomain}`;
+    const problem = subdomainLabelProblem(label);
+    if (problem) return { label, hostname, available: false, reason: problem };
+
+    const tenantId = RequestContext.requireTenantId();
+    const taken = await this.db.runAsPlatformAdmin((tx) =>
+      tx.query.storefrontDomains.findFirst({ where: (t, { eq: e }) => e(t.domain, hostname), columns: { tenantId: true } }),
+    );
+    if (taken) {
+      return {
+        label,
+        hostname,
+        available: false,
+        reason: taken.tenantId === tenantId ? "Your store already uses this address." : "That address is taken. Try another name.",
+      };
+    }
+    return { label, hostname, available: true };
+  }
+
+  private assertDomainAllowed(domain: string): void {
+    const check = checkStorefrontHostname(domain, this.baseDomain);
+    if (!check.ok) throw new AppError(ERROR_CODES.VALIDATION_FAILED, check.message);
+  }
+
   private async assertDomainFree(domain: string): Promise<void> {
     const tenantId = RequestContext.requireTenantId();
     const taken = await this.db.runAsPlatformAdmin((tx) =>

@@ -183,6 +183,9 @@ export type SetupStorefrontDto = z.infer<typeof SetupStorefrontSchema>;
 export const DomainSchema = z.object({ domain, isPrimary: z.boolean().default(false) });
 export type DomainDto = z.infer<typeof DomainSchema>;
 
+export const SubdomainAvailabilitySchema = z.object({ label: z.string().trim().max(63) });
+export type SubdomainAvailabilityDto = z.infer<typeof SubdomainAvailabilitySchema>;
+
 const ShippingRateSchema = z.object({
   emirate: z.enum(EMIRATES),
   baseFee: decimal,

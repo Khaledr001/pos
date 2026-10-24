@@ -9,6 +9,7 @@ import {
   BannerSchema,
   CouponSchema,
   DomainSchema,
+  SubdomainAvailabilitySchema,
   ListListingsSchema,
   ListWebOrdersSchema,
   PageSchema,
@@ -27,6 +28,7 @@ import {
   type BannerDto,
   type CouponDto,
   type DomainDto,
+  type SubdomainAvailabilityDto,
   type ListListingsDto,
   type ListWebOrdersDto,
   type PageDto,
@@ -252,6 +254,13 @@ export class SettingsAdminController {
   @RequirePermissions("storefront:read")
   get() {
     return this.settings.get();
+  }
+
+  /** Live check for the free `<name>.<base>` address field. Saves nothing. */
+  @Get("subdomain-availability")
+  @RequirePermissions("storefront:read")
+  subdomainAvailability(@Query(zodPipe(SubdomainAvailabilitySchema)) dto: SubdomainAvailabilityDto) {
+    return this.settings.subdomainAvailability(dto.label);
   }
 
   @Post("setup")

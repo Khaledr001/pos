@@ -235,6 +235,105 @@ the types the website renders, so a change on either side fails the build.
 
 ---
 
+## Subdomain storefronts on the VPS
+
+The VPS runs nginx + PM2 (`deploy/deploy.sh`), not the Caddy config, so a
+tenant's free shop address is `<name>.devsfleet.com`, covered by **one wildcard
+certificate**. One storefront process (PM2 `devsfleet-pos-storefront`, port
+3002) serves every shop; nginx sends every `*.devsfleet.com` it doesn't have an
+exact block for (`pos`, `pos-api`, `cdn`) to it, and the API picks the tenant
+from the hostname.
+
+**Platform subdomain rules.** With `STOREFRONT_BASE_DOMAIN=devsfleet.com` in
+`apps/api/.env`, a storefront domain on that domain must be a single label of
+3–40 characters (`a-z`, `0-9`, `-`), and the labels in `RESERVED_SUBDOMAINS`
+(`apps/api/src/modules/storefront/platform-subdomain.ts` — `pos`, `pos-api`,
+`api`, `cdn`, `www`, `admin`…) are refused. Add a label there BEFORE putting a
+new platform site on the domain. Admin → Online Store offers a "Free shop
+address" field with a live availability check
+(`GET /storefront-admin/settings/subdomain-availability?label=`).
+
+### One-time server setup
+
+1. **DNS (Cloudflare).** Add a record `*` → the VPS's IPv4 (`A`) and, if it
+   has one, IPv6 (`AAAA`), proxied. SSL/TLS mode: **Full (strict)**.
+2. **Wildcard certificate** (DNS challenge — an HTTP challenge can't prove a
+   wildcard):
+   ```bash
+   sudo apt install python3-certbot-dns-cloudflare
+   # Cloudflare → My Profile → API Tokens → Create token → "Edit zone DNS",
+   # Zone Resources: Include → Specific zone → devsfleet.com
+   sudo mkdir -p /root/.secrets
+   echo 'dns_cloudflare_api_token = <TOKEN>' | sudo tee /root/.secrets/cloudflare.ini
+   sudo chmod 600 /root/.secrets/cloudflare.ini
+   sudo certbot certonly --dns-cloudflare \
+     --dns-cloudflare-credentials /root/.secrets/cloudflare.ini \
+     -d devsfleet.com -d '*.devsfleet.com' --cert-name devsfleet.com
+   sudo certbot renew --dry-run   # renewal runs from certbot's own timer
+   ```
+3. **nginx:**
+   ```bash
+   sudo cp deploy/nginx/devsfleet-storefronts.conf /etc/nginx/sites-available/devsfleet-storefronts
+   sudo ln -sf /etc/nginx/sites-available/devsfleet-storefronts /etc/nginx/sites-enabled/
+   sudo nginx -t && sudo systemctl reload nginx
+   ```
+   If another enabled site already claims `*.devsfleet.com` or is the
+   `default_server` for those names, remove that first (`nginx -t` warns about
+   a conflicting server name).
+4. **API env** — in `apps/api/.env`:
+   ```
+   STOREFRONT_BASE_DOMAIN=devsfleet.com
+   STOREFRONT_PROXY_SECRET=<openssl rand -hex 32>
+   STOREFRONT_REVALIDATE_SECRET=<openssl rand -hex 24>
+   ```
+5. **Storefront env:** `cp deploy/storefront.env.example apps/storefront/.env`
+   and fill in the same two secrets (`STOREFRONT_PROXY_SECRET`,
+   `REVALIDATE_SECRET`). Leave `STOREFRONT_HOST` and `NEXT_PUBLIC_SITE_URL`
+   empty — either one pins every shop to one hostname.
+6. **Deploy:** `./deploy/deploy.sh`. It builds and starts the storefront
+   because `apps/storefront/.env` now exists, and checks it answers on :3002.
+
+### Putting a tenant's shop on its address (e.g. Al Lahiq)
+
+Preferred — **Admin**: sign in as the tenant (or impersonate it from Platform →
+Tenants) → Online Store → Free shop address `allahiq` → Create online store.
+Then Website Listings → publish products, Pages & Banners, payment settings.
+The tenant's plan must include `onlineStore`.
+
+Or on the VPS, from the repo:
+```bash
+DATABASE_URL_MIGRATOR=<migrator url> pnpm db:seed:storefront -- \
+  --tenant al-lahiq-elect-sanitary-ware-trdg \
+  --domain allahiq.devsfleet.com --site-url https://allahiq.devsfleet.com
+```
+That also publishes every unlisted product and adds starter pages, banners
+**and two demo coupons** — delete the coupons (Online Store → Promo codes) on a
+real shop. The script is an operator tool and does not apply the subdomain
+rules; the admin path does.
+
+Then open `https://allahiq.devsfleet.com`, and set the store's **Cache refresh
+URL** to `https://allahiq.devsfleet.com/api/revalidate`.
+
+### Custom domains later (shop.allahiq.ae)
+
+nginx can't issue a certificate per tenant domain on demand. Two ways, when a
+tenant wants their own domain:
+
+- **Cloudflare for SaaS (custom hostnames)** — recommended while DNS is on
+  Cloudflare: the tenant points a CNAME at a fallback origin on
+  devsfleet.com, Cloudflare issues and renews their certificate, and the
+  request arrives here with the tenant's Host, which the wildcard-style
+  routing already handles. Needs a catch-all nginx server for those hosts.
+- **Caddy** (`deploy/Caddyfile`) with on-demand TLS, which already asks
+  `/api/v1/storefront/domains/allowed` before issuing — replaces nginx.
+
+**Known gap — domain ownership isn't verified.** Any tenant can attach any
+hostname outside the platform domain; uniqueness is the only check, so a
+tenant could squat a domain another business will want. Add a DNS TXT
+verification step before custom domains are offered widely.
+
+---
+
 ## Known gaps
 
 - **No shopper notifications.** Order confirmation, dispatch and ready-for-

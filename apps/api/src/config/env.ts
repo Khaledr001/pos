@@ -78,6 +78,21 @@ export const envSchema = z.object({
   STOREFRONT_PROXY_SECRET: optionalSecret(32),
   /** Card payments go to a test page instead of a gateway. Refused in production. */
   STOREFRONT_DEV_PAYMENTS: bool.default(false),
+  /**
+   * The platform domain tenants get a free shop address on — "devsfleet.com"
+   * gives `<name>.devsfleet.com`. Set, it also protects the platform's own
+   * hosts on that domain (pos, pos-api, cdn…) from being claimed as a shop.
+   * Unset = no free addresses offered and no subdomain rules.
+   */
+  STOREFRONT_BASE_DOMAIN: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z
+      .string()
+      .trim()
+      .toLowerCase()
+      .regex(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/, "STOREFRONT_BASE_DOMAIN must be a bare domain like devsfleet.com")
+      .optional(),
+  ),
 
   // ---------------------------------------------------------------------------
   // HTTP

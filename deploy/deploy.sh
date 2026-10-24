@@ -66,6 +66,34 @@ node -e '
   }
 ' || die "apps/api/.env did not pass preflight"
 
+# The online store is optional on a host: no apps/storefront/.env, no storefront.
+# One storefront process serves every tenant's shop, picked by hostname — see
+# docs/STOREFRONT.md, "Subdomain storefronts on the VPS".
+STOREFRONT=0
+if [ -f apps/storefront/.env ]; then
+  node -e '
+    const fs = require("fs");
+    const env = Object.fromEntries(
+      fs.readFileSync("apps/storefront/.env", "utf8")
+        .split("\n")
+        .filter((l) => l.trim() && !l.trim().startsWith("#") && l.includes("="))
+        .map((l) => { const i = l.indexOf("="); return [l.slice(0, i).trim(), l.slice(i + 1).trim()]; })
+    );
+    const need = ["API_ORIGIN", "STOREFRONT_PROXY_SECRET", "REVALIDATE_SECRET"];
+    const missing = need.filter((k) => !env[k]);
+    if (missing.length) { console.error("apps/storefront/.env is missing required keys: " + missing.join(", ")); process.exit(1); }
+    // Either one pins EVERY shop to a single host: all tenants would render
+    // the same store, or link to it. Only right for a one-shop deployment.
+    for (const k of ["STOREFRONT_HOST", "NEXT_PUBLIC_SITE_URL"]) {
+      if (env[k]) console.warn("    WARNING: " + k + " is set in apps/storefront/.env — every shop will use " + env[k] + ". Leave it empty to serve many tenants.");
+    }
+  ' || die "apps/storefront/.env did not pass preflight"
+  STOREFRONT=1
+  echo "    storefront: enabled (apps/storefront/.env found)"
+else
+  echo "    storefront: skipped — no apps/storefront/.env (copy deploy/storefront.env.example to enable it)"
+fi
+
 # NEXT_PUBLIC_* is inlined into the client bundle at BUILD time and cannot be
 # changed by restarting anything. Read it from the API's own env so there is
 # one source of truth for the API's public URL.
@@ -108,6 +136,28 @@ say "Building"
 # a server deploy to the health of a codebase the server does not run.
 pnpm --filter=@devsfleet/api... --filter=@devsfleet/admin... build
 
+if [ "$STOREFRONT" = 1 ]; then
+  # Built with its own env loaded: next.config reads API_ORIGIN when it writes
+  # the /api/v1 rewrite into the build, not when the server starts. Parsed by
+  # node and exported quoted, so a secret with shell characters survives.
+  (
+    eval "$(node -e '
+      const fs = require("fs");
+      for (const l of fs.readFileSync("apps/storefront/.env", "utf8").split("\n")) {
+        const t = l.trim();
+        if (!t || t.startsWith("#") || !t.includes("=")) continue;
+        const i = t.indexOf("=");
+        const k = t.slice(0, i).trim();
+        if (!/^[A-Z_][A-Z0-9_]*$/.test(k)) continue;
+        // Single-quoted for the shell: nothing inside is expanded, and an
+        // embedded quote is closed, escaped and reopened.
+        console.log("export " + k + "=\x27" + t.slice(i + 1).trim().replace(/\x27/g, "\x27\\\x27\x27") + "\x27");
+      }
+    ')"
+    pnpm --filter=@devsfleet/storefront... build
+  )
+fi
+
 # -----------------------------------------------------------------------------
 # Next.js `output: "standalone"` traces the SERVER's dependencies only. It does
 # not copy .next/static or public/ into the bundle — that is documented Next
@@ -128,6 +178,20 @@ if [ -d apps/admin/public ]; then
   cp -r apps/admin/public "$STANDALONE/apps/admin/public"
 fi
 echo "    static assets copied into the standalone output"
+
+if [ "$STOREFRONT" = 1 ]; then
+  say "Assembling the standalone storefront bundle"
+  SF_STANDALONE="apps/storefront/.next/standalone"
+  [ -d "$SF_STANDALONE" ] || die "$SF_STANDALONE missing — did the storefront build actually run?"
+  mkdir -p "$SF_STANDALONE/apps/storefront/.next"
+  rm -rf "$SF_STANDALONE/apps/storefront/.next/static"
+  cp -r apps/storefront/.next/static "$SF_STANDALONE/apps/storefront/.next/static"
+  if [ -d apps/storefront/public ]; then
+    rm -rf "$SF_STANDALONE/apps/storefront/public"
+    cp -r apps/storefront/public "$SF_STANDALONE/apps/storefront/public"
+  fi
+  echo "    static assets copied into the standalone output"
+fi
 
 # -----------------------------------------------------------------------------
 if [ "$MIGRATE" = 1 ]; then
@@ -185,5 +249,16 @@ for i in $(seq 1 20); do
   [ "$i" = 20 ] && die "Admin never answered — pm2 logs devsfleet-pos-admin"
   sleep 1
 done
+
+if [ "$STOREFRONT" = 1 ]; then
+  # Any answer below 500 is the server working: a host with no shop gets a
+  # 404 page by design, and 127.0.0.1 is no shop's hostname.
+  for i in $(seq 1 20); do
+    code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3002/ 2>/dev/null || true)"
+    if [ -n "$code" ] && [ "$code" != "000" ] && [ "$code" -lt 500 ]; then echo "    Store /       OK ($code)"; break; fi
+    [ "$i" = 20 ] && die "Storefront never answered — pm2 logs devsfleet-pos-storefront"
+    sleep 1
+  done
+fi
 
 printf '\n\033[1;32mDeployed.\033[0m  pm2 status | pm2 logs devsfleet-pos-api\n\n'

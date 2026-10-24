@@ -26,8 +26,14 @@
 // pins it to CommonJS regardless of what the workspace later sets for "type".
 // =============================================================================
 
+const fs = require("node:fs");
 const path = require("node:path");
 const REPO = path.resolve(__dirname, "..");
+
+// The online store runs only where it has been configured (deploy.sh skips
+// building it otherwise), so a host without one does not get a crash-looping
+// process.
+const STOREFRONT_ENV = path.join(REPO, "apps/storefront/.env");
 
 /** Shared across both apps — restart policy, log format, memory guard. */
 const common = {
@@ -105,5 +111,31 @@ module.exports = {
         NEXT_TELEMETRY_DISABLED: "1",
       },
     },
+
+    // Every tenant's shop, picked by hostname. nginx sends *.devsfleet.com here.
+    ...(fs.existsSync(STOREFRONT_ENV)
+      ? [
+          {
+            ...common,
+            name: "devsfleet-pos-storefront",
+            script: "apps/storefront/server.js",
+            cwd: path.join(REPO, "apps/storefront/.next/standalone"),
+            // Node reads the secrets itself. Next's standalone server.js does
+            // not load .env files, and keeping them out of this file keeps
+            // them out of `pm2 show` / `pm2 env` too. Variables set below win
+            // over the file: --env-file never overrides an existing one.
+            node_args: [`--env-file=${STOREFRONT_ENV}`],
+            max_memory_restart: "512M",
+            out_file: "/var/log/pm2/devsfleet-pos-storefront-out.log",
+            error_file: "/var/log/pm2/devsfleet-pos-storefront-error.log",
+            env: {
+              NODE_ENV: "production",
+              PORT: 3002,
+              HOSTNAME: "127.0.0.1",
+              NEXT_TELEMETRY_DISABLED: "1",
+            },
+          },
+        ]
+      : []),
   ],
 };

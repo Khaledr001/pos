@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { SelectField } from "@/components/ui/select";
 import { useTenantSettings } from "@/lib/tenant-settings";
 import { Field, Loading, Notice, PageHeader, errorText, humanize, textareaClass } from "./shared";
+import { ShopAddressPicker, type PlatformDomain, type ShopAddress } from "./shop-address";
 
 const EMIRATES = ["ABU_DHABI", "DUBAI", "SHARJAH", "AJMAN", "UMM_AL_QUWAIN", "RAS_AL_KHAIMAH", "FUJAIRAH"];
 
@@ -57,6 +58,7 @@ interface Settings {
 
 interface Overview {
   planAllows: boolean;
+  platform?: PlatformDomain;
   storefront: { id: string; name: string; isActive: boolean } | null;
   settings?: Settings;
   domains?: { id: string; domain: string; isPrimary: boolean }[];
@@ -83,8 +85,11 @@ export default function OnlineStorePage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const [setup, setSetup] = useState({ name: "", domain: "" });
-  const [newDomain, setNewDomain] = useState("");
+  const [setupName, setSetupName] = useState("");
+  const [setupAddress, setSetupAddress] = useState<ShopAddress>(null);
+  const [newAddress, setNewAddress] = useState<ShopAddress>(null);
+  // Bumped after a domain is added, so the picker remounts empty.
+  const [pickerKey, setPickerKey] = useState(0);
   const [stripe, setStripe] = useState({ secretKey: "", webhookSecret: "" });
 
   const apply = (o: Overview) => {
@@ -122,14 +127,17 @@ export default function OnlineStorePage() {
     void load();
   }, [load]);
 
-  async function run(action: () => Promise<Overview>, done: string) {
+  /** True when the change went through — so a caller only clears its form on success. */
+  async function run(action: () => Promise<Overview>, done: string): Promise<boolean> {
     setSaving(true);
     setError(null);
     try {
       apply(await action());
       setSuccess(done);
+      return true;
     } catch (err) {
       setError(errorText(err, "That change was refused."));
+      return false;
     } finally {
       setSaving(false);
     }
@@ -179,13 +187,17 @@ export default function OnlineStorePage() {
             <p className="text-sm text-muted-foreground">Your plan does not include an online store. Upgrade to Pro to add one.</p>
           ) : (
             <>
-              <Field label="Store name"><Input value={setup.name} onChange={(e) => setSetup({ ...setup, name: e.target.value })} /></Field>
-              <Field label="Website address" hint="The hostname shoppers will type, e.g. shop.yourbusiness.ae. Point its DNS at the storefront.">
-                <Input value={setup.domain} onChange={(e) => setSetup({ ...setup, domain: e.target.value })} />
-              </Field>
+              <Field label="Store name"><Input value={setupName} onChange={(e) => setSetupName(e.target.value)} /></Field>
+              <ShopAddressPicker platform={overview.platform} accessToken={tokens?.accessToken} onChange={setSetupAddress} idPrefix="setup-address" />
               <Button
-                disabled={!mayWrite || !maySettings || saving || !setup.name || !setup.domain}
-                onClick={() => void run(() => api.post<Overview>("/storefront-admin/settings/setup", setup, auth), "Online store created.")}
+                disabled={!mayWrite || !maySettings || saving || !setupName.trim() || !setupAddress}
+                onClick={() =>
+                  setupAddress &&
+                  void run(
+                    () => api.post<Overview>("/storefront-admin/settings/setup", { name: setupName.trim(), domain: setupAddress.domain }, auth),
+                    `Online store created at ${setupAddress.domain}.`,
+                  )
+                }
               >
                 <Globe className="h-4 w-4" /> Create online store
               </Button>
@@ -237,8 +249,17 @@ export default function OnlineStorePage() {
           <Card className="space-y-3 p-5">
             <h2 className="text-sm font-semibold">Domains</h2>
             {overview.domains?.map((d) => (
-              <div key={d.id} className="flex items-center gap-3 text-xs">
-                <span className="font-mono">{d.domain}</span>
+              <div key={d.id} className="flex min-w-0 flex-wrap items-center gap-3 text-xs">
+                <a
+                  href={`https://${d.domain}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex min-w-0 items-center gap-1 font-mono text-primary hover:underline [overflow-wrap:anywhere]"
+                >
+                  {d.domain}
+                  <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
+                  <span className="sr-only">(opens the shop in a new tab)</span>
+                </a>
                 {d.isPrimary && <Badge>Primary</Badge>}
                 {mayWrite && maySettings && (overview.domains?.length ?? 0) > 1 && (
                   <button className="cursor-pointer text-muted-foreground hover:text-destructive" aria-label="Remove" onClick={() => void run(() => api.delete<Overview>(`/storefront-admin/settings/domains/${d.id}`, auth), "Domain removed.")}>
@@ -248,10 +269,23 @@ export default function OnlineStorePage() {
               </div>
             ))}
             {mayWrite && maySettings && (
-              <div className="flex max-w-md gap-2">
-                <Input value={newDomain} onChange={(e) => setNewDomain(e.target.value)} placeholder="www.yourbusiness.ae" />
-                <Button size="sm" variant="outline" disabled={!newDomain || saving} onClick={() => void run(() => api.post<Overview>("/storefront-admin/settings/domains", { domain: newDomain }, auth), "Domain added.").then(() => setNewDomain(""))}>
-                  <Plus className="h-4 w-4" /> Add
+              <div className="max-w-xl space-y-3 border-t border-border pt-3">
+                <p className="text-xs font-medium text-muted-foreground">Add another address</p>
+                <ShopAddressPicker key={pickerKey} platform={overview.platform} accessToken={tokens?.accessToken} onChange={setNewAddress} idPrefix="add-address" />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!newAddress || saving}
+                  onClick={() =>
+                    newAddress &&
+                    void run(() => api.post<Overview>("/storefront-admin/settings/domains", { domain: newAddress.domain }, auth), `${newAddress.domain} added.`).then((ok) => {
+                      if (!ok) return;
+                      setNewAddress(null);
+                      setPickerKey((k) => k + 1);
+                    })
+                  }
+                >
+                  <Plus className="h-4 w-4" /> Add address
                 </Button>
               </div>
             )}
