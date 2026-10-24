@@ -1,5 +1,7 @@
 import { AppError, ERROR_CODES } from "@devsfleet/shared-utils";
-import { Injectable } from "@nestjs/common";
+import { Injectable, Optional } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import type { Env } from "../../config/env.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import {
   graphCall,
@@ -75,7 +77,39 @@ export class WhatsappSetupService {
   /** Swappable in specs; the real `fetch` everywhere else. */
   fetchImpl: FetchLike | undefined;
 
-  constructor(private readonly db: TenantDatabase) {}
+  constructor(
+    private readonly db: TenantDatabase,
+    @Optional() private readonly config?: ConfigService<Env, true>,
+  ) {}
+
+  /**
+   * The secret Meta signs this account's calls with: its own for a manual
+   * number, DevsFleet's app secret for one connected by Embedded Signup.
+   */
+  private secretFor(account: { connectionMethod: string; appSecret: string | null }): string {
+    const secret =
+      account.connectionMethod === "embedded"
+        ? this.config?.get("META_APP_SECRET", { infer: true })?.trim()
+        : account.appSecret;
+    if (!secret) {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_FAILED,
+        account.connectionMethod === "embedded"
+          ? "This number was connected through Meta sign-in, but META_APP_SECRET isn't set on this server."
+          : "This number has no app secret saved. Update its token to add one.",
+      );
+    }
+    return secret;
+  }
+
+  private refuseEmbedded(account: { connectionMethod: string }, action: string): void {
+    if (account.connectionMethod === "embedded") {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_FAILED,
+        `This number was connected through Meta sign-in, so ${action} is handled by Meta. Reconnect it from "Connect WhatsApp" if it stops working.`,
+      );
+    }
+  }
 
   async testConnection(input: CredentialsInput): Promise<ConnectionCheck> {
     const { accessToken, appSecret } = input;
@@ -249,12 +283,14 @@ export class WhatsappSetupService {
       );
     }
     const account = await this.requireAccount(id);
-    const manual = { callbackUrl, verifyToken: account.verifyToken };
+    this.refuseEmbedded(account, "its webhook");
+    const appSecret = this.secretFor(account);
+    const manual = { callbackUrl, verifyToken: account.verifyToken ?? "" };
     const steps: Array<{ key: "app_webhook" | "account_subscription"; ok: boolean; message: string; problem?: GraphProblem }> = [];
 
     const debug = await graphCall<Parameters<typeof parseDebugToken>[0]>("debug_token", {
       accessToken: account.accessToken,
-      appSecret: account.appSecret,
+      appSecret,
       params: { input_token: account.accessToken },
       fetchImpl: this.fetchImpl,
     });
@@ -271,11 +307,11 @@ export class WhatsappSetupService {
       // The app's own token: subscriptions are an app setting, not a business one.
       const sub = await graphCall<{ success?: boolean }>(`${appId}/subscriptions`, {
         method: "POST",
-        accessToken: `${appId}|${account.appSecret}`,
+        accessToken: `${appId}|${appSecret}`,
         params: {
           object: "whatsapp_business_account",
           callback_url: callbackUrl,
-          verify_token: account.verifyToken,
+          verify_token: account.verifyToken ?? "",
           fields: "messages",
           include_values: "true",
         },
@@ -306,7 +342,7 @@ export class WhatsappSetupService {
       const subscribe = await graphCall<{ success?: boolean }>(`${account.businessAccountId}/subscribed_apps`, {
         method: "POST",
         accessToken: account.accessToken,
-        appSecret: account.appSecret,
+        appSecret,
         what: `the business account ${account.businessAccountId}`,
         fetchImpl: this.fetchImpl,
       });
@@ -325,7 +361,7 @@ export class WhatsappSetupService {
     const account = await this.requireAccount(id);
     const check = await this.testConnection({
       accessToken: account.accessToken,
-      appSecret: account.appSecret,
+      appSecret: this.secretFor(account),
       phoneNumberId: account.phoneNumberId,
       businessAccountId: account.businessAccountId ?? undefined,
     });
@@ -338,9 +374,10 @@ export class WhatsappSetupService {
     input: { accessToken?: string | undefined; appSecret?: string | undefined; businessAccountId?: string | undefined },
   ): Promise<ConnectionCheck> {
     const account = await this.requireAccount(id);
+    this.refuseEmbedded(account, "its token");
     return this.testConnection({
       accessToken: input.accessToken ?? account.accessToken,
-      appSecret: input.appSecret ?? account.appSecret,
+      appSecret: input.appSecret ?? this.secretFor(account),
       phoneNumberId: account.phoneNumberId,
       businessAccountId: input.businessAccountId ?? account.businessAccountId ?? undefined,
     });

@@ -36,6 +36,20 @@
       "when": 1791274915103,
       "tag": "0004_product_image_candidates",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792675896313,
+      "tag": "0005_flippant_roxanne_simpson",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792677116188,
+      "tag": "0006_nice_cannonball",
+      "breakpoints": true
     }
   ]
 }

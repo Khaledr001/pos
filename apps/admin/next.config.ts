@@ -54,13 +54,15 @@ const config: NextConfig = {
      * is only added to the dev policy below.
      */
     const wsOrigin = apiOrigin.replace(/^http/, "ws");
-    const policy = (imgSrc: string) => [
+    const policy = (imgSrc: string, meta = false) => [
       "default-src 'self'",
-      `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ""} https://static.cloudflareinsights.com`,
+      `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ""} https://static.cloudflareinsights.com${meta ? " https://connect.facebook.net" : ""}`,
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       `img-src ${imgSrc}`,
-      `connect-src 'self' ${apiOrigin} ${wsOrigin}${dev ? " ws: http://localhost:*" : ""} https://cloudflareinsights.com`,
+      `connect-src 'self' ${apiOrigin} ${wsOrigin}${dev ? " ws: http://localhost:*" : ""} https://cloudflareinsights.com${meta ? " https://*.facebook.com https://graph.facebook.com" : ""}`,
+      // Meta's SDK talks to its popup through hidden facebook.com frames.
+      ...(meta ? ["frame-src https://*.facebook.com"] : []),
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
@@ -70,6 +72,8 @@ const config: NextConfig = {
     // The image review screen previews candidate photos hosted on other sites,
     // so it alone may load images from any https origin. Images cannot run code.
     const reviewCsp = policy("'self' data: blob: http://localhost:9000 http://localhost:3001 https://*.devsfleet.com https:");
+    // The WhatsApp page alone loads Meta's SDK, for "Connect with Meta" (Embedded Signup).
+    const whatsappCsp = policy("'self' data: blob: http://localhost:9000 http://localhost:3001 https://*.devsfleet.com https://*.facebook.com https://*.fbcdn.net", true);
 
     const common = [
       { key: "X-Content-Type-Options", value: "nosniff" },
@@ -89,7 +93,11 @@ const config: NextConfig = {
         headers: [{ key: "Content-Security-Policy", value: reviewCsp }, ...common],
       },
       {
-        source: "/((?!products/image-review$).*)",
+        source: "/whatsapp",
+        headers: [{ key: "Content-Security-Policy", value: whatsappCsp }, ...common],
+      },
+      {
+        source: "/((?!products/image-review$|whatsapp$).*)",
         headers: [{ key: "Content-Security-Policy", value: csp }, ...common],
       },
     ];

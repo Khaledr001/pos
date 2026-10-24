@@ -34,6 +34,14 @@ const WebhookValueSchema = z.object({
   messages: z.array(WebhookMessageSchema).optional(),
   /** Delivery receipts. Acknowledged, not yet acted on. */
   statuses: z.array(z.record(z.string(), z.unknown())).optional(),
+  /*
+   * Coexistence numbers only (see meta-embedded.ts). Kept as unknown here and
+   * read by the parsers in coexistence.ts — without these keys the envelope
+   * schema would strip them and the phone app's messages would vanish.
+   */
+  message_echoes: z.array(z.unknown()).optional(),
+  history: z.array(z.unknown()).optional(),
+  state_sync: z.array(z.unknown()).optional(),
 });
 
 export const WhatsappWebhookSchema = z.object({
@@ -138,6 +146,21 @@ export const ConnectWebhookSchema = z.object({
   callbackUrl: z.string().trim().url().max(500),
 });
 export type ConnectWebhookDto = z.infer<typeof ConnectWebhookSchema>;
+
+/**
+ * What the browser hands back after Meta's signup popup closes. `wabaId` and
+ * `phoneNumberId` come from Meta's postMessage, through the browser — so they
+ * are checked against the token Meta issues for `code` before anything is
+ * trusted. See `checkWabaGrant`.
+ */
+export const CompleteEmbeddedSignupSchema = z.object({
+  code: z.string().trim().min(1).max(2048),
+  wabaId: z.string().trim().regex(/^\d+$/, "The WhatsApp Business Account ID is digits only.").max(64),
+  phoneNumberId: z.string().trim().regex(/^\d+$/, "The phone number ID is digits only.").max(64),
+  coexistence: z.boolean(),
+  defaultBranchId: z.string().uuid().optional(),
+});
+export type CompleteEmbeddedSignupDto = z.infer<typeof CompleteEmbeddedSignupSchema>;
 
 export const ListConversationsSchema = z.object({
   status: z.enum(["active", "resolved", "escalated"]).optional(),

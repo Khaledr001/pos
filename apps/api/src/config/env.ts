@@ -117,6 +117,21 @@ export const envSchema = z.object({
   /** Validates X-Hub-Signature-256 on inbound webhooks. Required once enabled. */
   WHATSAPP_APP_SECRET: z.string().optional(),
 
+  /**
+   * DevsFleet's own Meta app, for Embedded Signup — a business connects its
+   * number by logging into Meta in a popup instead of pasting credentials.
+   * All four are needed; with any missing the option is simply not offered
+   * and the manual setup remains. See docs/WHATSAPP_EMBEDDED_SIGNUP.md.
+   *
+   * META_APP_SECRET signs every webhook for numbers connected this way and
+   * exchanges the signup code for a token. It never leaves the server.
+   */
+  META_APP_ID: z.string().optional(),
+  META_APP_SECRET: z.string().optional(),
+  META_EMBEDDED_SIGNUP_CONFIG_ID: z.string().optional(),
+  /** The verify token set on the platform app's webhook in Meta's App Dashboard. */
+  META_WEBHOOK_VERIFY_TOKEN: z.string().optional(),
+
   // ---------------------------------------------------------------------------
   // AI (Phase 4)
   //

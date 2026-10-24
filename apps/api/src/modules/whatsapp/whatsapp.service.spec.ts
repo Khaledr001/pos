@@ -88,10 +88,43 @@ describe("WhatsappService", () => {
       await expect(service.verifySubscription("subscribe", "guessed")).resolves.toBeNull();
     });
 
+    it("accepts the platform app's token (Embedded Signup) before any number exists", async () => {
+      accounts = [];
+      await expect(service.verifySubscription("subscribe", "platform-token", "platform-token")).resolves.toBe(
+        "platform-token",
+      );
+      await expect(service.verifySubscription("subscribe", "guessed", "platform-token")).resolves.toBeNull();
+    });
+
+    it("never matches an embedded account's empty token", async () => {
+      accounts = [{ verifyToken: null as unknown as string }];
+      await expect(service.verifySubscription("subscribe", "")).resolves.toBeNull();
+      await expect(service.verifySubscription("subscribe", "anything")).resolves.toBeNull();
+    });
+
     it("refuses anything that is not a subscribe handshake", async () => {
       await expect(service.verifySubscription("unsubscribe", "the-right-token")).resolves.toBeNull();
       await expect(service.verifySubscription(undefined, "the-right-token")).resolves.toBeNull();
       await expect(service.verifySubscription("subscribe", undefined)).resolves.toBeNull();
+    });
+  });
+
+  describe("extractChanges", () => {
+    it("keeps each change's field, so coexistence notifications can be told apart", () => {
+      const payload = WhatsappWebhookSchema.parse({
+        entry: [
+          {
+            changes: [
+              { field: "smb_message_echoes", value: { metadata: { phone_number_id: "PN1" }, message_echoes: [{ id: "e" }] } },
+              { value: { metadata: { phone_number_id: "PN1" } } },
+            ],
+          },
+        ],
+      });
+      const changes = service.extractChanges(payload);
+      expect(changes.map((c) => c.field)).toEqual(["smb_message_echoes", "messages"]);
+      // Not stripped by the envelope schema — the echo survives to the parser.
+      expect(changes[0]!.value.message_echoes).toEqual([{ id: "e" }]);
     });
   });
 

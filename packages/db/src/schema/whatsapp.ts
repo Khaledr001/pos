@@ -10,6 +10,7 @@ import type {
 import { relations, sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -33,6 +34,29 @@ import { branches, tenantScope } from "./tenants.js";
  * work so a webhook is never lost to an LLM timeout, and Meta gets its 200
  * inside the retry window regardless of how slow the model is.
  */
+
+/**
+ * How a number was connected.
+ *
+ * `manual`: the business made its own Meta app and pasted its token, app
+ * secret and verify token — all three are per-row.
+ * `embedded`: connected through DevsFleet's Meta app with Embedded Signup.
+ * The token is still per-row (a business integration token for that number),
+ * but the app secret and verify token are the PLATFORM's, from env, because
+ * every embedded number belongs to the one DevsFleet app.
+ */
+export type WhatsappConnectionMethod = "manual" | "embedded";
+
+/**
+ * Where a stored message came from.
+ *
+ * `api`: received by, or sent through, the Cloud API — this system.
+ * `phone_app`: sent by staff from the WhatsApp Business app on the phone,
+ * which Meta echoes to us for a coexistence number.
+ * `history`: imported from the phone app's past chats when a coexistence
+ * number was connected.
+ */
+export type WhatsappMessageSource = "api" | "phone_app" | "history";
 
 /**
  * One business's WhatsApp number and the credentials to speak as it.
@@ -71,10 +95,36 @@ export const whatsappAccounts = pgTable(
 
     /** Meta Cloud API bearer token. Plaintext — see the table comment. */
     accessToken: text().notNull(),
-    /** Echoed back on Meta's GET verification handshake. */
-    verifyToken: varchar({ length: 128 }).notNull(),
-    /** Validates `X-Hub-Signature-256` on every inbound POST. */
-    appSecret: varchar({ length: 128 }).notNull(),
+    /**
+     * Echoed back on Meta's GET verification handshake. NULL for an
+     * `embedded` row, which answers to the platform token instead.
+     */
+    verifyToken: varchar({ length: 128 }),
+    /**
+     * Validates `X-Hub-Signature-256` on every inbound POST. NULL for an
+     * `embedded` row: Meta signs those with the platform app's secret.
+     */
+    appSecret: varchar({ length: 128 }),
+
+    connectionMethod: varchar({ length: 20 })
+      .$type<WhatsappConnectionMethod>()
+      .notNull()
+      .default("manual"),
+    /**
+     * The number is also live in the WhatsApp Business app on the owner's
+     * phone ("coexistence"). Messages sent from the phone arrive as echoes,
+     * and it must never be re-registered from here — that would sign the
+     * phone app out.
+     */
+    coexistence: boolean().notNull().default(false),
+    /** When the phone app's contacts and chat history were requested. Meta allows it once, soon after onboarding. */
+    historySyncRequestedAt: timestamp({ withTimezone: true, mode: "date" }),
+    /**
+     * The two-step verification PIN set when this system registered the
+     * number. Needed to register it again (a new server, a re-onboard).
+     * Plaintext, under the same documented gap as `accessToken`.
+     */
+    registrationPin: varchar({ length: 6 }),
 
     /** Which branch a conversation on this number acts against by default. */
     defaultBranchId: uuid().references(() => branches.id, { onDelete: "set null" }),
@@ -90,6 +140,14 @@ export const whatsappAccounts = pgTable(
      */
     uniqueIndex("uq_wa_accounts_phone_number_id").on(t.phoneNumberId),
     index("idx_wa_accounts_tenant").on(t.tenantId),
+    /**
+     * A manual row carries its own app's secrets or its webhook can never be
+     * verified; only an embedded row may lean on the platform's.
+     */
+    check(
+      "ck_wa_accounts_manual_secrets",
+      sql`connection_method <> 'manual' OR (app_secret IS NOT NULL AND verify_token IS NOT NULL)`,
+    ),
   ],
 );
 
@@ -104,6 +162,14 @@ export const whatsappConversations = pgTable(
     phoneNumber: varchar({ length: 20 }).notNull(),
     /** WhatsApp profile name — the only name available for an unknown sender. */
     profileName: varchar({ length: 255 }),
+    /**
+     * The business number this customer last wrote to (or was answered from).
+     * Replies go out from it: a business can have two numbers — a coexistence
+     * number on the owner's phone and an API-only one — and answering from
+     * the other confuses the customer and, outside its own 24-hour window,
+     * is refused by Meta.
+     */
+    whatsappAccountId: uuid().references(() => whatsappAccounts.id, { onDelete: "set null" }),
 
     branchId: uuid().references(() => branches.id, { onDelete: "set null" }),
     status: varchar({ length: 20 })
@@ -173,6 +239,7 @@ export const whatsappMessages = pgTable(
     errorMessage: text(),
 
     isAiGenerated: boolean().notNull().default(false),
+    source: varchar({ length: 20 }).$type<WhatsappMessageSource>().notNull().default("api"),
     /** Set when a human wrote the outbound message. */
     sentBy: uuid().references(() => users.id, { onDelete: "set null" }),
 

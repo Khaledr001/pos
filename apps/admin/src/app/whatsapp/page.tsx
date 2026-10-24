@@ -12,6 +12,7 @@ import {
   Send,
   Settings2,
   ShieldCheck,
+  Smartphone,
   Trash2,
   X,
 } from "lucide-react";
@@ -21,6 +22,7 @@ import { usePermission } from "@/lib/require-auth";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { ConnectWizard, type WizardAccount } from "./connect-wizard";
+import { ConnectChooser } from "./embedded-signup";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -53,6 +55,10 @@ interface Account {
   hasAccessToken: boolean;
   hasAppSecret: boolean;
   hasVerifyToken: boolean;
+  /** `embedded`: connected with a Meta sign-in through DevsFleet's app. */
+  connectionMethod?: "manual" | "embedded";
+  /** Also live in the WhatsApp Business app on the owner's phone. */
+  coexistence?: boolean;
 }
 
 interface Conversation {
@@ -72,6 +78,8 @@ interface WaMessage {
   errorMessage: string | null;
   occurredAt: string;
   isAiGenerated: boolean;
+  /** `phone_app`: sent from the WhatsApp Business app; `history`: imported past chat. */
+  source?: "api" | "phone_app" | "history";
 }
 
 interface ConversationDetail extends Conversation {
@@ -94,6 +102,8 @@ export default function WhatsappPage() {
   const [error, setError] = useState<string | null>(null);
   const [setupOpen, setSetupOpen] = useState(false);
   const [wizard, setWizard] = useState<{ open: boolean; account: WizardAccount | null }>({ open: false, account: null });
+  /** A new connection starts here: Meta sign-in when available, else the manual wizard. */
+  const [chooserOpen, setChooserOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!accessToken) return;
@@ -204,7 +214,7 @@ export default function WhatsappPage() {
             walks you through it and checks everything with Meta as you go — about 10 minutes.
           </p>
           {canConfigure ? (
-            <Button size="sm" onClick={() => setWizard({ open: true, account: null })}>
+            <Button size="sm" onClick={() => setChooserOpen(true)}>
               <Plus className="size-3.5" aria-hidden="true" />
               Connect WhatsApp
             </Button>
@@ -246,8 +256,20 @@ export default function WhatsappPage() {
         onChanged={() => void load()}
         onConnect={(account) => {
           setSetupOpen(false);
-          setWizard({ open: true, account });
+          if (account) setWizard({ open: true, account });
+          else setChooserOpen(true);
         }}
+      />
+
+      <ConnectChooser
+        open={chooserOpen}
+        accessToken={accessToken}
+        onClose={() => setChooserOpen(false)}
+        onManual={() => {
+          setChooserOpen(false);
+          setWizard({ open: true, account: null });
+        }}
+        onConnected={() => void load()}
       />
 
       <ConnectWizard
@@ -420,6 +442,15 @@ function ConversationPane({
                   )}
                 >
                   {new Date(m.occurredAt).toLocaleString()}
+                  {/* Who wrote it matters to whoever replies next: a colleague
+                      on the phone app may already have answered. */}
+                  {m.source === "phone_app" && (
+                    <>
+                      <Smartphone className="size-2.5" aria-hidden="true" />
+                      Sent from phone
+                    </>
+                  )}
+                  {m.source === "history" && <span>· Imported</span>}
                   {/* A failed send is kept, not hidden — otherwise an operator
                       retypes a reply believing it never left. */}
                   {failed && (
@@ -576,6 +607,12 @@ function SetupDialog({
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">{a.displayPhoneNumber || a.phoneNumberId}</p>
                       <p className="truncate font-mono text-[10px] text-muted-foreground">ID {a.phoneNumberId}</p>
+                      {a.connectionMethod === "embedded" && (
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                          Connected with Meta sign-in
+                          {a.coexistence ? " · also in the WhatsApp Business app" : ""}
+                        </p>
+                      )}
                     </div>
                     {h === "loading" || !h ? (
                       <Badge variant="secondary" className="shrink-0 gap-1">
@@ -593,20 +630,24 @@ function SetupDialog({
                     <p className="text-[11px] text-muted-foreground">{h.message}</p>
                   )}
                   <div className="flex flex-wrap gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        onConnect({
-                          id: a.id,
-                          phoneNumberId: a.phoneNumberId,
-                          displayPhoneNumber: a.displayPhoneNumber,
-                          businessAccountId: a.businessAccountId,
-                        })
-                      }
-                    >
-                      Update token
-                    </Button>
+                    {/* A Meta sign-in number has no token of the shop's to replace —
+                        reconnecting goes through Meta again. */}
+                    {a.connectionMethod !== "embedded" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          onConnect({
+                            id: a.id,
+                            phoneNumberId: a.phoneNumberId,
+                            displayPhoneNumber: a.displayPhoneNumber,
+                            businessAccountId: a.businessAccountId,
+                          })
+                        }
+                      >
+                        Update token
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"

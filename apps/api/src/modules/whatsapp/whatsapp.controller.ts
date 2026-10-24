@@ -13,9 +13,14 @@ import {
 import { ApiExcludeController } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
 import type { RawBodyRequest } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import type { WhatsappAccount } from "@devsfleet/db";
 import type { Request, Response } from "express";
 import { Public } from "../../common/decorators/index.js";
-import { WhatsappWebhookSchema, WebhookVerifySchema } from "./dto.js";
+import type { Env } from "../../config/env.js";
+import { parseContactSync, parseEchoes, parseHistory } from "./coexistence.js";
+import { WhatsappWebhookSchema, WebhookVerifySchema, type WhatsappWebhookValue } from "./dto.js";
+import { WEBHOOK_FIELDS, webhookSecretFor } from "./meta-embedded.js";
 import { WhatsappService } from "./whatsapp.service.js";
 
 /**
@@ -37,7 +42,10 @@ import { WhatsappService } from "./whatsapp.service.js";
 export class WhatsappController {
   private readonly logger = new Logger(WhatsappController.name);
 
-  constructor(private readonly whatsapp: WhatsappService) {}
+  constructor(
+    private readonly whatsapp: WhatsappService,
+    private readonly config: ConfigService<Env, true>,
+  ) {}
 
   /**
    * Meta's one-time subscription handshake: echo the challenge back verbatim.
@@ -65,6 +73,8 @@ export class WhatsappController {
       ? await this.whatsapp.verifySubscription(
           parsed.data["hub.mode"],
           parsed.data["hub.verify_token"],
+          // DevsFleet's own app (Embedded Signup) — its webhook is set once, before any number exists.
+          this.config.get("META_WEBHOOK_VERIFY_TOKEN", { infer: true })?.trim() || undefined,
         )
       : null;
 
@@ -112,8 +122,8 @@ export class WhatsappController {
       return { received: true };
     }
 
-    const values = this.whatsapp.extractValues(parsed.data);
-    const phoneNumberId = values.find((v) => v.metadata?.phone_number_id)?.metadata
+    const changes = this.whatsapp.extractChanges(parsed.data);
+    const phoneNumberId = changes.find((c) => c.value.metadata?.phone_number_id)?.value.metadata
       ?.phone_number_id;
 
     if (!phoneNumberId) {
@@ -130,10 +140,28 @@ export class WhatsappController {
       return { received: true };
     }
 
+    /*
+     * The account the payload names picks the secret — its own for a manual
+     * number, DevsFleet's app secret for an embedded one — and the signature
+     * then has to match it. A forged routing claim gains nothing: the wrong
+     * secret simply fails.
+     */
+    const secret = webhookSecretFor(
+      account,
+      this.config.get("META_APP_SECRET", { infer: true }),
+    );
+    if (!secret) {
+      this.logger.error(
+        { phoneNumberId, tenantId: account.tenantId },
+        "No secret to verify this number's webhooks with (META_APP_SECRET unset?) — payload dropped",
+      );
+      return { received: true };
+    }
+
     if (!this.whatsapp.verifySignature(
       rawBody,
       request.headers["x-hub-signature-256"] as string | undefined,
-      account.appSecret,
+      secret,
     )) {
       this.logger.error(
         { phoneNumberId, tenantId: account.tenantId },
@@ -144,44 +172,100 @@ export class WhatsappController {
       throw new ForbiddenException("Invalid signature");
     }
 
-    for (const value of values) {
-      for (const message of value.messages ?? []) {
-        const profileName = value.contacts?.[0]?.profile?.name;
-        try {
-          const stored = await this.whatsapp.persistInbound({
-            account,
-            from: message.from,
-            waMessageId: message.id,
-            type: message.type,
-            content: message.text?.body ?? null,
-            profileName,
-            // Meta sends unix seconds as a string.
-            occurredAt: message.timestamp
-              ? new Date(Number(message.timestamp) * 1000)
-              : new Date(),
-          });
-
-          // The AI turn belongs here, on a queue, gated on `stored.isNew` so a
-          // redelivery never produces a second reply. Not built yet.
-          this.logger.log(
-            {
-              tenantId: stored.tenantId,
-              conversationId: stored.conversationId,
-              isNew: stored.isNew,
-            },
-            "Stored an inbound WhatsApp message",
-          );
-        } catch (error) {
-          // One bad message must not cost the rest of the batch, and must not
-          // make Meta redeliver the ones that succeeded.
-          this.logger.error(
-            { err: error, waMessageId: message.id },
-            "Failed to store an inbound WhatsApp message",
-          );
-        }
+    for (const { field, value } of changes) {
+      // One envelope can carry several numbers. Only the one the signature
+      // was checked for is acted on; the others' secrets were never tested.
+      const pid = value.metadata?.phone_number_id;
+      if (pid && pid !== account.phoneNumberId) {
+        this.logger.warn({ phoneNumberId: pid }, "Skipped a change for a different number in the same webhook");
+        continue;
+      }
+      try {
+        await this.handleChange(account, field, value);
+      } catch (error) {
+        // One bad change must not cost the rest, nor make Meta redeliver what succeeded.
+        this.logger.error({ err: error, field, tenantId: account.tenantId }, "Failed to process a WhatsApp webhook change");
       }
     }
 
     return { received: true };
+  }
+
+  private async handleChange(account: WhatsappAccount, field: string, value: WhatsappWebhookValue): Promise<void> {
+    switch (field) {
+      case WEBHOOK_FIELDS.messages:
+        await this.storeInbound(account, value);
+        return;
+
+      // Coexistence: what staff typed in the WhatsApp Business app on the phone.
+      case WEBHOOK_FIELDS.messageEchoes: {
+        const { stored } = await this.whatsapp.persistBatch(account, parseEchoes(value), "phone_app");
+        this.logger.log({ tenantId: account.tenantId, stored }, "Stored messages sent from the phone app");
+        return;
+      }
+
+      // Coexistence: the phone app's past chats, a chunk at a time.
+      case WEBHOOK_FIELDS.history: {
+        const chunk = parseHistory(value, account.displayPhoneNumber);
+        if (chunk.errors.length > 0) {
+          this.logger.warn({ tenantId: account.tenantId, errors: chunk.errors }, "Meta reported a problem importing chat history");
+        }
+        const { stored, conversations } = await this.whatsapp.persistBatch(account, chunk.messages, "history");
+        this.logger.log(
+          { tenantId: account.tenantId, stored, conversations, progress: chunk.progress },
+          "Imported a chunk of WhatsApp chat history",
+        );
+        return;
+      }
+
+      // Coexistence: the phone's contacts — names for conversations that have none.
+      case WEBHOOK_FIELDS.appStateSync: {
+        const updated = await this.whatsapp.applyContactNames(account, parseContactSync(value));
+        this.logger.log({ tenantId: account.tenantId, updated }, "Applied contact names from the phone app");
+        return;
+      }
+
+      default:
+        // Account updates, template status and the like: acknowledged, not yet acted on.
+        return;
+    }
+  }
+
+  private async storeInbound(account: WhatsappAccount, value: WhatsappWebhookValue): Promise<void> {
+    for (const message of value.messages ?? []) {
+      const profileName = value.contacts?.[0]?.profile?.name;
+      try {
+        const stored = await this.whatsapp.persistInbound({
+          account,
+          from: message.from,
+          waMessageId: message.id,
+          type: message.type,
+          content: message.text?.body ?? null,
+          profileName,
+          // Meta sends unix seconds as a string.
+          occurredAt: message.timestamp
+            ? new Date(Number(message.timestamp) * 1000)
+            : new Date(),
+        });
+
+        // The AI turn belongs here, on a queue, gated on `stored.isNew` so a
+        // redelivery never produces a second reply. Not built yet.
+        this.logger.log(
+          {
+            tenantId: stored.tenantId,
+            conversationId: stored.conversationId,
+            isNew: stored.isNew,
+          },
+          "Stored an inbound WhatsApp message",
+        );
+      } catch (error) {
+        // One bad message must not cost the rest of the batch, and must not
+        // make Meta redeliver the ones that succeeded.
+        this.logger.error(
+          { err: error, waMessageId: message.id },
+          "Failed to store an inbound WhatsApp message",
+        );
+      }
+    }
   }
 }

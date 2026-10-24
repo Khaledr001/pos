@@ -15,6 +15,8 @@ import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Audited, RequirePermissions } from "../../common/decorators/index.js";
 import { zodPipe } from "../../common/pipes/zod-validation.pipe.js";
 import {
+  CompleteEmbeddedSignupSchema,
+  type CompleteEmbeddedSignupDto,
   ConnectWebhookSchema,
   CreateWhatsappAccountSchema,
   RetestWhatsappAccountSchema,
@@ -30,6 +32,7 @@ import {
   type SendWhatsappMessageDto,
   type UpdateWhatsappAccountDto,
 } from "./dto.js";
+import { EmbeddedSignupService } from "./embedded-signup.service.js";
 import { WhatsappSetupService } from "./whatsapp-setup.service.js";
 import { WhatsappService } from "./whatsapp.service.js";
 
@@ -53,6 +56,7 @@ export class WhatsappAdminController {
   constructor(
     private readonly whatsapp: WhatsappService,
     private readonly setup: WhatsappSetupService,
+    private readonly embedded: EmbeddedSignupService,
   ) {}
 
   // ── Configuration ──────────────────────────────────────────────────────────
@@ -62,6 +66,26 @@ export class WhatsappAdminController {
   @ApiOperation({ summary: "Configured WhatsApp numbers. Secrets are never returned." })
   listAccounts() {
     return this.whatsapp.listAccounts();
+  }
+
+  /**
+   * Whether "Connect with Meta" can be offered, and the public ids Meta's
+   * popup needs. The app secret stays on the server.
+   */
+  @Get("embedded-signup/config")
+  @RequirePermissions("settings:write")
+  @ApiOperation({ summary: "Embedded Signup availability and the public ids for Meta's popup" })
+  embeddedConfig() {
+    return this.embedded.getConfig();
+  }
+
+  @Post("embedded-signup/complete")
+  @RequirePermissions("settings:write")
+  @Audited("whatsapp_accounts", "embedded_signup")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Finish a Meta sign-in: verify the grant, subscribe, register or sync, and save the number" })
+  completeEmbeddedSignup(@Body(zodPipe(CompleteEmbeddedSignupSchema)) dto: CompleteEmbeddedSignupDto) {
+    return this.embedded.complete(dto);
   }
 
   /**

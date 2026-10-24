@@ -6,6 +6,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { RequestContext } from "../../common/context/request-context.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
+import { dedupeByWaId, groupByCustomer, type ContactName, type ParsedMessage } from "./coexistence.js";
 import type { WhatsappWebhookDto, WhatsappWebhookValue } from "./dto.js";
 import { generateVerifyToken } from "./meta-graph.js";
 
@@ -72,9 +73,17 @@ export class WhatsappService {
    * token itself has to identify the account. Matched in constant time across
    * active accounts rather than with a WHERE, so the comparison cannot be used
    * to probe for a valid token one character at a time.
+   *
+   * `platformToken` is DevsFleet's own app's token (Embedded Signup): that
+   * app's webhook is set once by the operator, before any number exists.
    */
-  async verifySubscription(mode: string | undefined, token: string | undefined): Promise<string | null> {
+  async verifySubscription(
+    mode: string | undefined,
+    token: string | undefined,
+    platformToken?: string | undefined,
+  ): Promise<string | null> {
     if (mode !== "subscribe" || !token) return null;
+    if (platformToken && constantTimeEquals(platformToken, token)) return token;
 
     const accounts = await this.db.runAsPlatformAdmin(async (tx) =>
       tx
@@ -83,7 +92,8 @@ export class WhatsappService {
         .where(eq(schema.whatsappAccounts.isActive, true)),
     );
 
-    const matched = accounts.some((account) => constantTimeEquals(account.verifyToken, token));
+    // Embedded rows have no token of their own; comparing against "" would match an empty query.
+    const matched = accounts.some((account) => account.verifyToken && constantTimeEquals(account.verifyToken, token));
     return matched ? token : null;
   }
 
@@ -118,6 +128,14 @@ export class WhatsappService {
 
     const expected = createHmac("sha256", appSecret).update(rawBody).digest("hex");
     return constantTimeEquals(header.slice("sha256=".length), expected);
+  }
+
+  /** Every change in the envelope with its `field`, which says what kind of notification it is. */
+  extractChanges(payload: WhatsappWebhookDto): Array<{ field: string; value: WhatsappWebhookValue }> {
+    return (payload.entry ?? [])
+      .flatMap((entry) => entry.changes ?? [])
+      .filter((change): change is { field: string | undefined; value: WhatsappWebhookValue } => Boolean(change.value))
+      .map((change) => ({ field: change.field ?? "messages", value: change.value }));
   }
 
   /** Every `value` block in the envelope, flattened. */
@@ -217,6 +235,95 @@ export class WhatsappService {
     });
   }
 
+  /**
+   * Store many messages at once — echoes from the phone app, or a chunk of
+   * imported history.
+   *
+   * Idempotent on `waMessageId` like `persistInbound`: Meta repeats history
+   * chunks and redelivers echoes, and the partial unique index decides. The
+   * 24-hour reply window is NOT reopened — an echo is the shop talking, and
+   * history is the past; only a fresh inbound message opens the window.
+   */
+  async persistBatch(
+    account: WhatsappAccount,
+    messages: ParsedMessage[],
+    source: "phone_app" | "history",
+  ): Promise<{ stored: number; conversations: number }> {
+    const unique = dedupeByWaId(messages);
+    if (unique.length === 0) return { stored: 0, conversations: 0 };
+    const groups = groupByCustomer(unique);
+
+    return this.db.runAs(account.tenantId, async (tx) => {
+      let stored = 0;
+      for (const [customer, rows] of groups) {
+        const phoneNumber = normalizePhone(customer) ?? customer;
+        const latest = rows[rows.length - 1]!.occurredAt;
+        const conversation = await this.upsertConversation(tx, {
+          account,
+          phoneNumber,
+          profileName: undefined,
+          occurredAt: latest,
+          reopenWindow: false,
+        });
+
+        // Chunked: a long-running thread's history can be thousands of rows.
+        for (let i = 0; i < rows.length; i += 500) {
+          const inserted = await tx
+            .insert(schema.whatsappMessages)
+            .values(
+              rows.slice(i, i + 500).map((m) => ({
+                tenantId: account.tenantId,
+                conversationId: conversation.id,
+                waMessageId: m.waMessageId,
+                direction: m.direction,
+                type: m.type,
+                content: m.content,
+                source,
+                // Sent and delivered as far as anyone knows; Meta reports no status for these.
+                ...(m.direction === "outbound" ? { status: "sent" as const } : {}),
+                occurredAt: m.occurredAt,
+              })),
+            )
+            // Same partial-index predicate as persistInbound — see the note there.
+            .onConflictDoNothing({
+              target: schema.whatsappMessages.waMessageId,
+              where: sql`${schema.whatsappMessages.waMessageId} IS NOT NULL`,
+            })
+            .returning({ id: schema.whatsappMessages.id });
+          stored += inserted.length;
+        }
+      }
+      return { stored, conversations: groups.size };
+    });
+  }
+
+  /**
+   * Names from the phone's address book, onto conversations that have none.
+   * A name the customer's WhatsApp profile already gave is not overwritten,
+   * and no conversation is created for a contact who never wrote.
+   */
+  async applyContactNames(account: WhatsappAccount, names: ContactName[]): Promise<number> {
+    if (names.length === 0) return 0;
+    return this.db.runAs(account.tenantId, async (tx) => {
+      let updated = 0;
+      for (const { phone, name } of names) {
+        const phoneNumber = normalizePhone(phone) ?? phone;
+        const rows = await tx
+          .update(schema.whatsappConversations)
+          .set({ profileName: name, updatedAt: new Date() })
+          .where(
+            and(
+              eq(schema.whatsappConversations.phoneNumber, phoneNumber),
+              sql`${schema.whatsappConversations.profileName} IS NULL`,
+            ),
+          )
+          .returning({ id: schema.whatsappConversations.id });
+        updated += rows.length;
+      }
+      return updated;
+    });
+  }
+
   // ── Account configuration ──────────────────────────────────────────────────
 
   /**
@@ -238,6 +345,9 @@ export class WhatsappService {
           displayPhoneNumber: schema.whatsappAccounts.displayPhoneNumber,
           businessAccountId: schema.whatsappAccounts.businessAccountId,
           defaultBranchId: schema.whatsappAccounts.defaultBranchId,
+          connectionMethod: schema.whatsappAccounts.connectionMethod,
+          coexistence: schema.whatsappAccounts.coexistence,
+          historySyncRequestedAt: schema.whatsappAccounts.historySyncRequestedAt,
           isActive: schema.whatsappAccounts.isActive,
           createdAt: schema.whatsappAccounts.createdAt,
           hasAccessToken: sql<boolean>`length(coalesce(${schema.whatsappAccounts.accessToken}, '')) > 0`,
@@ -434,11 +544,21 @@ export class WhatsappService {
       /*
        * Scoped by tenant through RLS, but the ACCOUNT still has to be chosen:
        * a tenant can hold more than one business number, and a reply must go
-       * out on the number the customer wrote to.
+       * out on the number the customer wrote to. A conversation from before
+       * that was recorded, or whose number has since been disconnected, falls
+       * back to the business's first active number.
        */
-      const account = await tx.query.whatsappAccounts.findFirst({
-        where: (t, { eq: e }) => e(t.isActive, true),
-      });
+      const own = conversation.whatsappAccountId
+        ? await tx.query.whatsappAccounts.findFirst({
+            where: (t, { and: a, eq: e }) =>
+              a(e(t.id, conversation.whatsappAccountId!), e(t.isActive, true)),
+          })
+        : undefined;
+      const account =
+        own ??
+        (await tx.query.whatsappAccounts.findFirst({
+          where: (t, { eq: e }) => e(t.isActive, true),
+        }));
       if (!account) {
         throw new AppError(
           ERROR_CODES.VALIDATION_FAILED,
@@ -581,9 +701,12 @@ export class WhatsappService {
       phoneNumber: string;
       profileName: string | undefined;
       occurredAt: Date;
+      /** False for the shop's own messages and imported history — only a customer's message opens the reply window. */
+      reopenWindow?: boolean;
     },
   ) {
     const { account, phoneNumber } = input;
+    const reopenWindow = input.reopenWindow ?? true;
 
     const customer = await tx.query.customers.findFirst({
       where: (t, { and: a, eq: e, isNull: n }) =>
@@ -598,12 +721,13 @@ export class WhatsappService {
       .values({
         tenantId: account.tenantId,
         phoneNumber,
+        whatsappAccountId: account.id,
         customerId: customer?.id ?? null,
         branchId: account.defaultBranchId,
         ...(input.profileName ? { profileName: input.profileName } : {}),
         ...(customer?.locale ? { locale: customer.locale as Locale } : {}),
         lastMessageAt: input.occurredAt,
-        windowExpiresAt,
+        ...(reopenWindow ? { windowExpiresAt } : {}),
       })
       .onConflictDoUpdate({
         target: [
@@ -611,10 +735,13 @@ export class WhatsappService {
           schema.whatsappConversations.phoneNumber,
         ],
         set: {
-          lastMessageAt: input.occurredAt,
+          // Never backwards: an old history chunk must not make a live thread look stale.
+          lastMessageAt: sql`greatest(${schema.whatsappConversations.lastMessageAt}, ${input.occurredAt.toISOString()}::timestamptz)`,
           // Every inbound message reopens the 24-hour window.
-          windowExpiresAt,
+          ...(reopenWindow ? { windowExpiresAt } : {}),
           ...(input.profileName ? { profileName: input.profileName } : {}),
+          // The number most recently involved is the one to reply from.
+          whatsappAccountId: account.id,
           // Re-checked on every message: a number that was unknown last week
           // may have been added to a customer since.
           ...(customer?.id ? { customerId: customer.id } : {}),
