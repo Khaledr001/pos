@@ -354,10 +354,10 @@ export function Sidebar({
    * loses children does not change height, indent or hit area.
    */
   const ROW =
-    "group relative flex w-full items-center gap-2.5 rounded-lg px-2.5 text-[13px] transition-colors " +
+    "group relative flex w-full items-center gap-2.5 rounded-lg px-2.5 text-[14px] transition-colors " +
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset";
   /** 36px — still well past the 24×24 CSS px pointer-target minimum. */
-  const ROW_H = "h-8";
+  const ROW_H = "h-9";
 
   /**
    * A rail tile — icon over a VISIBLE label.
@@ -431,7 +431,7 @@ export function Sidebar({
             >
               {isParentActive && <ActiveBar />}
               <Icon className="size-4 shrink-0" aria-hidden="true" />
-              <span aria-hidden="true" className="w-full truncate text-center text-[10px] leading-none">
+              <span aria-hidden="true" className="w-full truncate text-center text-[12px] leading-none">
                 {railLabel(item)}
               </span>
             </button>
@@ -552,7 +552,7 @@ export function Sidebar({
         {showLabel ? (
           <span className="truncate">{item.label}</span>
         ) : (
-          <span aria-hidden="true" className="w-full truncate text-center text-[10px] leading-none">
+          <span aria-hidden="true" className="w-full truncate text-center text-[12px] leading-none">
             {railLabel(item)}
           </span>
         )}
@@ -674,7 +674,7 @@ export function Sidebar({
               aria-expanded={false}
               className={cn(
                 "hidden w-full cursor-pointer items-center justify-center gap-1 rounded-lg py-1.5",
-                "text-[10px] font-medium text-muted-foreground transition-colors",
+                "text-[12px] font-medium text-muted-foreground transition-colors",
                 "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
                 "lg:flex",
@@ -734,7 +734,7 @@ export function Sidebar({
                   <Separator className="mx-auto my-0.5 w-8 opacity-60" aria-hidden="true" />
                 )
               ) : (
-                <h2 className="px-2.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
+                <h2 className="px-2.5 pb-1 text-[12px] font-bold uppercase tracking-wider text-muted-foreground/70">
                   {section.label}
                 </h2>
               )}
@@ -785,7 +785,7 @@ export function Sidebar({
                       <p className="truncate text-xs font-semibold text-sidebar-foreground">
                         {user?.name || "Admin User"}
                       </p>
-                      <p className="truncate text-[10px] text-muted-foreground">
+                      <p className="truncate text-[12px] text-muted-foreground">
                         {user?.roleName || "Owner / Admin"}
                       </p>
                     </div>
