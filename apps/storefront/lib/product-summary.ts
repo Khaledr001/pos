@@ -16,7 +16,7 @@ export function savedFromCard(p: ProductCard): SavedProduct {
 export function lowestPrice(p: ProductDetail) {
   let best: { fils: number; formatted: string } | null = null;
   for (const v of p.variants) {
-    const price = v.units[0]?.price.unit;
+    const price = v.units[0]?.price?.unit;
     if (price && (!best || price.fils < best.fils)) best = price;
   }
   return best;

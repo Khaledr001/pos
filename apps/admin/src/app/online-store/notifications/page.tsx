@@ -219,6 +219,7 @@ export default function NotificationsPage() {
             <h2 className="text-sm font-semibold">What gets sent</h2>
             <p className="mt-1 text-xs text-muted-foreground">
               Order messages go on WhatsApp only to shoppers who ticked “send my order updates on WhatsApp”; back-in-stock goes only to shoppers who gave a phone number.
+              New-lead alerts from your website forms are not listed here: they go to the notify addresses set on each form (Online Store → Forms).
             </p>
           </div>
           <div className="overflow-x-auto">

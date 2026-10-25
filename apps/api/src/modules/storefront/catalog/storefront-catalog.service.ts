@@ -4,6 +4,7 @@ import { AppError, ERROR_CODES, Money, searchKey } from "@devsfleet/shared-utils
 import { Injectable } from "@nestjs/common";
 import { RequestContext } from "../../../common/context/request-context.js";
 import { TenantDatabase } from "../../../database/tenant-database.service.js";
+import { siteFeatures } from "../context/site-features.js";
 import { currentShopper } from "../context/storefront.guard.js";
 import { moneyView, unitNetGross, type MoneyView } from "../pricing/money-view.js";
 import { StorefrontPricing, type PricingSubject, type PriceView } from "../pricing/storefront-pricing.service.js";
@@ -145,6 +146,10 @@ export class StorefrontCatalogService {
   // ---------------------------------------------------------------------------
 
   async listProducts(dto: ListProductsDto) {
+    // Search is a feature of the site: a catalogue that turned it off refuses a text query, not just hides the box.
+    if (dto.q && !siteFeatures().search) {
+      throw new AppError(ERROR_CODES.STORE_FEATURE_DISABLED, "That is not available on this site.");
+    }
     return this.db.run(async (tx) => {
       const ctx = await this.listingContext(tx);
       const base: SQL[] = [this.publishedPredicate()];
@@ -177,8 +182,9 @@ export class StorefrontCatalogService {
       }
       if (dto.inStock) filters.push(this.inStockPredicate(ctx));
       const gross = this.grossFromPrice(ctx);
-      if (dto.minPrice != null) filters.push(sql`${gross} >= ${String(dto.minPrice)}::numeric`);
-      if (dto.maxPrice != null) filters.push(sql`${gross} <= ${String(dto.maxPrice)}::numeric`);
+      // With prices hidden a price filter would let a visitor bisect them: ignored, not honoured.
+      if (ctx.showPrices && dto.minPrice != null) filters.push(sql`${gross} >= ${String(dto.minPrice)}::numeric`);
+      if (ctx.showPrices && dto.maxPrice != null) filters.push(sql`${gross} <= ${String(dto.maxPrice)}::numeric`);
       for (const [code, raw] of Object.entries(dto.attr ?? {})) {
         const values = raw.split(",").map((v) => v.trim()).filter(Boolean);
         if (values.length === 0) continue;
@@ -191,7 +197,9 @@ export class StorefrontCatalogService {
       }
 
       const where = sql.join([...base, ...filters], sql` AND `);
-      const sort = dto.sort ?? (score ? "relevance" : "newest");
+      // Sorting by price would leak the order of the prices just as well.
+      const requested = !ctx.showPrices && (dto.sort === "price_asc" || dto.sort === "price_desc") ? undefined : dto.sort;
+      const sort = requested ?? (score ? "relevance" : "newest");
       const orderBy =
         sort === "relevance" && score
           ? sql`${score} DESC, products.name ASC`
@@ -299,7 +307,7 @@ export class StorefrontCatalogService {
 
       const customerId = currentShopper()?.customerId ?? null;
       const [sheet, availability, categories, links] = await Promise.all([
-        this.pricing.priceSheet(tx, subjects, customerId),
+        ctx.showPrices ? this.pricing.priceSheet(tx, subjects, customerId) : Promise.resolve(new Map<string, { unitId: string; uom: string; price: PriceView }[]>()),
         this.availability(tx, product.variants.map((v) => ({ id: v.id, minStock: v.minStock })), product.isStockTracked, ctx),
         this.activeCategories(tx),
         tx.query.productLinks.findMany({
@@ -360,12 +368,17 @@ export class StorefrontCatalogService {
               value: av.value,
               unit: av.definition.unit,
             })),
-            units: (sheet.get(variant.id) ?? []).map((u) => ({
-              uom: u.uom,
-              unitId: u.unitId,
-              factor: Number(subjects.find((s) => s.variantId === variant.id)!.units.find((x) => x.unitId === u.unitId)!.conversionFactor),
-              price: u.price,
-            })),
+            units: ctx.showPrices
+              ? (sheet.get(variant.id) ?? []).map((u) => ({
+                  uom: u.uom,
+                  unitId: u.unitId,
+                  factor: Number(subjects.find((s) => s.variantId === variant.id)!.units.find((x) => x.unitId === u.unitId)!.conversionFactor),
+                  price: u.price as PriceView | null,
+                }))
+              : // Prices hidden: the units (a box of 50, a metre) are still sellable facts, the price is not sent.
+                subjects
+                  .find((s) => s.variantId === variant.id)!
+                  .units.map((u) => ({ uom: u.uom, unitId: u.unitId, factor: Number(u.conversionFactor), price: null as PriceView | null })),
             availability: stock,
           };
         }),
@@ -378,7 +391,8 @@ export class StorefrontCatalogService {
 
   /** Personalised prices — trade customers see their own list. Never cached for everyone. */
   async prices(skus: string[]) {
-    if (skus.length === 0) return {};
+    // Prices hidden: an empty answer, not an error, so a page that asks anyway simply shows none.
+    if (skus.length === 0 || !siteFeatures().prices) return {};
     return this.db.run(async (tx) => {
       const variants = await tx.query.productVariants.findMany({
         where: (t, { and: a, inArray: i, eq: e, isNull: n }) => a(i(t.sku, skus), e(t.isActive, true), n(t.deletedAt)),
@@ -494,6 +508,7 @@ export class StorefrontCatalogService {
       currency: tenantSettings.currency.base,
       decimals: tenantSettings.currency.decimals,
       taxMode: tenantSettings.tax.mode,
+      showPrices: siteFeatures().prices,
     };
   }
 
@@ -617,7 +632,7 @@ export class StorefrontCatalogService {
 
     const byId = new Map(
       rows.map((r) => {
-        const fromPrice = r.net_from
+        const fromPrice = ctx.showPrices && r.net_from
           ? moneyView(
               unitNetGross(r.net_from, r.tax_rate ?? ctx.defaultTaxRate, ctx.taxMode, ctx.decimals).gross,
               ctx.currency,
@@ -680,7 +695,7 @@ export class StorefrontCatalogService {
       brands: [...brands].map((b) => ({ slug: b.slug, name: b.name, count: Number(b.count) })),
       // A filter with one value cannot narrow anything.
       attributes: grouped.filter((f) => f.values.length > 1),
-      price: range?.min != null ? { min: bound(range.min), max: bound(range.max) } : null,
+      price: ctx.showPrices && range?.min != null ? { min: bound(range.min), max: bound(range.max) } : null,
     };
   }
 
@@ -724,6 +739,8 @@ export interface ListingContext {
   taxMode: TaxMode;
   currency: string;
   decimals: number;
+  /** False on a catalogue site that hides prices: nothing price-bearing is queried or sent. */
+  showPrices: boolean;
 }
 
 function emptyFacets() {

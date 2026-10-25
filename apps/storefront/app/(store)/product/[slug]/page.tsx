@@ -8,12 +8,13 @@ import { JsonLd } from "@/components/store/json-ld";
 import { crumbsFrom, Breadcrumbs } from "@/components/store/listing";
 import { Markdown } from "@/components/store/markdown";
 import { BuyBox } from "@/components/store/product/buy-box";
+import { EnquiryBox } from "@/components/store/product/enquiry-box";
 import { Gallery } from "@/components/store/product/gallery";
 import { TrackView } from "@/components/store/product/track-view";
 import { RecentlyViewed } from "@/components/store/recently-viewed";
 import { ProductGrid } from "@/components/store/product-card";
 import { cached, publicApi, tags } from "@/lib/api-server";
-import { getStore } from "@/lib/data";
+import { getForm, getStore } from "@/lib/data";
 import { displayName } from "@/lib/format";
 import { savedFromDetail } from "@/lib/product-summary";
 import { absoluteUrl, breadcrumbLd, socialMeta } from "@/lib/seo";
@@ -37,7 +38,7 @@ export async function generateMetadata({ params }: PageProps<"/product/[slug]">)
 }
 
 function offerLd(v: ProductDetail["variants"][number], currency: string, url: string) {
-  const price = v.units[0]?.price.unit;
+  const price = v.units[0]?.price?.unit;
   if (!price) return undefined;
   return {
     "@type": "Offer",
@@ -49,14 +50,14 @@ function offerLd(v: ProductDetail["variants"][number], currency: string, url: st
   };
 }
 
-function productLd(p: ProductDetail, site: string, currency: string) {
+function productLd(p: ProductDetail, site: string, currency: string, showOffers: boolean) {
   const url = `${site}/product/${p.slug}`;
   const images = p.images.map((i) => absoluteUrl(site, i.url));
   const brand = p.brand ? { "@type": "Brand", name: p.brand.name } : undefined;
   const base = { "@context": "https://schema.org", name: p.name, description: p.description ?? undefined, image: images.length ? images : undefined, brand, url };
   if (p.variants.length === 1) {
     const v = p.variants[0];
-    return { ...base, "@type": "Product", sku: v.sku, offers: offerLd(v, currency, url) };
+    return { ...base, "@type": "Product", sku: v.sku, offers: showOffers ? offerLd(v, currency, url) : undefined };
   }
   return {
     ...base,
@@ -68,7 +69,7 @@ function productLd(p: ProductDetail, site: string, currency: string) {
       name: `${p.name} ${v.name}`,
       image: images.length ? images : undefined,
       brand,
-      offers: offerLd(v, currency, url),
+      offers: showOffers ? offerLd(v, currency, url) : undefined,
     })),
   };
 }
@@ -76,12 +77,15 @@ function productLd(p: ProductDetail, site: string, currency: string) {
 export default async function ProductPage({ params }: PageProps<"/product/[slug]">) {
   const { slug } = await params;
   const [product, site, store] = await Promise.all([getProduct(slug), siteOrigin(), getStore()]);
+  // A site that cannot take an order answers a product with an enquiry instead.
+  const enquire = !store.features.checkout;
+  const enquiryForm = enquire && store.site.enquiry.form ? await getForm(store.site.enquiry.formSlug) : null;
   const crumbs = [...crumbsFrom(product.breadcrumbs), { href: `/product/${slug}`, label: displayName(product.name) }];
   const saved = savedFromDetail(product);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
-      <JsonLd data={[productLd(product, site, store.currency), breadcrumbLd(site, crumbs)]} />
+      <JsonLd data={[productLd(product, site, store.currency, store.features.prices), breadcrumbLd(site, crumbs)]} />
       <TrackView product={saved} />
       <Breadcrumbs items={crumbs} />
 
@@ -95,8 +99,19 @@ export default async function ProductPage({ params }: PageProps<"/product/[slug]
           )}
           <h1 className="mt-1 text-3xl sm:text-4xl">{displayName(product.name)}</h1>
           <div className="mt-5">
-            <BuyBox product={product} />
-            <CompareToggle product={saved} className="mt-2 -ml-2" />
+            {enquire ? (
+              <EnquiryBox
+                product={product}
+                form={enquiryForm}
+                pageUrl={`${site}/product/${slug}`}
+                storeName={store.name}
+                phone={store.phone}
+                whatsapp={store.whatsapp}
+              />
+            ) : (
+              <BuyBox product={product} />
+            )}
+            {store.features.compare && <CompareToggle product={saved} className="mt-2 -ml-2" />}
           </div>
         </div>
       </div>

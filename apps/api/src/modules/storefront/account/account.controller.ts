@@ -4,7 +4,7 @@ import type { Response } from "express";
 import { z } from "zod";
 import { sendPdf } from "../../../common/http/send-pdf.js";
 import { zodPipe } from "../../../common/pipes/zod-validation.pipe.js";
-import { RequireShopper, StorefrontRoute } from "../context/storefront.guard.js";
+import { RequireShopper, RequireSiteFeature, StorefrontRoute } from "../context/storefront.guard.js";
 import { AccountService } from "./account.service.js";
 import {
   ListItemSchema,
@@ -27,6 +27,7 @@ const ListIdSchema = z.union([z.literal("wishlist"), z.string().uuid()]);
 
 @ApiTags("storefront")
 @StorefrontRoute()
+@RequireSiteFeature("accounts")
 @RequireShopper()
 @Controller("storefront/me")
 export class AccountController {

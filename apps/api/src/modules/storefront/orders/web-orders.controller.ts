@@ -3,11 +3,12 @@ import { ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
 import type { Response } from "express";
 import { sendPdf } from "../../../common/http/send-pdf.js";
-import { StorefrontRoute } from "../context/storefront.guard.js";
+import { RequireSiteFeature, StorefrontRoute } from "../context/storefront.guard.js";
 import { WebOrdersService } from "./web-orders.service.js";
 
 @ApiTags("storefront")
 @StorefrontRoute()
+@RequireSiteFeature("tracking")
 @Controller("storefront/orders")
 export class WebOrdersController {
   constructor(private readonly orders: WebOrdersService) {}

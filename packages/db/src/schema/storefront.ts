@@ -1,7 +1,11 @@
 import type {
+  AnyNotificationEvent,
   BannerPlacement,
+  FormField,
+  LeadStatus,
   NotificationChannel,
-  NotificationEvent,
+  PageLayout,
+  PageSection,
   NotificationStatus,
   CartStatus,
   CouponType,
@@ -168,6 +172,13 @@ export const storefrontPages = pgTable(
     publishedAt: timestamp({ withTimezone: true, mode: "date" }),
     seoTitle: varchar({ length: 255 }),
     seoDescription: varchar({ length: 500 }),
+    /**
+     * The page as ordered sections (the same registry as the home page). Null =
+     * a plain text page rendered from `body`. A page built from sections may
+     * leave `body` empty.
+     */
+    sections: jsonb().$type<PageSection[] | null>(),
+    layout: varchar({ length: 10 }).$type<PageLayout>().notNull().default("standard"),
     ...timestamps(),
   },
   (t) => [
@@ -796,10 +807,82 @@ export type WebQuoteItem = typeof webQuoteItems.$inferSelect;
 export type StorefrontPaymentAccount = typeof storefrontPaymentAccounts.$inferSelect;
 
 // -----------------------------------------------------------------------------
+// Forms and leads
+// -----------------------------------------------------------------------------
+
+/**
+ * A form a tenant built for its site: contact, quote request, product enquiry.
+ *
+ * `fields` is the definition the public form renders and the submit endpoint
+ * validates against. `notifyEmails` is who is told about each submission — it
+ * is never sent to a browser.
+ */
+export const storefrontForms = pgTable(
+  "storefront_forms",
+  {
+    id: primaryId(),
+    ...tenantScope(),
+    slug: varchar({ length: 60 }).notNull(),
+    name: varchar({ length: 120 }).notNull(),
+    fields: jsonb().$type<FormField[]>().notNull().default([]),
+    submitLabel: varchar({ length: 60 }).notNull().default("Send"),
+    successMessage: varchar({ length: 500 }).notNull().default("Thanks! We'll be in touch."),
+    notifyEmails: jsonb().$type<string[]>().notNull().default([]),
+    /** Email the submitter a copy when the form has an email field. */
+    acknowledge: boolean().notNull().default(true),
+    ...activeFlag(),
+    ...timestamps(),
+  },
+  (t) => [uniqueIndex("uq_storefront_forms_tenant_slug").on(t.tenantId, t.slug)],
+);
+
+/**
+ * One submission of a form: an enquiry, a quote request, a contact message.
+ *
+ * Snapshots, like a document (rule 5): the answers carry the labels they were
+ * asked under and the product its name and SKU, so editing or deleting the form
+ * or the product later does not rewrite what the visitor actually sent.
+ * `ipHash` is an HMAC of the address, enough to spot a flood and useless as a
+ * record of who anyone is.
+ */
+export const storefrontLeads = pgTable(
+  "storefront_leads",
+  {
+    id: primaryId(),
+    ...tenantScope(),
+    formId: uuid().references(() => storefrontForms.id, { onDelete: "set null" }),
+    formSlug: varchar({ length: 60 }).notNull(),
+    formName: varchar({ length: 120 }).notNull(),
+    status: varchar({ length: 10 }).$type<LeadStatus>().notNull().default("new"),
+    name: varchar({ length: 255 }),
+    email: varchar({ length: 255 }),
+    phone: varchar({ length: 30 }),
+    answers: jsonb().$type<{ label: string; value: string }[]>().notNull().default([]),
+    sourcePath: varchar({ length: 300 }),
+    productId: uuid().references(() => products.id, { onDelete: "set null" }),
+    productName: varchar({ length: 255 }),
+    productSku: varchar({ length: 100 }),
+    notes: text().notNull().default(""),
+    /** Dedupes an identical submission within minutes: form + contact + content. */
+    contentHash: varchar({ length: 64 }).notNull(),
+    ipHash: varchar({ length: 64 }),
+    ...timestamps(),
+  },
+  (t) => [
+    index("idx_storefront_leads_inbox").on(t.tenantId, t.status, t.createdAt),
+    index("idx_storefront_leads_form").on(t.tenantId, t.formSlug),
+    index("idx_storefront_leads_dedupe").on(t.tenantId, t.contentHash, t.createdAt),
+  ],
+);
+
+export type StorefrontForm = typeof storefrontForms.$inferSelect;
+export type StorefrontLead = typeof storefrontLeads.$inferSelect;
+
+// -----------------------------------------------------------------------------
 // Shopper notifications (outbox)
 // -----------------------------------------------------------------------------
 
-export type NotificationSubjectKind = "web_order" | "web_quote" | "stock_alert";
+export type NotificationSubjectKind = "web_order" | "web_quote" | "stock_alert" | "lead";
 
 /**
  * One message to one shopper on one channel.
@@ -824,7 +907,7 @@ export const storefrontNotifications = pgTable(
     storefrontId: uuid()
       .notNull()
       .references(() => storefronts.id, { onDelete: "cascade" }),
-    event: varchar({ length: 30 }).$type<NotificationEvent>().notNull(),
+    event: varchar({ length: 30 }).$type<AnyNotificationEvent>().notNull(),
     channel: varchar({ length: 10 }).$type<NotificationChannel>().notNull(),
     /** An email address, or an E.164 number for WhatsApp. */
     recipient: varchar({ length: 255 }).notNull(),

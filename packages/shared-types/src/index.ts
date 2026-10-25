@@ -17,3 +17,6 @@ export * from "./sync.js";
 export * from "./storefront.js";
 export * from "./storefront-appearance.js";
 export * from "./storefront-notifications.js";
+export * from "./storefront-forms.js";
+export * from "./storefront-site.js";
+export * from "./site-templates.js";

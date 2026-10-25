@@ -9,6 +9,7 @@ import type { ShopperAuthService } from '../../../apps/api/src/modules/storefron
 import type { CartService } from '../../../apps/api/src/modules/storefront/cart/cart.service.js';
 import type { StorefrontCatalogService } from '../../../apps/api/src/modules/storefront/catalog/storefront-catalog.service.js';
 import type { CheckoutService } from '../../../apps/api/src/modules/storefront/checkout/checkout.service.js';
+import type { FormsService } from '../../../apps/api/src/modules/storefront/forms/forms.service.js';
 import type { StorefrontContentService } from '../../../apps/api/src/modules/storefront/content/storefront-content.service.js';
 import type { QuotesService } from '../../../apps/api/src/modules/storefront/quotes/quotes.service.js';
 import type { StockAlertsService } from '../../../apps/api/src/modules/storefront/stock-alerts/stock-alerts.service.js';
@@ -57,8 +58,12 @@ export type Contract = [
   Check<Out<StockAlertsService['subscribe']>, { subscribed: true }>,
   // content
   Check<Out<StorefrontContentService['home']>, C.HomeData>,
+  Check<Out<StorefrontContentService['pages']>, C.PageListItem[]>,
   Check<Out<StorefrontContentService['page']>, C.Page>,
   Check<Out<StorefrontContentService['blog']>, C.BlogList>,
   Check<Out<StorefrontContentService['branches']>, C.Branch[]>,
   Check<Out<StorefrontContentService['store']>, C.StoreInfo>,
+  // forms
+  Check<Out<FormsService['get']>, C.PublicForm>,
+  Check<Out<FormsService['submit']>, C.FormSubmitResult>,
 ];

@@ -27,6 +27,15 @@ export const NOTIFICATION_EVENTS = asConst([
 ]);
 export type NotificationEvent = (typeof NOTIFICATION_EVENTS)[number];
 
+/**
+ * Lead notifications ride the same outbox but are email-only and are not
+ * shopper-configurable: staff are told about a new lead, and the submitter
+ * gets an acknowledgement when the form asks for one.
+ */
+export const LEAD_NOTIFICATION_EVENTS = asConst(["lead_received", "lead_acknowledged"]);
+export type LeadNotificationEvent = (typeof LEAD_NOTIFICATION_EVENTS)[number];
+export type AnyNotificationEvent = NotificationEvent | LeadNotificationEvent;
+
 export const NOTIFICATION_CHANNELS = asConst(["email", "whatsapp"]);
 export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
 
@@ -44,6 +53,12 @@ export const NOTIFICATION_EVENT_LABELS: Record<NotificationEvent, string> = {
   order_refunded: "Order refunded",
   quote_quoted: "Trade quote ready",
   stock_back_in_stock: "Back in stock",
+};
+
+export const ANY_EVENT_LABELS: Record<AnyNotificationEvent, string> = {
+  ...NOTIFICATION_EVENT_LABELS,
+  lead_received: "New lead (to staff)",
+  lead_acknowledged: "Lead acknowledgement (to submitter)",
 };
 
 export interface NotificationEventRule {
@@ -214,7 +229,7 @@ export interface NotificationOverview {
 
 export interface NotificationLogRow {
   id: string;
-  event: NotificationEvent;
+  event: AnyNotificationEvent;
   channel: NotificationChannel;
   recipient: string;
   status: NotificationStatus;

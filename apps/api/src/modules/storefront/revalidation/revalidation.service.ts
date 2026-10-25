@@ -104,13 +104,14 @@ export class RevalidationService implements OnModuleInit, OnModuleDestroy {
          OR EXISTS (SELECT 1 FROM product_variants v JOIN inventory i ON i.variant_id = v.id
                     WHERE v.product_id = l.product_id AND i.updated_at > ${since}::timestamptz)
       LIMIT ${MAX_TAGS}`);
-    const [categories, brands, pages, banners, settings] = await Promise.all([
+    const [categories, brands, pages, banners, settings, forms] = await Promise.all([
       tx.execute<{ slug: string }>(sql`SELECT slug FROM categories WHERE updated_at > ${since}::timestamptz`),
       tx.execute<{ slug: string }>(sql`SELECT slug FROM brands WHERE updated_at > ${since}::timestamptz`),
       tx.execute<{ slug: string }>(sql`SELECT slug FROM storefront_pages WHERE updated_at > ${since}::timestamptz`),
       tx.execute<{ n: number }>(sql`SELECT count(*)::int AS n FROM storefront_banners WHERE updated_at > ${since}::timestamptz`),
       // Theme, navigation, home sections and region live on the storefront row.
       tx.execute<{ n: number }>(sql`SELECT count(*)::int AS n FROM storefronts WHERE updated_at > ${since}::timestamptz`),
+      tx.execute<{ slug: string }>(sql`SELECT slug FROM storefront_forms WHERE updated_at > ${since}::timestamptz`),
     ]);
 
     const tags = new Set<string>();
@@ -118,15 +119,19 @@ export class RevalidationService implements OnModuleInit, OnModuleDestroy {
     for (const c of categories) tags.add(`category:${c.slug}`);
     for (const b of brands) tags.add(`brand:${b.slug}`);
     for (const p of pages) tags.add(`page:${p.slug}`);
+    for (const f of forms) tags.add(`form:${f.slug}`);
     // Listings, filters and the home page all show prices and stock.
     if (products.length || categories.length || brands.length) {
       tags.add("catalog");
       tags.add("home");
     }
-    if (pages.length || Number(banners[0]?.n ?? 0) > 0 || Number(settings[0]?.n ?? 0) > 0) {
+    if (pages.length || forms.length || Number(banners[0]?.n ?? 0) > 0 || Number(settings[0]?.n ?? 0) > 0) {
       tags.add("content");
       tags.add("home");
     }
+    // The site mode lives in the settings: switching a shop to a catalogue (or hiding prices) changes what every
+    // cached product page and listing may show, so a settings save refreshes the catalogue too.
+    if (Number(settings[0]?.n ?? 0) > 0) tags.add("catalog");
     return [...tags];
   }
 }

@@ -131,3 +131,17 @@ describe("UpdateSettingsSchema", () => {
     expect(ok(UpdateSettingsSchema, { shipping: { rates: [{ ...rate, emirate: "not valid" }] } })).toBe(false);
   });
 });
+
+
+describe("ThemeSchema — site layout options", () => {
+  it("accepts the brochure header, the minimal footer, a wide container and a non-sticky header", () => {
+    expect(ThemeSchema.safeParse({ layout: { header: "simple", footer: "minimal", container: "wide", stickyHeader: false } }).success).toBe(true);
+  });
+
+  it("rejects layouts the build does not ship", () => {
+    expect(ThemeSchema.safeParse({ layout: { header: "mega" } }).success).toBe(false);
+    expect(ThemeSchema.safeParse({ layout: { footer: "tall" } }).success).toBe(false);
+    expect(ThemeSchema.safeParse({ layout: { container: "full" } }).success).toBe(false);
+    expect(ThemeSchema.safeParse({ layout: { stickyHeader: "yes" } }).success).toBe(false);
+  });
+});

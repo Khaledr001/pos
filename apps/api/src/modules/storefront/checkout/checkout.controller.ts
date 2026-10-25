@@ -4,12 +4,13 @@ import { Throttle } from "@nestjs/throttler";
 import type { Request, Response } from "express";
 import { zodPipe } from "../../../common/pipes/zod-validation.pipe.js";
 import { SessionCookies } from "../context/session-cookies.service.js";
-import { StorefrontRoute } from "../context/storefront.guard.js";
+import { RequireSiteFeature, StorefrontRoute } from "../context/storefront.guard.js";
 import { CheckoutService } from "./checkout.service.js";
 import { PlaceOrderSchema, QuoteSchema, type PlaceOrderDto, type QuoteDto } from "./dto.js";
 
 @ApiTags("storefront")
 @StorefrontRoute()
+@RequireSiteFeature("checkout")
 @Controller("storefront/checkout")
 export class CheckoutController {
   constructor(

@@ -1,14 +1,12 @@
-import type { BlogList, BrandSummary, CategoryNode, ProductList } from "@devsfleet/storefront-client";
+import type { BlogList, BrandSummary, CategoryNode, PageListItem, ProductList } from "@devsfleet/storefront-client";
 import type { MetadataRoute } from "next";
 import { cached, publicApi, tags } from "@/lib/api-server";
+import { getStore } from "@/lib/data";
 import { orFallback } from "@/lib/fallback";
 import { siteOrigin } from "@/lib/site";
 
 /** One sitemap per shop: built for the host it is requested on, never once at build time. */
 export const dynamic = "force-dynamic";
-
-/** Content pages that exist on every install (the footer links to them). */
-const CONTENT_PAGES = ["about", "delivery-returns", "warranty", "faq", "privacy", "terms"];
 
 const PAGE_SIZE = 60;
 /** Safety stop: 200 pages × 60 = 12,000 products, well under the 50,000-URL sitemap limit. */
@@ -39,11 +37,19 @@ function flatten(nodes: CategoryNode[]): CategoryNode[] {
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const [categories, products, brands, guides] = await Promise.all([
-    publicApi.get<CategoryNode[]>("/catalog/categories", cached([tags.catalog])).catch(orFallback([] as CategoryNode[])),
-    allProducts().catch(orFallback([] as ProductList["items"])),
-    publicApi.get<BrandSummary[]>("/catalog/brands", cached([tags.catalog])).catch(orFallback([] as BrandSummary[])),
+  const store = await getStore();
+  const { features } = store;
+  // A site without a catalogue has no product, category or brand pages to list.
+  const [categories, products, brands, guides, pages] = await Promise.all([
+    features.products
+      ? publicApi.get<CategoryNode[]>("/catalog/categories", cached([tags.catalog])).catch(orFallback([] as CategoryNode[]))
+      : ([] as CategoryNode[]),
+    features.products ? allProducts().catch(orFallback([] as ProductList["items"])) : ([] as ProductList["items"]),
+    features.products
+      ? publicApi.get<BrandSummary[]>("/catalog/brands", cached([tags.catalog])).catch(orFallback([] as BrandSummary[]))
+      : ([] as BrandSummary[]),
     allGuides().catch(orFallback([] as BlogList["items"])),
+    publicApi.get<PageListItem[]>("/content/pages", cached([tags.content])).catch(orFallback([] as PageListItem[])),
   ]);
 
   const site = await siteOrigin();
@@ -52,8 +58,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: url("/"), changeFrequency: "daily", priority: 1 },
     ...flatten(categories).map((c) => ({ url: url(`/category/${c.slug}`), changeFrequency: "daily" as const, priority: 0.8 })),
     ...products.map((p) => ({ url: url(`/product/${p.slug}`), changeFrequency: "weekly" as const, priority: 0.7 })),
-    { url: url("/departments"), changeFrequency: "weekly", priority: 0.5 },
-    { url: url("/brands"), changeFrequency: "weekly", priority: 0.5 },
+    ...(features.products
+      ? [
+          { url: url("/departments"), changeFrequency: "weekly" as const, priority: 0.5 },
+          { url: url("/brands"), changeFrequency: "weekly" as const, priority: 0.5 },
+        ]
+      : []),
     ...brands.map((b) => ({ url: url(`/brand/${b.slug}`), changeFrequency: "weekly" as const, priority: 0.5 })),
     { url: url("/blog"), changeFrequency: "weekly", priority: 0.5 },
     ...guides.map((g) => ({
@@ -64,8 +74,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     })),
     { url: url("/branches"), changeFrequency: "monthly", priority: 0.4 },
     { url: url("/contact"), changeFrequency: "monthly", priority: 0.4 },
-    { url: url("/trade"), changeFrequency: "monthly", priority: 0.4 },
-    { url: url("/track"), changeFrequency: "yearly", priority: 0.2 },
-    ...CONTENT_PAGES.map((slug) => ({ url: url(`/pages/${slug}`), changeFrequency: "monthly" as const, priority: 0.3 })),
+    ...(features.accounts ? [{ url: url("/trade"), changeFrequency: "monthly" as const, priority: 0.4 }] : []),
+    ...(features.tracking ? [{ url: url("/track"), changeFrequency: "yearly" as const, priority: 0.2 }] : []),
+    ...pages.map((p) => ({ url: url(`/pages/${p.slug}`), lastModified: p.updatedAt, changeFrequency: "monthly" as const, priority: 0.3 })),
   ];
 }

@@ -124,7 +124,7 @@ export class SettingsAdminService {
     await this.db.run(async (tx) => {
       const storefront = await this.requireStorefront(tx);
       const current = resolveStorefrontSettings(storefront.settings);
-      const { name, isActive, checkout, theme, region, headless, navigation, notifications, ...rest } = dto;
+      const { name, isActive, checkout, theme, region, headless, navigation, notifications, site, ...rest } = dto;
 
       if (checkout?.fulfilmentBranchId) await this.assertBranch(tx, checkout.fulfilmentBranchId);
       for (const branch of dto.branches ?? []) await this.assertBranch(tx, branch.branchId);
@@ -145,6 +145,15 @@ export class SettingsAdminService {
             }
           : current.theme,
         navigation: { ...current.navigation, ...navigation },
+        site: site
+          ? {
+              ...current.site,
+              ...site,
+              enquiry: { ...current.site.enquiry, ...site.enquiry },
+              features: { ...current.site.features, ...site.features },
+              headerCta: site.headerCta === undefined ? current.site.headerCta : site.headerCta,
+            }
+          : current.site,
         region: { ...current.region, ...region },
         headless: { ...current.headless, ...headless },
         notifications: notifications
@@ -170,6 +179,7 @@ export class SettingsAdminService {
       if (region?.zones || dto.shipping || dto.branches) {
         assertZonesConsistent(next.region, next.shipping.rates, next.branches);
       }
+      if (site) await assertSiteConsistent(tx, next.site);
       await tx
         .update(schema.storefronts)
         .set({ settings: next, ...(name ? { name } : {}), ...(isActive !== undefined ? { isActive } : {}) })
@@ -321,6 +331,29 @@ export class SettingsAdminService {
   }
 }
 
+
+/**
+ * A catalogue site with no way to enquire is a dead end, and an enquiry button
+ * wired to a form that does not exist (or is switched off) would swallow
+ * visitors silently. Refused at save, with the reason, rather than discovered
+ * by a customer.
+ */
+export async function assertSiteConsistent(tx: Transaction, site: StorefrontSettings["site"]): Promise<void> {
+  if (site.mode !== "catalogue") return;
+  const { form, whatsapp, call, formSlug } = site.enquiry;
+  if (!form && !whatsapp && !call) {
+    throw new AppError(ERROR_CODES.VALIDATION_FAILED, "A catalogue site needs at least one way to enquire: a form, WhatsApp or a phone call.");
+  }
+  if (form) {
+    const found = await tx.query.storefrontForms.findFirst({
+      where: (t, { and: a, eq: e }) => a(e(t.slug, formSlug), e(t.isActive, true)),
+      columns: { id: true },
+    });
+    if (!found) {
+      throw new AppError(ERROR_CODES.VALIDATION_FAILED, `The enquiry form "${formSlug}" does not exist or is switched off. Create it under Forms first.`);
+    }
+  }
+}
 
 /** Per-event merge: a PATCH that names one event leaves every other rule as it was. */
 export function mergeEventRules(

@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Save, Undo2 } from "lucide-react";
 import {
   FONT_PAIR_IDS,
+  CONTAINER_WIDTHS,
   FOOTER_LAYOUTS,
   HEADER_LAYOUTS,
   HEX_COLOR,
@@ -44,9 +45,19 @@ const FONT_LABELS: Record<FontPairId, { title: string; text: string }> = {
   serif: { title: "Playfair + Inter", text: "Serif headings. Elegant, editorial." },
 };
 const RADIUS_LABELS = { sharp: "Sharp", soft: "Soft", round: "Round" } as const;
-const HEADER_LABELS = { classic: ["Classic", "Logo left, wide search, department bar."], centered: ["Centered", "Logo centred, links underneath."], compact: ["Compact", "One slim row. More room for products."] } as const;
+const HEADER_LABELS = {
+  classic: ["Classic", "Logo left, wide search, department bar. For shops."],
+  centered: ["Centered", "Logo centred, links underneath."],
+  compact: ["Compact", "One slim row. More room for products."],
+  simple: ["Simple", "Logo, menu links and one button. No search or cart: company sites."],
+} as const;
 const CARD_LABELS = { standard: ["Standard", "Soft shadow around image and details."], minimal: ["Minimal", "No frame; just image, name and price."], bordered: ["Bordered", "Thin outline, flat."] } as const;
-const FOOTER_LABELS = { dark: ["Dark", "Uses the text colour as background."], light: ["Light", "Matches the card colour."] } as const;
+const FOOTER_LABELS = {
+  dark: ["Dark", "Uses the text colour as background."],
+  light: ["Light", "Matches the card colour."],
+  minimal: ["Minimal", "A single row: name, legal links and social icons."],
+} as const;
+const CONTAINER_LABELS = { boxed: ["Boxed", "Content in a centred column. Easy to read."], wide: ["Wide", "Content runs closer to the screen edges."] } as const;
 const SOCIAL_LABELS: Record<string, string> = { instagram: "Instagram", facebook: "Facebook", x: "X (Twitter)", tiktok: "TikTok", youtube: "YouTube", linkedin: "LinkedIn", snapchat: "Snapchat" };
 
 function luminance(hex: string): number {
@@ -239,6 +250,8 @@ export default function AppearancePage() {
             <Field label="Header"><OptionCards label="Header layout" value={draft.layout.header} onChange={(header) => set({ layout: { ...draft.layout, header } })} options={HEADER_LAYOUTS.map((v) => ({ value: v, title: HEADER_LABELS[v][0], text: HEADER_LABELS[v][1] }))} /></Field>
             <Field label="Product cards"><OptionCards label="Product card layout" value={draft.layout.productCard} onChange={(productCard) => set({ layout: { ...draft.layout, productCard } })} options={PRODUCT_CARD_LAYOUTS.map((v) => ({ value: v, title: CARD_LABELS[v][0], text: CARD_LABELS[v][1] }))} /></Field>
             <Field label="Footer"><OptionCards label="Footer layout" value={draft.layout.footer} onChange={(footer) => set({ layout: { ...draft.layout, footer } })} options={FOOTER_LAYOUTS.map((v) => ({ value: v, title: FOOTER_LABELS[v][0], text: FOOTER_LABELS[v][1] }))} /></Field>
+            <Field label="Page width"><OptionCards label="Page width" value={draft.layout.container} onChange={(container) => set({ layout: { ...draft.layout, container } })} options={CONTAINER_WIDTHS.map((v) => ({ value: v, title: CONTAINER_LABELS[v][0], text: CONTAINER_LABELS[v][1] }))} /></Field>
+            <label className="flex items-center gap-2 text-xs font-medium"><input type="checkbox" className="h-4 w-4" checked={draft.layout.stickyHeader} onChange={(e) => set({ layout: { ...draft.layout, stickyHeader: e.target.checked } })} /> Keep the header visible while scrolling</label>
           </Card>
 
           <Card className="space-y-4 p-5">

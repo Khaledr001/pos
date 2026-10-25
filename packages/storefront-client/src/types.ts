@@ -4,9 +4,9 @@
  * services against these, so a change on either side fails the build.
  */
 
-import type { HomeSection, StorefrontNavigation, StorefrontRegion, StorefrontTheme } from '@devsfleet/shared-types';
+import type { HomeSection, PageLayout, PageSection, PublicForm, SiteFeatures, SiteSettings, StorefrontNavigation, StorefrontRegion, StorefrontTheme } from '@devsfleet/shared-types';
 
-export type { HomeSection, HomeSectionType, NavLink, FooterColumn, StorefrontNavigation, StorefrontRegion, StorefrontTheme, RegionZone } from '@devsfleet/shared-types';
+export type { PageSection, PageLayout, PublicForm, FormField, FormSubmission, SiteFeatures, SiteSettings, SiteMode, HomeSection, HomeSectionType, NavLink, FooterColumn, StorefrontNavigation, StorefrontRegion, StorefrontTheme, RegionZone } from '@devsfleet/shared-types';
 
 // ── shared ──
 
@@ -141,7 +141,8 @@ export interface VariantUnit {
   uom: string;
   unitId: string;
   factor: number;
-  price: PriceView;
+  /** Null when the site hides prices (catalogue mode with prices off). */
+  price: PriceView | null;
 }
 
 export interface ProductVariant {
@@ -476,6 +477,20 @@ export interface Page {
   seoDescription: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Enabled sections in order; null = a plain text page rendered from `body`. */
+  sections: PageSection[] | null;
+  layout: PageLayout;
+}
+
+export interface PageListItem {
+  slug: string;
+  title: string;
+  updatedAt: string;
+}
+
+export interface FormSubmitResult {
+  ok: true;
+  message: string;
 }
 
 export interface BlogList {
@@ -515,6 +530,10 @@ export interface StoreInfo {
   region: StorefrontRegion;
   /** Timezone of the shop, e.g. "Asia/Dubai". */
   timezone: string;
+  /** Shop, catalogue or showcase, and the enquiry options for catalogue mode. */
+  site: SiteSettings;
+  /** What the site can do, derived from `site`. Navigation follows it; the API enforces it. */
+  features: SiteFeatures;
 }
 
 // ── back-in-stock alerts ──

@@ -3,9 +3,11 @@ import {
   DEFAULT_HOME_SECTIONS,
   resolveNavigation,
   resolveRegion,
+  resolveSite,
+  resolveSiteFeatures,
   resolveTheme,
 } from "@devsfleet/shared-types";
-import { ApiError, type BrandSummary, type CategoryNode, type HomeData, type StoreInfo } from "@devsfleet/storefront-client";
+import { ApiError, type Branch, type BrandSummary, type CategoryNode, type HomeData, type PublicForm, type StoreInfo } from "@devsfleet/storefront-client";
 import { unstable_rethrow } from "next/navigation";
 import { cache } from "react";
 import { cached, publicApi, tags } from "./api-server";
@@ -38,6 +40,8 @@ const FALLBACK_STORE: StoreInfo = {
   navigation: resolveNavigation(undefined),
   region: resolveRegion(undefined),
   timezone: "UTC",
+  site: resolveSite(undefined),
+  features: resolveSiteFeatures(resolveSite(undefined)),
 };
 
 /**
@@ -45,6 +49,7 @@ const FALLBACK_STORE: StoreInfo = {
  * can be rolled out before or after the API without a window of crashes.
  */
 function withDefaults(raw: Partial<StoreInfo> & Pick<StoreInfo, "name">): StoreInfo {
+  const site = resolveSite(raw.site);
   return {
     ...FALLBACK_STORE,
     ...raw,
@@ -52,6 +57,9 @@ function withDefaults(raw: Partial<StoreInfo> & Pick<StoreInfo, "name">): StoreI
     navigation: resolveNavigation(raw.navigation),
     region: resolveRegion(raw.region),
     timezone: raw.timezone ?? FALLBACK_STORE.timezone,
+    site,
+    // The API decides what the site can do; deriving it here is only for an API that predates site modes.
+    features: raw.features ?? resolveSiteFeatures(site),
   };
 }
 
@@ -73,6 +81,19 @@ export const getHome = cache(async () => {
   const home = await publicApi.get<HomeData>("/content/home", cached([tags.home, tags.catalog], 600));
   return { ...home, sections: home.sections ?? DEFAULT_HOME_SECTIONS.filter((section) => section.enabled) };
 });
+
+/** Branches shown online; deduped between sections on one page. */
+export const getBranches = cache(() =>
+  publicApi.get<Branch[]>("/content/branches", cached([tags.content])).catch(orFallback([] as Branch[])),
+);
+
+/** A form from the form builder, or null when it does not exist or is switched off. */
+export const getForm = cache((slug: string) =>
+  publicApi.get<PublicForm>(`/forms/${encodeURIComponent(slug)}`, cached([tags.content])).catch((error: unknown) => {
+    unstable_rethrow(error);
+    return null;
+  }),
+);
 
 /**
  * Does any shop answer on this hostname? One storefront deployment serves

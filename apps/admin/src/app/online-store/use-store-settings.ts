@@ -62,5 +62,5 @@ export function useStoreSettings() {
     [tokens],
   );
 
-  return { overview, settings: overview?.settings ?? null, loading, saving, error, success, setError, setSuccess, patch };
+  return { overview, settings: overview?.settings ?? null, loading, saving, error, success, setError, setSuccess, patch, reload: load };
 }

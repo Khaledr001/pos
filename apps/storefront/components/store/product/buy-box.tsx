@@ -4,7 +4,7 @@ import type { PriceMap, PriceView, ProductDetail } from "@devsfleet/storefront-c
 import { useQuery } from "@tanstack/react-query";
 import { Store, Truck } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { StockBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FormError } from "@/components/ui/field";
@@ -19,21 +19,13 @@ import { useStoreConfig } from "@/lib/store-config";
 import { SaveToList } from "./save-to-list";
 import { StockAlertForm } from "./stock-alert-form";
 import { TileCalculator } from "./tile-calculator";
-
-const AXIS_LABELS: Record<string, string> = { size: "Size", colour: "Colour", finish: "Finish", capacity: "Capacity", wattage: "Wattage", rating: "Rating", poles: "Poles" };
+import { OptionAxes, useVariantSelection } from "./variant-options";
 
 export function BuyBox({ product }: { product: ProductDetail }) {
   const { currency, region } = useStoreConfig();
   const { data: me } = useMe();
   const { add } = useCartActions();
-  const [selected, setSelected] = useState<Record<string, string>>(() => ({ ...product.variants[0].options }));
-  const variant = useMemo(
-    () =>
-      product.variants.find((v) => product.optionAxes.every((a) => v.options[a.code] === selected[a.code])) ??
-      product.variants.find((v) => product.optionAxes.every((a) => !selected[a.code] || v.options[a.code] === selected[a.code])) ??
-      product.variants[0],
-    [product, selected],
-  );
+  const { selected, variant, choose: pick, available } = useVariantSelection(product);
   const [uom, setUom] = useState(variant.units[0]?.uom ?? variant.baseUom);
   const [qty, setQty] = useState(1);
   const [added, setAdded] = useState<string | null>(null);
@@ -47,7 +39,7 @@ export function BuyBox({ product }: { product: ProductDetail }) {
   });
 
   const unit = variant.units.find((u) => u.uom === uom) ?? variant.units[0];
-  const price: PriceView | undefined = personal?.[variant.sku]?.find((u) => u.uom === unit?.uom)?.price ?? unit?.price;
+  const price: PriceView | undefined = personal?.[variant.sku]?.find((u) => u.uom === unit?.uom)?.price ?? unit?.price ?? undefined;
   const tier = price ? [...price.tiers].reverse().find((t) => t.minQty <= qty) : undefined;
   const unitPrice = tier?.unit ?? price?.unit;
   const unitNet = tier?.unitNet ?? price?.unitNet;
@@ -55,14 +47,9 @@ export function BuyBox({ product }: { product: ProductDetail }) {
   const boxUnit = variant.baseUom === "sqm" ? variant.units.find((u) => u.uom === "box") : undefined;
 
   const choose = (axis: string, value: string) => {
-    setSelected((s) => ({ ...s, [axis]: value }));
+    pick(axis, value);
     setAdded(null);
   };
-
-  const available = (axis: string, value: string) =>
-    product.variants.some(
-      (v) => v.options[axis] === value && product.optionAxes.every((a) => a.code === axis || !selected[a.code] || v.options[a.code] === selected[a.code]),
-    );
 
   const onAdd = async () => {
     setError(null);
@@ -82,34 +69,7 @@ export function BuyBox({ product }: { product: ProductDetail }) {
 
   return (
     <div className="space-y-5">
-      {product.optionAxes.map((axis) => (
-        <fieldset key={axis.code}>
-          <legend className="mb-2 text-sm font-medium">
-            {AXIS_LABELS[axis.code] ?? axis.code}: <span className="text-steel">{selected[axis.code]}</span>
-          </legend>
-          <div className="flex flex-wrap gap-2">
-            {axis.values.map((value) => {
-              const active = selected[axis.code] === value;
-              const possible = available(axis.code, value);
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => choose(axis.code, value)}
-                  className={cn(
-                    "h-10 min-w-12 rounded-[var(--radius-tag)] border px-3 text-[15px]",
-                    active ? "border-ink bg-ink text-white" : "border-galv bg-paper hover:border-steel-light",
-                    !possible && !active && "text-steel-light line-through decoration-steel-light/60",
-                  )}
-                >
-                  {value}
-                </button>
-              );
-            })}
-          </div>
-        </fieldset>
-      ))}
+      <OptionAxes product={product} selected={selected} available={available} onChoose={choose} />
 
       <div className="rounded-[var(--radius-panel)] border border-galv bg-paper p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">

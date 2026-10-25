@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { and, desc, eq, schema, type Transaction } from "@devsfleet/db";
 import type { NotificationEvent, WebOrderStatus } from "@devsfleet/shared-types";
 import { Money } from "@devsfleet/shared-utils";
@@ -8,7 +9,7 @@ import { StorefrontResolver } from "../context/storefront-resolver.service.js";
 import { dedupeKey, decideChannels, isMailbox } from "./channel-rules.js";
 import { sanitizeDisplayName } from "./mail.service.js";
 import { shopLink } from "./email-templates.js";
-import type { NotificationPayload, ShopSnapshot } from "./notification-types.js";
+import type { LeadSnapshot, NotificationPayload, ShopSnapshot } from "./notification-types.js";
 import type { NotificationSubjectKind } from "@devsfleet/db";
 import { whatsappVariables } from "./whatsapp-variables.js";
 
@@ -248,6 +249,74 @@ export class NotificationEnqueueService {
         },
       },
     });
+  }
+
+  // ── leads ────────────────────────────────────────────────────────────────
+
+  /**
+   * A form submission: an email to staff (the form's own addresses, or the
+   * business email when it names none) and, if the form asks for it and the
+   * visitor gave an address, an acknowledgement.
+   *
+   * Email only, and not shopper-configurable: nobody opts a business out of
+   * hearing about a customer. `notifyStaff` is false when a flood of
+   * submissions has already alerted staff enough — the leads are still stored
+   * and sit in the inbox; only the mail is held back.
+   */
+  async enqueueLead(tx: Transaction, leadId: string, options: { notifyStaff: boolean }): Promise<void> {
+    const scope = await this.scope();
+    if (!scope) return;
+    const lead = await tx.query.storefrontLeads.findFirst({ where: (t, { eq: e }) => e(t.id, leadId) });
+    if (!lead) return;
+    const form = lead.formId ? await tx.query.storefrontForms.findFirst({ where: (t, { eq: e }) => e(t.id, lead.formId!) }) : null;
+
+    const shop = this.shop(scope);
+    const settings = scope.settings.notifications;
+    const snapshot: LeadSnapshot = {
+      formName: lead.formName,
+      name: lead.name,
+      email: lead.email,
+      phone: lead.phone,
+      answers: lead.answers,
+      productName: lead.productName,
+      productSku: lead.productSku,
+      sourcePath: lead.sourcePath,
+    };
+    const fromName = sanitizeDisplayName(settings.fromName ?? shop.name, shop.name);
+    const shopReplyTo = [settings.replyTo, scope.tenantSettings.email].find((v) => isMailbox(v)) ?? null;
+    const base = { shop, customerName: lead.name ?? "", fromName, lead: snapshot };
+    const row = (event: "lead_received" | "lead_acknowledged", recipient: string, extra: { replyTo: string | null; status?: "skipped"; reason?: string }) => ({
+      tenantId: scope.tenantId,
+      storefrontId: scope.id,
+      event,
+      channel: "email" as const,
+      recipient,
+      subjectKind: "lead" as const,
+      subjectId: lead.id,
+      subjectLabel: `${lead.formName}${lead.name ? ` — ${lead.name}` : ""}`.slice(0, 255),
+      // Hashed: an address can be 254 characters and the key column is 160.
+      dedupeKey: dedupeKey(event, "email", lead.id, createHash("sha256").update(recipient).digest("hex").slice(0, 16)),
+      status: extra.status ?? ("queued" as const),
+      lastError: extra.reason ?? null,
+      payload: { ...base, event, replyTo: extra.replyTo } as unknown as Record<string, unknown>,
+    });
+
+    const rows: ReturnType<typeof row>[] = [];
+    if (options.notifyStaff) {
+      const configured = (form?.notifyEmails ?? []).filter((e) => isMailbox(e));
+      const recipients = [...new Set((configured.length > 0 ? configured : [scope.tenantSettings.email].filter(isMailbox)).map((e) => e.toLowerCase()))];
+      // Staff reply goes straight to the visitor; the visitor's address was validated as a plain mailbox on the way in.
+      const replyTo = isMailbox(lead.email) ? lead.email : shopReplyTo;
+      if (recipients.length === 0) {
+        rows.push(row("lead_received", "", { replyTo, status: "skipped", reason: "No staff email is set for this form, and the business has no email address." }));
+      }
+      for (const recipient of recipients) rows.push(row("lead_received", recipient, { replyTo }));
+    }
+    if (form?.acknowledge && isMailbox(lead.email)) {
+      rows.push(row("lead_acknowledged", lead.email.toLowerCase(), { replyTo: shopReplyTo }));
+    }
+    if (rows.length === 0) return;
+    await tx.insert(schema.storefrontNotifications).values(rows).onConflictDoNothing();
   }
 
   // ── shared ───────────────────────────────────────────────────────────────

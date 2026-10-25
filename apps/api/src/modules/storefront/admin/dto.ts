@@ -1,6 +1,7 @@
 import {
   BANNER_PLACEMENTS,
   CUSTOMER_TYPES,
+  PAGE_LAYOUTS,
   REGION_PRESETS,
   STOREFRONT_PAGE_KINDS,
   ZONE_CODE,
@@ -11,6 +12,8 @@ import { z } from "zod";
 import { sortSchema } from "../../../common/db/list-query.js";
 import { HeadlessSchema, HomeSectionsSchema, NavigationSchema, RegionSchema, ThemeSchema } from "./appearance.dto.js";
 import { NotificationSettingsSchema } from "./notifications.dto.js";
+import { PageSectionsSchema } from "./sections.dto.js";
+import { SiteSchema } from "./site.dto.js";
 import { wireEnum } from "../wire.js";
 
 const decimal = z
@@ -98,19 +101,36 @@ export type ProductLinksDto = z.infer<typeof ProductLinksSchema>;
 // Content
 // -----------------------------------------------------------------------------
 
-export const PageSchema = z.object({
+/**
+ * Page fields WITHOUT defaults: Zod 4 applies a default even through
+ * `.partial()`, so a PATCH of one field would blank the body and unpublish the
+ * page. The create schema adds the defaults; the update schema never has them.
+ */
+const pageFields = {
   slug,
   title: z.string().trim().min(1).max(255),
-  body: z.string().max(100_000).default(""),
-  kind: z.enum(STOREFRONT_PAGE_KINDS).default("page"),
+  body: z.string().max(100_000),
+  kind: z.enum(STOREFRONT_PAGE_KINDS),
   excerpt: z.string().trim().max(500).nullable().optional(),
   coverImageUrl: z.string().trim().url().max(500).nullable().optional(),
-  isPublished: z.boolean().default(false),
+  isPublished: z.boolean(),
   seoTitle: z.string().trim().max(255).nullable().optional(),
   seoDescription: z.string().trim().max(500).nullable().optional(),
+  /** Null (or absent) = a plain text page rendered from `body`. */
+  sections: PageSectionsSchema.nullable().optional(),
+  layout: z.enum(PAGE_LAYOUTS),
+};
+
+export const PageSchema = z.object({
+  ...pageFields,
+  body: pageFields.body.default(""),
+  kind: pageFields.kind.default("page"),
+  isPublished: pageFields.isPublished.default(false),
+  // No default: the column's own default is 'standard'.
+  layout: pageFields.layout.optional(),
 });
 export type PageDto = z.infer<typeof PageSchema>;
-export const UpdatePageSchema = PageSchema.partial();
+export const UpdatePageSchema = z.object(pageFields).partial();
 export type UpdatePageDto = z.infer<typeof UpdatePageSchema>;
 
 export const BannerSchema = z.object({
@@ -259,6 +279,7 @@ export const UpdateSettingsSchema = z.object({
   region: RegionSchema.optional(),
   headless: HeadlessSchema.optional(),
   notifications: NotificationSettingsSchema.optional(),
+  site: SiteSchema.optional(),
 });
 export type UpdateSettingsDto = z.infer<typeof UpdateSettingsSchema>;
 

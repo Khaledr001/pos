@@ -31,6 +31,11 @@ export class StorefrontContentController {
     return this.content.branches();
   }
 
+  @Get("pages")
+  pages() {
+    return this.content.pages();
+  }
+
   @Get("pages/:slug")
   page(@Param("slug") slug: string) {
     return this.content.page(slug);

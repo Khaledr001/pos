@@ -1,18 +1,5 @@
-import type { BadgeIcon, HomeSectionSettings } from "@devsfleet/shared-types";
-import { BadgeCheck, Clock, CreditCard, Headset, Leaf, Package, RefreshCw, ShieldCheck, Star, Truck, type LucideIcon } from "lucide-react";
-
-const ICONS: Record<BadgeIcon, LucideIcon> = {
-  truck: Truck,
-  shield: ShieldCheck,
-  "badge-check": BadgeCheck,
-  headset: Headset,
-  refresh: RefreshCw,
-  "credit-card": CreditCard,
-  clock: Clock,
-  package: Package,
-  star: Star,
-  leaf: Leaf,
-};
+import type { HomeSectionSettings } from "@devsfleet/shared-types";
+import { badgeIcon } from "./icons";
 
 export function TrustBadges({ settings }: { settings: HomeSectionSettings["trust_badges"] }) {
   const items = (settings.items ?? []).filter((i) => i.title.trim());
@@ -21,7 +8,7 @@ export function TrustBadges({ settings }: { settings: HomeSectionSettings["trust
     <section aria-label="Why buy here" className="border-b border-galv bg-paper">
       <ul className="mx-auto grid max-w-7xl grid-cols-2 gap-x-6 gap-y-4 px-4 py-5 lg:grid-cols-4">
         {items.map((item) => {
-          const Icon = ICONS[item.icon] ?? BadgeCheck;
+          const Icon = badgeIcon(item.icon);
           return (
             <li key={`${item.icon}-${item.title}`} className="flex items-center gap-3">
               <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-pipe-tint text-pipe">

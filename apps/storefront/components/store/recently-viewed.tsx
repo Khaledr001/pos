@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { PriceOnRequest } from "@/components/ui/price-on-request";
 import { ProductImage } from "@/components/ui/product-image";
 import { useRecentlyViewed } from "@/lib/hooks/recently-viewed";
 
@@ -25,7 +26,7 @@ export function RecentlyViewed({ excludeSlug, className }: { excludeSlug?: strin
                     {p.name}
                   </Link>
                 </h3>
-                <p className="mt-auto pt-1 font-cond text-lg font-bold">{p.price ?? <span className="font-sans text-sm font-normal text-steel">Price on request</span>}</p>
+                <p className="mt-auto pt-1 font-cond text-lg font-bold">{p.price ?? <PriceOnRequest className="font-sans text-sm font-normal text-steel" />}</p>
               </div>
             </article>
           </li>

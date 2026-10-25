@@ -52,9 +52,13 @@ import {
   Receipt,
   Percent,
   ListRestart,
+  Shapes,
+  ClipboardList,
+  Inbox,
 } from "lucide-react";
 import { hasPermission, type Permission } from "@devsfleet/shared-types";
 import { useAuth } from "@/lib/auth-context";
+import { isStoreScreenVisible, useSiteMode } from "@/app/online-store/site-mode";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -180,10 +184,13 @@ const NAV_SECTIONS: NavSection[] = [
         children: [
           { label: "Online Orders", href: "/online-store/orders", icon: ShoppingCart, permission: "order:read" },
           { label: "Website Listings", href: "/online-store/listings", icon: Package, permission: "storefront:read" },
+          { label: "Site Type", href: "/online-store/site", icon: Shapes, permission: "storefront:read" },
           { label: "Pages & Banners", href: "/online-store/content", icon: FileText, permission: "storefront:read" },
           { label: "Appearance", href: "/online-store/appearance", icon: Palette, permission: "storefront:read" },
           { label: "Home Page", href: "/online-store/home", icon: LayoutTemplate, permission: "storefront:read" },
           { label: "Navigation", href: "/online-store/navigation", icon: Menu, permission: "storefront:read" },
+          { label: "Forms", href: "/online-store/forms", icon: ClipboardList, permission: "storefront:read" },
+          { label: "Leads", href: "/online-store/leads", icon: Inbox, permission: "storefront:read" },
           { label: "Notifications", href: "/online-store/notifications", icon: Mail, permission: "storefront:read" },
           { label: "Promo Codes", href: "/online-store/coupons", icon: TicketPercent, permission: "storefront:read" },
           { label: "Quotes", href: "/online-store/quotes", icon: FileSignature, permission: "order:read" },
@@ -328,6 +335,9 @@ export function Sidebar({
   const isRail = collapsed && !mobileOpen;
 
   const permissions = (user?.permissions ?? []) as Permission[];
+  // A catalogue or company site has no orders, promo codes or quotes to manage.
+  // Unknown (still loading) shows everything, so the menu never flickers.
+  const siteMode = useSiteMode(hasPermission(permissions, "storefront:read"));
 
   // Filter items by user permissions and platform operator status
   const visibleSections = NAV_SECTIONS.filter(
@@ -345,7 +355,9 @@ export function Sidebar({
           // If item has children, filter children by permission
           if (item.children) {
             const visibleChildren = item.children.filter(
-              (c) => !c.permission || hasPermission(permissions, c.permission),
+              (c) =>
+                (!c.permission || hasPermission(permissions, c.permission)) &&
+                (!c.href.startsWith("/online-store/") || isStoreScreenVisible(c.href, siteMode)),
             );
             if (visibleChildren.length === 0) return null;
             return { ...item, children: visibleChildren };

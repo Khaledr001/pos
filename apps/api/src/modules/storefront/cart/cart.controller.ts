@@ -3,7 +3,7 @@ import { ApiTags } from "@nestjs/swagger";
 import type { Request, Response } from "express";
 import { zodPipe } from "../../../common/pipes/zod-validation.pipe.js";
 import { SessionCookies } from "../context/session-cookies.service.js";
-import { StorefrontRoute } from "../context/storefront.guard.js";
+import { RequireSiteFeature, StorefrontRoute } from "../context/storefront.guard.js";
 import { CartService } from "./cart.service.js";
 import {
   AddCartItemSchema,
@@ -16,6 +16,7 @@ import {
 
 @ApiTags("storefront")
 @StorefrontRoute()
+@RequireSiteFeature("cart")
 @Controller("storefront/cart")
 export class CartController {
   constructor(

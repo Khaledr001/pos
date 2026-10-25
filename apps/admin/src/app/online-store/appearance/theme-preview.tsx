@@ -47,14 +47,22 @@ export function ThemePreview({ theme, name }: { theme: StorefrontTheme; name: st
     <div style={{ flex: 1, height: 26, border: "1px solid var(--p-line)", borderRadius: rTag, background: "var(--p-bg)", fontSize: 10, color: "var(--p-muted)", padding: "5px 8px" }}>Search products</div>
   );
   const dark = theme.layout.footer === "dark";
+  const pad = theme.layout.container === "wide" ? 6 : 12;
+  const simple = theme.layout.header === "simple";
 
   return (
     <div aria-label="Preview of your shop" role="img" style={{ ...vars, background: "var(--p-bg)", color: "var(--p-ink)", border: "1px solid var(--p-line)", borderRadius: rPanel, overflow: "hidden", fontSize: 12 }}>
       {theme.announcement.enabled && theme.announcement.text && (
         <div style={{ background: "var(--p-ink)", color: "#fff", fontSize: 10, textAlign: "center", padding: "4px 8px" }}>{theme.announcement.text}</div>
       )}
-      <div style={{ background: "var(--p-surface)", borderBottom: "1px solid var(--p-line)", padding: theme.layout.header === "compact" ? "6px 12px" : "10px 12px" }}>
-        {theme.layout.header === "centered" ? (
+      <div style={{ background: "var(--p-surface)", borderBottom: "1px solid var(--p-line)", padding: theme.layout.header === "compact" ? `6px ${pad}px` : `10px ${pad}px` }}>
+        {simple ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            {logo}
+            <div style={{ display: "flex", gap: 12, fontSize: 10, color: "var(--p-muted)", marginLeft: "auto" }}><span>About</span><span>Services</span><span>Projects</span><span>Contact</span></div>
+            <span style={button(true)}>Get a quote</span>
+          </div>
+        ) : theme.layout.header === "centered" ? (
           <div style={{ display: "grid", gap: 6, justifyItems: "center" }}>
             {logo}
             <div style={{ display: "flex", gap: 12, fontSize: 10, color: "var(--p-muted)" }}><span>Shop</span><span>Brands</span><span>Guides</span><span>Contact</span></div>
@@ -72,8 +80,8 @@ export function ThemePreview({ theme, name }: { theme: StorefrontTheme; name: st
         <div style={{ fontSize: 10, opacity: 0.75, margin: "4px 0 10px" }}>Delivered to your door or ready for pickup.</div>
         <span style={{ ...button(true), background: "var(--p-highlight)", color: c.ink, borderColor: "var(--p-highlight)", display: "inline-block" }}>Shop now</span>
       </div>
-      <div style={{ padding: 12 }}>
-        <div style={{ ...heading, fontSize: 13, marginBottom: 8 }}>Best sellers</div>
+      <div style={{ padding: pad }}>
+        <div style={{ ...heading, fontSize: 13, marginBottom: 8 }}>{simple ? "Our services" : "Best sellers"}</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
           {[0, 1, 2].map((i) => (
             <div
@@ -94,15 +102,22 @@ export function ThemePreview({ theme, name }: { theme: StorefrontTheme; name: st
           ))}
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-          <span style={button(true)}>Add to cart</span>
-          <span style={button(false)}>Request a quote</span>
-          <span style={{ fontSize: 9, alignSelf: "center", padding: "2px 6px", borderRadius: rTag, background: mix(c.highlight, "white", 18), color: c.ink }}>Trade price</span>
+          <span style={button(true)}>{simple ? "Get in touch" : "Add to cart"}</span>
+          <span style={button(false)}>{simple ? "Our work" : "Request a quote"}</span>
+          {!simple && <span style={{ fontSize: 9, alignSelf: "center", padding: "2px 6px", borderRadius: rTag, background: mix(c.highlight, "white", 18), color: c.ink }}>Trade price</span>}
         </div>
       </div>
-      <div style={{ background: dark ? "var(--p-ink)" : "var(--p-surface)", color: dark ? "rgb(255 255 255 / 0.8)" : "var(--p-muted)", borderTop: "1px solid var(--p-line)", padding: "10px 12px", fontSize: 10, display: "flex", justifyContent: "space-between" }}>
-        <span>© {name || "Your shop"}</span>
-        <span>Privacy · Terms</span>
-      </div>
+      {theme.layout.footer === "minimal" ? (
+        <div style={{ background: "var(--p-surface)", color: "var(--p-muted)", borderTop: "1px solid var(--p-line)", padding: `8px ${pad}px`, fontSize: 10, display: "flex", justifyContent: "space-between" }}>
+          <span>© {name || "Your shop"} · Privacy · Terms</span>
+          <span>◎ ◎ ◎</span>
+        </div>
+      ) : (
+        <div style={{ background: dark ? "var(--p-ink)" : "var(--p-surface)", color: dark ? "rgb(255 255 255 / 0.8)" : "var(--p-muted)", borderTop: "1px solid var(--p-line)", padding: `10px ${pad}px`, fontSize: 10, display: "flex", justifyContent: "space-between" }}>
+          <span>© {name || "Your shop"}</span>
+          <span>Privacy · Terms</span>
+        </div>
+      )}
     </div>
   );
 }

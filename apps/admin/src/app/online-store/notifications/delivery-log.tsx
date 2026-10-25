@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { RefreshCw, RotateCw } from "lucide-react";
 import {
   NOTIFICATION_CHANNELS,
-  NOTIFICATION_EVENT_LABELS,
+  ANY_EVENT_LABELS,
   NOTIFICATION_STATUSES,
   type NotificationLogPage,
   type NotificationLogRow,
@@ -119,7 +119,7 @@ export function DeliveryLog({ auth, mayWrite }: { auth: { accessToken: string | 
             {items.map((r) => (
               <tr key={r.id} className="border-b border-border/60 text-xs last:border-0">
                 <td className="whitespace-nowrap px-4 py-2.5">{new Date(r.sentAt ?? r.createdAt).toLocaleString()}</td>
-                <td className="px-4 py-2.5">{NOTIFICATION_EVENT_LABELS[r.event] ?? r.event}</td>
+                <td className="px-4 py-2.5">{ANY_EVENT_LABELS[r.event] ?? r.event}</td>
                 <td className="px-4 py-2.5 capitalize">{r.channel}</td>
                 <td className="px-4 py-2.5 font-mono">{maskRecipient(r.recipient)}</td>
                 <td className="px-4 py-2.5">{r.subject}</td>

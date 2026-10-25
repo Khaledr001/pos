@@ -1,4 +1,4 @@
-import type { NotificationEvent } from "@devsfleet/shared-types";
+import type { AnyNotificationEvent } from "@devsfleet/shared-types";
 
 /**
  * What an outbox row carries. A snapshot taken when the message was queued
@@ -50,6 +50,19 @@ export interface StockAlertSnapshot {
   unsubscribeUrl: string;
 }
 
+/** A form submission, as it was when it arrived (rule 5). */
+export interface LeadSnapshot {
+  formName: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  answers: { label: string; value: string }[];
+  productName: string | null;
+  productSku: string | null;
+  /** The page the visitor was on, a site path. */
+  sourcePath: string | null;
+}
+
 export interface WhatsappSnapshot {
   template: string;
   language: string;
@@ -58,7 +71,7 @@ export interface WhatsappSnapshot {
 }
 
 export interface NotificationPayload {
-  event: NotificationEvent;
+  event: AnyNotificationEvent;
   shop: ShopSnapshot;
   customerName: string;
   /** Display name for the From header, already sanitised. */
@@ -67,5 +80,6 @@ export interface NotificationPayload {
   order?: OrderSnapshot;
   quote?: QuoteSnapshot;
   stockAlert?: StockAlertSnapshot;
+  lead?: LeadSnapshot;
   whatsapp?: WhatsappSnapshot;
 }

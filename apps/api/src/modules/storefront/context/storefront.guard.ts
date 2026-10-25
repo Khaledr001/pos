@@ -12,10 +12,13 @@ import type { Request } from "express";
 import { RequestContext } from "../../../common/context/request-context.js";
 import { Public } from "../../../common/decorators/index.js";
 import { readCookie, SHOPPER_ACCESS_COOKIE, storefrontHost } from "./cookies.js";
+import { assertSiteFeature, type SiteFeatureKey } from "./site-features.js";
 import { ShopperTokens } from "./shopper-tokens.service.js";
 import { StorefrontResolver } from "./storefront-resolver.service.js";
 
 const REQUIRE_SHOPPER_KEY = "storefront:requireShopper";
+/** Exported for the spec that pins which routes need which feature. */
+export const REQUIRE_FEATURE_KEY = "storefront:requireFeature";
 
 /**
  * Puts a storefront request into its tenant.
@@ -46,6 +49,12 @@ export class StorefrontGuard implements CanActivate {
     }
     RequestContext.setStorefront(storefront);
 
+    // Before anything about the shopper: a feature the site does not run is
+    // refused for everyone, signed in or not. Class-level and handler-level
+    // requirements add up.
+    const features = this.reflector.getAllAndMerge<SiteFeatureKey[]>(REQUIRE_FEATURE_KEY, [context.getHandler(), context.getClass()]);
+    if (features?.length) assertSiteFeature(...features);
+
     const token = readCookie(request, SHOPPER_ACCESS_COOKIE);
     const shopper = token ? await this.tokens.verifyAccess(token) : null;
     if (shopper && shopper.tenantId === storefront.tenantId) {
@@ -71,6 +80,13 @@ export class StorefrontGuard implements CanActivate {
  * runs under RLS through `db.run()`.
  */
 export const StorefrontRoute = () => applyDecorators(Public(), UseGuards(StorefrontGuard));
+
+/**
+ * The route belongs to a part of the platform the site may not run
+ * (`cart`, `checkout`, `accounts`, `products`, …). Enforced by the guard, so a
+ * hidden menu item in the storefront is never the only thing stopping a request.
+ */
+export const RequireSiteFeature = (...features: SiteFeatureKey[]) => SetMetadata(REQUIRE_FEATURE_KEY, features);
 
 /** The route needs a signed-in shopper. */
 export const RequireShopper = () => SetMetadata(REQUIRE_SHOPPER_KEY, true);

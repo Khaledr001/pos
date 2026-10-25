@@ -50,6 +50,10 @@
     line-height: 1.1;
     letter-spacing: 0.005em;
   }
+  html {
+    /* Anchor links (#features) land below the sticky header, not under it. */
+    scroll-padding-top: 5rem;
+  }
   :focus-visible {
     outline: 2px solid var(--color-pipe);
     outline-offset: 2px;
@@ -215,4 +219,95 @@
   [data-card="bordered"] .product-card:hover {
     transform: none;
   }
+}
+
+/*
+ * Page sections (home page and custom pages). A section styled with a
+ * background or spacing is wrapped in a "band"; the band publishes a few
+ * custom properties that new sections read, so one component looks right on a
+ * light, tinted, accent or dark background. Unlayered on purpose, like the
+ * product-card variants above: it must beat the layered utilities.
+ */
+:root {
+  --sec-fg: var(--color-ink);
+  --sec-muted: var(--color-steel);
+  --sec-line: var(--color-galv);
+  --sec-card: var(--color-paper);
+  --sec-accent: var(--color-pipe);
+}
+.section-band[data-bg="surface"] {
+  background: var(--color-paper);
+  --sec-card: var(--color-sheet);
+}
+.section-band[data-bg="tint"] {
+  background: var(--color-pipe-tint);
+  --sec-line: color-mix(in srgb, var(--color-pipe) 22%, white);
+}
+.section-band[data-bg="accent"],
+.section-band[data-bg="dark"] {
+  color: #fff;
+  --sec-fg: #fff;
+  --sec-muted: rgb(255 255 255 / 0.8);
+  --sec-line: rgb(255 255 255 / 0.22);
+  --sec-card: rgb(255 255 255 / 0.08);
+}
+.section-band[data-bg="accent"] {
+  background: var(--color-pipe);
+  --sec-accent: #fff;
+}
+.section-band[data-bg="dark"] {
+  background: var(--color-ink);
+  --sec-accent: var(--color-brass);
+}
+.section-band[data-bg="accent"] .btn-primary {
+  background: #fff;
+  color: var(--color-pipe-dark);
+}
+.section-band[data-bg="dark"] .btn-primary {
+  background: var(--color-brass);
+  color: var(--color-ink);
+}
+.section-band[data-bg="accent"] .btn-secondary,
+.section-band[data-bg="dark"] .btn-secondary {
+  background: transparent;
+  color: #fff;
+  border-color: rgb(255 255 255 / 0.5);
+}
+/* A band supplies the vertical spacing, so a section's own top margin would double it. */
+.section-band[data-banded="true"] section {
+  margin-top: 0;
+}
+.section-band[data-width="full"] > .mx-auto {
+  max-width: none;
+  padding-inline: 0;
+}
+.section-band[data-align="center"] {
+  text-align: center;
+}
+.sec-fg {
+  color: var(--sec-fg);
+}
+.sec-muted {
+  color: var(--sec-muted);
+}
+.sec-accent {
+  color: var(--sec-accent);
+}
+.sec-card {
+  background: var(--sec-card);
+  border: 1px solid var(--sec-line);
+  border-radius: var(--radius-panel);
+}
+.sec-icon {
+  background: color-mix(in srgb, var(--sec-accent) 16%, transparent);
+  color: var(--sec-accent);
+}
+.sec-rule {
+  border-color: var(--sec-line);
+}
+.section-band[data-bg="dark"] .cta-panel {
+  background-color: var(--color-pipe);
+}
+.section-band[data-bg="accent"] .cta-panel {
+  background-color: var(--color-ink);
 }

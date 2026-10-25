@@ -136,6 +136,8 @@ export const ERROR_CODES = {
   // online store
   /** No active storefront answers on this host, or the tenant's plan has none. */
   STOREFRONT_NOT_FOUND: "STOREFRONT_NOT_FOUND",
+  /** The site's mode does not offer this (a catalogue site has no cart; a company site has no products). */
+  STORE_FEATURE_DISABLED: "STORE_FEATURE_DISABLED",
   /** The route needs a signed-in shopper. Distinct from a staff 401. */
   SHOPPER_AUTH_REQUIRED: "SHOPPER_AUTH_REQUIRED",
   /** A price moved between the cart and checkout. The shopper must see it before paying. */

@@ -162,6 +162,7 @@ checks pass.
 - [x] Cache revalidation from `updated_at`; per-shopper rate limiting behind the storefront
 - [x] One storefront deployment for every tenant; on-demand TLS for shop domains
 - [x] Shopper notifications (order confirmation, dispatch, ready for pickup, delivered, cancelled, refunded, trade quote ready, back-in-stock) by email and WhatsApp template — outbox + sweep, see STOREFRONT.md
+- [x] Site types — shop / catalogue + enquiry / company site / one-page landing, per-site mode switch with API-enforced features and price hiding, section builder on every page, form builder and leads inbox, templates (see STOREFRONT.md)
 - [ ] Tax invoice download in the shopper's account
 - [ ] Fixed-amount coupons (needs a line discount amount on sales)
 - [ ] Courier API integration; Tabby / Tamara

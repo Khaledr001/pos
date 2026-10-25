@@ -1,4 +1,4 @@
-import { DEFAULT_STOREFRONT_SETTINGS, resolveStorefrontSettings, type StorefrontSettings } from "@devsfleet/shared-types";
+import { DEFAULT_STOREFRONT_SETTINGS, resolveSiteFeatures, resolveStorefrontSettings, type StorefrontSettings } from "@devsfleet/shared-types";
 import { describe, expect, it } from "vitest";
 import { RequestContext } from "../../../common/context/request-context.js";
 import type { TenantDatabase } from "../../../database/tenant-database.service.js";
@@ -10,7 +10,7 @@ import type { UpdateSettingsDto } from "./dto.js";
 const BRANCH = "0b1a2c3d-0000-4000-8000-000000000001";
 
 /** The service over a fake transaction that records what was written to `storefronts.settings`. */
-function setup(stored: Partial<StorefrontSettings> = {}, planId = "pro") {
+function setup(stored: Partial<StorefrontSettings> = {}, planId = "pro", forms: string[] = []) {
   const writes: { settings: StorefrontSettings }[] = [];
   // A delivery line already exists, so update() never has to create one.
   let settings: unknown = { checkout: { ...DEFAULT_STOREFRONT_SETTINGS.checkout, deliveryVariantId: "variant-1" }, ...stored };
@@ -21,6 +21,7 @@ function setup(stored: Partial<StorefrontSettings> = {}, planId = "pro") {
       storefrontDomains: { findMany: async () => [] },
       storefrontPaymentAccounts: { findFirst: async () => undefined },
       branches: { findFirst: async () => ({ id: BRANCH }) },
+      storefrontForms: { findFirst: async () => (forms.length ? { id: "f1" } : undefined) },
     },
     update: () => ({
       set: (values: { settings: StorefrontSettings }) => ({
@@ -115,5 +116,54 @@ describe("SettingsAdminService.update — headless", () => {
     const { update, latest } = setup({ headless: { enabled: true, allowedOrigins: ["https://a.com"] } }, "trial");
     await update({ headless: { enabled: false } });
     expect(latest().headless).toEqual({ enabled: false, allowedOrigins: ["https://a.com"] });
+  });
+});
+
+
+describe("SettingsAdminService.update — site", () => {
+  it("merges the site block one level deep and keeps the rest", async () => {
+    const { update, latest } = setup({ site: { ...DEFAULT_STOREFRONT_SETTINGS.site, headerCta: { label: "Hi", href: "/pages/contact" } } });
+    await update({ site: { showPrices: false, enquiry: { call: true } } });
+    expect(latest().site).toMatchObject({ mode: "shop", showPrices: false, enquiry: { call: true, form: true, whatsapp: true }, headerCta: { label: "Hi", href: "/pages/contact" } });
+  });
+
+  it("removes the header button when told null, and leaves it when not mentioned", async () => {
+    const { update, latest } = setup({ site: { ...DEFAULT_STOREFRONT_SETTINGS.site, headerCta: { label: "Hi", href: "/pages/contact" } } });
+    await update({ site: { mode: "showcase" } });
+    expect(latest().site.headerCta).not.toBeNull();
+    await update({ site: { headerCta: null } });
+    expect(latest().site.headerCta).toBeNull();
+  });
+
+  it("needs an enquiry route and an existing form for a catalogue", async () => {
+    const none = setup();
+    await expect(none.update({ site: { mode: "catalogue", enquiry: { form: false, whatsapp: false, call: false } } })).rejects.toThrow(/at least one way to enquire/);
+    await expect(none.update({ site: { mode: "catalogue" } })).rejects.toThrow(/does not exist or is switched off/);
+    expect(none.writes).toHaveLength(0);
+
+    const withForm = setup({}, "pro", ["product-enquiry"]);
+    await withForm.update({ site: { mode: "catalogue" } });
+    expect(withForm.latest().site.mode).toBe("catalogue");
+
+    const whatsappOnly = setup();
+    await whatsappOnly.update({ site: { mode: "catalogue", enquiry: { form: false, whatsapp: true } } });
+    expect(whatsappOnly.latest().site.mode).toBe("catalogue");
+  });
+
+  it("does not ask a shop or a company site for an enquiry form, nor re-check on an unrelated save", async () => {
+    const shop = setup();
+    await shop.update({ site: { mode: "showcase" } });
+    expect(shop.latest().site.mode).toBe("showcase");
+    const stale = setup({ site: { ...DEFAULT_STOREFRONT_SETTINGS.site, mode: "catalogue" } });
+    await stale.update({ theme: { font: "inter" } });
+    expect(stale.latest().theme.font).toBe("inter");
+  });
+});
+
+describe("a store saved before sites had a mode", () => {
+  it("resolves to a shop with every commerce feature on", () => {
+    const old = resolveStorefrontSettings({ tagline: "Hello", homeSections: undefined } as never);
+    expect(old.site).toMatchObject({ mode: "shop", template: "shop", showPrices: true });
+    expect(resolveSiteFeatures(old.site)).toMatchObject({ products: true, prices: true, cart: true, checkout: true, accounts: true, tracking: true, stockAlerts: true, search: true, enquiries: false });
   });
 });

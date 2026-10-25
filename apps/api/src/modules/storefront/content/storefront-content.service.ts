@@ -1,5 +1,11 @@
 import { sql, type Transaction } from "@devsfleet/db";
-import { HOME_SECTION_TYPES } from "@devsfleet/shared-types";
+import {
+  COMMERCE_SECTION_TYPES,
+  HOME_SECTION_TYPES,
+  resolveSiteFeatures,
+  type HomeSection,
+  type SiteFeatures,
+} from "@devsfleet/shared-types";
 import { AppError, ERROR_CODES, Money } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
 import { RequestContext } from "../../../common/context/request-context.js";
@@ -8,6 +14,18 @@ import { StorefrontCatalogService } from "../catalog/storefront-catalog.service.
 
 /** Enough for the largest product-row section (limit 12); each section slices what it shows. */
 const HOME_CARDS = 12;
+
+/**
+ * The sections a visitor may be shown. A type this build does not know (a newer
+ * admin saved it) is skipped rather than breaking the page; a site with no
+ * products (showcase) never renders the sections that need them, even if a
+ * template or an earlier mode left them in the list.
+ */
+export function visibleSections(sections: readonly HomeSection[] | null | undefined, features: SiteFeatures): HomeSection[] {
+  const known = new Set<string>(HOME_SECTION_TYPES);
+  const commerce = new Set<string>(COMMERCE_SECTION_TYPES);
+  return (sections ?? []).filter((s) => s.enabled && known.has(s.type) && (features.products || !commerce.has(s.type)));
+}
 
 @Injectable()
 export class StorefrontContentService {
@@ -18,22 +36,25 @@ export class StorefrontContentService {
 
   async home() {
     const { settings } = RequestContext.requireStorefront();
-    // A section type this build does not know (a newer admin saved it) is
-    // skipped rather than breaking the whole page.
-    const known = new Set<string>(HOME_SECTION_TYPES);
-    const sections = settings.homeSections.filter((s) => s.enabled && known.has(s.type));
+    const features = resolveSiteFeatures(settings.site);
+    const sections = visibleSections(settings.homeSections, features);
     return this.db.run(async (tx) => {
+      // A site with no products runs no catalogue queries at all.
       const [banners, categories, brands, bestSellers, newArrivals] = await Promise.all([
         this.activeBanners(tx),
-        this.catalog.categoryTreeIn(tx),
-        tx.query.brands.findMany({
-          where: (t, { and: a, eq: e, isNull: n }) => a(e(t.isActive, true), e(t.isFeatured, true), n(t.deletedAt)),
-          columns: { slug: true, name: true, logoUrl: true },
-          orderBy: (t, { asc }) => asc(t.name),
-          limit: 12,
-        }),
-        this.bestSellers(tx),
-        this.catalog.cardsWhere(tx, sql`true`, sql`product_listings.published_at DESC NULLS LAST, products.created_at DESC`, HOME_CARDS),
+        features.products ? this.catalog.categoryTreeIn(tx) : [],
+        features.products
+          ? tx.query.brands.findMany({
+              where: (t, { and: a, eq: e, isNull: n }) => a(e(t.isActive, true), e(t.isFeatured, true), n(t.deletedAt)),
+              columns: { slug: true, name: true, logoUrl: true },
+              orderBy: (t, { asc }) => asc(t.name),
+              limit: 12,
+            })
+          : [],
+        features.products ? this.bestSellers(tx) : [],
+        features.products
+          ? this.catalog.cardsWhere(tx, sql`true`, sql`product_listings.published_at DESC NULLS LAST, products.created_at DESC`, HOME_CARDS)
+          : [],
       ]);
 
       return {
@@ -55,6 +76,8 @@ export class StorefrontContentService {
   }
 
   async page(slug: string) {
+    const { settings } = RequestContext.requireStorefront();
+    const features = resolveSiteFeatures(settings.site);
     return this.db.run(async (tx) => {
       const page = await tx.query.storefrontPages.findFirst({
         where: (t, { and: a, eq: e }) => a(e(t.slug, slug), e(t.isPublished, true)),
@@ -73,8 +96,24 @@ export class StorefrontContentService {
         seoTitle: page.seoTitle,
         seoDescription: page.seoDescription,
         createdAt: page.createdAt,
+        // null = a plain text page; a page with sections is rendered from them.
+        sections: page.sections ? visibleSections(page.sections, features) : null,
+        layout: page.layout,
         updatedAt: page.updatedAt,
       };
+    });
+  }
+
+  /** Published content pages, for the sitemap. Blog guides are listed by `blog()`. */
+  async pages() {
+    return this.db.run(async (tx) => {
+      const rows = await tx.query.storefrontPages.findMany({
+        where: (t, { and: a, eq: e }) => a(e(t.kind, "page"), e(t.isPublished, true)),
+        columns: { slug: true, title: true, updatedAt: true },
+        orderBy: (t, { asc }) => asc(t.slug),
+        limit: 500,
+      });
+      return rows;
     });
   }
 
@@ -143,6 +182,9 @@ export class StorefrontContentService {
       theme: settings.theme,
       navigation: settings.navigation,
       region: settings.region,
+      site: settings.site,
+      // Derived here once so the storefront never re-implements the mode rules; the API enforces the same flags.
+      features: resolveSiteFeatures(settings.site),
       cod: {
         enabled: settings.checkout.cod.enabled,
         max: Money.toDecimalString(codMax, 2),

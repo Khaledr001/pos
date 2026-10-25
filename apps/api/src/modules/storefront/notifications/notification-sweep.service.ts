@@ -1,5 +1,5 @@
 import { schema, sql } from "@devsfleet/db";
-import type { NotificationChannel, NotificationEvent } from "@devsfleet/shared-types";
+import type { AnyNotificationEvent, NotificationChannel } from "@devsfleet/shared-types";
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { RequestContext } from "../../../common/context/request-context.js";
@@ -18,7 +18,7 @@ const BATCH_PER_TENANT = 25;
 
 type ClaimedRow = {
   id: string;
-  event: NotificationEvent;
+  event: AnyNotificationEvent;
   channel: NotificationChannel;
   recipient: string;
   subject_kind: string;

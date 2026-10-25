@@ -3,7 +3,7 @@ import { ApiTags } from "@nestjs/swagger";
 import type { Response } from "express";
 import { Throttle } from "@nestjs/throttler";
 import { zodPipe } from "../../../common/pipes/zod-validation.pipe.js";
-import { StorefrontRoute } from "../context/storefront.guard.js";
+import { RequireSiteFeature, StorefrontRoute } from "../context/storefront.guard.js";
 import { SubscribeStockAlertSchema, type SubscribeStockAlertDto } from "./dto.js";
 import { StockAlertsService } from "./stock-alerts.service.js";
 import { UNSUBSCRIBE_PAGE_HEADERS } from "./unsubscribe-page.js";
@@ -14,8 +14,12 @@ import { UNSUBSCRIBE_PAGE_HEADERS } from "./unsubscribe-page.js";
 export class StockAlertsController {
   constructor(private readonly alerts: StockAlertsService) {}
 
-  /** Public: a guest has no account to hold this. The throttle is what stands between it and a mail-bomb. */
+  /**
+   * Public: a guest has no account to hold this. The throttle is what stands between it and a mail-bomb.
+   * Only subscribing needs the feature: unsubscribe links already sent must keep working after a shop changes mode.
+   */
   @Post()
+  @RequireSiteFeature("stockAlerts")
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   subscribe(@Body(zodPipe(SubscribeStockAlertSchema)) dto: SubscribeStockAlertDto) {

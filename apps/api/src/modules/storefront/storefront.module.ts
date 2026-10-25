@@ -3,6 +3,12 @@ import { OrdersModule } from "../orders/orders.module.js";
 import { PricingModule } from "../pricing/pricing.module.js";
 import { AccountController } from "./account/account.controller.js";
 import { ContentAdminService } from "./admin/content-admin.service.js";
+import { FormsAdminService } from "./admin/forms-admin.service.js";
+import { LeadsAdminService } from "./admin/leads-admin.service.js";
+import { SiteAdminService } from "./admin/site-admin.service.js";
+import { FormsAdminController, LeadsAdminController, SiteAdminController } from "./admin/site-forms-leads.controller.js";
+import { FormsController } from "./forms/forms.controller.js";
+import { FormsService } from "./forms/forms.service.js";
 import { ListingsAdminService } from "./admin/listings-admin.service.js";
 import { OrderDeskService } from "./admin/order-desk.service.js";
 import { SettingsAdminService } from "./admin/settings-admin.service.js";
@@ -90,6 +96,11 @@ import { StockAlertsService } from "./stock-alerts/stock-alerts.service.js";
     QuotesAdminController,
     StockAlertsAdminController,
     NotificationsAdminController,
+    FormsAdminController,
+    LeadsAdminController,
+    SiteAdminController,
+    // Public: render a form, take a submission.
+    FormsController,
   ],
   providers: [
     StorefrontResolver,
@@ -122,6 +133,10 @@ import { StockAlertsService } from "./stock-alerts/stock-alerts.service.js";
     NotificationEnqueueService,
     NotificationSweepService,
     NotificationsAdminService,
+    FormsService,
+    FormsAdminService,
+    LeadsAdminService,
+    SiteAdminService,
   ],
   exports: [StorefrontResolver, WebOrdersService],
 })

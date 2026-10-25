@@ -9,7 +9,7 @@ import { cn } from "@/lib/cn";
 import { activeFilterCount, type ListingQuery, toggle, toSearch } from "@/lib/listing";
 import { ProductGrid } from "./product-card";
 import { SortSelect } from "./sort-select";
-import { getFormat } from "@/lib/data";
+import { getFormat, getStore } from "@/lib/data";
 import { displayName } from "@/lib/format";
 
 import { Breadcrumbs } from "./breadcrumbs";
@@ -40,7 +40,7 @@ function FilterLink({ href, active, children, count }: { href: string; active: b
 }
 
 async function Filters({ data, query, path }: { data: ProductList; query: ListingQuery; path: string }) {
-  const { currency, region } = await getFormat();
+  const [{ currency, region }, { features }] = await Promise.all([getFormat(), getStore()]);
   const href = (q: ListingQuery) => `${path}${toSearch(q)}`;
   const { facets } = data;
   return (
@@ -80,6 +80,7 @@ async function Filters({ data, query, path }: { data: ProductList; query: Listin
         </section>
       ))}
 
+      {features.prices && (
       <section>
         <h3 className="mb-2 text-lg">Price ({currency}, incl. {region.taxLabel})</h3>
         <form action={path} className="flex items-end gap-2">
@@ -113,12 +114,13 @@ async function Filters({ data, query, path }: { data: ProductList; query: Listin
           </button>
         </form>
       </section>
+      )}
     </div>
   );
 }
 
 /** Shared by category, brand and search pages. */
-export function Listing({
+export async function Listing({
   title,
   intro,
   crumbs,
@@ -135,6 +137,7 @@ export function Listing({
   query: ListingQuery;
   path: string;
 }) {
+  const { features } = await getStore();
   const filters = activeFilterCount(query);
   const clearHref = `${path}${toSearch({ q: query.q, brand: [], attr: {}, inStock: false, page: 1 })}`;
 
@@ -183,7 +186,7 @@ export function Listing({
               )}
             </p>
             <Suspense>
-              <SortSelect hasQuery={!!query.q} />
+              <SortSelect hasQuery={!!query.q} showPrice={features.prices} />
             </Suspense>
           </div>
 

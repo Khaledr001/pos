@@ -22,14 +22,23 @@ export type FontPairId = (typeof FONT_PAIR_IDS)[number];
 export const RADIUS_STYLES = asConst(["sharp", "soft", "round"]);
 export type RadiusStyle = (typeof RADIUS_STYLES)[number];
 
-export const HEADER_LAYOUTS = asConst(["classic", "centered", "compact"]);
+/**
+ * classic/centered/compact are shop headers (search, account, cart). `simple` is
+ * a brochure header: logo, menu links and one call-to-action button.
+ */
+export const HEADER_LAYOUTS = asConst(["classic", "centered", "compact", "simple"]);
 export type HeaderLayout = (typeof HEADER_LAYOUTS)[number];
 
 export const PRODUCT_CARD_LAYOUTS = asConst(["standard", "minimal", "bordered"]);
 export type ProductCardLayout = (typeof PRODUCT_CARD_LAYOUTS)[number];
 
-export const FOOTER_LAYOUTS = asConst(["dark", "light"]);
+/** `minimal` is a single row: name, legal links and social icons. */
+export const FOOTER_LAYOUTS = asConst(["dark", "light", "minimal"]);
 export type FooterLayout = (typeof FOOTER_LAYOUTS)[number];
+
+/** Page content width: boxed is the 80rem column, wide is 96rem. */
+export const CONTAINER_WIDTHS = asConst(["boxed", "wide"]);
+export type ContainerWidth = (typeof CONTAINER_WIDTHS)[number];
 
 /** Six-digit hex, e.g. "#0e6b53". Everything else (tints, hover shades) is derived in CSS. */
 export type HexColor = string;
@@ -58,6 +67,9 @@ export interface StorefrontTheme {
     header: HeaderLayout;
     productCard: ProductCardLayout;
     footer: FooterLayout;
+    container: ContainerWidth;
+    /** The header stays visible while scrolling. */
+    stickyHeader: boolean;
   };
   /** Public URLs from the platform's asset storage. */
   faviconUrl: string | null;
@@ -84,7 +96,7 @@ export const THEME_PRESETS: Record<ThemePresetId, { label: string; blurb: string
     colors: { ink: "#1c2530", accent: "#0e6b53", highlight: "#c9971c", background: "#f4f6f7", surface: "#ffffff" },
     font: "barlow",
     radius: "sharp",
-    layout: { header: "classic", productCard: "standard", footer: "dark" },
+    layout: { header: "classic", productCard: "standard", footer: "dark", container: "boxed", stickyHeader: true },
   },
   ocean: {
     label: "Ocean",
@@ -92,7 +104,7 @@ export const THEME_PRESETS: Record<ThemePresetId, { label: string; blurb: string
     colors: { ink: "#10243e", accent: "#1d5fd6", highlight: "#f59e0b", background: "#f5f8fc", surface: "#ffffff" },
     font: "inter",
     radius: "soft",
-    layout: { header: "classic", productCard: "bordered", footer: "dark" },
+    layout: { header: "classic", productCard: "bordered", footer: "dark", container: "boxed", stickyHeader: true },
   },
   boutique: {
     label: "Boutique",
@@ -100,7 +112,7 @@ export const THEME_PRESETS: Record<ThemePresetId, { label: string; blurb: string
     colors: { ink: "#2b2622", accent: "#8a5a44", highlight: "#b8860b", background: "#faf7f2", surface: "#ffffff" },
     font: "serif",
     radius: "round",
-    layout: { header: "centered", productCard: "minimal", footer: "light" },
+    layout: { header: "centered", productCard: "minimal", footer: "light", container: "boxed", stickyHeader: true },
   },
   fresh: {
     label: "Fresh",
@@ -108,7 +120,7 @@ export const THEME_PRESETS: Record<ThemePresetId, { label: string; blurb: string
     colors: { ink: "#14291d", accent: "#16a34a", highlight: "#f97316", background: "#f6faf6", surface: "#ffffff" },
     font: "poppins",
     radius: "round",
-    layout: { header: "compact", productCard: "standard", footer: "light" },
+    layout: { header: "compact", productCard: "standard", footer: "light", container: "boxed", stickyHeader: true },
   },
   midnight: {
     label: "Midnight",
@@ -116,7 +128,7 @@ export const THEME_PRESETS: Record<ThemePresetId, { label: string; blurb: string
     colors: { ink: "#0f1115", accent: "#e11d48", highlight: "#facc15", background: "#eef0f3", surface: "#ffffff" },
     font: "inter",
     radius: "soft",
-    layout: { header: "compact", productCard: "bordered", footer: "dark" },
+    layout: { header: "compact", productCard: "bordered", footer: "dark", container: "boxed", stickyHeader: true },
   },
 };
 
@@ -134,9 +146,14 @@ export const DEFAULT_THEME: StorefrontTheme = {
   social: {},
 };
 
-// ── home page sections ───────────────────────────────────────────────────
+// ── page sections ────────────────────────────────────────────────────────
+//
+// A page — the home page or any custom page — is an ordered list of sections.
+// The same registry renders all of them, so a tenant can build a shop front, a
+// company profile or a one-page landing from the same parts.
 
 export const HOME_SECTION_TYPES = asConst([
+  // shop
   "hero",
   "trust_badges",
   "categories",
@@ -144,13 +161,35 @@ export const HOME_SECTION_TYPES = asConst([
   "promo_banner",
   "brands",
   "banner_strip",
+  // content
   "rich_text",
   "faq",
+  "image_text",
+  "features",
+  "cards",
+  "stats",
+  "gallery",
+  "testimonials",
+  "logos",
+  "steps",
+  "cta_banner",
+  "video",
+  "map",
+  "contact_info",
+  "form",
+  "spacer",
 ]);
 export type HomeSectionType = (typeof HOME_SECTION_TYPES)[number];
 
-/** Icons a trust badge may use. A closed set, so a tenant never injects markup. */
-export const BADGE_ICONS = asConst(["truck", "shield", "badge-check", "headset", "refresh", "credit-card", "clock", "package", "star", "leaf"]);
+/** Section types that need the product catalogue; hidden in a `showcase` site. */
+export const COMMERCE_SECTION_TYPES: readonly HomeSectionType[] = ["categories", "products", "promo_banner", "brands", "banner_strip", "trust_badges"];
+
+/** Icons a feature or trust badge may use. A closed set, so a tenant never injects markup. */
+export const BADGE_ICONS = asConst([
+  "truck", "shield", "badge-check", "headset", "refresh", "credit-card", "clock", "package", "star", "leaf",
+  "wrench", "hammer", "building", "users", "award", "phone", "mail", "map-pin", "globe", "heart", "lightbulb",
+  "ruler", "zap", "droplet", "briefcase", "chart", "lock", "thumbs-up",
+]);
 export type BadgeIcon = (typeof BADGE_ICONS)[number];
 
 export interface TrustBadge {
@@ -164,17 +203,79 @@ export interface FaqItem {
   a: string;
 }
 
+export const SECTION_BACKGROUNDS = asConst(["none", "surface", "tint", "accent", "dark"]);
+export type SectionBackground = (typeof SECTION_BACKGROUNDS)[number];
+export const SECTION_SPACING = asConst(["none", "sm", "md", "lg"]);
+export type SectionSpacing = (typeof SECTION_SPACING)[number];
+
+/** Look shared by every section type. All optional; absent = the type's own default. */
+export interface SectionStyle {
+  background?: SectionBackground;
+  paddingY?: SectionSpacing;
+  /** contained = inside the page column; full = edge to edge. */
+  width?: "contained" | "full";
+  align?: "left" | "center";
+  /** Lets a menu link jump here: `#<anchor>`. Lowercase letters, digits, hyphens. */
+  anchor?: string;
+  hideOnMobile?: boolean;
+}
+export const SECTION_ANCHOR = /^[a-z][a-z0-9-]{0,39}$/;
+
+export interface ImageItem {
+  imageUrl: string;
+  alt?: string;
+  caption?: string;
+}
+
+export interface CardItem {
+  imageUrl?: string;
+  title: string;
+  text?: string;
+  href?: string;
+  /** Link text, e.g. "Learn more". */
+  label?: string;
+}
+
 /** Per-type settings. Every field is optional: a section with `{}` renders sensible defaults. */
 export interface HomeSectionSettings {
-  hero: { headline?: string; subheadline?: string; ctaLabel?: string; ctaHref?: string; variant?: "banner" | "split" | "minimal" };
+  hero: {
+    headline?: string;
+    subheadline?: string;
+    ctaLabel?: string;
+    ctaHref?: string;
+    secondaryLabel?: string;
+    secondaryHref?: string;
+    /** `image` = full-width photo behind the text; the others use the shop's hero banners. */
+    variant?: "banner" | "split" | "minimal" | "image";
+    /** The photo for `image` and `split`. */
+    imageUrl?: string;
+    align?: "left" | "center";
+    height?: "sm" | "md" | "lg";
+  };
   trust_badges: { items?: TrustBadge[] };
   categories: { title?: string; limit?: number };
-  products: { title?: string; source?: "best_sellers" | "new_arrivals"; limit?: number };
+  products: { title?: string; source?: "best_sellers" | "new_arrivals" | "category"; categorySlug?: string; limit?: number };
   promo_banner: { headline?: string; text?: string; ctaLabel?: string; ctaHref?: string };
   brands: { title?: string };
   banner_strip: Record<string, never>;
   rich_text: { title?: string; body?: string };
   faq: { title?: string; items?: FaqItem[] };
+  image_text: { title?: string; body?: string; imageUrl?: string; imageAlt?: string; imageSide?: "left" | "right"; bullets?: string[]; ctaLabel?: string; ctaHref?: string };
+  features: { title?: string; subtitle?: string; columns?: 2 | 3 | 4; items?: { icon: BadgeIcon; title: string; text: string }[] };
+  cards: { title?: string; subtitle?: string; variant?: "card" | "plain" | "overlay" | "person"; columns?: 2 | 3 | 4; items?: CardItem[] };
+  stats: { title?: string; items?: { value: string; label: string }[] };
+  gallery: { title?: string; columns?: 2 | 3 | 4; items?: ImageItem[] };
+  testimonials: { title?: string; items?: { quote: string; name: string; role?: string; avatarUrl?: string }[] };
+  logos: { title?: string; items?: { imageUrl: string; name: string; href?: string }[] };
+  steps: { title?: string; subtitle?: string; items?: { title: string; text: string }[] };
+  cta_banner: { headline?: string; text?: string; ctaLabel?: string; ctaHref?: string; secondaryLabel?: string; secondaryHref?: string; showWhatsapp?: boolean };
+  /** YouTube or Vimeo watch/embed URL only; rendered through the provider's privacy-friendly embed. */
+  video: { title?: string; url?: string; caption?: string };
+  map: { title?: string; mode?: "branches" | "embed"; /** https://www.google.com/maps/embed… or openstreetmap embed */ embedUrl?: string; height?: "sm" | "md" | "lg" };
+  contact_info: { title?: string; showBranches?: boolean; showHours?: boolean; showSocial?: boolean };
+  /** Embeds a form from the form builder. */
+  form: { title?: string; subtitle?: string; formSlug?: string; layout?: "stacked" | "split" };
+  spacer: { height?: "sm" | "md" | "lg"; divider?: boolean };
 }
 
 export type HomeSection = {
@@ -184,11 +285,15 @@ export type HomeSection = {
     type: T;
     enabled: boolean;
     settings: HomeSectionSettings[T];
+    style?: SectionStyle;
   };
 }[HomeSectionType];
 
+/** A page's sections are the same thing as the home page's. */
+export type PageSection = HomeSection;
+
 export const HOME_SECTION_LABELS: Record<HomeSectionType, string> = {
-  hero: "Hero banner",
+  hero: "Hero",
   trust_badges: "Trust badges",
   categories: "Departments",
   products: "Product row",
@@ -197,10 +302,29 @@ export const HOME_SECTION_LABELS: Record<HomeSectionType, string> = {
   banner_strip: "Banner strip",
   rich_text: "Text block",
   faq: "FAQ",
+  image_text: "Image + text",
+  features: "Feature grid",
+  cards: "Cards (services, projects, team)",
+  stats: "Numbers",
+  gallery: "Image gallery",
+  testimonials: "Testimonials",
+  logos: "Client logos",
+  steps: "Process steps",
+  cta_banner: "Call to action",
+  video: "Video",
+  map: "Map",
+  contact_info: "Contact details",
+  form: "Form",
+  spacer: "Spacer / divider",
 };
 
-/** Max sections on the home page; keeps the page fast and the editor sane. */
-export const MAX_HOME_SECTIONS = 20;
+/** Max sections on one page; keeps the page fast and the editor sane. */
+export const MAX_HOME_SECTIONS = 30;
+export const MAX_PAGE_SECTIONS = 30;
+
+/** How a custom page frames its content: `standard` = title + breadcrumb; `full` = sections edge to edge. */
+export const PAGE_LAYOUTS = asConst(["standard", "full"]);
+export type PageLayout = (typeof PAGE_LAYOUTS)[number];
 
 /** What the home page looked like before sections were configurable. */
 export const DEFAULT_HOME_SECTIONS: HomeSection[] = [

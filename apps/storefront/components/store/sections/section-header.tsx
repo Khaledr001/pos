@@ -1,5 +1,6 @@
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
+import { cn } from "@/lib/cn";
 
 export function SectionHeader({
   id,
@@ -37,3 +38,28 @@ export function SectionHeader({
 export function SectionFrame({ children }: { children: React.ReactNode }) {
   return <div className="mx-auto max-w-7xl px-4">{children}</div>;
 }
+
+/** Heading block of the content sections: title, optional intro, aligned as the section is. */
+export function SecHeading({ id, title, subtitle, centered }: { id: string; title?: string; subtitle?: string; centered?: boolean }) {
+  if (!title && !subtitle) return null;
+  return (
+    <div className={cn("mb-6 max-w-3xl", centered && "mx-auto text-center")}>
+      {title && (
+        <h2 id={id} className="text-3xl sm:text-4xl">
+          {title}
+        </h2>
+      )}
+      {subtitle && <p className="sec-muted mt-2 text-lg">{subtitle}</p>}
+    </div>
+  );
+}
+
+/** Trimmed, or undefined when blank, so `a ?? b` falls through on an empty field. */
+export const clean = (value: string | undefined | null) => value?.trim() || undefined;
+
+/** Tailwind needs whole class names, so the column counts are spelled out. */
+export const GRID_COLS: Record<2 | 3 | 4, string> = {
+  2: "sm:grid-cols-2",
+  3: "sm:grid-cols-2 lg:grid-cols-3",
+  4: "sm:grid-cols-2 lg:grid-cols-4",
+};

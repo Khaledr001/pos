@@ -17,6 +17,9 @@ import {
 import { MobileEmpty, MobileList, MobileRow } from "@/components/ui/mobile-list";
 import { SelectField } from "@/components/ui/select";
 import { Field, Notice, PageHeader, errorText, humanize, textareaClass } from "../shared";
+import type { PageLayout, PageSection } from "@devsfleet/shared-types";
+import { SectionEditor, listProblems, useSectionLookups } from "../components/section-editor";
+import { useSiteMode } from "../site-mode";
 
 interface PageRow {
   id: string;
@@ -25,6 +28,9 @@ interface PageRow {
   kind: string;
   isPublished: boolean;
   updatedAt: string;
+  /** Set by the API's list for a sections page; a full read carries `sections` itself. */
+  hasSections?: boolean;
+  sections?: PageSection[] | null;
 }
 
 interface PageFull extends PageRow {
@@ -33,7 +39,27 @@ interface PageFull extends PageRow {
   coverImageUrl: string | null;
   seoTitle: string | null;
   seoDescription: string | null;
+  sections: PageSection[] | null;
+  layout: PageLayout;
 }
+
+interface PageForm {
+  id?: string;
+  slug: string;
+  title: string;
+  body: string;
+  kind: string;
+  excerpt: string;
+  coverImageUrl: string;
+  isPublished: boolean;
+  seoTitle: string;
+  seoDescription: string;
+  /** null = a text page rendered from `body`. */
+  sections: PageSection[] | null;
+  layout: PageLayout;
+}
+
+const isSectionsPage = (p: PageRow) => p.hasSections === true || Array.isArray(p.sections);
 
 interface Banner {
   id: string;
@@ -49,7 +75,7 @@ interface Banner {
   endsAt: string | null;
 }
 
-const EMPTY_PAGE = { slug: "", title: "", body: "", kind: "page", excerpt: "", coverImageUrl: "", isPublished: false, seoTitle: "", seoDescription: "" };
+const EMPTY_PAGE: PageForm = { slug: "", title: "", body: "", kind: "page", excerpt: "", coverImageUrl: "", isPublished: false, seoTitle: "", seoDescription: "", sections: null, layout: "standard" };
 const EMPTY_BANNER = { placement: "home_hero", title: "", subtitle: "", imageUrl: "", linkUrl: "", ctaLabel: "", sortOrder: 0, isActive: true };
 
 const orNull = (v: string) => (v.trim() ? v.trim() : null);
@@ -66,7 +92,9 @@ export default function ContentPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const [pageForm, setPageForm] = useState<(typeof EMPTY_PAGE & { id?: string }) | null>(null);
+  const [pageForm, setPageForm] = useState<PageForm | null>(null);
+  const lookups = useSectionLookups();
+  const siteMode = useSiteMode(mayWrite);
   const [bannerForm, setBannerForm] = useState<(typeof EMPTY_BANNER & { id?: string }) | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -105,6 +133,8 @@ export default function ContentPage() {
         isPublished: p.isPublished,
         seoTitle: p.seoTitle ?? "",
         seoDescription: p.seoDescription ?? "",
+        sections: p.sections ?? null,
+        layout: p.layout ?? "standard",
       });
     } catch (err) {
       setError(errorText(err, "Failed to load the page."));
@@ -117,8 +147,15 @@ export default function ContentPage() {
     setSaving(true);
     setError(null);
     const { id, ...f } = pageForm;
+    if (f.sections && listProblems(f.sections, siteMode).length > 0) {
+      setError("Fix the problems listed under the sections first.");
+      setSaving(false);
+      return;
+    }
     const body = {
       ...f,
+      // Guides are always text; a sections list on one would be stored and never shown.
+      sections: f.kind === "page" ? f.sections : null,
       excerpt: orNull(f.excerpt),
       coverImageUrl: orNull(f.coverImageUrl),
       seoTitle: orNull(f.seoTitle),
@@ -214,7 +251,7 @@ export default function ContentPage() {
               key={p.id}
               title={p.title}
               subtitle={p.kind === "blog" ? "Guide" : "Page"}
-              badge={<Badge variant={p.isPublished ? "success" : "secondary"}>{p.isPublished ? "Published" : "Draft"}</Badge>}
+              badge={<span className="flex gap-1">{isSectionsPage(p) && <Badge variant="outline">Sections</Badge>}<Badge variant={p.isPublished ? "success" : "secondary"}>{p.isPublished ? "Published" : "Draft"}</Badge></span>}
               fields={[{ label: "Address", value: <span className="font-mono">{p.kind === "blog" ? `/blog/${p.slug}` : `/pages/${p.slug}`}</span> }]}
               actions={
                 mayWrite ? (
@@ -275,7 +312,7 @@ export default function ContentPage() {
                   <tr key={p.id} className="hover:bg-secondary/30">
                     <td className="px-4 py-3.5 font-medium text-foreground">{p.title}</td>
                     <td className="px-4 py-3.5 font-mono text-muted-foreground">{p.kind === "blog" ? `/blog/${p.slug}` : `/pages/${p.slug}`}</td>
-                    <td className="px-4 py-3.5">{p.kind === "blog" ? "Guide" : "Page"}</td>
+                    <td className="px-4 py-3.5">{p.kind === "blog" ? "Guide" : "Page"} {isSectionsPage(p) && <Badge variant="outline">Sections</Badge>}</td>
                     <td className="px-4 py-3.5"><Badge variant={p.isPublished ? "success" : "secondary"}>{p.isPublished ? "Published" : "Draft"}</Badge></td>
                     <td className="px-4 py-3.5 text-right space-x-3">
                       {mayWrite && <button type="button" className="cursor-pointer text-muted-foreground hover:text-foreground" onClick={() => void editPage(p.id)} aria-label={`Edit ${p.title}`}><Pencil className="h-3.5 w-3.5" /></button>}
@@ -328,7 +365,7 @@ export default function ContentPage() {
       </Card>
 
       <Dialog open={!!pageForm} onOpenChange={(o) => !o && setPageForm(null)}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className={cn("max-h-[90vh] overflow-y-auto", pageForm?.sections ? "sm:max-w-4xl" : "sm:max-w-2xl")}>
           {pageForm && (
             <>
               <DialogHeader><DialogTitle>{pageForm.id ? "Edit page" : "New page"}</DialogTitle></DialogHeader>
@@ -347,9 +384,54 @@ export default function ContentPage() {
                     />
                   </Field>
                 </div>
-                <Field label="Body" hint="Markdown: ## headings, **bold**, lists.">
-                  <textarea rows={12} className={textareaClass} value={pageForm.body} onChange={(e) => setPageForm({ ...pageForm, body: e.target.value })} />
-                </Field>
+                {pageForm.kind === "page" && (
+                  <div role="radiogroup" aria-label="Page type" className="grid gap-2 sm:grid-cols-2">
+                    {([
+                      { value: "text", title: "Text page", text: "One block of text: delivery terms, about us, policies." },
+                      { value: "sections", title: "Sections page", text: "Build it from sections: pictures, services, forms, maps and more." },
+                    ] as const).map((o) => {
+                      const on = (o.value === "sections") === (pageForm.sections !== null);
+                      return (
+                        <button
+                          key={o.value}
+                          type="button"
+                          role="radio"
+                          aria-checked={on}
+                          onClick={() => {
+                            if (on) return;
+                            if (o.value === "sections") setPageForm({ ...pageForm, sections: [], layout: "full" });
+                            else if (pageForm.sections && pageForm.sections.length > 0 && !window.confirm("Switching to a text page discards this page's sections when you save. Continue?")) return;
+                            else setPageForm({ ...pageForm, sections: null, layout: "standard" });
+                          }}
+                          className={cn("cursor-pointer rounded-xl border p-3 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", on ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border hover:bg-accent")}
+                        >
+                          <div className="font-semibold">{o.title}</div>
+                          <div className="mt-0.5 text-[11px] text-muted-foreground">{o.text}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                {pageForm.sections === null || pageForm.kind !== "page" ? (
+                  <Field label="Body" hint="Markdown: ## headings, **bold**, lists.">
+                    <textarea rows={12} className={textareaClass} value={pageForm.body} onChange={(e) => setPageForm({ ...pageForm, body: e.target.value })} />
+                  </Field>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Field label="Page frame" hint="Standard adds the title and a breadcrumb above your sections. Full lets the sections run edge to edge, with no title.">
+                        <SelectField size="sm" label="Page frame" value={pageForm.layout} onValueChange={(v) => setPageForm({ ...pageForm, layout: v as PageLayout })} options={[{ value: "full", label: "Full (edge to edge)" }, { value: "standard", label: "Standard (title and breadcrumb)" }]} />
+                      </Field>
+                    </div>
+                    {pageForm.body.trim() && (
+                      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400">
+                        <span>This page still has text saved. It is kept but not shown while the page is built from sections.</span>
+                        <Button type="button" size="sm" variant="outline" onClick={() => setPageForm({ ...pageForm, sections: [...(pageForm.sections ?? []), { id: `rich-text-${Math.random().toString(36).slice(2, 8)}`, type: "rich_text", enabled: true, settings: { title: "", body: pageForm.body } }], body: "" })}>Move the text into a Text block</Button>
+                      </div>
+                    )}
+                    <SectionEditor sections={pageForm.sections} onChange={(sections) => setPageForm({ ...pageForm, sections })} mayWrite={mayWrite} siteMode={siteMode} lookups={lookups} />
+                  </div>
+                )}
                 {pageForm.kind === "blog" && (
                   <div className="grid gap-3 sm:grid-cols-2">
                     <Field label="Excerpt"><Input value={pageForm.excerpt} onChange={(e) => setPageForm({ ...pageForm, excerpt: e.target.value })} /></Field>

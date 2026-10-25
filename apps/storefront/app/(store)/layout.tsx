@@ -2,9 +2,10 @@ import { Providers } from "@/components/providers";
 import { Analytics } from "@/components/store/analytics";
 import { CompareTray } from "@/components/store/compare/compare-tray";
 import { Footer } from "@/components/store/footer";
+import { HashScroll } from "@/components/store/hash-scroll";
 import { Header } from "@/components/store/header";
 import { WhatsAppButton } from "@/components/store/whatsapp-button";
-import { storefrontExists } from "@/lib/data";
+import { getStore, storefrontExists } from "@/lib/data";
 import { notFound } from "next/navigation";
 
 // Rendered per request: pages read live prices and stock through the tagged
@@ -14,6 +15,7 @@ export const dynamic = "force-dynamic";
 
 export default async function StoreLayout({ children }: LayoutProps<"/">) {
   if (!(await storefrontExists())) notFound();
+  const { features } = await getStore();
   return (
     <Providers>
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:bg-paper focus:p-3">
@@ -25,8 +27,9 @@ export default async function StoreLayout({ children }: LayoutProps<"/">) {
       </main>
       <Footer />
       <WhatsAppButton />
-      <CompareTray />
+      {features.compare && <CompareTray />}
       <Analytics />
+      <HashScroll />
     </Providers>
   );
 }

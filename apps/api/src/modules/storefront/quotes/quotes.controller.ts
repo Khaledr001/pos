@@ -4,12 +4,13 @@ import { Throttle } from "@nestjs/throttler";
 import type { Request } from "express";
 import { zodPipe } from "../../../common/pipes/zod-validation.pipe.js";
 import { SessionCookies } from "../context/session-cookies.service.js";
-import { RequireShopper, StorefrontRoute } from "../context/storefront.guard.js";
+import { RequireShopper, RequireSiteFeature, StorefrontRoute } from "../context/storefront.guard.js";
 import { CreateQuoteSchema, QuotePageSchema, type CreateQuoteDto } from "./dto.js";
 import { QuotesService } from "./quotes.service.js";
 
 @ApiTags("storefront")
 @StorefrontRoute()
+@RequireSiteFeature("accounts")
 @RequireShopper()
 @Controller("storefront/quotes")
 export class QuotesController {

@@ -3,18 +3,25 @@ import { Camera, Mail, MapPin, MessageCircle, Phone } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { LeadForm } from "@/components/store/lead-form";
 import { Breadcrumbs } from "@/components/store/listing";
 import { buttonClass } from "@/components/ui/button";
 import { cached, publicApi, tags } from "@/lib/api-server";
-import { getFormat, getStore } from "@/lib/data";
+import { CONTACT_FORM_SLUG } from "@devsfleet/shared-types";
+import { getForm, getFormat, getStore } from "@/lib/data";
 import { whatsappLink } from "@/lib/format";
 import { orFallback } from "@/lib/fallback";
 
-export const metadata: Metadata = {
-  title: "Contact us",
-  description: "Call, email or WhatsApp us. Can't find a product? Send us the part name, size or a photo and we'll source it.",
-  alternates: { canonical: "/contact" },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const { features } = await getStore();
+  return {
+    title: "Contact us",
+    description: features.products
+      ? "Call, email or WhatsApp us. Can't find a product? Send us the part name, size or a photo and we'll source it."
+      : "Call, email or message us. We're happy to help.",
+    alternates: { canonical: "/contact" },
+  };
+}
 
 function Row({ icon, label, children }: { icon: ReactNode; label: string; children: ReactNode }) {
   return (
@@ -29,11 +36,13 @@ function Row({ icon, label, children }: { icon: ReactNode; label: string; childr
 }
 
 export default async function ContactPage() {
-  const [store, f, branches] = await Promise.all([
+  const [store, f, branches, form] = await Promise.all([
     getStore(),
     getFormat(),
     publicApi.get<Branch[]>("/content/branches", cached([tags.content])).catch(orFallback([] as Branch[])),
+    getForm(CONTACT_FORM_SLUG),
   ]);
+  const { features } = store;
   const wa = store.whatsapp ? whatsappLink(store.whatsapp) : null;
   const sourcing = store.whatsapp
     ? whatsappLink(store.whatsapp, "Hello, I'm looking for a part I couldn't find on the website: ")
@@ -43,7 +52,9 @@ export default async function ContactPage() {
     <div className="mx-auto max-w-5xl px-4 py-6">
       <Breadcrumbs items={[{ href: "/contact", label: "Contact us" }]} />
       <h1 className="mt-3 text-4xl">Contact us</h1>
-      <p className="mt-1 text-steel">Questions about a product, an order or a trade account? We&apos;re happy to help.</p>
+      <p className="mt-1 text-steel">
+        {features.checkout ? "Questions about a product, an order or a trade account? We're happy to help." : "Get in touch. We're happy to help."}
+      </p>
 
       <div className="mt-6 grid gap-6 md:grid-cols-[1fr_1fr]">
         <section aria-labelledby="reach" className="rounded-[var(--radius-panel)] border border-galv bg-paper p-5">
@@ -83,6 +94,7 @@ export default async function ContactPage() {
           )}
         </section>
 
+        {features.products && (
         <section aria-labelledby="source" className="flex flex-col rounded-[var(--radius-panel)] border border-brass/40 bg-brass-tint p-5">
           <Camera className="size-7 text-brass-ink" aria-hidden />
           <h2 id="source" className="mt-2 text-2xl">
@@ -97,7 +109,17 @@ export default async function ContactPage() {
             </a>
           )}
         </section>
+        )}
       </div>
+
+      {form && (
+        <section aria-labelledby="message" className="mt-6 rounded-[var(--radius-panel)] border border-galv bg-paper p-5">
+          <h2 id="message" className="text-2xl">
+            {form.name}
+          </h2>
+          <LeadForm form={form} className="mt-4" />
+        </section>
+      )}
 
       {branches.length > 0 && (
         <section aria-labelledby="branches" className="mt-6 rounded-[var(--radius-panel)] border border-galv bg-paper p-5">
@@ -125,11 +147,13 @@ export default async function ContactPage() {
         </section>
       )}
 
-      <p className="mt-6 text-[15px] text-steel">
-        Looking for an order? <Link href="/track" className="text-pipe underline">Track it here</Link>, or see{" "}
-        <Link href="/pages/delivery-returns" className="text-pipe underline">delivery and returns</Link> and our{" "}
-        <Link href="/pages/faq" className="text-pipe underline">FAQ</Link>.
-      </p>
+      {features.tracking && (
+        <p className="mt-6 text-[15px] text-steel">
+          Looking for an order? <Link href="/track" className="text-pipe underline">Track it here</Link>, or see{" "}
+          <Link href="/pages/delivery-returns" className="text-pipe underline">delivery and returns</Link> and our{" "}
+          <Link href="/pages/faq" className="text-pipe underline">FAQ</Link>.
+        </p>
+      )}
     </div>
   );
 }

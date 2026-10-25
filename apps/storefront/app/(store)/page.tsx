@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { JsonLd } from "@/components/store/json-ld";
 import { RecentlyViewed } from "@/components/store/recently-viewed";
-import { HomeSections } from "@/components/store/sections/home-sections";
+import { PageSections } from "@/components/store/sections/page-sections";
 import { HomeSkeleton } from "@/components/store/skeletons";
 import { getHome, getStore } from "@/lib/data";
 import { absoluteUrl } from "@/lib/seo";
@@ -38,18 +38,25 @@ async function HomeContent() {
             "@type": "WebSite",
             name: store.name,
             url: site,
-            potentialAction: {
-              "@type": "SearchAction",
-              target: { "@type": "EntryPoint", urlTemplate: `${site}/search?q={search_term_string}` },
-              "query-input": "required name=search_term_string",
-            },
+            // Only a site with a search page can offer a search action.
+            ...(store.features.search
+              ? {
+                  potentialAction: {
+                    "@type": "SearchAction",
+                    target: { "@type": "EntryPoint", urlTemplate: `${site}/search?q={search_term_string}` },
+                    "query-input": "required name=search_term_string",
+                  },
+                }
+              : {}),
           },
         ]}
       />
-      <HomeSections sections={home.sections} home={home} store={store} />
-      <div className="mx-auto max-w-7xl px-4">
-        <RecentlyViewed className="mt-14" />
-      </div>
+      <PageSections sections={home.sections} store={store} />
+      {store.features.products && (
+        <div className="mx-auto max-w-7xl px-4">
+          <RecentlyViewed className="mt-14" />
+        </div>
+      )}
     </>
   );
 }

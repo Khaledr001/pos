@@ -1,15 +1,12 @@
 import {
-  BADGE_ICONS,
+  CONTAINER_WIDTHS,
   FONT_PAIR_IDS,
   FOOTER_LAYOUTS,
   HEADER_LAYOUTS,
   HEX_COLOR,
-  HOME_SECTION_TYPES,
   MAX_FOOTER_COLUMNS,
   MAX_HEADLESS_ORIGINS,
-  MAX_HOME_SECTIONS,
   MAX_NAV_LINKS,
-  NAV_HREF,
   PRODUCT_CARD_LAYOUTS,
   RADIUS_STYLES,
   SOCIAL_NETWORKS,
@@ -17,6 +14,7 @@ import {
   ZONE_CODE,
 } from "@devsfleet/shared-types";
 import { z } from "zod";
+import { href, https, imageUrl, label, text } from "./field-rules.js";
 
 /**
  * Shape rules for the storefront's appearance, home sections, navigation,
@@ -25,22 +23,7 @@ import { z } from "zod";
  * SettingsAdminService, not here.
  */
 
-const text = (max: number) => z.string().trim().max(max);
-const label = (max: number) => z.string().trim().min(1).max(max);
-
-/** A path on the shop or an https URL. Nothing that could run script. */
-const href = z.string().trim().max(500).regex(NAV_HREF, "Use a path like /pages/about or an https:// link");
-
-/** An image already uploaded to the platform, or any http(s) URL. */
-const imageUrl = z
-  .string()
-  .trim()
-  .max(500)
-  .regex(/^(https?:\/\/[^\s]+|\/(?![/\\])[^\s]*)$/, "Use an http(s) URL or an uploaded file's path");
-
 const hex = z.string().trim().regex(HEX_COLOR, "Use a six-digit hex colour like #0e6b53").transform((v) => v.toLowerCase());
-
-const https = z.string().trim().max(300).regex(/^https:\/\/[^\s]+$/, "Use a full https:// link");
 
 // ── theme ────────────────────────────────────────────────────────────────
 
@@ -55,6 +38,8 @@ export const ThemeSchema = z
         header: z.enum(HEADER_LAYOUTS),
         productCard: z.enum(PRODUCT_CARD_LAYOUTS),
         footer: z.enum(FOOTER_LAYOUTS),
+        container: z.enum(CONTAINER_WIDTHS),
+        stickyHeader: z.boolean(),
       })
       .partial(),
     faviconUrl: imageUrl.nullable(),
@@ -71,73 +56,8 @@ export type ThemeDto = z.infer<typeof ThemeSchema>;
 
 // ── home sections ────────────────────────────────────────────────────────
 
-const sectionBase = { id: z.string().trim().min(1).max(40).regex(/^[a-z0-9_-]+$/i, "Letters, digits, - and _ only"), enabled: z.boolean() };
-const limit = z.coerce.number().int().min(1).max(12);
-
-const TrustBadgeSchema = z.object({ icon: z.enum(BADGE_ICONS), title: label(60), text: text(200) });
-const FaqItemSchema = z.object({ q: label(200), a: label(1000) });
-
-const HomeSectionSchemaUnion = z.discriminatedUnion("type", [
-  z.object({
-    ...sectionBase,
-    type: z.literal("hero"),
-    settings: z
-      .object({
-        headline: text(120),
-        subheadline: text(300),
-        ctaLabel: text(40),
-        ctaHref: href,
-        variant: z.enum(["banner", "split", "minimal"]),
-      })
-      .partial()
-      .strict(),
-  }),
-  z.object({
-    ...sectionBase,
-    type: z.literal("trust_badges"),
-    settings: z.object({ items: z.array(TrustBadgeSchema).max(6) }).partial().strict(),
-  }),
-  z.object({
-    ...sectionBase,
-    type: z.literal("categories"),
-    settings: z.object({ title: text(80), limit }).partial().strict(),
-  }),
-  z.object({
-    ...sectionBase,
-    type: z.literal("products"),
-    settings: z.object({ title: text(80), source: z.enum(["best_sellers", "new_arrivals"]), limit }).partial().strict(),
-  }),
-  z.object({
-    ...sectionBase,
-    type: z.literal("promo_banner"),
-    settings: z.object({ headline: text(120), text: text(300), ctaLabel: text(40), ctaHref: href }).partial().strict(),
-  }),
-  z.object({
-    ...sectionBase,
-    type: z.literal("brands"),
-    settings: z.object({ title: text(80) }).partial().strict(),
-  }),
-  z.object({ ...sectionBase, type: z.literal("banner_strip"), settings: z.object({}).strict() }),
-  z.object({
-    ...sectionBase,
-    type: z.literal("rich_text"),
-    settings: z.object({ title: text(120), body: text(5000) }).partial().strict(),
-  }),
-  z.object({
-    ...sectionBase,
-    type: z.literal("faq"),
-    settings: z.object({ title: text(80), items: z.array(FaqItemSchema).max(20) }).partial().strict(),
-  }),
-]);
-
-// Fails loudly if a type is added to the shared list without a schema here.
-const _everyTypeHasASchema: (typeof HOME_SECTION_TYPES)[number] extends z.infer<typeof HomeSectionSchemaUnion>["type"] ? true : never = true;
-void _everyTypeHasASchema;
-
-export const HomeSectionsSchema = z
-  .array(HomeSectionSchemaUnion)
-  .max(MAX_HOME_SECTIONS)
-  .refine((sections) => new Set(sections.map((s) => s.id)).size === sections.length, { message: "Section ids must be unique" });
+/** The section schemas live in sections.dto.ts: the home page and custom pages share them. */
+export { HomeSectionsSchema } from "./sections.dto.js";
 
 // ── navigation ───────────────────────────────────────────────────────────
 

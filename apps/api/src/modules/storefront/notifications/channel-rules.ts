@@ -1,4 +1,5 @@
 import type {
+  AnyNotificationEvent,
   NotificationChannel,
   NotificationEvent,
   StorefrontNotificationSettings,
@@ -77,7 +78,7 @@ export function decideChannels(input: ChannelInput): ChannelDecision[] {
  * back-in-stock alert for someone who re-subscribed.
  */
 export function dedupeKey(
-  event: NotificationEvent,
+  event: AnyNotificationEvent,
   channel: NotificationChannel,
   subjectId: string,
   version?: string | number,

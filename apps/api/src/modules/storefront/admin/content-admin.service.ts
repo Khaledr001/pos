@@ -5,6 +5,13 @@ import { RequestContext } from "../../../common/context/request-context.js";
 import { TenantDatabase } from "../../../database/tenant-database.service.js";
 import type { BannerDto, CouponDto, PageDto, UpdateBannerDto, UpdateCouponDto, UpdatePageDto } from "./dto.js";
 
+/** A blog post is an article (text + cover); only ordinary pages are built from sections. */
+function assertSectionsAllowed(kind: string | undefined, sections: unknown[] | null | undefined): void {
+  if (kind === "blog" && sections) {
+    throw new AppError(ERROR_CODES.VALIDATION_FAILED, "A blog post is written as text. Only pages can be built from sections.");
+  }
+}
+
 const toDate = (value: string | null | undefined) => (value === undefined ? undefined : value === null ? null : new Date(value));
 
 /** Pages, banners and promo codes. */
@@ -16,13 +23,15 @@ export class ContentAdminService {
   // Pages
   // ---------------------------------------------------------------------------
 
-  pages() {
-    return this.db.run((tx) =>
+  /** The list leaves out the heavy parts; `hasSections` says which pages are section-built. */
+  async pages() {
+    const rows = await this.db.run((tx) =>
       tx.query.storefrontPages.findMany({
         columns: { body: false },
         orderBy: (t, { asc, desc: d }) => [asc(t.kind), d(t.updatedAt)],
       }),
     );
+    return rows.map(({ sections, ...page }) => ({ ...page, hasSections: sections !== null }));
   }
 
   async page(id: string) {
@@ -32,6 +41,7 @@ export class ContentAdminService {
   }
 
   createPage(dto: PageDto) {
+    assertSectionsAllowed(dto.kind, dto.sections);
     return this.db.run(async (tx) => {
       const [page] = await tx
         .insert(schema.storefrontPages)
@@ -45,6 +55,7 @@ export class ContentAdminService {
     return this.db.run(async (tx) => {
       const existing = await tx.query.storefrontPages.findFirst({ where: (t, { eq: e }) => e(t.id, id) });
       if (!existing) throw new AppError(ERROR_CODES.NOT_FOUND, "That page does not exist.");
+      assertSectionsAllowed(dto.kind ?? existing.kind, dto.sections === undefined ? existing.sections : dto.sections);
       const [page] = await tx
         .update(schema.storefrontPages)
         .set({

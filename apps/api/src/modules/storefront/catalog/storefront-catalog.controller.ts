@@ -1,7 +1,7 @@
 import { Controller, Get, Param, type PipeTransform, Query } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 import { zodPipe } from "../../../common/pipes/zod-validation.pipe.js";
-import { StorefrontRoute } from "../context/storefront.guard.js";
+import { RequireSiteFeature, StorefrontRoute } from "../context/storefront.guard.js";
 import {
   ListProductsSchema,
   PricesQuerySchema,
@@ -36,6 +36,7 @@ class FoldBracketKeysPipe implements PipeTransform<Record<string, unknown>, Reco
 
 @ApiTags("storefront")
 @StorefrontRoute()
+@RequireSiteFeature("products")
 @Controller("storefront/catalog")
 export class StorefrontCatalogController {
   constructor(private readonly catalog: StorefrontCatalogService) {}
@@ -76,6 +77,7 @@ export class StorefrontCatalogController {
   }
 
   @Get("suggest")
+  @RequireSiteFeature("search")
   suggest(@Query(zodPipe(SuggestQuerySchema)) query: SuggestQueryDto) {
     return this.catalog.suggest(query.q);
   }

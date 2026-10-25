@@ -49,3 +49,15 @@ function clientIpOf(headers: Record<string, unknown> | undefined): string | null
   const ip = headers?.["x-storefront-client-ip"];
   return typeof ip === "string" && ip.length > 0 && ip.length <= 64 ? ip : null;
 }
+
+/**
+ * The address a storefront visitor really comes from: the one the storefront
+ * server vouches for with the shared secret, else the connection's own. For
+ * things that need an identity-ish value per visitor (an abuse hash), not for
+ * anything that decides access.
+ */
+export function visitorIp(req: { headers?: Record<string, unknown>; ip?: string }): string | null {
+  const claimed = clientIpOf(req.headers);
+  if (claimed && isStorefront(req.headers)) return claimed;
+  return req.ip ?? null;
+}

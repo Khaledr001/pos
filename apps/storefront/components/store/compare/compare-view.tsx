@@ -14,6 +14,7 @@ import { cn } from "@/lib/cn";
 import { displayName } from "@/lib/format";
 import { useCompare } from "@/lib/hooks/compare";
 import { bestStock, lowestPrice } from "@/lib/product-summary";
+import { useSite } from "@/lib/store-config";
 
 type Column = { slug: string; name: string; state: "loading" | "missing" | "error" | "ready"; product?: ProductDetail };
 
@@ -22,6 +23,7 @@ const rowHead = "sticky left-0 z-10 w-28 min-w-28 border-b border-r border-galv 
 
 export function CompareView() {
   const { items, remove, clear } = useCompare();
+  const { features } = useSite();
   const results = useQueries({
     queries: items.map((i) => ({
       queryKey: ["compare", i.slug],
@@ -112,7 +114,9 @@ export function CompareView() {
               </thead>
               <tbody>
                 <Row label="Brand" columns={columns} render={(p) => (p.brand ? displayName(p.brand.name) : "")} />
-                <Row label="Price" columns={columns} render={(p) => <span className="font-cond text-xl font-bold">{lowestPrice(p)?.formatted ?? "Price on request"}</span>} />
+                {features.prices && (
+                  <Row label="Price" columns={columns} render={(p) => <span className="font-cond text-xl font-bold">{lowestPrice(p)?.formatted ?? "Price on request"}</span>} />
+                )}
                 <Row label="Availability" columns={columns} render={(p) => { const s = bestStock(p); return s ? <StockBadge label={s} /> : ""; }} />
                 {specLabels.map((label) => (
                   <Row key={label} label={label} columns={columns} render={(p) => p.specs.find((s) => s.label === label)?.value ?? ""} />

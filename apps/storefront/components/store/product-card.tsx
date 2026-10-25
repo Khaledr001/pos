@@ -1,6 +1,7 @@
 import type { ProductCard as Card } from "@devsfleet/storefront-client";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
+import { PriceOnRequest } from "@/components/ui/price-on-request";
 import { PriceTag } from "@/components/ui/price-tag";
 import { ProductImage } from "@/components/ui/product-image";
 import { cn } from "@/lib/cn";
@@ -23,7 +24,7 @@ export function ProductCard({ product, priority }: { product: Card; priority?: b
           {product.fromPrice ? (
             <PriceTag price={product.fromPrice} uom={product.baseUom} from={product.variantCount > 1} />
           ) : (
-            <p className="text-sm text-steel">Price on request</p>
+            <p><PriceOnRequest /></p>
           )}
           <div className="mt-2 flex flex-wrap gap-1.5">
             {!product.inStock && <Badge tone="signal">Out of stock</Badge>}

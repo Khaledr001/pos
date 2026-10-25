@@ -290,6 +290,144 @@ reaches the shop within ~30 s.
 
 **Headless.** See [HEADLESS.md](HEADLESS.md).
 
+## Site types, sections and forms
+
+Not every tenant sells online. The same deployment serves four kinds of site,
+and a tenant can start from a template and then reconfigure any part of it.
+Types: `packages/shared-types/src/storefront-site.ts` (mode, features),
+`storefront-appearance.ts` (sections), `storefront-forms.ts` (forms, leads),
+`site-templates.ts` (the templates).
+
+### Modes and what each can do
+
+`storefronts.settings.site.mode` is `shop`, `catalogue` or `showcase`. The
+feature flags are derived in **one** place, `resolveSiteFeatures()`, so the
+storefront's navigation and the API's checks cannot disagree.
+
+| Feature | `shop` | `catalogue` | `showcase` |
+|---|---|---|---|
+| Product, category, brand pages | yes | yes | no |
+| Prices sent to browsers | yes | `showPrices` | no |
+| Cart, checkout | yes | no | no |
+| Shopper accounts, quotes, saved lists | `features.account` | no | no |
+| Order tracking | yes | no | no |
+| Back-in-stock alerts | yes | no | no |
+| Search | `features.search` | `features.search` | no |
+| Product "Enquire" action | no | yes | no |
+| Pages, blog, branches, **forms** | yes | yes | yes |
+
+A store saved before sites had a mode has no `site` block and resolves to `shop`
+(`resolveSite` fills the default), so nothing regressed.
+
+### The API is the control, not the menu
+
+Rule 9 applied to modes. `@RequireSiteFeature(...)` (on the controller, enforced by
+`StorefrontGuard`, which already knows the shop) refuses a route whose feature the
+site does not run, with `STORE_FEATURE_DISABLED` → **404** and the neutral message
+"That is not available on this site." It runs before the shopper check, so a
+signed-out visitor to a disabled route gets the same 404. The mapping is pinned by
+`context/site-features.spec.ts`:
+
+| Route group | Needs |
+|---|---|
+| `storefront/cart/*` | `cart` |
+| `storefront/checkout/*` | `checkout` |
+| `storefront/auth/*`, `storefront/me/*`, `storefront/quotes/*` | `accounts` |
+| `storefront/orders/*` (tracking) | `tracking` |
+| `POST storefront/stock-alerts` | `stockAlerts` (unsubscribe links always work) |
+| `storefront/catalog/*` | `products` (`suggest` also `search`) |
+| `storefront/content/*`, `storefront/forms/*` | always available |
+
+**Price hiding** (catalogue with `showPrices: false`) happens in the catalogue
+service, not the page: cards carry `fromPrice: null`, `facets.price` is `null`,
+product detail units carry `price: null` (the units themselves — a box of 50 — are
+still sent), `GET /catalog/prices` answers `{}`, a price filter is ignored and a
+price sort falls back to the default (either would let a visitor bisect prices).
+The price sheet is never queried. A text search on a site that turned search off
+is refused, not just hidden. A settings save also refreshes the `catalog` cache tag,
+so flipping a shop to a catalogue clears cached product pages that held prices.
+
+`GET /content/home` on a `showcase` site runs no catalogue queries and drops the
+sections that need products (`COMMERCE_SECTION_TYPES`); `GET /content/store`
+returns `site` and `features`.
+
+### Sections on every page
+
+A page is an ordered list of sections, the same registry for the home page
+(`settings.homeSections`) and any custom page (`storefront_pages.sections`; null =
+a plain text page rendered from `body`, `layout` = `standard` | `full`). 23 types:
+the shop ones (`hero`, `trust_badges`, `categories`, `products`, `promo_banner`,
+`brands`, `banner_strip`) and content ones (`rich_text`, `faq`, `image_text`,
+`features`, `cards`, `stats`, `gallery`, `testimonials`, `logos`, `steps`,
+`cta_banner`, `video`, `map`, `contact_info`, `form`, `spacer`). Every section also
+takes a `style` (background, spacing, width, alignment, a jump `anchor`, hide on
+mobile). One Zod definition (`admin/sections.dto.ts`) validates both lists: strict
+per-type settings (an unknown key is an error), capped lists, links only as a site
+path or https URL, images only https / an uploaded file / local dev, video only
+YouTube and Vimeo (by parsed hostname), map embeds only Google Maps and
+OpenStreetMap embed URLs, icons from a closed set. Nothing a tenant types is HTML.
+A blog post cannot be built from sections.
+
+`PATCH /storefront-admin/pages/:id` merges: **a field the request does not name is
+left alone** (the update schemas carry no defaults; Zod 4 applies a default even
+through `.partial()`, which used to blank the body and unpublish a page on a
+one-field patch).
+
+### Templates
+
+`SITE_TEMPLATES`: `shop` (today's store), `catalogue` (products + enquiry),
+`corporate` (company site: services, projects, about, contact), `landing` (one page
+with anchor navigation). Applying one — `POST /storefront-admin/site/apply-template`
+`{ template, applyTheme, applyContent, createPages, createForms, overwritePages }` —
+is one transaction that copies it into the tenant's own rows: `applyContent` sets
+the site block (reset from the template), layout, navigation and home sections;
+`applyTheme` also takes the preset's colours, font and radius (never the logo,
+favicon, share image, announcement or social links); `createPages` and
+`createForms` add the ones whose address is free; `overwritePages` replaces a
+same-address page (never a blog post). Forms are created before the settings are
+validated, so a catalogue's enquiry form exists when its mode is checked. It returns
+the settings overview plus `applied` (what was created, replaced, skipped). Nothing
+links back to the template afterwards. `site-templates.spec.ts` runs every template
+through the real Zod schemas, so one the API would reject cannot ship.
+
+### Forms and the leads inbox
+
+`storefront_forms` (admin CRUD at `storefront-admin/forms`) is the builder:
+fields of type text, email, phone, textarea, select, checkbox, number, date, an
+optional `role` (name / email / phone) that fills the lead's own columns, who is
+emailed, and whether to acknowledge the visitor. The public side:
+
+- `GET storefront/forms/:slug` → `PublicForm` (never the staff addresses).
+- `POST storefront/forms/:slug/submit` `{ values, source?, website?, startedAt? }`
+  → `{ ok: true, message }`. Throttled (5/min per visitor). A honeypot hit, a
+  submission under two seconds old and an identical submission within five minutes
+  (form + email/phone + content hash) all get the **same** OK and store nothing,
+  so a bot learns nothing. Answers are validated against the form's own
+  definition (required, type, select options, region-aware phone, 2000 chars);
+  field errors come back as a 400 `details` map keyed by field key. A product id
+  is resolved server-side to a name and SKU snapshot — never taken from the
+  visitor. The IP is stored only as an HMAC.
+
+A lead snapshots the labels and answers (rule 5) so editing the form later does
+not rewrite it. Notifications ride the shopper-notification outbox, in the same
+transaction as the lead: `lead_received` (email to each staff address, replies go
+to the visitor; the business email when the form names none; a visible `skipped`
+row when there is nobody) and `lead_acknowledged` (to the visitor). Email only, not
+shopper-configurable. Past 30 leads in ten minutes staff are no longer mailed each
+one (they are all in the inbox). The staff mail carries no inbox link yet: the API
+has no configured admin URL.
+
+Inbox: `storefront-admin/leads` (`GET` list with `status`, `form`, `q`, paging and
+per-status counts; `GET export` CSV/XLSX through the shared export writer, which
+neutralises formula cells, capped at 10,000; `GET :id`; `PATCH :id` status/notes;
+`DELETE :id`). Permissions reuse `storefront:read` / `storefront:write`.
+A form that is the site's enquiry form cannot be deleted or switched off while a
+catalogue site's "Enquire" button posts to it.
+
+Cache tags (from `updated_at`, see `RevalidationService`): a form change pushes
+`form:<slug>` and `content`; a page change `page:<slug>`; a settings save
+`content`, `home` and `catalog`.
+
 ---
 
 ## Caching and refresh

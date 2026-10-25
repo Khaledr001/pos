@@ -62,6 +62,8 @@ export function themeCss(theme: StorefrontTheme): string {
     `--font-cond:${font.cond},ui-sans-serif,sans-serif;`,
     `--radius-tag:${radius.tag};`,
     `--radius-panel:${radius.panel};`,
+    // Every page column is `max-w-7xl`, which Tailwind resolves through this token.
+    ...(theme.layout.container === "wide" ? ["--container-7xl:96rem;"] : []),
     "}",
   ].join("");
 }

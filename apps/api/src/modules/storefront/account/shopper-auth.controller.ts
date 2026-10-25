@@ -4,7 +4,7 @@ import { Throttle } from "@nestjs/throttler";
 import type { Request, Response } from "express";
 import { zodPipe } from "../../../common/pipes/zod-validation.pipe.js";
 import { SessionCookies } from "../context/session-cookies.service.js";
-import { RequireShopper, StorefrontRoute } from "../context/storefront.guard.js";
+import { RequireShopper, RequireSiteFeature, StorefrontRoute } from "../context/storefront.guard.js";
 import { LoginSchema, RegisterSchema, type LoginDto, type RegisterDto } from "./dto.js";
 import { ShopperAuthService } from "./shopper-auth.service.js";
 
@@ -14,6 +14,7 @@ import { ShopperAuthService } from "./shopper-auth.service.js";
  */
 @ApiTags("storefront")
 @StorefrontRoute()
+@RequireSiteFeature("accounts")
 @Controller("storefront/auth")
 export class ShopperAuthController {
   constructor(

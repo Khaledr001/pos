@@ -36,7 +36,10 @@ const FONT_CLASS: Record<string, string> = {
 export async function generateMetadata(): Promise<Metadata> {
   const [store, site] = await Promise.all([getStore(), siteOrigin()]);
   const { faviconUrl, shareImageUrl } = store.theme;
-  const description = `Shop ${store.name} online. Prices include ${store.region.taxLabel}; delivery or store pickup.`;
+  // Only a shop that takes orders promises prices and delivery.
+  const description = store.features.checkout
+    ? `Shop ${store.name} online. Prices include ${store.region.taxLabel}; delivery or store pickup.`
+    : (store.tagline ? `${store.name} — ${store.tagline}` : store.name);
   return {
     metadataBase: new URL(site),
     title: {
@@ -71,7 +74,14 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         data-footer={theme.layout.footer}
         suppressHydrationWarning
       >
-        <StoreConfigProvider currency={store.currency} locale={region.formatLocale} timezone={store.timezone} region={region}>
+        <StoreConfigProvider
+          currency={store.currency}
+          locale={region.formatLocale}
+          timezone={store.timezone}
+          region={region}
+          site={store.site}
+          features={store.features}
+        >
           {children}
         </StoreConfigProvider>
       </body>

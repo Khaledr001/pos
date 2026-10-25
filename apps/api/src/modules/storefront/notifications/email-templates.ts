@@ -45,7 +45,7 @@ interface Copy {
 }
 
 function copyFor(p: NotificationPayload): Copy {
-  const { order, quote, stockAlert, shop } = p;
+  const { order, quote, stockAlert, lead, shop } = p;
   const name = p.customerName || "there";
   const n = order?.number ?? "";
   const tracking = order ? safeUrl(order.trackingUrl) : null;
@@ -95,6 +95,25 @@ function copyFor(p: NotificationPayload): Copy {
         ],
         cta: { label: "Review and accept", url: quote ? safeUrl(quote.url) : null },
       };
+    case "lead_received": {
+      const who = lead?.name || lead?.email || lead?.phone || "A visitor";
+      return {
+        subject: `New ${lead?.formName ?? "enquiry"}${lead?.productName ? `: ${lead.productName}` : ""}`.slice(0, 200),
+        heading: "New enquiry",
+        lines: [
+          `${who} submitted "${lead?.formName ?? "a form"}" on ${shop.name}.`,
+          ...(lead?.productName ? [`About: ${lead.productName}${lead.productSku ? ` (${lead.productSku})` : ""}.`] : []),
+          ...(lead?.sourcePath ? [`From the page ${lead.sourcePath}.`] : []),
+          "Reply to this email to answer them directly.",
+        ],
+      };
+    }
+    case "lead_acknowledged":
+      return {
+        subject: `We've received your message`,
+        heading: "Thanks for getting in touch",
+        lines: [`Hi ${name}, thanks for contacting ${shop.name}. We've received your message and will get back to you shortly.`, "Here is a copy of what you sent:"],
+      };
     case "stock_back_in_stock":
       return {
         subject: `${stockAlert?.productName ?? "An item"} is back in stock`,
@@ -122,6 +141,16 @@ export function renderEmail(p: NotificationPayload): RenderedEmail {
           .join("")}<tr><td style="padding:10px 0;font-weight:700">Total</td><td align="right" style="padding:10px 0;font-weight:700;white-space:nowrap">${esc(order.total)}</td></tr></table>`
       : "";
 
+  const answers = p.lead && p.lead.answers.length > 0 ? p.lead.answers : null;
+  const answerRows = answers
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0;border-collapse:collapse;font-size:14px">${answers
+        .map(
+          (a) =>
+            `<tr><td valign="top" style="padding:8px 12px 8px 0;border-bottom:1px solid #e5e7eb;color:#6b7280;width:36%">${esc(a.label)}</td><td style="padding:8px 0;border-bottom:1px solid #e5e7eb;white-space:pre-wrap">${esc(a.value)}</td></tr>`,
+        )
+        .join("")}</table>`
+    : "";
+
   const ctaUrl = copy.cta ? copy.cta.url : null;
   const cta =
     copy.cta && ctaUrl
@@ -136,12 +165,13 @@ export function renderEmail(p: NotificationPayload): RenderedEmail {
       : "";
 
   const contact = [p.shop.phone, p.shop.email].filter(Boolean).map(esc).join(" · ");
-  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(subject)}</title></head><body style="margin:0;background:#f3f4f6;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111827"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:10px;overflow:hidden"><tr><td style="background:${accent};padding:18px 24px;color:#ffffff;font-size:18px;font-weight:700">${logo ? `<img src="${esc(logo)}" alt="" height="28" style="vertical-align:middle;margin-right:8px;border:0">` : ""}${esc(p.shop.name)}</td></tr><tr><td style="padding:24px"><h1 style="margin:0 0 12px;font-size:20px">${esc(copy.heading)}</h1>${copy.lines.map((l) => `<p style="margin:0 0 10px;line-height:1.5">${esc(l)}</p>`).join("")}${lineRows}${cta}${unsubscribe}</td></tr><tr><td style="padding:16px 24px;background:#f9fafb;font-size:12px;color:#6b7280">${esc(p.shop.name)}${contact ? ` · ${contact}` : ""}</td></tr></table></td></tr></table></body></html>`;
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(subject)}</title></head><body style="margin:0;background:#f3f4f6;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111827"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:10px;overflow:hidden"><tr><td style="background:${accent};padding:18px 24px;color:#ffffff;font-size:18px;font-weight:700">${logo ? `<img src="${esc(logo)}" alt="" height="28" style="vertical-align:middle;margin-right:8px;border:0">` : ""}${esc(p.shop.name)}</td></tr><tr><td style="padding:24px"><h1 style="margin:0 0 12px;font-size:20px">${esc(copy.heading)}</h1>${copy.lines.map((l) => `<p style="margin:0 0 10px;line-height:1.5">${esc(l)}</p>`).join("")}${lineRows}${answerRows}${cta}${unsubscribe}</td></tr><tr><td style="padding:16px 24px;background:#f9fafb;font-size:12px;color:#6b7280">${esc(p.shop.name)}${contact ? ` · ${contact}` : ""}</td></tr></table></td></tr></table></body></html>`;
 
   const textParts = [copy.heading, "", ...copy.lines];
   if (lineRows && order) {
     textParts.push("", ...order.lines.map((l) => `- ${l.name} x ${l.quantity}: ${l.total}`), `Total: ${order.total}`);
   }
+  if (answers) textParts.push("", ...answers.map((a) => `${a.label}: ${a.value}`));
   if (copy.cta && ctaUrl) textParts.push("", `${copy.cta.label}: ${ctaUrl}`);
   if (p.stockAlert && unsubscribe) textParts.push("", `Stop these alerts: ${safeUrl(p.stockAlert.unsubscribeUrl)}`);
   textParts.push("", `${p.shop.name}${contact ? ` - ${[p.shop.phone, p.shop.email].filter(Boolean).join(" · ")}` : ""}`);

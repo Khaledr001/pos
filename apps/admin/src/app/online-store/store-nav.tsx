@@ -3,11 +3,14 @@ import { Button } from "@/components/ui/button";
 
 const TABS = [
   { href: "/online-store", label: "Settings" },
+  { href: "/online-store/site", label: "Site type" },
   { href: "/online-store/appearance", label: "Appearance" },
   { href: "/online-store/home", label: "Home page" },
   { href: "/online-store/navigation", label: "Navigation" },
   { href: "/online-store/notifications", label: "Notifications" },
   { href: "/online-store/content", label: "Pages & banners" },
+  { href: "/online-store/forms", label: "Forms" },
+  { href: "/online-store/leads", label: "Leads" },
 ] as const;
 
 /** Links between the screens that shape the website, so none is a dead end. */

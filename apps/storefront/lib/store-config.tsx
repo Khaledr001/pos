@@ -1,10 +1,11 @@
 "use client";
 
-import type { StorefrontRegion } from "@devsfleet/shared-types";
+import type { SiteFeatures, SiteSettings, StorefrontRegion } from "@devsfleet/shared-types";
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { makeFormat, type StoreFormat, type StoreFormatter } from "./format";
 
 const StoreConfigContext = createContext<StoreFormatter | null>(null);
+const SiteContext = createContext<{ site: SiteSettings; features: SiteFeatures } | null>(null);
 
 /**
  * The shop's currency, locale, timezone and delivery zones for client
@@ -16,10 +17,24 @@ export function StoreConfigProvider({
   locale,
   timezone,
   region,
+  site,
+  features,
   children,
-}: StoreFormat & { region: StorefrontRegion; children: ReactNode }) {
+}: StoreFormat & { region: StorefrontRegion; site: SiteSettings; features: SiteFeatures; children: ReactNode }) {
   const value = useMemo(() => makeFormat({ currency, locale, timezone, region }), [currency, locale, timezone, region]);
-  return <StoreConfigContext.Provider value={value}>{children}</StoreConfigContext.Provider>;
+  const siteValue = useMemo(() => ({ site, features }), [site, features]);
+  return (
+    <StoreConfigContext.Provider value={value}>
+      <SiteContext.Provider value={siteValue}>{children}</SiteContext.Provider>
+    </StoreConfigContext.Provider>
+  );
+}
+
+/** What this site is (shop, catalogue, showcase) and can do, for client components. */
+export function useSite() {
+  const value = useContext(SiteContext);
+  if (!value) throw new Error("useSite must be used inside <StoreConfigProvider>");
+  return value;
 }
 
 export function useStoreConfig(): StoreFormatter {

@@ -238,6 +238,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       case ERROR_CODES.PRODUCT_NOT_FOUND:
       case ERROR_CODES.CUSTOMER_NOT_FOUND:
       case ERROR_CODES.STOREFRONT_NOT_FOUND:
+      case ERROR_CODES.STORE_FEATURE_DISABLED:
       case ERROR_CODES.NOT_FOUND:
         return HttpStatus.NOT_FOUND;
       case ERROR_CODES.SKU_ALREADY_EXISTS:

@@ -56,6 +56,17 @@ The shop-window endpoints, all under `/api/v1/storefront`:
 | Cart & checkout | `/cart/*`, checkout (need the shopper cookie → server proxy) |
 | Shopper | `/auth/*`, `/me/*`, `/quotes` (cookie → server proxy); `/stock-alerts` is public |
 
+**Site modes.** `GET /content/store` also returns `site` and `features`
+(derived from the shop's mode: shop, catalogue or showcase). A route whose feature
+the site does not run answers **404** `STORE_FEATURE_DISABLED` ("That is not
+available on this site.") — not 403 — so a catalogue site's cart and a company
+site's catalogue simply do not exist for a custom front end either. Prices are
+omitted (`null` / `{}`) when a catalogue site hides them. Content and forms are
+always available: `GET /forms/:slug` and `POST /forms/:slug/submit` work from a
+browser on an allowed origin like any public read (no cookies involved), so a
+custom front end can embed the same contact and enquiry forms. See
+[STOREFRONT.md](STOREFRONT.md#site-types-sections-and-forms).
+
 Responses are JSON; amounts are decimal strings and whole fils. Never compute a
 total on the client — the checkout quote is the authority.
 

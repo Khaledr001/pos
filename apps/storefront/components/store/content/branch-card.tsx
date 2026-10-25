@@ -2,7 +2,7 @@ import type { Branch } from "@devsfleet/storefront-client";
 import { MapPin, Navigation, Phone } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { buttonClass } from "@/components/ui/button";
-import { getFormat } from "@/lib/data";
+import { getFormat, getStore } from "@/lib/data";
 import { WEEKDAYS } from "@/lib/format";
 
 function hours(openingHours: unknown): Record<string, string> {
@@ -14,7 +14,7 @@ function hours(openingHours: unknown): Record<string, string> {
 const pretty = (h: string) => h.replace(/\s*-\s*/g, "–");
 
 export async function BranchCard({ branch }: { branch: Branch }) {
-  const { zoneName } = await getFormat();
+  const [{ zoneName }, { features }] = await Promise.all([getFormat(), getStore()]);
   const h = hours(branch.openingHours);
   const directions =
     branch.lat != null && branch.lng != null ? `https://www.google.com/maps/dir/?api=1&destination=${branch.lat},${branch.lng}` : null;
@@ -22,7 +22,7 @@ export async function BranchCard({ branch }: { branch: Branch }) {
     <li className="flex flex-col rounded-[var(--radius-panel)] border border-galv bg-paper p-5">
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="text-2xl">{branch.name}</h2>
-        {branch.pickupEnabled && <Badge tone="pipe">Store pickup</Badge>}
+        {branch.pickupEnabled && features.checkout && <Badge tone="pipe">Store pickup</Badge>}
       </div>
       <p className="text-sm text-steel">{zoneName(branch.emirate)}</p>
       <p className="mt-3 flex gap-2 text-[15px]">

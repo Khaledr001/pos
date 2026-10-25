@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { ComponentProps } from "react";
 import { cn } from "@/lib/cn";
 
-type Variant = "primary" | "secondary" | "ghost" | "danger" | "brass";
+type Variant = "primary" | "secondary" | "ghost" | "danger" | "brass" | "onDark";
 type Size = "sm" | "md" | "lg";
 
 const base =
@@ -14,6 +14,8 @@ const variants: Record<Variant, string> = {
   ghost: "text-ink hover:bg-galv/60",
   danger: "bg-signal text-white hover:brightness-95",
   brass: "bg-brass text-ink hover:brightness-95",
+  /** Outline button for photos and dark panels. */
+  onDark: "border border-white/60 text-white hover:bg-white/10",
 };
 
 const sizes: Record<Size, string> = {
@@ -23,7 +25,8 @@ const sizes: Record<Size, string> = {
 };
 
 export function buttonClass(variant: Variant = "primary", size: Size = "md", className?: string) {
-  return cn(base, variants[variant], sizes[size], className);
+  // `btn-<variant>` is a hook for coloured section bands (globals.css), which restyle buttons that would vanish into them.
+  return cn(base, `btn-${variant}`, variants[variant], sizes[size], className);
 }
 
 export function Button({

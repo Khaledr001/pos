@@ -44,7 +44,7 @@ export default async function DepartmentsPage() {
 
       <div className="space-y-8">
         {[...groups.entries()].map(([letter, items]) => (
-          <section key={letter} id={`letter-${letter}`} aria-labelledby={`heading-${letter}`} className="scroll-mt-40">
+          <section key={letter} id={`letter-${letter}`} aria-labelledby={`heading-${letter}`} className="scroll-mt-20">
             <h2 id={`heading-${letter}`} className="mb-3 border-b border-galv pb-2 text-2xl">
               {letter}
             </h2>

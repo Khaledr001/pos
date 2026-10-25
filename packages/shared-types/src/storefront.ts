@@ -22,6 +22,7 @@ import {
   type StorefrontRegion,
   type StorefrontTheme,
 } from "./storefront-appearance.js";
+import { DEFAULT_SITE, resolveSite, type SiteSettings } from "./storefront-site.js";
 import {
   DEFAULT_NOTIFICATION_SETTINGS,
   resolveNotificationSettings,
@@ -224,6 +225,8 @@ export interface StorefrontSettings {
   headless: HeadlessSettings;
   /** Which shopper messages go out, on which channel, with which WhatsApp template. */
   notifications: StorefrontNotificationSettings;
+  /** Shop, catalogue or showcase; which parts of the platform this site uses. */
+  site: SiteSettings;
 }
 
 export const DEFAULT_SHIPPING_RATES: ShippingRate[] = [
@@ -254,6 +257,7 @@ export const DEFAULT_STOREFRONT_SETTINGS: StorefrontSettings = {
   region: DEFAULT_REGION,
   headless: DEFAULT_HEADLESS,
   notifications: DEFAULT_NOTIFICATION_SETTINGS,
+  site: DEFAULT_SITE,
 };
 
 /** Merge stored partial settings over the defaults. One level per section. */
@@ -279,5 +283,6 @@ export function resolveStorefrontSettings(stored: unknown): StorefrontSettings {
     region: resolveRegion(s.region),
     headless: { ...d.headless, ...s.headless },
     notifications: resolveNotificationSettings(s.notifications),
+    site: resolveSite(s.site),
   };
 }

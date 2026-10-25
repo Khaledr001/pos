@@ -1,6 +1,6 @@
 "use client";
 
-import type { NavLink } from "@devsfleet/shared-types";
+import type { NavLink, SiteFeatures } from "@devsfleet/shared-types";
 import type { CategoryNode } from "@devsfleet/storefront-client";
 import { ChevronDown, ChevronRight, LayoutGrid, Menu, MessageCircle, Phone, UserRound, X } from "lucide-react";
 import Link from "next/link";
@@ -19,7 +19,7 @@ import { NavAnchor } from "./nav-anchor";
  * alphabetical list, and the row beside it shows as many of the busiest
  * departments as fit on one line — the rest are dropped, never wrapped.
  */
-export function DeptNav({ categories, links = [] }: { categories: CategoryNode[]; links?: NavLink[] }) {
+export function DeptNav({ categories, links = [], showTrade = true }: { categories: CategoryNode[]; links?: NavLink[]; showTrade?: boolean }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const [path, setPath] = useState(pathname);
@@ -123,12 +123,14 @@ export function DeptNav({ categories, links = [] }: { categories: CategoryNode[]
           <Link href="/brands" className="font-medium hover:text-pipe">
             Brands
           </Link>
-          <Link
-            href="/account/trade"
-            className="rounded-[var(--radius-tag)] bg-brass-tint px-3 py-1.5 font-semibold text-brass-ink transition-colors hover:bg-brass hover:text-ink"
-          >
-            Trade accounts
-          </Link>
+          {showTrade && (
+            <Link
+              href="/account/trade"
+              className="rounded-[var(--radius-tag)] bg-brass-tint px-3 py-1.5 font-semibold text-brass-ink transition-colors hover:bg-brass hover:text-ink"
+            >
+              Trade accounts
+            </Link>
+          )}
         </div>
       </div>
 
@@ -184,13 +186,20 @@ export function MobileMenu({
   phone,
   whatsappHref,
   links = [],
+  features,
+  cta = null,
+  title = "Menu",
 }: {
   categories: CategoryNode[];
   phone?: string | null;
   whatsappHref?: string | null;
   links?: NavLink[];
+  features: SiteFeatures;
+  /** The header's call-to-action button, repeated here because the header hides it on phones. */
+  cta?: { label: string; href: string } | null;
+  /** Shown in the drawer's header when there is no account block (a site without accounts). */
+  title?: string;
 }) {
-  const { data: me } = useMe();
   const [drawer, setDrawer] = useState(false);
   const pathname = usePathname();
   const [path, setPath] = useState(pathname);
@@ -250,7 +259,7 @@ export function MobileMenu({
         type="button"
         onClick={() => setDrawer(true)}
         className="inline-flex size-11 cursor-pointer items-center justify-center rounded-[var(--radius-tag)] transition-colors hover:bg-sheet active:bg-galv lg:hidden"
-        aria-label="Open departments menu"
+        aria-label={features.products ? "Open departments menu" : "Open menu"}
         aria-expanded={drawer}
       >
         <Menu className="size-6" aria-hidden />
@@ -270,24 +279,20 @@ export function MobileMenu({
             }}
           >
             <div className="flex items-center justify-between bg-ink px-4 py-3 text-white">
-              <Link href={me ? "/account" : "/login"} className="flex min-w-0 items-center gap-3">
-                <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-white/15">
-                  <UserRound className="size-5" aria-hidden />
-                </span>
-                <span className="flex min-w-0 flex-col leading-tight">
-                  <span className="truncate font-semibold">{me ? `Hello, ${me.firstName}` : "Log in or register"}</span>
-                  <span className="text-sm text-white/70">{me ? "Your account and orders" : "Track orders, reorder fast"}</span>
-                </span>
-              </Link>
+              {features.accounts ? (
+                <DrawerAccount />
+              ) : (
+                <p className="min-w-0 truncate font-cond text-xl font-semibold">{title}</p>
+              )}
               <button ref={closeRef} type="button" onClick={() => setDrawer(false)} aria-label="Close menu" className="inline-flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-[var(--radius-tag)] hover:bg-white/10">
                 <X className="size-6" aria-hidden />
               </button>
             </div>
 
-            <nav aria-label="Departments" className="flex-1 overflow-y-auto overscroll-contain px-2 py-2">
-              <p className="px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-wider text-steel">Shop by department</p>
+            <nav aria-label={features.products ? "Departments" : "Menu"} className="flex-1 overflow-y-auto overscroll-contain px-2 py-2">
+              {features.products && <p className="px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-wider text-steel">Shop by department</p>}
               <ul>
-                {all.map((c) => {
+                {(features.products ? all : []).map((c) => {
                   const isOpen = expanded === c.slug;
                   const hasChildren = c.children.length > 0;
                   const panelId = `m-dept-${c.slug}`;
@@ -338,10 +343,10 @@ export function MobileMenu({
 
             <div className="border-t border-galv bg-sheet px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2">
               <ul className="grid grid-cols-2 gap-x-1">
-                <li><Link href="/brands" className={row}>Brands</Link></li>
+                {features.products && <li><Link href="/brands" className={row}>Brands</Link></li>}
                 <li><Link href="/branches" className={row}>Branches</Link></li>
-                <li><Link href="/track" className={row}>Track order</Link></li>
-                <li><Link href="/account/trade" className={cn(row, "font-semibold text-brass-ink")}>Trade accounts</Link></li>
+                {features.tracking && <li><Link href="/track" className={row}>Track order</Link></li>}
+                {features.accounts && <li><Link href="/account/trade" className={cn(row, "font-semibold text-brass-ink")}>Trade accounts</Link></li>}
                 {links.map((l) => (
                   <li key={`${l.label}-${l.href}`}>
                     <NavAnchor href={l.href} className={row}>
@@ -350,6 +355,13 @@ export function MobileMenu({
                   </li>
                 ))}
               </ul>
+              {cta && (
+                <div className="px-1 pb-1 pt-1">
+                  <NavAnchor href={cta.href} className="inline-flex h-11 w-full items-center justify-center rounded-[var(--radius-tag)] bg-pipe font-semibold text-white active:bg-pipe-dark">
+                    {cta.label}
+                  </NavAnchor>
+                </div>
+              )}
               {(phone || whatsappHref) && (
                 <div className="mt-1 grid grid-cols-2 gap-2 px-1 pb-1">
                   {phone && (
@@ -369,5 +381,21 @@ export function MobileMenu({
         </div>
       )}
     </>
+  );
+}
+
+/** The signed-in shopper (or the invitation to sign in) at the top of the phone menu. Only mounted on sites with accounts, so it never calls /me on one without. */
+function DrawerAccount() {
+  const { data: me } = useMe();
+  return (
+    <Link href={me ? "/account" : "/login"} className="flex min-w-0 items-center gap-3">
+      <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-white/15">
+        <UserRound className="size-5" aria-hidden />
+      </span>
+      <span className="flex min-w-0 flex-col leading-tight">
+        <span className="truncate font-semibold">{me ? `Hello, ${me.firstName}` : "Log in or register"}</span>
+        <span className="text-sm text-white/70">{me ? "Your account and orders" : "Track orders, reorder fast"}</span>
+      </span>
+    </Link>
   );
 }

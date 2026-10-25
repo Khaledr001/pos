@@ -1,5 +1,5 @@
 import type { ApiClient } from './client.ts';
-import type { CreateQuoteInput, Paged, QuoteSummary, QuoteView, StockAlertInput } from './types.ts';
+import type { FormSubmission, FormSubmitResult, PublicForm, CreateQuoteInput, Paged, QuoteSummary, QuoteView, StockAlertInput } from './types.ts';
 
 /** Back-in-stock alerts. Public: a guest can subscribe. */
 export const stockAlertsApi = (api: ApiClient) => ({
@@ -14,4 +14,10 @@ export const quotesApi = (api: ApiClient) => ({
   get: (id: string) => api.get<QuoteView>(`/quotes/${id}`),
   accept: (id: string) => api.post<QuoteView>(`/quotes/${id}/accept`),
   decline: (id: string) => api.post<QuoteView>(`/quotes/${id}/decline`),
+});
+
+/** Forms from the form builder. Public: a guest can submit. */
+export const formsApi = (api: ApiClient) => ({
+  get: (slug: string) => api.get<PublicForm>(`/forms/${slug}`),
+  submit: (slug: string, input: FormSubmission) => api.post<FormSubmitResult>(`/forms/${slug}/submit`, input),
 });

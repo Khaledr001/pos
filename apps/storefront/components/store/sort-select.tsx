@@ -10,7 +10,8 @@ const OPTIONS = [
   { value: "name", label: "Name A–Z" },
 ];
 
-export function SortSelect({ hasQuery }: { hasQuery: boolean }) {
+/** `showPrice` is false on a site that hides prices: sorting by one would leak their order. */
+export function SortSelect({ hasQuery, showPrice = true }: { hasQuery: boolean; showPrice?: boolean }) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -28,7 +29,7 @@ export function SortSelect({ hasQuery }: { hasQuery: boolean }) {
         }}
         className="h-9 rounded-[var(--radius-tag)] border border-galv bg-paper px-2"
       >
-        {OPTIONS.map((o) => (
+        {OPTIONS.filter((o) => showPrice || !o.value.startsWith("price")).map((o) => (
           <option key={o.value} value={o.value}>
             {o.value === "" && hasQuery ? "Best match" : o.label}
           </option>
