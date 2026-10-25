@@ -27,7 +27,7 @@ export function AddedToCartMessage({ result, names }: { result: AddedToCart; nam
         <p className="rounded-[var(--radius-tag)] bg-signal-tint px-3 py-2 text-signal">Nothing could be added to your cart.</p>
       )}
       {result.skipped.length > 0 && (
-        <div className="rounded-[var(--radius-tag)] bg-brass-tint px-3 py-2 text-[#7a5a0c]">
+        <div className="rounded-[var(--radius-tag)] bg-brass-tint px-3 py-2 text-brass-ink">
           <p>
             {result.skipped.length === 1 ? "This item is" : "These items are"} no longer available, so we left{" "}
             {result.skipped.length === 1 ? "it" : "them"} out:

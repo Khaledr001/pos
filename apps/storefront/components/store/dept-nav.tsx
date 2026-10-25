@@ -1,5 +1,6 @@
 "use client";
 
+import type { NavLink } from "@devsfleet/shared-types";
 import type { CategoryNode } from "@devsfleet/storefront-client";
 import { ChevronDown, ChevronRight, LayoutGrid, Menu, MessageCircle, Phone, UserRound, X } from "lucide-react";
 import Link from "next/link";
@@ -8,6 +9,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { alphabetical, busiestFirst, displayName } from "@/lib/format";
 import { useMe } from "@/lib/hooks/store";
+import { NavAnchor } from "./nav-anchor";
 
 /**
  * Desktop department bar.
@@ -17,7 +19,7 @@ import { useMe } from "@/lib/hooks/store";
  * alphabetical list, and the row beside it shows as many of the busiest
  * departments as fit on one line — the rest are dropped, never wrapped.
  */
-export function DeptNav({ categories }: { categories: CategoryNode[] }) {
+export function DeptNav({ categories, links = [] }: { categories: CategoryNode[]; links?: NavLink[] }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const [path, setPath] = useState(pathname);
@@ -113,12 +115,17 @@ export function DeptNav({ categories }: { categories: CategoryNode[] }) {
         </ul>
 
         <div className="flex shrink-0 items-center gap-4 text-sm">
+          {links.map((l) => (
+            <NavAnchor key={`${l.label}-${l.href}`} href={l.href} className="font-medium hover:text-pipe">
+              {l.label}
+            </NavAnchor>
+          ))}
           <Link href="/brands" className="font-medium hover:text-pipe">
             Brands
           </Link>
           <Link
             href="/account/trade"
-            className="rounded-[var(--radius-tag)] bg-brass-tint px-3 py-1.5 font-semibold text-[#7a5a0c] transition-colors hover:bg-brass hover:text-ink"
+            className="rounded-[var(--radius-tag)] bg-brass-tint px-3 py-1.5 font-semibold text-brass-ink transition-colors hover:bg-brass hover:text-ink"
           >
             Trade accounts
           </Link>
@@ -126,7 +133,7 @@ export function DeptNav({ categories }: { categories: CategoryNode[] }) {
       </div>
 
       {open && (
-        <div id="all-departments" className="absolute inset-x-0 top-full z-40 border-t border-galv bg-paper shadow-[0_16px_32px_-12px_rgb(28_37_48/0.25)]">
+        <div id="all-departments" className="absolute inset-x-0 top-full z-40 border-t border-galv bg-paper shadow-[0_16px_32px_-12px_color-mix(in_srgb,var(--color-ink)_25%,transparent)]">
           <div className="mx-auto max-h-[70vh] max-w-7xl overflow-y-auto px-4 py-6">
             <div className="mb-4 flex items-baseline justify-between gap-4">
               <h2 className="text-2xl">All departments</h2>
@@ -176,10 +183,12 @@ export function MobileMenu({
   categories,
   phone,
   whatsappHref,
+  links = [],
 }: {
   categories: CategoryNode[];
   phone?: string | null;
   whatsappHref?: string | null;
+  links?: NavLink[];
 }) {
   const { data: me } = useMe();
   const [drawer, setDrawer] = useState(false);
@@ -332,7 +341,14 @@ export function MobileMenu({
                 <li><Link href="/brands" className={row}>Brands</Link></li>
                 <li><Link href="/branches" className={row}>Branches</Link></li>
                 <li><Link href="/track" className={row}>Track order</Link></li>
-                <li><Link href="/account/trade" className={cn(row, "font-semibold text-[#7a5a0c]")}>Trade accounts</Link></li>
+                <li><Link href="/account/trade" className={cn(row, "font-semibold text-brass-ink")}>Trade accounts</Link></li>
+                {links.map((l) => (
+                  <li key={`${l.label}-${l.href}`}>
+                    <NavAnchor href={l.href} className={row}>
+                      {l.label}
+                    </NavAnchor>
+                  </li>
+                ))}
               </ul>
               {(phone || whatsappHref) && (
                 <div className="mt-1 grid grid-cols-2 gap-2 px-1 pb-1">

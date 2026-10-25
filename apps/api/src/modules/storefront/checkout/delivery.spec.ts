@@ -70,3 +70,29 @@ describe("pickupSlots", () => {
     expect(slots.every((s) => !s.label.endsWith("20:30"))).toBe(true);
   });
 });
+
+describe("courierQuote in another region", () => {
+  const rates = [
+    { emirate: "RIYADH", baseFee: "15.00", baseWeightKg: 5, perKgFee: "2.00", freeOver: null, maxWeightKg: 30, etaDays: 3, active: true },
+    { emirate: "TABUK", baseFee: "40.00", baseWeightKg: 5, perKgFee: "2.00", freeOver: null, maxWeightKg: 30, etaDays: 5, active: false },
+  ];
+  const quote = (emirate: string) =>
+    courierQuote({
+      rates,
+      emirate,
+      weightKg: Money.toMinor("3"),
+      goodsNetAfterDiscount: Money.toMinor("100"),
+      hasPickupOnlyItems: false,
+      freeShipping: false,
+      deliveryConfigured: true,
+    });
+
+  it("prices a zone that is not an emirate", () => {
+    expect(Money.toDecimalString(quote("RIYADH").fee, 2)).toBe("15.00");
+  });
+
+  it("refuses a zone that is switched off, or that has no rate", () => {
+    expect(quote("TABUK").reason).toBe("EMIRATE_NOT_SERVED");
+    expect(quote("DUBAI").reason).toBe("EMIRATE_NOT_SERVED");
+  });
+});

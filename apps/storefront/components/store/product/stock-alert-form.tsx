@@ -8,6 +8,7 @@ import { FormError, TextField } from "@/components/ui/field";
 import { api } from "@/lib/api-browser";
 import { useMe } from "@/lib/hooks/store";
 import { friendlyError } from "@/components/store/account/session";
+import { useStoreConfig } from "@/lib/store-config";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -21,6 +22,7 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
  */
 export function StockAlertForm({ variantId, productName }: { variantId: string; productName: string }) {
   const { data: me } = useMe();
+  const { phonePlaceholder } = useStoreConfig();
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [website, setWebsite] = useState("");
@@ -89,11 +91,11 @@ export function StockAlertForm({ variantId, productName }: { variantId: string; 
         type="tel"
         autoComplete="tel"
         inputMode="tel"
-        placeholder="+971 50 123 4567"
+        placeholder={phonePlaceholder}
         maxLength={20}
         value={phoneValue}
         onChange={(e) => setPhone(e.target.value)}
-        hint="A UAE number"
+        hint="Optional: we can message you there"
       />
       {/* Honeypot: invisible and unreachable for people, tempting for form-filling scripts. */}
       <div aria-hidden="true" className="absolute -left-[9999px] h-0 w-0 overflow-hidden">

@@ -4,6 +4,10 @@
  * services against these, so a change on either side fails the build.
  */
 
+import type { HomeSection, StorefrontNavigation, StorefrontRegion, StorefrontTheme } from '@devsfleet/shared-types';
+
+export type { HomeSection, HomeSectionType, NavLink, FooterColumn, StorefrontNavigation, StorefrontRegion, StorefrontTheme, RegionZone } from '@devsfleet/shared-types';
+
 // ── shared ──
 
 export interface Money {
@@ -14,14 +18,8 @@ export interface Money {
   formatted: string;
 }
 
-export type Emirate =
-  | 'ABU_DHABI'
-  | 'DUBAI'
-  | 'SHARJAH'
-  | 'AJMAN'
-  | 'UMM_AL_QUWAIN'
-  | 'RAS_AL_KHAIMAH'
-  | 'FUJAIRAH';
+/** A delivery zone code from the shop's region (`StoreInfo.region.zones`). */
+export type Emirate = string;
 
 export type StockLabel = 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK';
 export type PriceListType = 'RETAIL' | 'TRADE' | 'PROMO';
@@ -458,6 +456,8 @@ export interface HomeData {
   featuredBrands: BrandSummary[];
   bestSellers: ProductCard[];
   newArrivals: ProductCard[];
+  /** Enabled sections only, in the order the shop wants them. */
+  sections: HomeSection[];
 }
 
 export interface Page {
@@ -508,6 +508,11 @@ export interface StoreInfo {
   whatsapp: string;
   currency: string;
   cod: { enabled: boolean; max: string; maxFils: number };
+  theme: StorefrontTheme;
+  navigation: StorefrontNavigation;
+  region: StorefrontRegion;
+  /** Timezone of the shop, e.g. "Asia/Dubai". */
+  timezone: string;
 }
 
 // ── back-in-stock alerts ──

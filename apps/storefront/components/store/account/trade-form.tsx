@@ -9,21 +9,22 @@ import { Button, ButtonLink } from "@/components/ui/button";
 import { FormError, TextAreaField, TextField } from "@/components/ui/field";
 import { api, ApiError } from "@/lib/api-browser";
 import { useMe } from "@/lib/hooks/store";
+import { useStoreConfig } from "@/lib/store-config";
 import { QueryError, friendlyError } from "./session";
 
 export function TradeApplicationForm({ companyName, trn }: { companyName: string; trn: string }) {
   const qc = useQueryClient();
+  const { region } = useStoreConfig();
   const [form, setForm] = useState({ companyName, trn, message: "" });
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const cleanTrn = form.trn.replace(/[\s-]/g, "");
-  const trnError = cleanTrn.length >= 15 && !/^100\d{12}$/.test(cleanTrn) ? "A UAE TRN is 15 digits and starts with 100" : null;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!/^100\d{12}$/.test(cleanTrn)) {
-      setError("Enter your 15-digit TRN, starting with 100. You'll find it on your VAT registration certificate.");
+    if (cleanTrn.length < 5) {
+      setError(`Enter your ${region.taxIdLabel}. You'll find it on your tax registration certificate.`);
       return;
     }
     setPending(true);
@@ -54,14 +55,11 @@ export function TradeApplicationForm({ companyName, trn }: { companyName: string
           hint="As it appears on your trade licence"
         />
         <TextField
-          label="TRN"
-          inputMode="numeric"
-          placeholder="100XXXXXXXXXXXX"
+          label={region.taxIdLabel}
           value={form.trn}
           onChange={(e) => setForm({ ...form, trn: e.target.value })}
           required
-          hint="15 digits, starting with 100"
-          error={trnError}
+          hint="As on your tax registration certificate"
         />
       </div>
       <TextAreaField
@@ -102,6 +100,7 @@ function StatusPanel({ tone, icon, title, children }: { tone: "pipe" | "brass" |
 
 /** The visitor's trade status, or the sign-up prompt / application form. */
 export function TradeStatusPanel() {
+  const { region } = useStoreConfig();
   const { data: me, isLoading, error } = useMe();
   const next = encodeURIComponent("/account/trade");
   if (isLoading) return <div role="status" className="h-40 animate-pulse rounded-[var(--radius-panel)] border border-galv bg-paper"><span className="sr-only">Loading your trade status</span></div>;
@@ -111,7 +110,7 @@ export function TradeStatusPanel() {
       {!me && (
         <StatusPanel tone="plain" title="Create an account to apply">
           <p className="text-steel">
-            It takes a minute. Then send us your company name and TRN, and we&apos;ll review your application.
+            It takes a minute. Then send us your company name and tax registration number, and we&apos;ll review your application.
           </p>
           <div className="flex flex-wrap items-center gap-3">
             <ButtonLink href={`/register?next=${next}`}>Create an account</ButtonLink>
@@ -130,7 +129,7 @@ export function TradeStatusPanel() {
           <p>
             You see your trade prices across the store whenever you&apos;re logged in
             {me.companyName ? `, and invoices go to ${me.companyName}` : ""}
-            {me.trn ? ` (TRN ${me.trn})` : ""}.
+            {me.trn ? ` (${region.taxIdLabel} ${me.trn})` : ""}.
           </p>
           <p className="text-steel">
             Need a quote for a large project? Send us your list on WhatsApp or{" "}
@@ -143,14 +142,14 @@ export function TradeStatusPanel() {
       )}
 
       {me?.tradeStatus === "PENDING" && (
-        <StatusPanel tone="brass" icon={<Clock className="size-6 text-[#7a5a0c]" aria-hidden />} title="We're reviewing your trade application">
+        <StatusPanel tone="brass" icon={<Clock className="size-6 text-brass-ink" aria-hidden />} title="We're reviewing your trade application">
           <p>
             We&apos;ll email {me.email} when your trade prices are ready. Until then you can keep ordering at our regular prices.
           </p>
           {(me.companyName || me.trn) && (
             <p className="text-steel">
               Applied as {me.companyName}
-              {me.trn ? `, TRN ${me.trn}` : ""}.
+              {me.trn ? `, ${region.taxIdLabel} ${me.trn}` : ""}.
             </p>
           )}
         </StatusPanel>
@@ -159,7 +158,7 @@ export function TradeStatusPanel() {
       {me?.tradeStatus === "REJECTED" && (
         <StatusPanel tone="signal" icon={<XCircle className="size-6 text-signal" aria-hidden />} title="We couldn't approve your application">
           <p>
-            Check your company name and TRN and apply again below, or{" "}
+            Check your company name and tax registration number and apply again below, or{" "}
             <Link href="/contact" className="underline">
               contact us
             </Link>{" "}

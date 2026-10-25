@@ -16,7 +16,7 @@ export function QueryError({ error }: { error: unknown }) {
   const pathname = usePathname();
   if (error instanceof ApiError && error.status === 401) {
     return (
-      <div role="alert" className="rounded-[var(--radius-tag)] border border-brass/40 bg-brass-tint px-3 py-2 text-sm text-[#7a5a0c]">
+      <div role="alert" className="rounded-[var(--radius-tag)] border border-brass/40 bg-brass-tint px-3 py-2 text-sm text-brass-ink">
         You&apos;ve been logged out.{" "}
         <Link href={`/login?next=${encodeURIComponent(pathname)}`} className="font-semibold underline">
           Log in again

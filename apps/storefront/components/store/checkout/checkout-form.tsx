@@ -21,10 +21,11 @@ import { EmptyState } from "@/components/ui/empty";
 import { track } from "@/lib/analytics";
 import { api, ApiError, errorMessage } from "@/lib/api-browser";
 import { cn } from "@/lib/cn";
-import { displayName, emirateName, EMIRATES, uomCount } from "@/lib/format";
+import { displayName, uomCount } from "@/lib/format";
 import { useCart, useMe } from "@/lib/hooks/store";
+import { useStoreConfig } from "@/lib/store-config";
 
-const emptyAddress: AddressInput = { fullName: "", phone: "", emirate: "DUBAI", area: "", street: "", building: "", landmark: "" };
+const emptyAddress = (zone: string): AddressInput => ({ fullName: "", phone: "", emirate: zone, area: "", street: "", building: "", landmark: "" });
 
 function Step({ n, title, children }: { n: number; title: string; children: ReactNode }) {
   return (
@@ -59,6 +60,7 @@ export function CheckoutForm() {
   const router = useRouter();
   const params = useSearchParams();
   const qc = useQueryClient();
+  const { currency, region, zoneName, phonePlaceholder } = useStoreConfig();
   const { data: me } = useMe();
   const { data: cart, isLoading: cartLoading } = useCart();
 
@@ -66,7 +68,7 @@ export function CheckoutForm() {
   // User choices; null means "not chosen yet, use the default".
   const [chosenMethod, setMethod] = useState<DeliveryMethod | null>(null);
   const [chosenAddressId, setAddressId] = useState<string | null>(null);
-  const [address, setAddress] = useState<AddressInput>(emptyAddress);
+  const [address, setAddress] = useState<AddressInput>(() => emptyAddress(region.zones[0]!.code));
   const [saveAddress, setSaveAddress] = useState(true);
   const [chosenBranchId, setBranchId] = useState<string | null>(null);
   const [chosenSlot, setSlot] = useState<string>("");
@@ -139,13 +141,13 @@ export function CheckoutForm() {
       case "OVERWEIGHT":
         return `This order weighs about ${quote.weightKg} kg, over the courier limit. Choose store pickup.`;
       case "EMIRATE_NOT_SERVED":
-        return "We don't deliver to this emirate yet. Choose store pickup.";
+        return `We don't deliver to this ${region.zoneLabel.toLowerCase()} yet. Choose store pickup.`;
       case "NOT_OFFERED":
         return "Courier delivery isn't offered yet. Choose store pickup.";
       default:
         return null;
     }
-  }, [quote]);
+  }, [quote, region.zoneLabel]);
 
   if (cartLoading) return <div className="mx-auto max-w-7xl px-4 py-12 text-steel">Loading checkout…</div>;
   if (!cart || cart.items.length === 0) {
@@ -175,6 +177,7 @@ export function CheckoutForm() {
     };
     setPlacing(true);
     track("begin_checkout", {
+      currency,
       value: quote.totals.total.fils / 100,
       items: cart.items.map((i) => ({ item_id: i.sku, item_name: i.productName, price: (i.unitPrice?.fils ?? 0) / 100, quantity: i.quantity })),
     });
@@ -222,7 +225,7 @@ export function CheckoutForm() {
             <div className="grid gap-4 sm:grid-cols-3">
               <TextField label="Full name" autoComplete="name" value={contact.fullName} onChange={(e) => setContact({ ...contact, fullName: e.target.value })} required />
               <TextField label="Email" type="email" autoComplete="email" value={contact.email} onChange={(e) => setContact({ ...contact, email: e.target.value })} required />
-              <TextField label="Mobile" type="tel" autoComplete="tel" placeholder="+971 50 123 4567" value={contact.phone} onChange={(e) => setContact({ ...contact, phone: e.target.value })} required hint="For delivery and order updates" />
+              <TextField label="Mobile" type="tel" autoComplete="tel" placeholder={phonePlaceholder} value={contact.phone} onChange={(e) => setContact({ ...contact, phone: e.target.value })} required hint="For delivery and order updates" />
             </div>
           </Step>
 
@@ -252,7 +255,7 @@ export function CheckoutForm() {
                       <Choice key={a.id} name="address" checked={addressId === a.id} onChange={() => setAddressId(a.id)}>
                         <span className="font-medium">{a.label ?? a.fullName}</span>
                         <span className="block text-sm text-steel">
-                          {[a.building, a.street, a.area, emirateName(a.emirate)].filter(Boolean).join(", ")}
+                          {[a.building, a.street, a.area, zoneName(a.emirate)].filter(Boolean).join(", ")}
                         </span>
                       </Choice>
                     ))}
@@ -263,10 +266,10 @@ export function CheckoutForm() {
                 )}
                 {addressId === "new" && (
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <SelectField label="Emirate" value={address.emirate} onChange={(e) => setAddress({ ...address, emirate: e.target.value as Emirate })}>
-                      {EMIRATES.map((e) => (
-                        <option key={e.value} value={e.value}>
-                          {e.label}
+                    <SelectField label={region.zoneLabel} value={address.emirate} onChange={(e) => setAddress({ ...address, emirate: e.target.value as Emirate })}>
+                      {region.zones.map((z) => (
+                        <option key={z.code} value={z.code}>
+                          {z.name}
                         </option>
                       ))}
                     </SelectField>
@@ -280,11 +283,11 @@ export function CheckoutForm() {
                 {courierBlocked && courierMessage && <FormError message={courierMessage} />}
                 {quote?.courier.available && (
                   <p className="text-[15px]">
-                    Delivery to {emirateName(emirate)}:{" "}
+                    Delivery to {zoneName(emirate)}:{" "}
                     <strong>{quote.courier.feeNetFils === 0 ? "Free" : quote.courier.fee.formatted}</strong>, usually {quote.courier.etaDays}{" "}
                     {quote.courier.etaDays === 1 ? "working day" : "working days"}.
                     {quote.courier.freeOverFils && quote.courier.feeNetFils > 0 && (
-                      <span className="text-steel"> Free on orders over AED {(quote.courier.freeOverFils / 100).toFixed(0)} excl. VAT.</span>
+                      <span className="text-steel"> Free on orders over {currency} {(quote.courier.freeOverFils / 100).toFixed(0)} excl. {region.taxLabel}.</span>
                     )}
                   </p>
                 )}
@@ -319,7 +322,7 @@ export function CheckoutForm() {
             {business && (
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 <TextField label="Company name" value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
-                <TextField label="TRN" inputMode="numeric" placeholder="100XXXXXXXXXXXX" value={trn} onChange={(e) => setTrn(e.target.value)} hint="15 digits, starting with 100" />
+                <TextField label={region.taxIdLabel} inputMode="text" value={trn} onChange={(e) => setTrn(e.target.value)} hint="Printed on the invoice" />
               </div>
             )}
           </Step>
@@ -356,7 +359,7 @@ export function CheckoutForm() {
           {quote && (
             <dl className="space-y-2 border-t border-galv pt-3 text-[15px]">
               <div className="flex justify-between">
-                <dt className="text-steel">Items (excl. VAT)</dt>
+                <dt className="text-steel">Items (excl. {region.taxLabel})</dt>
                 <dd>{quote.totals.subtotalNet.formatted}</dd>
               </div>
               {quote.totals.discountNet.fils > 0 && (
@@ -366,11 +369,11 @@ export function CheckoutForm() {
                 </div>
               )}
               <div className="flex justify-between">
-                <dt className="text-steel">Delivery (excl. VAT)</dt>
+                <dt className="text-steel">Delivery (excl. {region.taxLabel})</dt>
                 <dd>{method === "PICKUP" || quote.totals.shippingNet.fils === 0 ? "Free" : quote.totals.shippingNet.formatted}</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-steel">VAT 5%</dt>
+                <dt className="text-steel">{region.taxLabel}</dt>
                 <dd>{quote.totals.vat.formatted}</dd>
               </div>
               <div className="flex items-baseline justify-between border-t border-galv pt-3">

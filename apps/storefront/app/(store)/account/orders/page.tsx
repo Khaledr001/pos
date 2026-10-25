@@ -6,13 +6,15 @@ import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty";
 import { Pagination } from "@/components/ui/pagination";
 import { accountGet, requireSession } from "@/lib/account-server";
-import { DELIVERY_METHOD, formatDate } from "@/lib/format";
+import { DELIVERY_METHOD } from "@/lib/format";
+import { getFormat } from "@/lib/data";
 
 export const metadata: Metadata = { title: "Your orders", robots: { index: false } };
 
 const PAGE_SIZE = 20;
 
 export default async function OrdersPage({ searchParams }: PageProps<"/account/orders">) {
+  const f = await getFormat();
   const raw = Number((await searchParams).page);
   const page = Number.isInteger(raw) && raw > 1 ? raw : 1;
   const path = page > 1 ? `/account/orders?page=${page}` : "/account/orders";
@@ -53,10 +55,10 @@ export default async function OrdersPage({ searchParams }: PageProps<"/account/o
                       <Link href={`/account/orders/${o.id}`} className="font-cond text-xl font-semibold text-pipe hover:underline">
                         {o.orderNumber}
                       </Link>
-                      <span className="block text-sm text-steel sm:hidden">{formatDate(o.placedAt)}</span>
+                      <span className="block text-sm text-steel sm:hidden">{f.date(o.placedAt)}</span>
                       <span className="hidden text-sm text-steel sm:block">{DELIVERY_METHOD[o.deliveryMethod]}</span>
                     </td>
-                    <td className="hidden px-4 py-3 sm:table-cell">{formatDate(o.placedAt)}</td>
+                    <td className="hidden px-4 py-3 sm:table-cell">{f.date(o.placedAt)}</td>
                     <td className="px-4 py-3">
                       <OrderStatusBadge status={o.status} />
                     </td>

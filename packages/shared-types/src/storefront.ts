@@ -7,6 +7,22 @@
  * side of an order (contact, address, payment, delivery status).
  */
 
+import {
+  DEFAULT_HEADLESS,
+  DEFAULT_HOME_SECTIONS,
+  DEFAULT_NAVIGATION,
+  DEFAULT_REGION,
+  DEFAULT_THEME,
+  resolveNavigation,
+  resolveRegion,
+  resolveTheme,
+  type HeadlessSettings,
+  type HomeSection,
+  type StorefrontNavigation,
+  type StorefrontRegion,
+  type StorefrontTheme,
+} from "./storefront-appearance.js";
+
 // `const T` keeps the literals, so a status is "placed" | "shipped" | …, not string.
 const asConst = <const T extends readonly string[]>(values: T) => values;
 
@@ -19,7 +35,12 @@ export const EMIRATES = asConst([
   "RAS_AL_KHAIMAH",
   "FUJAIRAH",
 ]);
-export type Emirate = (typeof EMIRATES)[number];
+/**
+ * A delivery zone code. The name is historical: the shop launched in the UAE,
+ * where zones are emirates. It is now any code from the tenant's region
+ * (`StorefrontRegion.zones`); the UAE codes above are just one preset.
+ */
+export type Emirate = string;
 
 export const PRODUCT_LINK_KINDS = asConst(["related", "alternative", "bought_together"]);
 export type ProductLinkKind = (typeof PRODUCT_LINK_KINDS)[number];
@@ -187,6 +208,15 @@ export interface StorefrontSettings {
     /** Each group is a set of interchangeable words: ["tap", "faucet", "mixer"]. */
     synonyms: string[][];
   };
+
+  /** Colours, fonts, layout variants, announcement bar, social links. */
+  theme: StorefrontTheme;
+  /** The home page, as an ordered list. */
+  homeSections: HomeSection[];
+  navigation: StorefrontNavigation;
+  /** Country, language formatting and delivery zones. Currency comes from the tenant. */
+  region: StorefrontRegion;
+  headless: HeadlessSettings;
 }
 
 export const DEFAULT_SHIPPING_RATES: ShippingRate[] = [
@@ -211,6 +241,11 @@ export const DEFAULT_STOREFRONT_SETTINGS: StorefrontSettings = {
   pickup: { slotMinutes: 120, leadTimeHours: 2, daysAhead: 5, opensAt: "08:00", closesAt: "20:00" },
   branches: [],
   search: { synonyms: [] },
+  theme: DEFAULT_THEME,
+  homeSections: DEFAULT_HOME_SECTIONS,
+  navigation: DEFAULT_NAVIGATION,
+  region: DEFAULT_REGION,
+  headless: DEFAULT_HEADLESS,
 };
 
 /** Merge stored partial settings over the defaults. One level per section. */
@@ -230,5 +265,10 @@ export function resolveStorefrontSettings(stored: unknown): StorefrontSettings {
     pickup: { ...d.pickup, ...s.pickup },
     branches: s.branches ?? d.branches,
     search: { ...d.search, ...s.search },
+    theme: resolveTheme(s.theme),
+    homeSections: s.homeSections ?? d.homeSections,
+    navigation: resolveNavigation(s.navigation),
+    region: resolveRegion(s.region),
+    headless: { ...d.headless, ...s.headless },
   };
 }

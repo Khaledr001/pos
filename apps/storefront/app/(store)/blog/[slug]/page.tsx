@@ -5,8 +5,8 @@ import { permanentRedirect } from "next/navigation";
 import { Breadcrumbs } from "@/components/store/listing";
 import { Markdown } from "@/components/store/markdown";
 import { getPage } from "@/lib/content";
-import { getStore } from "@/lib/data";
-import { formatDate } from "@/lib/format";
+import { getStore, getFormat } from "@/lib/data";
+
 import { socialMeta } from "@/lib/seo";
 
 export async function generateMetadata({ params }: PageProps<"/blog/[slug]">): Promise<Metadata> {
@@ -24,6 +24,7 @@ export async function generateMetadata({ params }: PageProps<"/blog/[slug]">): P
 }
 
 export default async function GuidePage({ params }: PageProps<"/blog/[slug]">) {
+  const f = await getFormat();
   const { slug } = await params;
   const page = await getPage(slug);
   if (page.kind !== "blog") permanentRedirect(`/pages/${slug}`);
@@ -35,7 +36,7 @@ export default async function GuidePage({ params }: PageProps<"/blog/[slug]">) {
         <h1 className="text-4xl">{page.title}</h1>
         {page.publishedAt && (
           <p className="mt-1 text-sm text-steel">
-            <time dateTime={page.publishedAt}>{formatDate(page.publishedAt)}</time>
+            <time dateTime={page.publishedAt}>{f.date(page.publishedAt)}</time>
           </p>
         )}
         {page.excerpt && <p className="mt-3 text-lg text-steel">{page.excerpt}</p>}

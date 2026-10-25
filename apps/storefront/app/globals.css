@@ -1,9 +1,10 @@
 @import "tailwindcss";
 
 /*
- * Al-Lahiq design tokens.
- * Grounded in the trade counter: graphite ink, galvanised steel greys,
- * pipe green for action and "in stock", brass for offers and trade prices.
+ * Default design tokens (the "Workshop" preset): graphite ink, galvanised
+ * steel greys, pipe green for action and "in stock", brass for offers and
+ * trade prices. A shop's own theme overrides these at request time — see
+ * lib/theme.ts — so every colour, font and radius is read through a variable.
  * The one bold element is the shelf-tag price (condensed numerals + unit).
  */
 @theme {
@@ -18,6 +19,7 @@
   --color-pipe-tint: #e6f2ee;
   --color-brass: #c9971c;
   --color-brass-tint: #fbf3dc;
+  --color-brass-ink: #7a5a0c;
   --color-signal: #b83227;
   --color-signal-tint: #fbe9e7;
 
@@ -178,5 +180,39 @@
   *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/*
+ * Product-card variants, chosen per shop (<body data-card>). Unlayered on
+ * purpose: the card's own border and background utilities live in a cascade
+ * layer, and an unlayered rule beats any layer without !important.
+ */
+[data-card="minimal"] .product-card {
+  overflow: visible;
+  border-color: transparent;
+  background: transparent;
+}
+[data-card="minimal"] .product-card > :first-child {
+  overflow: hidden;
+  border-radius: var(--radius-panel);
+}
+[data-card="minimal"] .product-card-body {
+  border-top-color: transparent;
+  padding-inline: 0.125rem;
+}
+[data-card="bordered"] .product-card {
+  border-color: color-mix(in srgb, var(--color-ink) 22%, white);
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease;
+}
+[data-card="bordered"] .product-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px -14px color-mix(in srgb, var(--color-ink) 45%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-card="bordered"] .product-card:hover {
+    transform: none;
   }
 }

@@ -165,6 +165,46 @@ accepts or declines from `/account/quotes`.
   where it is linked. Routes: `order:read` / `order:write`; pricing and closing are audited.
 - No shopper or staff notification is sent when a quote is requested or priced (see Known gaps).
 
+## Appearance, sections, navigation, region, headless
+
+One storefront deployment serves every tenant, so a tenant's look and regional
+rules are **data in `storefronts.settings`** (JSONB, no migration), never code.
+Types and defaults: `packages/shared-types/src/storefront-appearance.ts`.
+Shape rules: `apps/api/.../admin/appearance.dto.ts`. All of it is edited with
+the existing `PATCH /storefront-admin/settings`, merged one level per block (arrays are
+replaced wholesale), and published to the shop through `GET /content/store`
+(theme, navigation, region, timezone) and `GET /content/home` (`sections`).
+
+| Block | What a tenant controls | Guard rails |
+|---|---|---|
+| `theme` | preset, five colours (ink, accent, highlight, background, surface), font pair, radius, header / product-card / footer layout variants, favicon, share image, announcement bar, social links | colours are six-digit hex, fonts and layouts are closed enums the build ships, images are http(s) or site-relative, social links https only |
+| `homeSections` | ordered list of `hero`, `trust_badges`, `categories`, `products`, `promo_banner`, `brands`, `banner_strip`, `rich_text`, `faq`, each with its own settings | max 20, unique ids, per-type strict schema, links are a site path or https URL, no HTML. Unknown types are skipped on render |
+| `navigation` | extra header links, footer columns, legal links, footer note | max 12 links per list, 4 columns, same link rule |
+| `region` | country, calling code, zone label ("Emirate", "Region"…), the delivery **zones**, tax labels, number-format locale | zone codes `[A-Z0-9_]{1,20}`, unique, 1–60 zones. Currency and timezone still come from the tenant's own settings |
+| `headless` | on/off and the exact origins allowed to call the API from a browser | plan needs `apiAccess`; exact https origins (or `http://localhost`), no wildcards, max 10 |
+
+**Zones.** The wire/DB field is still called `emirate` (`web_orders`,
+`shopper_addresses`, shipping rates, branches). It now holds any zone code from
+the tenant's `region.zones`; the UAE emirates are just the `AE` preset. Address,
+checkout and quote schemas check the code against the shop's zones, and
+`PATCH` refuses delivery rates or branches that name a zone the region lacks
+(it never silently drops one). `setup` takes an optional `region` (a key of
+`REGION_PRESETS`); omitted, it is inferred from the tenant's timezone, then
+currency, then falls back to the UAE, and seeds one delivery rate per zone.
+
+**Phone and tax id.** `shopperPhone` normalises to the shop's calling code
+(UAE numbers keep the exact 8–9 digit rule; any other country 8–15 digits).
+`shopperTaxId` is the strict 15-digit TRN for `AE` and a lenient 5–20
+letters/digits elsewhere. Both read the region off the request context.
+
+**Refresh.** A settings save moves `storefronts.updated_at`, which the
+revalidation job turns into the `content` and `home` tags, so a theme change
+reaches the shop within ~30 s.
+
+**Headless.** See [HEADLESS.md](HEADLESS.md).
+
+---
+
 ## Caching and refresh
 
 Catalogue pages are cached by the storefront with tags (`product:<slug>`,

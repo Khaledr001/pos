@@ -8,7 +8,7 @@ type Tone = "neutral" | "pipe" | "brass" | "signal" | "ink";
 const tones: Record<Tone, string> = {
   neutral: "bg-galv text-ink",
   pipe: "bg-pipe-tint text-pipe-dark",
-  brass: "bg-brass-tint text-[#7a5a0c]",
+  brass: "bg-brass-tint text-brass-ink",
   signal: "bg-signal-tint text-signal",
   ink: "bg-ink text-white",
 };

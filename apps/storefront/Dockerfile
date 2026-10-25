@@ -19,6 +19,7 @@ ENV CI=true
 FROM base AS deps
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY apps/storefront/package.json            apps/storefront/
+COPY packages/shared-types/package.json     packages/shared-types/
 COPY packages/storefront-client/package.json packages/storefront-client/
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile --filter=@devsfleet/storefront...
@@ -26,12 +27,16 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
 FROM base AS build
 COPY --from=deps /repo/node_modules ./node_modules
 COPY --from=deps /repo/apps/storefront/node_modules ./apps/storefront/node_modules
+COPY --from=deps /repo/packages/shared-types/node_modules ./packages/shared-types/node_modules
 COPY --from=deps /repo/packages/storefront-client/node_modules ./packages/storefront-client/node_modules
 COPY tsconfig.base.json pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY packages/shared-types ./packages/shared-types
 COPY packages/storefront-client ./packages/storefront-client
 COPY apps/storefront ./apps/storefront
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN pnpm --filter=@devsfleet/storefront build
+# shared-types is consumed from its compiled dist/, so build it first.
+RUN pnpm --filter=@devsfleet/shared-types build \
+ && pnpm --filter=@devsfleet/storefront build
 
 FROM node:24-alpine AS runtime
 RUN apk add --no-cache tini curl && \

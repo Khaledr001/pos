@@ -1,6 +1,6 @@
 import { DELIVERY_METHODS, WEB_PAYMENT_METHODS } from "@devsfleet/shared-types";
 import { z } from "zod";
-import { AddressSchema, emirate, uaePhone, uaeTrn, wireEnum } from "../wire.js";
+import { AddressSchema, emirate, shopperPhone, shopperTaxId, wireEnum } from "../wire.js";
 
 export const QuoteSchema = z.object({
   deliveryMethod: wireEnum(DELIVERY_METHODS).optional(),
@@ -21,7 +21,7 @@ export const PlaceOrderSchema = z
     contact: z.object({
       fullName: z.string().trim().min(2).max(120),
       email: z.string().trim().toLowerCase().pipe(z.email().max(255)),
-      phone: uaePhone,
+      phone: shopperPhone,
     }),
     address: AddressSchema.optional(),
     addressId: z.string().uuid().optional(),
@@ -30,7 +30,7 @@ export const PlaceOrderSchema = z
     pickupSlotStart: z.string().datetime().optional(),
     paymentMethod: wireEnum(WEB_PAYMENT_METHODS),
     companyName: z.string().trim().max(200).optional(),
-    trn: uaeTrn.optional(),
+    trn: shopperTaxId.optional(),
     notes: z.string().trim().max(1000).optional(),
     /** The total the shopper was shown, in fils. A mismatch means they would pay something they did not see. */
     expectedTotalFils: z.number().int().min(0).optional(),

@@ -1,15 +1,16 @@
 import type { QuoteView } from "@devsfleet/storefront-client";
 import type { ReactNode } from "react";
-import { formatDate, formatDateTime, uomShort } from "@/lib/format";
+import { getFormat } from "@/lib/data";
+import { uomShort, type StoreFormatter } from "@/lib/format";
 import { QuoteStatusBadge } from "./quote-status";
 
-function statusMessage(quote: QuoteView): string {
+function statusMessage(quote: QuoteView, f: StoreFormatter): string {
   switch (quote.status) {
     case "REQUESTED":
       return "We've received your request and will price it. Figures below are an estimate at list price and may change.";
     case "QUOTED":
       return quote.validUntil
-        ? `Our prices are held until ${formatDateTime(quote.validUntil)}. Accept to confirm them, or decline if you don't need them.`
+        ? `Our prices are held until ${f.dateTime(quote.validUntil)}. Accept to confirm them, or decline if you don't need them.`
         : "Our prices are below. Accept to confirm them, or decline if you don't need them.";
     case "ACCEPTED":
       return "You accepted this quote. Our team will be in touch to confirm your order.";
@@ -23,7 +24,8 @@ function statusMessage(quote: QuoteView): string {
 }
 
 /** A quote: status, lines and totals. The actions (accept / decline) are passed in so this stays a server component. */
-export function QuoteDetail({ quote, back, actions }: { quote: QuoteView; back?: ReactNode; actions?: ReactNode }) {
+export async function QuoteDetail({ quote, back, actions }: { quote: QuoteView; back?: ReactNode; actions?: ReactNode }) {
+  const f = await getFormat();
   const { totals } = quote;
   return (
     <div>
@@ -34,11 +36,11 @@ export function QuoteDetail({ quote, back, actions }: { quote: QuoteView; back?:
             Quote <span className="font-cond">{quote.number}</span>
           </h1>
           <p className="mt-1 flex flex-wrap items-center gap-2 text-steel">
-            <span>Requested {formatDate(quote.requestedAt)}</span>
+            <span>Requested {f.date(quote.requestedAt)}</span>
             <QuoteStatusBadge status={quote.status} />
             {quote.validUntil && quote.status !== "REQUESTED" && (
               <span>
-                {quote.status === "EXPIRED" ? "Expired" : "Valid until"} {formatDate(quote.validUntil)}
+                {quote.status === "EXPIRED" ? "Expired" : "Valid until"} {f.date(quote.validUntil)}
               </span>
             )}
           </p>
@@ -46,7 +48,7 @@ export function QuoteDetail({ quote, back, actions }: { quote: QuoteView; back?:
       </div>
 
       <p className="mt-5 rounded-[var(--radius-tag)] bg-sheet px-3 py-2 text-[15px]" role="status">
-        {statusMessage(quote)}
+        {statusMessage(quote, f)}
       </p>
 
       {actions && <div className="mt-5">{actions}</div>}
@@ -88,7 +90,7 @@ export function QuoteDetail({ quote, back, actions }: { quote: QuoteView; back?:
           <h2 className="mb-3 text-xl">{quote.estimate ? "Estimated total" : "Quote total"}</h2>
           <dl className="space-y-2 text-[15px]">
             <div className="flex justify-between">
-              <dt className="text-steel">Items (excl. VAT)</dt>
+              <dt className="text-steel">Items (excl. {f.region.taxLabel})</dt>
               <dd>{totals.subtotalNet.formatted}</dd>
             </div>
             {totals.discountNet.fils > 0 && (
@@ -98,7 +100,7 @@ export function QuoteDetail({ quote, back, actions }: { quote: QuoteView; back?:
               </div>
             )}
             <div className="flex justify-between">
-              <dt className="text-steel">VAT</dt>
+              <dt className="text-steel">{f.region.taxLabel}</dt>
               <dd>{totals.vat.formatted}</dd>
             </div>
             <div className="flex items-baseline justify-between border-t border-galv pt-3">

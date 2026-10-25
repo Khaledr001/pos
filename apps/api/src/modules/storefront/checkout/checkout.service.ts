@@ -336,7 +336,7 @@ export class CheckoutService {
     if (!courier.available) {
       const messages: Record<string, string> = {
         PICKUP_ONLY_ITEMS: "Some items can only be collected from the store.",
-        EMIRATE_NOT_SERVED: "We do not deliver to this emirate yet.",
+        EMIRATE_NOT_SERVED: `We do not deliver to this ${RequestContext.requireStorefront().settings.region.zoneLabel.toLowerCase()} yet.`,
         OVERWEIGHT: "This order is too heavy for courier delivery. Please choose store pickup.",
         NO_ADDRESS: "A delivery address is required.",
         NOT_OFFERED: "Courier delivery is not offered yet. Please choose store pickup.",

@@ -9,6 +9,7 @@ import { FormError, TextField } from "@/components/ui/field";
 import { api, ApiError } from "@/lib/api-browser";
 import { useMe, useSessionChanged } from "@/lib/hooks/store";
 import { friendlyError } from "./session";
+import { useStoreConfig } from "@/lib/store-config";
 
 const loginHref = (next: string | null) => (next ? `/login?next=${encodeURIComponent(next)}` : "/login");
 const registerHref = (next: string | null) => (next ? `/register?next=${encodeURIComponent(next)}` : "/register");
@@ -82,6 +83,7 @@ export function LoginForm({ next }: { next: string | null }) {
 
 export function RegisterForm({ next }: { next: string | null }) {
   useLeaveIfLoggedIn(next);
+  const { phonePlaceholder } = useStoreConfig();
   const router = useRouter();
   const sessionChanged = useSessionChanged();
   const [form, setForm] = useState({ firstName: "", lastName: "", email: "", phone: "", password: "" });
@@ -130,10 +132,10 @@ export function RegisterForm({ next }: { next: string | null }) {
         label="Mobile (optional)"
         type="tel"
         autoComplete="tel"
-        placeholder="+971 50 123 4567"
+        placeholder={phonePlaceholder}
         value={form.phone}
         onChange={set("phone")}
-        hint="A UAE mobile number, for delivery and order updates"
+        hint="A mobile number, for delivery and order updates"
       />
       <TextField
         label="Password"
@@ -148,7 +150,7 @@ export function RegisterForm({ next }: { next: string | null }) {
       />
       <div aria-live="polite">
         {emailTaken && (
-          <div role="alert" className="rounded-[var(--radius-tag)] border border-brass/40 bg-brass-tint px-3 py-2 text-sm text-[#7a5a0c]">
+          <div role="alert" className="rounded-[var(--radius-tag)] border border-brass/40 bg-brass-tint px-3 py-2 text-sm text-brass-ink">
             There is already an account with this email.{" "}
             <Link href={loginHref(next)} className="font-semibold underline">
               Log in instead

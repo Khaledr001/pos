@@ -4,7 +4,7 @@ import type { ProductDetail } from "@devsfleet/storefront-client";
 import { useQueries } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import Link from "next/link";
-import { Breadcrumbs } from "@/components/store/listing";
+import { Breadcrumbs } from "@/components/store/breadcrumbs";
 import { StockBadge } from "@/components/ui/badge";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty";

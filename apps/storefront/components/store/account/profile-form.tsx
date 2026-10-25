@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { FormError, TextField } from "@/components/ui/field";
 import { api, ApiError } from "@/lib/api-browser";
 import { useMe } from "@/lib/hooks/store";
+import { useStoreConfig } from "@/lib/store-config";
 import { QueryError, friendlyError } from "./session";
 
 /** Loads the customer, then shows the form with their details. */
@@ -20,6 +21,7 @@ export function ProfileSection() {
 
 export function ProfileForm({ me }: { me: Customer }) {
   const qc = useQueryClient();
+  const { region, phonePlaceholder } = useStoreConfig();
   const [form, setForm] = useState({
     firstName: me.firstName,
     lastName: me.lastName,
@@ -35,16 +37,11 @@ export function ProfileForm({ me }: { me: Customer }) {
     setForm((f) => ({ ...f, [k]: e.target.value }));
   };
   const trn = form.trn.replace(/[\s-]/g, "");
-  const trnError = trn && trn.length >= 15 && !/^100\d{12}$/.test(trn) ? "A UAE TRN is 15 digits and starts with 100" : null;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
     setSaved(false);
-    if (trn && !/^100\d{12}$/.test(trn)) {
-      setError("Enter your 15-digit TRN, starting with 100, or leave it empty.");
-      return;
-    }
     const phone = form.phone.replace(/[\s-]/g, "");
     setPending(true);
     try {
@@ -76,10 +73,10 @@ export function ProfileForm({ me }: { me: Customer }) {
           label="Mobile"
           type="tel"
           autoComplete="tel"
-          placeholder="+971 50 123 4567"
+          placeholder={phonePlaceholder}
           value={form.phone}
           onChange={set("phone")}
-          hint="A UAE mobile number, for delivery and order updates"
+          hint="A mobile number, for delivery and order updates"
         />
       </fieldset>
       <div className="border-t border-galv pt-5">
@@ -87,7 +84,7 @@ export function ProfileForm({ me }: { me: Customer }) {
         <legend className="mb-1 font-cond text-2xl font-semibold">Company</legend>
         <p className="text-[15px] text-steel sm:col-span-2">Used on your tax invoices. You can still change them for a single order at checkout.</p>
         <TextField label="Company name" autoComplete="organization" value={form.companyName} onChange={set("companyName")} maxLength={200} />
-        <TextField label="TRN" inputMode="numeric" placeholder="100XXXXXXXXXXXX" value={form.trn} onChange={set("trn")} hint="15 digits, starting with 100" error={trnError} />
+        <TextField label={region.taxIdLabel} value={form.trn} onChange={set("trn")} hint="Printed on your tax invoices" />
       </fieldset>
       </div>
       <div aria-live="polite">

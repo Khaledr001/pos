@@ -1,13 +1,15 @@
 import {
   BANNER_PLACEMENTS,
   CUSTOMER_TYPES,
-  EMIRATES,
+  REGION_PRESETS,
   STOREFRONT_PAGE_KINDS,
+  ZONE_CODE,
   WEB_ORDER_STATUSES,
 } from "@devsfleet/shared-types";
 import { slugify } from "@devsfleet/shared-utils";
 import { z } from "zod";
 import { sortSchema } from "../../../common/db/list-query.js";
+import { HeadlessSchema, HomeSectionsSchema, NavigationSchema, RegionSchema, ThemeSchema } from "./appearance.dto.js";
 import { wireEnum } from "../wire.js";
 
 const decimal = z
@@ -177,6 +179,13 @@ const domain = z
 export const SetupStorefrontSchema = z.object({
   name: z.string().trim().min(1).max(255),
   domain,
+  /** A country from REGION_PRESETS. Omitted, it is inferred from the business's currency and timezone. */
+  region: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .refine((code) => code in REGION_PRESETS, "That country has no preset yet")
+    .optional(),
 });
 export type SetupStorefrontDto = z.infer<typeof SetupStorefrontSchema>;
 
@@ -186,8 +195,11 @@ export type DomainDto = z.infer<typeof DomainSchema>;
 export const SubdomainAvailabilitySchema = z.object({ label: z.string().trim().max(63) });
 export type SubdomainAvailabilityDto = z.infer<typeof SubdomainAvailabilitySchema>;
 
+/** The zone code is checked against the shop's region zones by SettingsAdminService. */
+const zoneCode = z.string().trim().toUpperCase().regex(ZONE_CODE, "Choose a delivery zone");
+
 const ShippingRateSchema = z.object({
-  emirate: z.enum(EMIRATES),
+  emirate: zoneCode,
   baseFee: decimal,
   baseWeightKg: z.coerce.number().int().min(0).max(1000),
   perKgFee: decimal,
@@ -216,7 +228,7 @@ export const UpdateSettingsSchema = z.object({
       fulfilmentBranchId: z.string().uuid().nullable().optional(),
     })
     .optional(),
-  shipping: z.object({ rates: z.array(ShippingRateSchema).max(EMIRATES.length) }).optional(),
+  shipping: z.object({ rates: z.array(ShippingRateSchema).max(60) }).optional(),
   pickup: z
     .object({
       slotMinutes: z.coerce.number().int().min(15).max(24 * 60),
@@ -230,7 +242,7 @@ export const UpdateSettingsSchema = z.object({
     .array(
       z.object({
         branchId: z.string().uuid(),
-        emirate: z.enum(EMIRATES),
+        emirate: zoneCode,
         lat: z.number().min(-90).max(90).nullable(),
         lng: z.number().min(-180).max(180).nullable(),
         openingHours: z.record(z.string().max(40), z.string().max(40)).nullable(),
@@ -240,6 +252,11 @@ export const UpdateSettingsSchema = z.object({
     .max(200)
     .optional(),
   search: z.object({ synonyms: z.array(z.array(z.string().trim().min(1).max(40)).min(2).max(10)).max(200) }).optional(),
+  theme: ThemeSchema.optional(),
+  homeSections: HomeSectionsSchema.optional(),
+  navigation: NavigationSchema.optional(),
+  region: RegionSchema.optional(),
+  headless: HeadlessSchema.optional(),
 });
 export type UpdateSettingsDto = z.infer<typeof UpdateSettingsSchema>;
 

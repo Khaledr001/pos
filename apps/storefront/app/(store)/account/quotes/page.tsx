@@ -6,13 +6,15 @@ import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty";
 import { Pagination } from "@/components/ui/pagination";
 import { accountGet, requireSession } from "@/lib/account-server";
-import { formatDate } from "@/lib/format";
+import { getFormat } from "@/lib/data";
+
 
 export const metadata: Metadata = { title: "Your quotes", robots: { index: false } };
 
 const PAGE_SIZE = 20;
 
 export default async function QuotesPage({ searchParams }: PageProps<"/account/quotes">) {
+  const f = await getFormat();
   const raw = Number((await searchParams).page);
   const page = Number.isInteger(raw) && raw > 1 ? raw : 1;
   const path = page > 1 ? `/account/quotes?page=${page}` : "/account/quotes";
@@ -57,11 +59,11 @@ export default async function QuotesPage({ searchParams }: PageProps<"/account/q
                         {q.itemCount} {q.itemCount === 1 ? "item" : "items"}
                       </span>
                     </td>
-                    <td className="hidden px-4 py-3 sm:table-cell">{formatDate(q.requestedAt)}</td>
+                    <td className="hidden px-4 py-3 sm:table-cell">{f.date(q.requestedAt)}</td>
                     <td className="px-4 py-3">
                       <QuoteStatusBadge status={q.status} />
                     </td>
-                    <td className="hidden px-4 py-3 md:table-cell">{q.estimate ? "" : formatDate(q.validUntil)}</td>
+                    <td className="hidden px-4 py-3 md:table-cell">{q.estimate ? "" : f.date(q.validUntil)}</td>
                     <td className="tag-price px-4 py-3 text-right text-xl">
                       {q.total.formatted}
                       {q.estimate && <span className="block text-xs font-normal text-steel">estimate</span>}

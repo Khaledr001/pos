@@ -16,7 +16,7 @@ export default async function BrandsPage() {
     <div className="mx-auto max-w-7xl px-4 py-6">
       <Breadcrumbs items={[{ href: "/brands", label: "Brands" }]} />
       <h1 className="mt-3 text-4xl">Brands</h1>
-      <p className="mt-1 text-steel">Genuine products with the manufacturer&apos;s UAE warranty.</p>
+      <p className="mt-1 text-steel">Genuine products from the brands we stock.</p>
       <div className="mt-8 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
         {[...groups].map(([letter, list]) => (
           <section key={letter}>

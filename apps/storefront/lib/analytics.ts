@@ -20,12 +20,12 @@ const META_EVENTS: Record<string, string> = {
   view_item: "ViewContent",
 };
 
-export function track(event: "view_item" | "add_to_cart" | "begin_checkout" | "purchase", params: { value: number; items: Item[]; transaction_id?: string }) {
+export function track(event: "view_item" | "add_to_cart" | "begin_checkout" | "purchase", params: { currency: string; value: number; items: Item[]; transaction_id?: string }) {
   if (typeof window === "undefined") return;
-  const payload = { currency: "AED", ...params };
+  const payload = params;
   window.gtag?.("event", event, payload);
   window.fbq?.("track", META_EVENTS[event], {
-    currency: "AED",
+    currency: params.currency,
     value: params.value,
     content_ids: params.items.map((i) => i.item_id),
     content_type: "product",

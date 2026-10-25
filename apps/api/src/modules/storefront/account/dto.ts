@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AddressSchema, uaePhone, uaeTrn } from "../wire.js";
+import { AddressSchema, shopperPhone, shopperTaxId } from "../wire.js";
 
 const email = z.string().trim().toLowerCase().pipe(z.email().max(255));
 
@@ -8,7 +8,7 @@ export const RegisterSchema = z.object({
   password: z.string().min(8, "Use at least 8 characters").max(200),
   firstName: z.string().trim().min(1).max(60),
   lastName: z.string().trim().min(1).max(60),
-  phone: uaePhone.optional(),
+  phone: shopperPhone.optional(),
 });
 export type RegisterDto = z.infer<typeof RegisterSchema>;
 
@@ -21,9 +21,9 @@ export type LoginDto = z.infer<typeof LoginSchema>;
 export const UpdateProfileSchema = z.object({
   firstName: z.string().trim().min(1).max(60).optional(),
   lastName: z.string().trim().min(1).max(60).optional(),
-  phone: uaePhone.optional(),
+  phone: shopperPhone.optional(),
   companyName: z.string().trim().max(200).optional(),
-  trn: uaeTrn.optional(),
+  trn: shopperTaxId.optional(),
 });
 export type UpdateProfileDto = z.infer<typeof UpdateProfileSchema>;
 
@@ -35,7 +35,7 @@ export type UpdateAddressDto = z.infer<typeof UpdateAddressSchema>;
 
 export const TradeApplicationSchema = z.object({
   companyName: z.string().trim().min(2).max(200),
-  trn: uaeTrn,
+  trn: shopperTaxId,
   message: z.string().trim().max(1000).optional(),
 });
 export type TradeApplicationDto = z.infer<typeof TradeApplicationSchema>;

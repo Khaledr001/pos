@@ -12,6 +12,7 @@
     "clean": "rm -rf .next .turbo *.tsbuildinfo"
   },
   "dependencies": {
+    "@devsfleet/shared-types": "workspace:*",
     "@devsfleet/storefront-client": "workspace:*",
     "@tanstack/react-query": "^5.104.0",
     "clsx": "^2.1.1",

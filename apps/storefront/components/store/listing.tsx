@@ -1,4 +1,4 @@
-import type { Crumb, ProductList } from "@devsfleet/storefront-client";
+import type { ProductList } from "@devsfleet/storefront-client";
 import { Check, SlidersHorizontal } from "lucide-react";
 import Link from "next/link";
 import { Suspense, type ReactNode } from "react";
@@ -9,39 +9,12 @@ import { cn } from "@/lib/cn";
 import { activeFilterCount, type ListingQuery, toggle, toSearch } from "@/lib/listing";
 import { ProductGrid } from "./product-card";
 import { SortSelect } from "./sort-select";
+import { getFormat } from "@/lib/data";
 import { displayName } from "@/lib/format";
 
-export function Breadcrumbs({ items }: { items: { href: string; label: string }[] }) {
-  return (
-    <nav aria-label="Breadcrumb" className="text-sm text-steel">
-      <ol className="flex flex-wrap items-center gap-1.5">
-        <li>
-          <Link href="/" className="hover:text-ink">
-            Home
-          </Link>
-        </li>
-        {items.map((c, i) => (
-          <li key={c.href} className="flex items-center gap-1.5">
-            <span aria-hidden>/</span>
-            {i === items.length - 1 ? (
-              <span aria-current="page" className="text-ink">
-                {c.label}
-              </span>
-            ) : (
-              <Link href={c.href} className="hover:text-ink">
-                {c.label}
-              </Link>
-            )}
-          </li>
-        ))}
-      </ol>
-    </nav>
-  );
-}
+import { Breadcrumbs } from "./breadcrumbs";
 
-export function crumbsFrom(trail: Crumb[]) {
-  return trail.map((c) => ({ href: `/category/${c.slug}`, label: displayName(c.name) }));
-}
+export { Breadcrumbs, crumbsFrom } from "./breadcrumbs";
 
 function FilterLink({ href, active, children, count }: { href: string; active: boolean; children: ReactNode; count?: number }) {
   return (
@@ -66,7 +39,8 @@ function FilterLink({ href, active, children, count }: { href: string; active: b
   );
 }
 
-function Filters({ data, query, path }: { data: ProductList; query: ListingQuery; path: string }) {
+async function Filters({ data, query, path }: { data: ProductList; query: ListingQuery; path: string }) {
+  const { currency, region } = await getFormat();
   const href = (q: ListingQuery) => `${path}${toSearch(q)}`;
   const { facets } = data;
   return (
@@ -107,7 +81,7 @@ function Filters({ data, query, path }: { data: ProductList; query: ListingQuery
       ))}
 
       <section>
-        <h3 className="mb-2 text-lg">Price (AED, incl. VAT)</h3>
+        <h3 className="mb-2 text-lg">Price ({currency}, incl. {region.taxLabel})</h3>
         <form action={path} className="flex items-end gap-2">
           {query.q && <input type="hidden" name="q" value={query.q} />}
           {query.brand.length > 0 && <input type="hidden" name="brand" value={query.brand.join(",")} />}

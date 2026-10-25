@@ -2,6 +2,7 @@
 
 import React from "react";
 import { AlertCircle, CheckCircle2, X } from "lucide-react";
+import { REGION_PRESETS } from "@devsfleet/shared-types";
 import { Badge } from "@/components/ui/badge";
 
 /** Success / error banners, the same as every other admin screen. */
@@ -60,14 +61,11 @@ const LABELS: Record<string, string> = {
   CARD: "Card",
   APPLE_PAY: "Apple Pay",
   GOOGLE_PAY: "Google Pay",
-  ABU_DHABI: "Abu Dhabi",
-  DUBAI: "Dubai",
-  SHARJAH: "Sharjah",
-  AJMAN: "Ajman",
-  UMM_AL_QUWAIN: "Umm Al Quwain",
-  RAS_AL_KHAIMAH: "Ras Al Khaimah",
-  FUJAIRAH: "Fujairah",
 };
+
+// Delivery zone codes from every built-in region, so an order from a Saudi or
+// Qatari shop reads "Riyadh", not "Riyadh" lowercased by the generic fallback.
+for (const region of Object.values(REGION_PRESETS)) for (const zone of region.zones) LABELS[zone.code] ??= zone.name;
 
 /** "PENDING_PAYMENT" -> "Pending payment"; proper names keep their capitals. */
 export function humanize(value: string): string {

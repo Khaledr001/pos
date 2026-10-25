@@ -1,4 +1,5 @@
-import type { DeliveryMethod, Emirate, OrderStatus, PaymentMethod, PaymentStatus, StockLabel } from "@devsfleet/storefront-client";
+import type { StorefrontRegion } from "@devsfleet/shared-types";
+import type { DeliveryMethod, OrderStatus, PaymentMethod, PaymentStatus, StockLabel } from "@devsfleet/storefront-client";
 
 const UOM: Record<string, { short: string; one: string; many: string }> = {
   pc: { short: "pc", one: "piece", many: "pieces" },
@@ -32,20 +33,6 @@ export function isFractionalUom(uom: string) {
 
 export function formatQty(qty: number) {
   return Number.isInteger(qty) ? String(qty) : qty.toFixed(qty < 10 ? 2 : 1).replace(/\.?0+$/, "");
-}
-
-export const EMIRATES: { value: Emirate; label: string }[] = [
-  { value: "DUBAI", label: "Dubai" },
-  { value: "ABU_DHABI", label: "Abu Dhabi" },
-  { value: "SHARJAH", label: "Sharjah" },
-  { value: "AJMAN", label: "Ajman" },
-  { value: "UMM_AL_QUWAIN", label: "Umm Al Quwain" },
-  { value: "RAS_AL_KHAIMAH", label: "Ras Al Khaimah" },
-  { value: "FUJAIRAH", label: "Fujairah" },
-];
-
-export function emirateName(e: Emirate | string | null | undefined) {
-  return EMIRATES.find((x) => x.value === e)?.label ?? e ?? "";
 }
 
 export const ORDER_STATUS: Record<OrderStatus, string> = {
@@ -90,36 +77,56 @@ export const STOCK_LABEL: Record<StockLabel, string> = {
   OUT_OF_STOCK: "Out of stock",
 };
 
-const dateFmt = new Intl.DateTimeFormat("en-GB", {
-  timeZone: "Asia/Dubai",
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-});
-const dateTimeFmt = new Intl.DateTimeFormat("en-GB", {
-  timeZone: "Asia/Dubai",
-  day: "numeric",
-  month: "short",
-  hour: "2-digit",
-  minute: "2-digit",
-});
-
-export function formatDate(iso: string | null | undefined) {
-  return iso ? dateFmt.format(new Date(iso)) : "";
+/** What a page needs to know about the shop to print a price, a date or a zone name. */
+export interface StoreFormat {
+  /** ISO 4217, e.g. "AED". */
+  currency: string;
+  /** BCP-47 tag for numbers and dates, e.g. "en-AE". */
+  locale: string;
+  /** IANA zone the shop runs in; order times are shown in it, not the visitor's or the server's. */
+  timezone: string;
+  region: StorefrontRegion;
 }
 
-export function formatDateTime(iso: string | null | undefined) {
-  return iso ? dateTimeFmt.format(new Date(iso)) : "";
+export type StoreFormatter = ReturnType<typeof makeFormat>;
+
+/** The same formatters, built from a `StoreInfo` a page already has in hand. */
+export function makeFormatFor(store: { currency: string; timezone: string; region: StorefrontRegion }) {
+  return makeFormat({ currency: store.currency, locale: store.region.formatLocale, timezone: store.timezone, region: store.region });
 }
 
-export function aed(fils: number) {
-  return `AED ${(fils / 100).toLocaleString("en-AE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
+/**
+ * Formatters bound to one shop. One deployment serves every tenant, so none of
+ * this can live in module state: a server render builds it per request from the
+ * store's own settings, and client components read the same thing from context.
+ */
+export function makeFormat({ currency, locale, timezone, region }: StoreFormat) {
+  const number = new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const whole = new Intl.NumberFormat(locale);
+  const dateFmt = new Intl.DateTimeFormat(locale, { timeZone: timezone, day: "numeric", month: "short", year: "numeric" });
+  const dateTimeFmt = new Intl.DateTimeFormat(locale, { timeZone: timezone, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  const timeFmt = new Intl.DateTimeFormat(locale, { timeZone: timezone, hour: "2-digit", minute: "2-digit" });
+  const zoneName = (code: string | null | undefined) => region.zones.find((z) => z.code === code)?.name ?? code ?? "";
 
-/** Splits "AED 1,234.50" into parts for the shelf-tag price. */
-export function priceParts(fils: number) {
-  const [whole, dec] = (fils / 100).toFixed(2).split(".");
-  return { whole: Number(whole).toLocaleString("en-AE"), dec };
+  return {
+    currency,
+    locale,
+    timezone,
+    region,
+    /** "AED 1,234.50" from whole minor units (fils). */
+    money: (minor: number) => `${currency} ${number.format(minor / 100)}`,
+    /** The pieces of a shelf-tag price: whole part and two decimals. */
+    priceParts: (minor: number) => ({ whole: whole.format(Math.trunc(minor / 100)), dec: (minor / 100).toFixed(2).split(".")[1]! }),
+    date: (iso: string | null | undefined) => (iso ? dateFmt.format(new Date(iso)) : ""),
+    dateTime: (iso: string | null | undefined) => (iso ? dateTimeFmt.format(new Date(iso)) : ""),
+    time: (iso: string | null | undefined) => (iso ? timeFmt.format(new Date(iso)) : ""),
+    zoneName,
+    /** Placeholder for a phone field: the shop's own calling code, never another country's. */
+    phonePlaceholder: `+${region.callingCode} …`,
+    /** "Villa 12, Street 5, Al Barsha 2, Dubai" from a saved or order address. */
+    addressLine: (a: { building?: string | null; street?: string | null; area?: string | null; emirate?: string | null }) =>
+      [a.building, a.street, a.area, zoneName(a.emirate)].filter(Boolean).join(", "),
+  };
 }
 
 export function whatsappLink(number: string, text?: string) {
@@ -130,11 +137,6 @@ export function whatsappLink(number: string, text?: string) {
 /** Only follow a `?next=` value when it is a path on this site (not "//evil.com"). */
 export function safeNext(next: unknown, fallback = "/account") {
   return typeof next === "string" && /^\/(?![/\\])/.test(next) ? next : fallback;
-}
-
-/** "Villa 12, Street 5, Al Barsha 2, Dubai" from a saved or order address. */
-export function addressLine(a: { building?: string | null; street?: string | null; area?: string | null; emirate?: string | null }) {
-  return [a.building, a.street, a.area, emirateName(a.emirate)].filter(Boolean).join(", ");
 }
 
 /** Weekday keys used in branch opening hours, Monday first. */

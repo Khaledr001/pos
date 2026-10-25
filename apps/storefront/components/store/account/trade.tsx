@@ -9,8 +9,8 @@ const BENEFITS = [
   },
   {
     icon: FileText,
-    title: "Tax invoices with your TRN",
-    text: "Every order comes with a VAT invoice in your company name, ready for your accounts.",
+    title: "Tax invoices in your company name",
+    text: "Every order comes with a tax invoice in your company name, ready for your accounts.",
   },
   {
     icon: UserCheck,

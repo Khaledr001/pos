@@ -1,10 +1,13 @@
+"use client";
+
 import type { Money } from "@devsfleet/storefront-client";
 import { cn } from "@/lib/cn";
-import { priceParts, uomShort } from "@/lib/format";
+import { uomShort } from "@/lib/format";
+import { useStoreConfig } from "@/lib/store-config";
 
 /**
  * The shelf-tag price: condensed numerals, small fils, the unit always shown.
- * Prices are VAT-inclusive (UAE rules for consumer prices).
+ * Prices are tax-inclusive, as consumer prices are across the Gulf.
  */
 export function PriceTag({
   price,
@@ -21,6 +24,7 @@ export function PriceTag({
   size?: "sm" | "md" | "lg" | "xl";
   className?: string;
 }) {
+  const { currency, priceParts } = useStoreConfig();
   const { whole, dec } = priceParts(price.fils);
   const big = { sm: "text-xl", md: "text-[26px]", lg: "text-4xl", xl: "text-5xl" }[size];
   const small = { sm: "text-xs", md: "text-sm", lg: "text-lg", xl: "text-xl" }[size];
@@ -29,7 +33,7 @@ export function PriceTag({
       <span className="sr-only">{`${from ? "From " : ""}${price.formatted}${uom ? ` per ${uomShort(uom)}` : ""}`}</span>
       <span aria-hidden className="tag-price inline-flex items-baseline text-ink">
         {from && <span className={cn("mr-1 font-sans font-medium text-steel", small)}>from</span>}
-        <span className={cn("mr-0.5 font-semibold text-steel", small)}>AED</span>
+        <span className={cn("mr-0.5 font-semibold text-steel", small)}>{currency}</span>
         <span className={big}>{whole}</span>
         <span className={cn("self-start mt-0.5", small)}>.{dec}</span>
         {uom && <span className={cn("ml-1 font-sans font-medium text-steel", small)}>/ {uomShort(uom)}</span>}

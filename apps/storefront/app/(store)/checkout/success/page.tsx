@@ -5,12 +5,14 @@ import Link from "next/link";
 import { PurchaseEvent } from "@/components/store/checkout/purchase-event";
 import { ButtonLink } from "@/components/ui/button";
 import { publicApi } from "@/lib/api-server";
-import { DELIVERY_METHOD, formatDateTime, PAYMENT_METHOD } from "@/lib/format";
+import { DELIVERY_METHOD, PAYMENT_METHOD } from "@/lib/format";
 import { orFallback } from "@/lib/fallback";
+import { getFormat } from "@/lib/data";
 
 export const metadata: Metadata = { title: "Order placed", robots: { index: false } };
 
 export default async function SuccessPage({ searchParams }: PageProps<"/checkout/success">) {
+  const f = await getFormat();
   const token = (await searchParams).order;
   const order =
     typeof token === "string" ? await publicApi.get<OrderView>(`/orders/track/${token}`, { cache: "no-store" }).catch(orFallback(null)) : null;
@@ -55,8 +57,8 @@ export default async function SuccessPage({ searchParams }: PageProps<"/checkout
             <dt className="text-steel">{DELIVERY_METHOD[order.deliveryMethod]}</dt>
             <dd className="font-medium">
               {order.pickup
-                ? `${order.pickup.branch.name}, ${formatDateTime(order.pickup.slotStart)}`
-                : [order.shippingAddress?.area, order.shippingAddress?.emirate].filter(Boolean).join(", ")}
+                ? `${order.pickup.branch.name}, ${f.dateTime(order.pickup.slotStart)}`
+                : [order.shippingAddress?.area, f.zoneName(order.shippingAddress?.emirate)].filter(Boolean).join(", ")}
             </dd>
           </div>
         </dl>

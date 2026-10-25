@@ -4,7 +4,7 @@ import type { NextConfig } from "next";
 const API_ORIGIN = process.env.API_ORIGIN ?? "http://localhost:3001";
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["@devsfleet/storefront-client"],
+  transpilePackages: ["@devsfleet/shared-types", "@devsfleet/storefront-client"],
   poweredByHeader: false,
   // Self-contained server for the Docker image; trace files from the monorepo root.
   output: "standalone",

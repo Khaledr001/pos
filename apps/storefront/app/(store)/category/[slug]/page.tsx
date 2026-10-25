@@ -23,8 +23,8 @@ async function getCategory(slug: string) {
 export async function generateMetadata({ params }: PageProps<"/category/[slug]">): Promise<Metadata> {
   const { slug } = await params;
   const [c, store] = await Promise.all([getCategory(slug), getStore()]);
-  const title = c.seoTitle ?? `${displayName(c.name)} in the UAE`;
-  const description = c.seoDescription ?? `Buy ${c.name.toLowerCase()} online. Prices include VAT; delivery across the UAE or store pickup.`;
+  const title = c.seoTitle ?? displayName(c.name);
+  const description = c.seoDescription ?? `Buy ${c.name.toLowerCase()} online. Delivery or store pickup.`;
   return { title, description, ...socialMeta({ title, description, path: `/category/${slug}`, image: c.imageUrl, siteName: store.name }) };
 }
 

@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { buttonClass } from "@/components/ui/button";
 import { ProductImage } from "@/components/ui/product-image";
 import { cn } from "@/lib/cn";
-import { addressLine, DELIVERY_METHOD, displayName, formatDate, formatDateTime, PAYMENT_METHOD, PAYMENT_STATUS, uomCount, uomShort, whatsappLink } from "@/lib/format";
+import { DELIVERY_METHOD, displayName, makeFormatFor, PAYMENT_METHOD, PAYMENT_STATUS, uomCount, uomShort, whatsappLink, type StoreFormatter } from "@/lib/format";
 import { OrderStatusBadge } from "./order-status";
 
 /** Mirrors the backend lifecycle: forward steps may be skipped (placed → packed). */
@@ -20,8 +20,6 @@ const RANK: Partial<Record<OrderStatus, number>> = {
   COLLECTED: 5,
 };
 
-const timeFmt = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Dubai", hour: "2-digit", minute: "2-digit" });
-
 function lastAt(order: OrderView, status: OrderStatus) {
   return order.timeline.filter((t) => t.status === status).at(-1)?.at ?? null;
 }
@@ -30,9 +28,9 @@ function courierName(c: string) {
   return c.charAt(0).toUpperCase() + c.slice(1);
 }
 
-function statusMessage(order: OrderView): { text: string; tone: "info" | "good" | "bad" } {
+function statusMessage(order: OrderView, f: StoreFormatter): { text: string; tone: "info" | "good" | "bad" } {
   const pickup = order.deliveryMethod === "PICKUP";
-  const when = formatDate(lastAt(order, order.status));
+  const when = f.date(lastAt(order, order.status));
   switch (order.status) {
     case "PENDING_PAYMENT":
       return { text: "We're waiting for your payment to be confirmed. This usually takes a few minutes.", tone: "info" };
@@ -67,7 +65,7 @@ function statusMessage(order: OrderView): { text: string; tone: "info" | "good" 
   }
 }
 
-function Progress({ order }: { order: OrderView }) {
+function Progress({ order, f }: { order: OrderView; f: StoreFormatter }) {
   const pickup = order.deliveryMethod === "PICKUP";
   const ended = order.status === "CANCELLED" || order.status === "REFUNDED";
   const reachedRanks = order.timeline.map((t) => RANK[t.status]).filter((r): r is number => r !== undefined);
@@ -115,7 +113,7 @@ function Progress({ order }: { order: OrderView }) {
                 {s.label}
                 <span className="sr-only">{s.done ? " (done)" : " (not yet)"}</span>
               </span>
-              {s.done && s.at && <span className="block text-sm text-steel">{formatDateTime(s.at)}</span>}
+              {s.done && s.at && <span className="block text-sm text-steel">{f.dateTime(s.at)}</span>}
               {s.notes.map((n) => (
                 <span key={n} className="mt-0.5 block text-sm text-steel">
                   {n}
@@ -159,10 +157,11 @@ export function OrderDetail({
   back?: ReactNode;
 }) {
   const pickup = order.deliveryMethod === "PICKUP";
-  const message = statusMessage(order);
+  const f = makeFormatFor(store);
+  const message = statusMessage(order, f);
   const addr = order.shippingAddress;
   const cod = order.paymentMethod === "COD" && order.paymentStatus === "PENDING";
-  const endTime = order.pickup?.slotEnd ? timeFmt.format(new Date(order.pickup.slotEnd)) : null;
+  const endTime = order.pickup?.slotEnd ? f.time(order.pickup.slotEnd) : null;
   const { totals } = order;
 
   return (
@@ -174,7 +173,7 @@ export function OrderDetail({
             Order <span className="font-cond">{order.orderNumber}</span>
           </h1>
           <p className="mt-1 flex flex-wrap items-center gap-2 text-steel">
-            <span>Placed {formatDate(order.placedAt ?? order.createdAt)}</span>
+            <span>Placed {f.date(order.placedAt ?? order.createdAt)}</span>
             <OrderStatusBadge status={order.status} />
           </p>
         </div>
@@ -203,7 +202,7 @@ export function OrderDetail({
           {message.tone === "bad" && <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />}
           {message.text}
         </p>
-        {order.status !== "PENDING_PAYMENT" && <Progress order={order} />}
+        {order.status !== "PENDING_PAYMENT" && <Progress order={order} f={f} />}
         {order.shipments.length > 0 && (
           <ul className="mt-5 space-y-2 border-t border-galv pt-4">
             {order.shipments.map((s) => (
@@ -263,7 +262,7 @@ export function OrderDetail({
           </ul>
           <dl className="space-y-2 border-t border-galv py-4 text-[15px]">
             <div className="flex justify-between">
-              <dt className="text-steel">Items (excl. VAT)</dt>
+              <dt className="text-steel">Items (excl. {f.region.taxLabel})</dt>
               <dd>{totals.subtotalNet.formatted}</dd>
             </div>
             {totals.discountNet.fils > 0 && (
@@ -273,11 +272,11 @@ export function OrderDetail({
               </div>
             )}
             <div className="flex justify-between">
-              <dt className="text-steel">{pickup ? "Store pickup" : "Delivery (excl. VAT)"}</dt>
+              <dt className="text-steel">{pickup ? "Store pickup" : `Delivery (excl. ${f.region.taxLabel})`}</dt>
               <dd>{totals.shippingNet.fils === 0 ? "Free" : totals.shippingNet.formatted}</dd>
             </div>
             <div className="flex justify-between">
-              <dt className="text-steel">VAT 5%</dt>
+              <dt className="text-steel">{f.region.taxLabel}</dt>
               <dd>{totals.vat.formatted}</dd>
             </div>
             <div className="flex items-baseline justify-between border-t border-galv pt-3">
@@ -301,7 +300,7 @@ export function OrderDetail({
               )}
               {order.pickup.slotStart && (
                 <p className="pt-1">
-                  Pickup time: <strong>{formatDateTime(order.pickup.slotStart)}{endTime ? `–${endTime}` : ""}</strong>
+                  Pickup time: <strong>{f.dateTime(order.pickup.slotStart)}{endTime ? `–${endTime}` : ""}</strong>
                 </p>
               )}
             </Panel>
@@ -310,7 +309,7 @@ export function OrderDetail({
               {addr ? (
                 <>
                   <p className="font-medium">{addr.fullName}</p>
-                  <p className="text-steel">{addressLine(addr)}</p>
+                  <p className="text-steel">{f.addressLine(addr)}</p>
                   {addr.landmark && <p className="text-steel">Near {addr.landmark}</p>}
                   {addr.phone && <p className="text-steel">{addr.phone}</p>}
                 </>
@@ -329,11 +328,11 @@ export function OrderDetail({
 
           <Panel title="Tax invoice">
             {order.companyName && <p className="font-medium">{order.companyName}</p>}
-            {order.trn && <p className="text-steel">TRN {order.trn}</p>}
+            {order.trn && <p className="text-steel">{f.region.taxIdLabel} {order.trn}</p>}
             {!order.companyName && !order.trn && <p className="text-steel">Issued to {order.contact.fullName}</p>}
             {order.invoice ? (
               <p className="text-steel">
-                Invoice {order.invoice.number}, {formatDate(order.invoice.issuedAt)}
+                Invoice {order.invoice.number}, {f.date(order.invoice.issuedAt)}
               </p>
             ) : (
               <p className="text-steel">The invoice will be ready once the order is confirmed.</p>

@@ -8,7 +8,7 @@ import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { FormError, inputClass } from "@/components/ui/field";
 import { api } from "@/lib/api-browser";
-import { formatDate } from "@/lib/format";
+import { useStoreConfig } from "@/lib/store-config";
 import { QueryError, friendlyError } from "./session";
 
 /** Inline name editor used for creating and renaming lists. */
@@ -51,6 +51,7 @@ export function ListNameForm({
 }
 
 function ListRow({ list }: { list: ProjectListSummary }) {
+  const { date } = useStoreConfig();
   const qc = useQueryClient();
   const [mode, setMode] = useState<"view" | "rename" | "delete">("view");
   const refresh = () => qc.invalidateQueries({ queryKey: ["lists"] });
@@ -82,7 +83,7 @@ function ListRow({ list }: { list: ProjectListSummary }) {
             <span className="min-w-0">
               <span className="block font-cond text-xl font-semibold group-hover:text-pipe group-hover:underline">{list.name}</span>
               <span className="text-sm text-steel">
-                {list.itemCount === 1 ? "1 item" : `${list.itemCount} items`}, updated {formatDate(list.updatedAt)}
+                {list.itemCount === 1 ? "1 item" : `${list.itemCount} items`}, updated {date(list.updatedAt)}
               </span>
             </span>
           </Link>

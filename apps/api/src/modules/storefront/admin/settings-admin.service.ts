@@ -3,6 +3,7 @@ import {
   DEFAULT_STOREFRONT_SETTINGS,
   resolvePlan,
   resolveStorefrontSettings,
+  resolveTenantSettings,
   type StorefrontSettings,
 } from "@devsfleet/shared-types";
 import { AppError, ERROR_CODES, variantSearchKey } from "@devsfleet/shared-utils";
@@ -12,6 +13,7 @@ import { RequestContext } from "../../../common/context/request-context.js";
 import type { Env } from "../../../config/env.js";
 import { TenantDatabase } from "../../../database/tenant-database.service.js";
 import { StorefrontResolver } from "../context/storefront-resolver.service.js";
+import { assertZonesConsistent, defaultRegionCode, defaultShippingRates, regionPreset } from "../region.js";
 import { checkStorefrontHostname, subdomainLabelProblem, suggestSubdomainLabel } from "../platform-subdomain.js";
 import type { DomainDto, PaymentAccountDto, SetupStorefrontDto, UpdateSettingsDto } from "./dto.js";
 
@@ -43,8 +45,10 @@ export class SettingsAdminService {
       const storefront = await tx.query.storefronts.findFirst();
       const tenant = await tx.query.tenants.findFirst({ columns: { planId: true, name: true } });
       const planAllows = resolvePlan(tenant?.planId).features.onlineStore;
+      // Headless access is the plan's API access; the admin disables the switch without it.
+      const planAllowsHeadless = resolvePlan(tenant?.planId).features.apiAccess;
       const platform = this.platformDomain(tenant?.name);
-      if (!storefront) return { storefront: null, planAllows, platform };
+      if (!storefront) return { storefront: null, planAllows, planAllowsHeadless, platform };
 
       const [domains, account] = await Promise.all([
         tx.query.storefrontDomains.findMany({ orderBy: (t, { desc }) => desc(t.isPrimary) }),
@@ -52,6 +56,7 @@ export class SettingsAdminService {
       ]);
       return {
         planAllows,
+        planAllowsHeadless,
         platform,
         storefront: { id: storefront.id, name: storefront.name, isActive: storefront.isActive },
         settings: resolveStorefrontSettings(storefront.settings),
@@ -73,10 +78,12 @@ export class SettingsAdminService {
   async setup(dto: SetupStorefrontDto) {
     const tenantId = RequestContext.requireTenantId();
     await this.db.run(async (tx) => {
-      const tenant = await tx.query.tenants.findFirst({ columns: { planId: true } });
+      const tenant = await tx.query.tenants.findFirst({ columns: { planId: true, settings: true } });
       if (!resolvePlan(tenant?.planId).features.onlineStore) {
         throw new AppError(ERROR_CODES.PLAN_LIMIT_EXCEEDED, "Your plan does not include an online store. Upgrade to add one.");
       }
+      const tenantSettings = resolveTenantSettings(tenant?.settings);
+      const region = regionPreset(dto.region ?? defaultRegionCode(tenantSettings.currency.base, tenantSettings.locale.timezone));
       if (await tx.query.storefronts.findFirst({ columns: { id: true } })) {
         throw new AppError(ERROR_CODES.CONFLICT, "This business already has an online store.");
       }
@@ -89,6 +96,8 @@ export class SettingsAdminService {
       });
       const settings: Partial<StorefrontSettings> = {
         ...DEFAULT_STOREFRONT_SETTINGS,
+        region,
+        shipping: { rates: defaultShippingRates(region) },
         checkout: {
           ...DEFAULT_STOREFRONT_SETTINGS.checkout,
           fulfilmentBranchId: branches[0]?.id ?? null,
@@ -96,7 +105,7 @@ export class SettingsAdminService {
         },
         branches: branches.map((b) => ({
           branchId: b.id,
-          emirate: "DUBAI",
+          emirate: region.zones[0]!.code,
           lat: null,
           lng: null,
           openingHours: null,
@@ -115,14 +124,29 @@ export class SettingsAdminService {
     await this.db.run(async (tx) => {
       const storefront = await this.requireStorefront(tx);
       const current = resolveStorefrontSettings(storefront.settings);
-      const { name, isActive, checkout, ...rest } = dto;
+      const { name, isActive, checkout, theme, region, headless, navigation, ...rest } = dto;
 
       if (checkout?.fulfilmentBranchId) await this.assertBranch(tx, checkout.fulfilmentBranchId);
       for (const branch of dto.branches ?? []) await this.assertBranch(tx, branch.branchId);
 
+      if (headless?.enabled) await this.assertHeadlessAllowed(tx);
+
       const next: StorefrontSettings = {
         ...current,
         ...rest,
+        theme: theme
+          ? {
+              ...current.theme,
+              ...theme,
+              colors: { ...current.theme.colors, ...theme.colors },
+              layout: { ...current.theme.layout, ...theme.layout },
+              announcement: { ...current.theme.announcement, ...theme.announcement },
+              social: theme.social ?? current.theme.social,
+            }
+          : current.theme,
+        navigation: { ...current.navigation, ...navigation },
+        region: { ...current.region, ...region },
+        headless: { ...current.headless, ...headless },
         checkout: {
           ...current.checkout,
           ...checkout,
@@ -132,6 +156,11 @@ export class SettingsAdminService {
           deliveryVariantId: current.checkout.deliveryVariantId ?? (await this.ensureDeliveryVariant(tx, tenantId)),
         },
       };
+      // Only when the request touches them, so an unrelated save (a colour) is
+      // never refused over a rate that was already stale.
+      if (region?.zones || dto.shipping || dto.branches) {
+        assertZonesConsistent(next.region, next.shipping.rates, next.branches);
+      }
       await tx
         .update(schema.storefronts)
         .set({ settings: next, ...(name ? { name } : {}), ...(isActive !== undefined ? { isActive } : {}) })
@@ -139,6 +168,14 @@ export class SettingsAdminService {
     });
     this.resolver.invalidateTenant(tenantId);
     return this.get();
+  }
+
+  /** A custom front end reads the catalogue with the plan's API access, like any other integration. */
+  private async assertHeadlessAllowed(tx: Transaction): Promise<void> {
+    const tenant = await tx.query.tenants.findFirst({ columns: { planId: true } });
+    if (!resolvePlan(tenant?.planId).features.apiAccess) {
+      throw new AppError(ERROR_CODES.PLAN_LIMIT_EXCEEDED, "Your plan does not include API access. Upgrade to let a custom front end use your store.");
+    }
   }
 
   async addDomain(dto: DomainDto) {

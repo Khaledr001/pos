@@ -4,7 +4,7 @@ import { TradeContent } from "@/components/store/account/trade";
 export const metadata: Metadata = {
   title: "Trade accounts for contractors",
   description:
-    "Project pricing and quantity breaks for contractors and maintenance companies, with tax invoices in your company name and TRN.",
+    "Project pricing and quantity breaks for contractors and maintenance companies, with tax invoices in your company name.",
   alternates: { canonical: "/trade" },
 };
 

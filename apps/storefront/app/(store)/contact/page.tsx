@@ -6,8 +6,8 @@ import type { ReactNode } from "react";
 import { Breadcrumbs } from "@/components/store/listing";
 import { buttonClass } from "@/components/ui/button";
 import { cached, publicApi, tags } from "@/lib/api-server";
-import { getStore } from "@/lib/data";
-import { emirateName, whatsappLink } from "@/lib/format";
+import { getFormat, getStore } from "@/lib/data";
+import { whatsappLink } from "@/lib/format";
 import { orFallback } from "@/lib/fallback";
 
 export const metadata: Metadata = {
@@ -29,8 +29,9 @@ function Row({ icon, label, children }: { icon: ReactNode; label: string; childr
 }
 
 export default async function ContactPage() {
-  const [store, branches] = await Promise.all([
+  const [store, f, branches] = await Promise.all([
     getStore(),
+    getFormat(),
     publicApi.get<Branch[]>("/content/branches", cached([tags.content])).catch(orFallback([] as Branch[])),
   ]);
   const wa = store.whatsapp ? whatsappLink(store.whatsapp) : null;
@@ -77,13 +78,13 @@ export default async function ContactPage() {
           </dl>
           {store.trn && (
             <p className="mt-2 text-sm text-steel">
-              {store.legalName}, TRN {store.trn}
+              {store.legalName}, {store.region.taxIdLabel} {store.trn}
             </p>
           )}
         </section>
 
         <section aria-labelledby="source" className="flex flex-col rounded-[var(--radius-panel)] border border-brass/40 bg-brass-tint p-5">
-          <Camera className="size-7 text-[#7a5a0c]" aria-hidden />
+          <Camera className="size-7 text-brass-ink" aria-hidden />
           <h2 id="source" className="mt-2 text-2xl">
             Can&apos;t find a product?
           </h2>
@@ -112,7 +113,7 @@ export default async function ContactPage() {
             {branches.map((b) => (
               <li key={b.code} className="text-[15px]">
                 <p className="font-medium">{b.name}</p>
-                <p className="text-steel">{emirateName(b.emirate)}</p>
+                <p className="text-steel">{f.zoneName(b.emirate)}</p>
                 {b.phone && (
                   <a href={`tel:${b.phone.replace(/\s/g, "")}`} className="text-pipe hover:underline">
                     {b.phone}

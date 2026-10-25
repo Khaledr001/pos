@@ -2,7 +2,7 @@ import { WEB_QUOTE_STATUSES } from "@devsfleet/shared-types";
 import { Money } from "@devsfleet/shared-utils";
 import { z } from "zod";
 import { sortSchema } from "../../../common/db/list-query.js";
-import { uaePhone, wireEnum } from "../wire.js";
+import { shopperPhone, wireEnum } from "../wire.js";
 
 export const CreateQuoteSchema = z.object({
   /**
@@ -13,7 +13,7 @@ export const CreateQuoteSchema = z.object({
   contact: z.object({
     fullName: z.string().trim().min(2).max(120),
     email: z.string().trim().toLowerCase().pipe(z.email().max(255)),
-    phone: uaePhone,
+    phone: shopperPhone,
   }),
   companyName: z.string().trim().max(200).optional(),
   notes: z.string().trim().max(2000).optional(),

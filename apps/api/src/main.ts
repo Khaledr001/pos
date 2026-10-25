@@ -12,6 +12,8 @@ import { Logger as PinoLogger } from "nestjs-pino";
 import { AppModule } from "./app.module.js";
 import type { Env } from "./config/env.js";
 import { StorageService } from "./modules/storage/storage.service.js";
+import { createCorsDelegate } from "./modules/storefront/context/headless-cors.js";
+import { StorefrontResolver } from "./modules/storefront/context/storefront-resolver.service.js";
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
@@ -79,15 +81,17 @@ async function bootstrap(): Promise<void> {
   );
   app.use(compression());
 
-  app.enableCors({
-    origin: config
-      .get("API_CORS_ORIGINS", { infer: true })
-      .split(",")
-      .map((o) => o.trim())
-      .filter(Boolean),
-    credentials: true,
-    exposedHeaders: ["x-request-id"],
-  });
+  app.enableCors(
+    createCorsDelegate({
+      staticOrigins: config
+        .get("API_CORS_ORIGINS", { infer: true })
+        .split(",")
+        .map((o) => o.trim())
+        .filter(Boolean),
+      prefix,
+      resolver: app.get(StorefrontResolver),
+    }),
+  );
 
   /**
    * There is deliberately no global ValidationPipe.

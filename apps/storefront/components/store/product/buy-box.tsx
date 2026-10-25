@@ -15,6 +15,7 @@ import { api, errorMessage } from "@/lib/api-browser";
 import { cn } from "@/lib/cn";
 import { formatQty, uomCount, uomShort } from "@/lib/format";
 import { useCartActions, useMe } from "@/lib/hooks/store";
+import { useStoreConfig } from "@/lib/store-config";
 import { SaveToList } from "./save-to-list";
 import { StockAlertForm } from "./stock-alert-form";
 import { TileCalculator } from "./tile-calculator";
@@ -22,6 +23,7 @@ import { TileCalculator } from "./tile-calculator";
 const AXIS_LABELS: Record<string, string> = { size: "Size", colour: "Colour", finish: "Finish", capacity: "Capacity", wattage: "Wattage", rating: "Rating", poles: "Poles" };
 
 export function BuyBox({ product }: { product: ProductDetail }) {
+  const { currency, region } = useStoreConfig();
   const { data: me } = useMe();
   const { add } = useCartActions();
   const [selected, setSelected] = useState<Record<string, string>>(() => ({ ...product.variants[0].options }));
@@ -67,6 +69,7 @@ export function BuyBox({ product }: { product: ProductDetail }) {
     try {
       await add.mutateAsync({ variantId: variant.id, uom: unit?.uom, quantity: qty });
       track("add_to_cart", {
+        currency,
         // Analytics estimate only; never shown to the shopper.
         value: ((unitPrice?.fils ?? 0) * qty) / 100,
         items: [{ item_id: variant.sku, item_name: product.name, price: (unitPrice?.fils ?? 0) / 100, quantity: qty }],
@@ -114,9 +117,9 @@ export function BuyBox({ product }: { product: ProductDetail }) {
             <div>
               <PriceTag price={unitPrice} uom={unit?.uom} was={price.discounted || tier ? price.retailUnit : null} size="xl" />
               <p className="mt-1 text-sm text-steel">
-                Incl. {Number(product.taxPercent)}% VAT{unitNet ? `, ${unitNet.formatted} excl. VAT` : ""}
-                {price.priceListType === "TRADE" && <span className="ml-2 font-semibold text-[#7a5a0c]">Your trade price</span>}
-                {price.priceListType === "PROMO" && <span className="ml-2 font-semibold text-[#7a5a0c]">Online offer</span>}
+                Incl. {Number(product.taxPercent)}% {region.taxLabel}{unitNet ? `, ${unitNet.formatted} excl. ${region.taxLabel}` : ""}
+                {price.priceListType === "TRADE" && <span className="ml-2 font-semibold text-brass-ink">Your trade price</span>}
+                {price.priceListType === "PROMO" && <span className="ml-2 font-semibold text-brass-ink">Online offer</span>}
               </p>
             </div>
           ) : (
@@ -220,7 +223,7 @@ export function BuyBox({ product }: { product: ProductDetail }) {
                 <strong>Store pickup only</strong> — too heavy or bulky for courier delivery.
               </span>
             ) : (
-              <span>Courier delivery to all emirates, fee shown at checkout.</span>
+              <span>Courier delivery, fee shown at checkout.</span>
             )}
           </li>
           <li className="flex gap-2">

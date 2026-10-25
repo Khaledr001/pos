@@ -13,6 +13,7 @@ import { QtyInput } from "@/components/ui/qty-input";
 import { errorMessage } from "@/lib/api-browser";
 import { displayName, uomShort } from "@/lib/format";
 import { useCart, useCartActions } from "@/lib/hooks/store";
+import { useStoreConfig } from "@/lib/store-config";
 import { QuoteRequest } from "./quote-request";
 
 function Line({ item }: { item: CartItem }) {
@@ -43,7 +44,7 @@ function Line({ item }: { item: CartItem }) {
           {!item.available && <Badge tone="signal">No longer available</Badge>}
         </div>
         {item.nextTier && (
-          <p className="mt-2 text-sm text-[#7a5a0c]">
+          <p className="mt-2 text-sm text-brass-ink">
             Buy {item.nextTier.minQty} {uomShort(item.uom)} or more to pay {item.nextTier.unitPrice.formatted} each.
           </p>
         )}
@@ -127,6 +128,7 @@ function Coupon({ code, error }: { code: string | null; error: string | null }) 
 }
 
 export function CartPage() {
+  const { region } = useStoreConfig();
   const { data: cart, isLoading } = useCart();
 
   if (isLoading) {
@@ -155,7 +157,7 @@ export function CartPage() {
               {[...blocking, ...notices].map((i, n) => (
                 <li
                   key={`${i.code}-${i.sku ?? n}`}
-                  className={`flex items-start gap-2 rounded-[var(--radius-tag)] px-3 py-2 text-[15px] ${blocking.includes(i) ? "bg-signal-tint text-signal" : "bg-brass-tint text-[#7a5a0c]"}`}
+                  className={`flex items-start gap-2 rounded-[var(--radius-tag)] px-3 py-2 text-[15px] ${blocking.includes(i) ? "bg-signal-tint text-signal" : "bg-brass-tint text-brass-ink"}`}
                 >
                   <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
                   {i.message}
@@ -174,7 +176,7 @@ export function CartPage() {
           <h2 className="text-2xl">Order summary</h2>
           <dl className="space-y-2 text-[15px]">
             <div className="flex justify-between">
-              <dt className="text-steel">Items (excl. VAT)</dt>
+              <dt className="text-steel">Items (excl. {region.taxLabel})</dt>
               <dd>{cart.totals.subtotalNet.formatted}</dd>
             </div>
             {cart.totals.discountNet.fils > 0 && (
@@ -184,7 +186,7 @@ export function CartPage() {
               </div>
             )}
             <div className="flex justify-between">
-              <dt className="text-steel">VAT 5%</dt>
+              <dt className="text-steel">{region.taxLabel}</dt>
               <dd>{cart.totals.vat.formatted}</dd>
             </div>
             <div className="flex justify-between">
@@ -202,7 +204,7 @@ export function CartPage() {
           </ButtonLink>
           {blocking.length > 0 && <p className="text-sm text-signal">Change or remove the items marked above to continue.</p>}
           <QuoteRequest itemCount={cart.items.length} />
-          <p className="text-sm text-steel">Tax invoice with our TRN included. Add your company TRN at checkout.</p>
+          <p className="text-sm text-steel">Tax invoice included. Add your company tax number at checkout.</p>
         </aside>
       </div>
     </div>

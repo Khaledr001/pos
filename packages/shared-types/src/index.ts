@@ -15,3 +15,4 @@ export * from "./plans.js";
 export * from "./api.js";
 export * from "./sync.js";
 export * from "./storefront.js";
+export * from "./storefront-appearance.js";

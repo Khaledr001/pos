@@ -6,7 +6,8 @@ import { OrderStatusBadge } from "@/components/store/account/order-status";
 import { AccountWelcome } from "@/components/store/account/welcome";
 import { ButtonLink } from "@/components/ui/button";
 import { accountGet, requireSession } from "@/lib/account-server";
-import { formatDate } from "@/lib/format";
+import { getFormat } from "@/lib/data";
+
 
 export const metadata: Metadata = { title: "Your account", robots: { index: false } };
 
@@ -14,10 +15,11 @@ const QUICK_LINKS = [
   { href: "/account/orders", label: "Orders", text: "Track, reorder and download invoices", icon: Package },
   { href: "/account/addresses", label: "Addresses", text: "Homes, offices and site addresses", icon: MapPin },
   { href: "/account/lists", label: "Lists", text: "Wishlist and project lists", icon: ListChecks },
-  { href: "/account/profile", label: "Profile and company", text: "Name, mobile, company and TRN", icon: UserRound },
+  { href: "/account/profile", label: "Profile and company", text: "Name, mobile and company details", icon: UserRound },
 ];
 
 export default async function AccountPage() {
+  const f = await getFormat();
   await requireSession("/account");
   const orders = await accountGet<Paged<OrderSummary>>("/me/orders?page=1", "/account");
   const recent = orders.items.slice(0, 3);
@@ -45,7 +47,7 @@ export default async function AccountPage() {
                   <span>
                     <span className="font-cond text-xl font-semibold">{o.orderNumber}</span>
                     <span className="block text-sm text-steel">
-                      {formatDate(o.placedAt)}, {o.itemCount === 1 ? "1 item" : `${o.itemCount} items`}
+                      {f.date(o.placedAt)}, {o.itemCount === 1 ? "1 item" : `${o.itemCount} items`}
                     </span>
                   </span>
                   <OrderStatusBadge status={o.status} className="justify-self-end sm:justify-self-start" />

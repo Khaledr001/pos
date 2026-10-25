@@ -19,7 +19,7 @@ export function AccountWelcome() {
       </div>
 
       {me?.tradeStatus === "PENDING" && (
-        <p className="flex items-start gap-2 rounded-[var(--radius-panel)] border border-brass/40 bg-brass-tint px-4 py-3 text-[15px] text-[#7a5a0c]">
+        <p className="flex items-start gap-2 rounded-[var(--radius-panel)] border border-brass/40 bg-brass-tint px-4 py-3 text-[15px] text-brass-ink">
           <Clock className="mt-0.5 size-5 shrink-0" aria-hidden />
           <span>
             We&apos;re reviewing your trade application. We&apos;ll email you when your trade prices are ready.{" "}
@@ -45,7 +45,7 @@ export function AccountWelcome() {
       )}
       {me?.tradeStatus === "NONE" && (
         <p className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-panel)] border border-galv bg-paper px-4 py-3 text-[15px]">
-          <span>Buying for a business? Get project pricing and invoices with your TRN.</span>
+          <span>Buying for a business? Get project pricing and invoices with your tax registration number.</span>
           <Link href="/account/trade" className="font-semibold text-pipe hover:underline">
             Apply for a trade account
           </Link>

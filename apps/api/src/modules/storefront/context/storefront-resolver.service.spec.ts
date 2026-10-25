@@ -82,4 +82,46 @@ describe("StorefrontResolver", () => {
     expect(await new StorefrontResolver(db).resolve(undefined)).toBeNull();
     expect(calls.count).toBe(0);
   });
+
+  describe("headless access", () => {
+    const headless = (overrides: Record<string, unknown> = {}) =>
+      row({ settings: { headless: { enabled: true, allowedOrigins: ["https://app.example.com"] } }, ...overrides });
+
+    it("allows a listed origin on a live shop whose plan has API access", async () => {
+      const { db } = dbReturning([headless()]);
+      expect(await new StorefrontResolver(db).headlessAllows("Shop.Example", "https://app.example.com")).toBe(true);
+    });
+
+    it.each([
+      ["the origin is not listed", headless(), "https://other.example.com"],
+      ["headless is off", headless({ settings: { headless: { enabled: false, allowedOrigins: ["https://app.example.com"] } } }), "https://app.example.com"],
+      ["the plan has no API access", headless({ planId: "trial", trialEndsAt: new Date(Date.now() + 86_400_000) }), "https://app.example.com"],
+      ["the shop is suspended", headless({ suspendedAt: new Date() }), "https://app.example.com"],
+    ])("refuses when %s", async (_label, found, origin) => {
+      const { db } = dbReturning([found]);
+      expect(await new StorefrontResolver(db).headlessAllows("shop.example", origin)).toBe(false);
+    });
+
+    it("refuses with no host, without querying", async () => {
+      const { db, calls } = dbReturning([headless()]);
+      expect(await new StorefrontResolver(db).headlessAllows(undefined, "https://app.example.com")).toBe(false);
+      expect(calls.count).toBe(0);
+    });
+
+    it("answers a preflight for an origin any live shop lists, cached, and forgets on invalidate", async () => {
+      const { db, calls } = dbReturning([headless()]);
+      const resolver = new StorefrontResolver(db);
+      expect(await resolver.originAllowedAnywhere("https://app.example.com")).toBe(true);
+      expect(await resolver.originAllowedAnywhere("https://app.example.com")).toBe(true);
+      expect(calls.count).toBe(1);
+      resolver.invalidateTenant("tenant-1");
+      await resolver.originAllowedAnywhere("https://app.example.com");
+      expect(calls.count).toBe(2);
+    });
+
+    it("refuses a preflight when the matching shop is dark", async () => {
+      const { db } = dbReturning([headless({ isActive: false })]);
+      expect(await new StorefrontResolver(db).originAllowedAnywhere("https://app.example.com")).toBe(false);
+    });
+  });
 });

@@ -2,7 +2,8 @@ import type { Branch } from "@devsfleet/storefront-client";
 import { MapPin, Navigation, Phone } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { buttonClass } from "@/components/ui/button";
-import { emirateName, WEEKDAYS } from "@/lib/format";
+import { getFormat } from "@/lib/data";
+import { WEEKDAYS } from "@/lib/format";
 
 function hours(openingHours: unknown): Record<string, string> {
   if (!openingHours || typeof openingHours !== "object") return {};
@@ -12,7 +13,8 @@ function hours(openingHours: unknown): Record<string, string> {
 /** "07:30-12:00, 14:00-20:00" → "07:30–12:00, 14:00–20:00" */
 const pretty = (h: string) => h.replace(/\s*-\s*/g, "–");
 
-export function BranchCard({ branch }: { branch: Branch }) {
+export async function BranchCard({ branch }: { branch: Branch }) {
+  const { zoneName } = await getFormat();
   const h = hours(branch.openingHours);
   const directions =
     branch.lat != null && branch.lng != null ? `https://www.google.com/maps/dir/?api=1&destination=${branch.lat},${branch.lng}` : null;
@@ -22,7 +24,7 @@ export function BranchCard({ branch }: { branch: Branch }) {
         <h2 className="text-2xl">{branch.name}</h2>
         {branch.pickupEnabled && <Badge tone="pipe">Store pickup</Badge>}
       </div>
-      <p className="text-sm text-steel">{emirateName(branch.emirate)}</p>
+      <p className="text-sm text-steel">{zoneName(branch.emirate)}</p>
       <p className="mt-3 flex gap-2 text-[15px]">
         <MapPin className="mt-0.5 size-4 shrink-0 text-steel" aria-hidden />
         {branch.address}

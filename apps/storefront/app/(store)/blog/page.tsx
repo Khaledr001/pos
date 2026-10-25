@@ -6,17 +6,19 @@ import { Breadcrumbs } from "@/components/store/listing";
 import { EmptyState } from "@/components/ui/empty";
 import { Pagination } from "@/components/ui/pagination";
 import { cached, publicApi, tags } from "@/lib/api-server";
-import { formatDate } from "@/lib/format";
+import { getFormat } from "@/lib/data";
+
 
 export const metadata: Metadata = {
   title: "Guides",
-  description: "Practical DIY and trade guides: cable sizes, tile quantities, plumbing fittings and more.",
+  description: "Guides and advice to help you choose the right product and buy the right amount.",
   alternates: { canonical: "/blog" },
 };
 
 const PAGE_SIZE = 12;
 
 export default async function BlogPage({ searchParams }: PageProps<"/blog">) {
+  const f = await getFormat();
   const raw = Number((await searchParams).page);
   const page = Number.isInteger(raw) && raw > 1 ? raw : 1;
   const data = await publicApi.get<BlogList>(`/content/blog?page=${page}`, cached([tags.content]));
@@ -25,7 +27,7 @@ export default async function BlogPage({ searchParams }: PageProps<"/blog">) {
     <div className="mx-auto max-w-7xl px-4 py-6">
       <Breadcrumbs items={[{ href: "/blog", label: "Guides" }]} />
       <h1 className="mt-3 text-4xl">Guides</h1>
-      <p className="mt-1 max-w-[65ch] text-steel">DIY and trade guides to help you pick the right part and buy the right amount.</p>
+      <p className="mt-1 max-w-[65ch] text-steel">Guides to help you pick the right product and buy the right amount.</p>
 
       {data.items.length === 0 ? (
         <div className="mt-6">
@@ -50,7 +52,7 @@ export default async function BlogPage({ searchParams }: PageProps<"/blog">) {
                     {post.excerpt && <p className="mt-2 flex-1 text-[15px] text-steel">{post.excerpt}</p>}
                     {post.publishedAt && (
                       <p className="mt-4 text-sm text-steel-light">
-                        <time dateTime={post.publishedAt}>{formatDate(post.publishedAt)}</time>
+                        <time dateTime={post.publishedAt}>{f.date(post.publishedAt)}</time>
                       </p>
                     )}
                   </div>

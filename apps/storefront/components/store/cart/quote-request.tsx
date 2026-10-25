@@ -10,6 +10,7 @@ import { Button, ButtonLink } from "@/components/ui/button";
 import { FormError, TextAreaField, TextField } from "@/components/ui/field";
 import { api } from "@/lib/api-browser";
 import { useMe } from "@/lib/hooks/store";
+import { useStoreConfig } from "@/lib/store-config";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -21,6 +22,7 @@ type Fields = { company: string; name: string; email: string; phone: string; not
  * login link that returns here. The form never sends prices.
  */
 export function QuoteRequest({ itemCount }: { itemCount: number }) {
+  const { phonePlaceholder } = useStoreConfig();
   const { data: me } = useMe();
   const qc = useQueryClient();
   const dialog = useRef<HTMLDialogElement>(null);
@@ -147,7 +149,7 @@ export function QuoteRequest({ itemCount }: { itemCount: number }) {
             <TextField label="Company (optional)" autoComplete="organization" maxLength={200} value={value("company")} onChange={set("company")} />
             <div className="grid gap-4 sm:grid-cols-2">
               <TextField label="Contact name" autoComplete="name" required value={value("name")} onChange={set("name")} error={errors.name} />
-              <TextField label="Phone" type="tel" autoComplete="tel" inputMode="tel" required placeholder="+971 50 123 4567" value={value("phone")} onChange={set("phone")} error={errors.phone} />
+              <TextField label="Phone" type="tel" autoComplete="tel" inputMode="tel" required placeholder={phonePlaceholder} value={value("phone")} onChange={set("phone")} error={errors.phone} />
             </div>
             <TextField label="Email" type="email" autoComplete="email" required value={value("email")} onChange={set("email")} error={errors.email} />
             <TextAreaField

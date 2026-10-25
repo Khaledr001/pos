@@ -9,8 +9,8 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty";
 import { Checkbox, FormError, SelectField, TextField } from "@/components/ui/field";
 import { api } from "@/lib/api-browser";
-import { addressLine, EMIRATES } from "@/lib/format";
 import { useMe } from "@/lib/hooks/store";
+import { useStoreConfig } from "@/lib/store-config";
 import { QueryError, friendlyError } from "./session";
 
 type Draft = {
@@ -25,11 +25,11 @@ type Draft = {
   isDefault: boolean;
 };
 
-const blank = (defaults: Partial<Draft>): Draft => ({
+const blank = (zone: string, defaults: Partial<Draft>): Draft => ({
   label: "",
   fullName: "",
   phone: "",
-  emirate: "DUBAI",
+  emirate: zone,
   area: "",
   street: "",
   building: "",
@@ -83,6 +83,7 @@ function AddressForm({
   submitLabel: string;
   showDefault: boolean;
 }) {
+  const { region, phonePlaceholder } = useStoreConfig();
   const [d, setD] = useState(initial);
   const set = (k: keyof Draft) => (e: { target: { value: string } }) => setD((x) => ({ ...x, [k]: e.target.value }));
   const submit = (e: FormEvent) => {
@@ -101,15 +102,15 @@ function AddressForm({
         hint="Helps you pick the right address at checkout"
       />
       <TextField label="Full name" autoComplete="name" value={d.fullName} onChange={set("fullName")} required minLength={2} maxLength={120} hint="Who receives the delivery" />
-      <TextField label="Mobile" type="tel" autoComplete="tel" placeholder="+971 50 123 4567" value={d.phone} onChange={set("phone")} required hint="The driver calls this number" />
-      <SelectField label="Emirate" value={d.emirate} onChange={(e) => setD({ ...d, emirate: e.target.value as Emirate })}>
-        {EMIRATES.map((e) => (
-          <option key={e.value} value={e.value}>
-            {e.label}
+      <TextField label="Mobile" type="tel" autoComplete="tel" placeholder={phonePlaceholder} value={d.phone} onChange={set("phone")} required hint="The driver calls this number" />
+      <SelectField label={region.zoneLabel} value={d.emirate} onChange={(e) => setD({ ...d, emirate: e.target.value as Emirate })}>
+        {region.zones.map((z) => (
+          <option key={z.code} value={z.code}>
+            {z.name}
           </option>
         ))}
       </SelectField>
-      <TextField label="Area" placeholder="e.g. Al Barsha 2" value={d.area} onChange={set("area")} required minLength={2} maxLength={120} />
+      <TextField label="Area" placeholder="Neighbourhood or district" value={d.area} onChange={set("area")} required minLength={2} maxLength={120} />
       <TextField label="Street" value={d.street} onChange={set("street")} required minLength={2} maxLength={200} />
       <TextField label="Building / villa / office (optional)" value={d.building} onChange={set("building")} maxLength={120} />
       <TextField
@@ -140,6 +141,7 @@ function AddressForm({
 
 function AddressCard({ address, onEdit }: { address: Address; onEdit: () => void }) {
   const qc = useQueryClient();
+  const { addressLine } = useStoreConfig();
   const [confirming, setConfirming] = useState(false);
   const refresh = () => qc.invalidateQueries({ queryKey: ["addresses"] });
   const makeDefault = useMutation({
@@ -205,6 +207,7 @@ function AddressCard({ address, onEdit }: { address: Address; onEdit: () => void
 
 export function AddressBook() {
   const qc = useQueryClient();
+  const { region } = useStoreConfig();
   const { data: me } = useMe();
   const defaults: Partial<Draft> = me ? { fullName: `${me.firstName} ${me.lastName}`.trim(), phone: me.phone ?? "" } : {};
   const { data: addresses, isLoading, error } = useQuery({
@@ -252,7 +255,7 @@ export function AddressBook() {
           </h2>
           <AddressForm
             key={editing}
-            initial={editingAddress ? fromAddress(editingAddress) : blank(defaults)}
+            initial={editingAddress ? fromAddress(editingAddress) : blank(region.zones[0]!.code, defaults)}
             onSave={(draft) => save.mutate({ id: editing === "new" ? null : editing, draft })}
             onCancel={() => open(null)}
             saving={save.isPending}

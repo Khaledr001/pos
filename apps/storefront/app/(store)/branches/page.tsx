@@ -8,7 +8,7 @@ import { orFallback } from "@/lib/fallback";
 
 export const metadata: Metadata = {
   title: "Branches and opening hours",
-  description: "Visit or collect your order from our branches in Dubai, Sharjah and Abu Dhabi. Addresses, phone numbers and opening hours.",
+  description: "Visit or collect your order from our branches. Addresses, phone numbers and opening hours.",
   alternates: { canonical: "/branches" },
 };
 

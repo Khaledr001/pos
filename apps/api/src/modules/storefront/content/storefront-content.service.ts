@@ -1,11 +1,13 @@
 import { sql, type Transaction } from "@devsfleet/db";
+import { HOME_SECTION_TYPES } from "@devsfleet/shared-types";
 import { AppError, ERROR_CODES, Money } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
 import { RequestContext } from "../../../common/context/request-context.js";
 import { TenantDatabase } from "../../../database/tenant-database.service.js";
 import { StorefrontCatalogService } from "../catalog/storefront-catalog.service.js";
 
-const HOME_CARDS = 8;
+/** Enough for the largest product-row section (limit 12); each section slices what it shows. */
+const HOME_CARDS = 12;
 
 @Injectable()
 export class StorefrontContentService {
@@ -15,6 +17,11 @@ export class StorefrontContentService {
   ) {}
 
   async home() {
+    const { settings } = RequestContext.requireStorefront();
+    // A section type this build does not know (a newer admin saved it) is
+    // skipped rather than breaking the whole page.
+    const known = new Set<string>(HOME_SECTION_TYPES);
+    const sections = settings.homeSections.filter((s) => s.enabled && known.has(s.type));
     return this.db.run(async (tx) => {
       const [banners, categories, brands, bestSellers, newArrivals] = await Promise.all([
         this.activeBanners(tx),
@@ -42,6 +49,7 @@ export class StorefrontContentService {
         featuredBrands: brands.map((b) => ({ ...b, featured: true })),
         bestSellers,
         newArrivals,
+        sections,
       };
     });
   }
@@ -131,6 +139,10 @@ export class StorefrontContentService {
       email: tenantSettings.email ?? "",
       whatsapp: settings.whatsapp ?? "",
       currency: tenantSettings.currency.base,
+      timezone: tenantSettings.locale.timezone,
+      theme: settings.theme,
+      navigation: settings.navigation,
+      region: settings.region,
       cod: {
         enabled: settings.checkout.cod.enabled,
         max: Money.toDecimalString(codMax, 2),

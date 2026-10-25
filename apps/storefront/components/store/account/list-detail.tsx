@@ -12,7 +12,8 @@ import { FormError, inputClass } from "@/components/ui/field";
 import { ProductImage } from "@/components/ui/product-image";
 import { QtyInput } from "@/components/ui/qty-input";
 import { api, ApiError } from "@/lib/api-browser";
-import { aed, displayName, uomShort } from "@/lib/format";
+import { displayName, uomShort } from "@/lib/format";
+import { useStoreConfig } from "@/lib/store-config";
 import { AddToCartAction } from "./add-to-cart-result";
 import { QueryError, friendlyError } from "./session";
 
@@ -122,6 +123,7 @@ function ItemRow({ listId, item, otherLists }: { listId: string; item: Item; oth
 }
 
 export function ListDetail({ id }: { id: string }) {
+  const { money, region } = useStoreConfig();
   const { data: list, isLoading, error } = useQuery({
     queryKey: ["list", id],
     queryFn: () => api.get<ProjectListDetail>(`/me/lists/${id}`),
@@ -166,7 +168,7 @@ export function ListDetail({ id }: { id: string }) {
             {list.items.length === 1 ? "1 item" : `${list.items.length} items`}
             {total > 0 && (
               <>
-                , <span className="tag-price text-lg text-ink">{aed(total)}</span> incl. VAT at today&apos;s prices
+                , <span className="tag-price text-lg text-ink">{money(total)}</span> incl. {region.taxLabel} at today&apos;s prices
               </>
             )}
           </p>
