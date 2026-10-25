@@ -167,7 +167,7 @@ export class StorefrontPaymentsService {
       } else {
         // Paid after the order lapsed. The money is real; staff refund it.
         await tx.update(schema.webOrders).set({ paymentStatus: "paid" }).where(eq(schema.webOrders.orderId, web.orderId));
-        await this.webOrders.recordEvent(tx, web.orderId, web.status, "Payment received after the order was cancelled — refund required.");
+        await this.webOrders.recordEvent(tx, web.orderId, web.status, "Payment received after the order was cancelled — refund required.", null, { notify: false });
         this.logger.warn({ orderId: web.orderId }, "Late payment on a cancelled web order");
       }
     });
@@ -269,7 +269,7 @@ export class StorefrontPaymentsService {
           if (web?.status !== "pending_payment" || web.paymentStatus === "paid") return;
           await this.orders.cancelInTransaction(tx, orderId, "Online payment was not completed in time.");
           await tx.update(schema.webOrders).set({ status: "cancelled" }).where(eq(schema.webOrders.orderId, orderId));
-          await this.webOrders.recordEvent(tx, orderId, "cancelled", "Payment was not completed in time.");
+          await this.webOrders.recordEvent(tx, orderId, "cancelled", "Payment was not completed in time.", null, { notify: false });
           expired++;
         });
       });

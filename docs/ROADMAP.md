@@ -161,7 +161,7 @@ checks pass.
 - [x] Order desk, listings, content, promo codes, trade approvals in apps/admin
 - [x] Cache revalidation from `updated_at`; per-shopper rate limiting behind the storefront
 - [x] One storefront deployment for every tenant; on-demand TLS for shop domains
-- [ ] Shopper notifications (order confirmation, dispatch, ready for pickup)
+- [x] Shopper notifications (order confirmation, dispatch, ready for pickup, delivered, cancelled, refunded, trade quote ready, back-in-stock) by email and WhatsApp template — outbox + sweep, see STOREFRONT.md
 - [ ] Tax invoice download in the shopper's account
 - [ ] Fixed-amount coupons (needs a line discount amount on sales)
 - [ ] Courier API integration; Tabby / Tamara

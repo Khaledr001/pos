@@ -338,6 +338,31 @@ it. Do not add anything that does.
 
 ---
 
+## Email
+
+Shopper notifications (order updates, trade quotes, back-in-stock) go out as
+email through ONE platform SMTP account, shared by every shop. Set these in
+`apps/api/.env`:
+
+| Variable | Meaning |
+| --- | --- |
+| `SMTP_HOST`, `SMTP_PORT` (587), `SMTP_SECURE` (`true` = implicit TLS, port 465) | Your provider's SMTP endpoint (SES, Postmark, Resend SMTP, a relay) |
+| `SMTP_USER`, `SMTP_PASS` | Credentials, if the provider needs them |
+| `MAIL_FROM_ADDRESS` | The **verified** sending address, e.g. `orders@mail.devsfleet.com` |
+| `MAIL_DRIVER` | `smtp` or `log`. Blank = `smtp` when `SMTP_HOST` is set, otherwise `log` |
+
+Set up SPF and DKIM on the sending domain at the provider before going live;
+without them mail lands in spam. Each shop appears as `<Shop name> <MAIL_FROM_ADDRESS>`
+with its own reply-to, so a shop's own domain is never spoofed and replies still
+reach the shop.
+
+With `SMTP_HOST` unset the API still boots: the admin shows email as "not
+configured" and queued emails are logged and marked *skipped* (retryable once
+SMTP is set), never marked sent. `MAIL_DRIVER=smtp` without `SMTP_HOST` or
+`MAIL_FROM_ADDRESS` stops the boot.
+
+---
+
 ## Troubleshooting
 
 **502 from nginx.** PM2 is down or still booting.

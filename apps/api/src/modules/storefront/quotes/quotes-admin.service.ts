@@ -5,6 +5,7 @@ import { Injectable } from "@nestjs/common";
 import { RequestContext } from "../../../common/context/request-context.js";
 import { containsPattern } from "../../../common/db/list-query.js";
 import { TenantDatabase } from "../../../database/tenant-database.service.js";
+import { NotificationEnqueueService } from "../notifications/notification-enqueue.service.js";
 import { toWire } from "../wire.js";
 import type { CloseQuoteDto, ListQuotesDto, PriceQuoteDto } from "./dto.js";
 import { quoteTotals, withinDiscountCeiling } from "./quote-math.js";
@@ -22,7 +23,10 @@ import { displayDecimals, staffQuoteView } from "./quote-view.js";
  */
 @Injectable()
 export class QuotesAdminService {
-  constructor(private readonly db: TenantDatabase) {}
+  constructor(
+    private readonly db: TenantDatabase,
+    private readonly notifications: NotificationEnqueueService,
+  ) {}
 
   async list(dto: ListQuotesDto) {
     return this.db.run(async (tx) => {
@@ -131,6 +135,8 @@ export class QuotesAdminService {
           ...(dto.staffNotes !== undefined ? { staffNotes: dto.staffNotes } : {}),
         })
         .where(eq(schema.webQuotes.id, id));
+      // Same transaction as the pricing: the shopper is told if and only if the quote is really theirs to accept.
+      await this.notifications.enqueueQuote(tx, id);
       return this.load(tx, id);
     });
   }

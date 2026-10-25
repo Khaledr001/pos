@@ -620,6 +620,50 @@ export class WhatsappService {
   }
 
   /**
+   * Record an approved-template message the platform sent on its own (an order
+   * update), so the shop's inbox shows what a customer was told.
+   *
+   * Best effort by design: the message has already left, and failing to file
+   * it must not turn a delivered notification into a retry (and a duplicate).
+   * Does not touch the 24-hour window — only a customer's own message opens it.
+   */
+  async recordTemplateSend(
+    account: WhatsappAccount,
+    input: { to: string; templateName: string; variables: string[]; waMessageId: string },
+  ): Promise<void> {
+    try {
+      await this.db.runAs(account.tenantId, async (tx) => {
+        const now = new Date();
+        const conversation = await this.upsertConversation(tx, {
+          account,
+          phoneNumber: input.to,
+          profileName: undefined,
+          occurredAt: now,
+          reopenWindow: false,
+        });
+        await tx
+          .insert(schema.whatsappMessages)
+          .values({
+            tenantId: account.tenantId,
+            conversationId: conversation.id,
+            direction: "outbound",
+            type: "template",
+            content: `Template message: ${input.templateName}`,
+            templateName: input.templateName,
+            templatePayload: { variableCount: input.variables.length },
+            waMessageId: input.waMessageId,
+            status: "sent",
+            isAiGenerated: false,
+            occurredAt: now,
+          })
+          .onConflictDoNothing();
+      });
+    } catch (error) {
+      this.logger.warn(`Could not file a template message in the inbox: ${error instanceof Error ? error.message : "unknown error"}`);
+    }
+  }
+
+  /**
    * The one place this service talks to Meta.
    *
    * Never throws: every failure comes back as a value, because the caller has

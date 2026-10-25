@@ -56,7 +56,8 @@ function Choice({ checked, onChange, name, children, disabled }: { checked: bool
   );
 }
 
-export function CheckoutForm() {
+/** `offerWhatsappUpdates`: the shop has a WhatsApp number, so the shopper may opt in to order updates there. */
+export function CheckoutForm({ offerWhatsappUpdates = false }: { offerWhatsappUpdates?: boolean }) {
   const router = useRouter();
   const params = useSearchParams();
   const qc = useQueryClient();
@@ -65,6 +66,8 @@ export function CheckoutForm() {
   const { data: cart, isLoading: cartLoading } = useCart();
 
   const [contact, setContact] = useState({ fullName: "", email: "", phone: "" });
+  // Unticked by default: a WhatsApp message needs the shopper's explicit opt-in.
+  const [whatsappUpdates, setWhatsappUpdates] = useState(false);
   // User choices; null means "not chosen yet, use the default".
   const [chosenMethod, setMethod] = useState<DeliveryMethod | null>(null);
   const [chosenAddressId, setAddressId] = useState<string | null>(null);
@@ -166,6 +169,7 @@ export function CheckoutForm() {
       deliveryMethod: method,
       paymentMethod: payment,
       contact,
+      ...(offerWhatsappUpdates && whatsappUpdates ? { whatsappUpdates: true } : {}),
       expectedTotalFils: quote.totals.total.fils,
       notes: notes || undefined,
       ...(business ? { companyName: companyName || undefined, trn: trn.replace(/\s/g, "") || undefined } : {}),
@@ -227,6 +231,15 @@ export function CheckoutForm() {
               <TextField label="Email" type="email" autoComplete="email" value={contact.email} onChange={(e) => setContact({ ...contact, email: e.target.value })} required />
               <TextField label="Mobile" type="tel" autoComplete="tel" placeholder={phonePlaceholder} value={contact.phone} onChange={(e) => setContact({ ...contact, phone: e.target.value })} required hint="For delivery and order updates" />
             </div>
+            {offerWhatsappUpdates && (
+              <label className="mt-4 flex items-start gap-2 text-[15px]">
+                <input type="checkbox" className="mt-1 size-4 accent-[var(--color-pipe)]" checked={whatsappUpdates} onChange={(e) => setWhatsappUpdates(e.target.checked)} />
+                <span>
+                  Send my order updates on WhatsApp
+                  <span className="block text-sm text-steel">We&apos;ll only message you about this order.</span>
+                </span>
+              </label>
+            )}
           </Step>
 
           <Step n={2} title="Delivery">

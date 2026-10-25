@@ -6,6 +6,7 @@ const TABS = [
   { href: "/online-store/appearance", label: "Appearance" },
   { href: "/online-store/home", label: "Home page" },
   { href: "/online-store/navigation", label: "Navigation" },
+  { href: "/online-store/notifications", label: "Notifications" },
   { href: "/online-store/content", label: "Pages & banners" },
 ] as const;
 

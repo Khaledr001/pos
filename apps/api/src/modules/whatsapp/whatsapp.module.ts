@@ -4,6 +4,7 @@ import { WhatsappAdminController } from "./whatsapp-admin.controller.js";
 import { WhatsappController } from "./whatsapp.controller.js";
 import { WhatsappSetupService } from "./whatsapp-setup.service.js";
 import { WhatsappService } from "./whatsapp.service.js";
+import { WhatsappTemplateService } from "./whatsapp-template.service.js";
 
 /**
  * Two controllers, deliberately: `WhatsappController` holds Meta's two
@@ -17,7 +18,7 @@ import { WhatsappService } from "./whatsapp.service.js";
  */
 @Module({
   controllers: [WhatsappController, WhatsappAdminController],
-  providers: [WhatsappService, WhatsappSetupService, EmbeddedSignupService],
-  exports: [WhatsappService],
+  providers: [WhatsappService, WhatsappTemplateService, WhatsappSetupService, EmbeddedSignupService],
+  exports: [WhatsappService, WhatsappTemplateService],
 })
 export class WhatsappModule {}

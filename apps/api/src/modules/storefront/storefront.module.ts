@@ -9,6 +9,7 @@ import { SettingsAdminService } from "./admin/settings-admin.service.js";
 import {
   ContentAdminController,
   ListingsAdminController,
+  NotificationsAdminController,
   OrderDeskController,
   SettingsAdminController,
   TradeAdminController,
@@ -34,6 +35,11 @@ import { StorefrontResolver } from "./context/storefront-resolver.service.js";
 import { WebOrdersController } from "./orders/web-orders.controller.js";
 import { WebOrdersService } from "./orders/web-orders.service.js";
 import { SalesModule } from "../sales/sales.module.js";
+import { WhatsappModule } from "../whatsapp/whatsapp.module.js";
+import { NotificationsAdminService } from "./admin/notifications-admin.service.js";
+import { MailService } from "./notifications/mail.service.js";
+import { NotificationEnqueueService } from "./notifications/notification-enqueue.service.js";
+import { NotificationSweepService } from "./notifications/notification-sweep.service.js";
 import { PaymentExpiryService } from "./payments/payment-expiry.service.js";
 import { DevPaymentsController, StripeWebhookController } from "./payments/payments.controller.js";
 import { StorefrontPaymentsService } from "./payments/payments.service.js";
@@ -61,7 +67,7 @@ import { StockAlertsService } from "./stock-alerts/stock-alerts.service.js";
  * with its permission, scoped to the staff member's own tenant.
  */
 @Module({
-  imports: [PricingModule, OrdersModule, SalesModule],
+  imports: [PricingModule, OrdersModule, SalesModule, WhatsappModule],
   controllers: [
     StorefrontCatalogController,
     StorefrontContentController,
@@ -83,6 +89,7 @@ import { StockAlertsService } from "./stock-alerts/stock-alerts.service.js";
     SettingsAdminController,
     QuotesAdminController,
     StockAlertsAdminController,
+    NotificationsAdminController,
   ],
   providers: [
     StorefrontResolver,
@@ -110,6 +117,11 @@ import { StockAlertsService } from "./stock-alerts/stock-alerts.service.js";
     StockAlertSweepService,
     QuotesService,
     QuotesAdminService,
+    // Shopper notifications: queued in the transaction that causes them, sent by the sweep.
+    MailService,
+    NotificationEnqueueService,
+    NotificationSweepService,
+    NotificationsAdminService,
   ],
   exports: [StorefrontResolver, WebOrdersService],
 })

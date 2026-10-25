@@ -1,5 +1,8 @@
 import type {
   BannerPlacement,
+  NotificationChannel,
+  NotificationEvent,
+  NotificationStatus,
   CartStatus,
   CouponType,
   DeliveryMethod,
@@ -463,6 +466,11 @@ export const webOrders = pgTable(
     pickupSlotStart: timestamp({ withTimezone: true, mode: "date" }),
     pickupSlotEnd: timestamp({ withTimezone: true, mode: "date" }),
     couponCode: varchar({ length: 40 }),
+    /**
+     * The shopper ticked "send order updates on WhatsApp" at checkout. Consent
+     * is per order, so the shop never messages a number nobody asked it to.
+     */
+    whatsappOptIn: boolean().notNull().default(false),
     /** Delivery fee, net. Also present as a line on the order, where it is taxed. */
     shippingAmount: money().notNull().default("0"),
     weightKg: quantity().notNull().default("0"),
@@ -786,3 +794,60 @@ export type StockAlertSubscription = typeof stockAlertSubscriptions.$inferSelect
 export type WebQuote = typeof webQuotes.$inferSelect;
 export type WebQuoteItem = typeof webQuoteItems.$inferSelect;
 export type StorefrontPaymentAccount = typeof storefrontPaymentAccounts.$inferSelect;
+
+// -----------------------------------------------------------------------------
+// Shopper notifications (outbox)
+// -----------------------------------------------------------------------------
+
+export type NotificationSubjectKind = "web_order" | "web_quote" | "stock_alert";
+
+/**
+ * One message to one shopper on one channel.
+ *
+ * Written in the SAME transaction as the change that causes it (a status move,
+ * a priced quote, a back-in-stock claim), so a crash can neither lose a message
+ * nor send one for a change that rolled back. A sweep sends the queued rows.
+ *
+ * `dedupeKey` (unique per tenant) is what stops a retry, a webhook redelivery
+ * or two API instances from messaging a shopper twice about the same thing.
+ * `payload` is a snapshot (rule 5): names, totals and links as they were, so
+ * renaming a product later does not rewrite a message already queued.
+ *
+ * Not append-only: `status`, `attempts` and `lastError` are the delivery
+ * record and move as the send is attempted.
+ */
+export const storefrontNotifications = pgTable(
+  "storefront_notifications",
+  {
+    id: primaryId(),
+    ...tenantScope(),
+    storefrontId: uuid()
+      .notNull()
+      .references(() => storefronts.id, { onDelete: "cascade" }),
+    event: varchar({ length: 30 }).$type<NotificationEvent>().notNull(),
+    channel: varchar({ length: 10 }).$type<NotificationChannel>().notNull(),
+    /** An email address, or an E.164 number for WhatsApp. */
+    recipient: varchar({ length: 255 }).notNull(),
+    subjectKind: varchar({ length: 20 }).$type<NotificationSubjectKind>().notNull(),
+    subjectId: uuid().notNull(),
+    /** Order or quote number, or a product name — what the admin log shows. */
+    subjectLabel: varchar({ length: 255 }).notNull().default(""),
+    dedupeKey: varchar({ length: 160 }).notNull(),
+    status: varchar({ length: 10 }).$type<NotificationStatus>().notNull().default("queued"),
+    attempts: integer().notNull().default(0),
+    nextAttemptAt: timestamp({ withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    /** Why a send failed or was skipped. Never holds a message body. */
+    lastError: text(),
+    payload: jsonb().$type<Record<string, unknown>>().notNull(),
+    sentAt: timestamp({ withTimezone: true, mode: "date" }),
+    providerMessageId: varchar({ length: 100 }),
+    ...timestamps(),
+  },
+  (t) => [
+    uniqueIndex("uq_storefront_notifications_dedupe").on(t.tenantId, t.dedupeKey),
+    index("idx_storefront_notifications_due").on(t.status, t.nextAttemptAt),
+    index("idx_storefront_notifications_log").on(t.tenantId, t.createdAt),
+    index("idx_storefront_notifications_subject").on(t.subjectKind, t.subjectId),
+    check("ck_storefront_notifications_attempts", sql`attempts >= 0`),
+  ],
+);

@@ -5,6 +5,7 @@ import { Injectable } from "@nestjs/common";
 import { RequestContext } from "../../../common/context/request-context.js";
 import { TenantDatabase } from "../../../database/tenant-database.service.js";
 import { SalesService } from "../../sales/sales.service.js";
+import { NotificationEnqueueService } from "../notifications/notification-enqueue.service.js";
 import { moneyView } from "../pricing/money-view.js";
 import { toWire } from "../wire.js";
 
@@ -23,6 +24,7 @@ export class WebOrdersService {
   constructor(
     private readonly db: TenantDatabase,
     private readonly sales: SalesService,
+    private readonly notifications: NotificationEnqueueService,
   ) {}
 
   /** A guest's order, by the unguessable token in their confirmation email. */
@@ -136,13 +138,20 @@ export class WebOrdersService {
     });
   }
 
-  /** Append to the tracking timeline. Every status change writes one. */
+  /**
+   * Append to the tracking timeline. Every status change writes one — and, in
+   * the same transaction, queues the shopper's message about it, so the two
+   * commit or roll back together. `notify: false` is for entries that record
+   * something other than a move the shopper should hear about (an abandoned
+   * checkout's cancellation, a late payment noted against a cancelled order).
+   */
   async recordEvent(
     tx: Transaction,
     orderId: string,
     status: WebOrderStatus,
     note: string | null = null,
     actorId: string | null = null,
+    options: { notify?: boolean } = {},
   ): Promise<void> {
     await tx.insert(schema.webOrderEvents).values({
       tenantId: RequestContext.requireTenantId(),
@@ -151,6 +160,7 @@ export class WebOrdersService {
       note,
       actorId,
     });
+    if (options.notify !== false) await this.notifications.enqueueOrder(tx, orderId, status);
   }
 
   async view(tx: Transaction, orderId: string) {

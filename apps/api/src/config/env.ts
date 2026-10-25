@@ -121,6 +121,24 @@ export const envSchema = z.object({
   S3_PUBLIC_URL: z.string().url().optional(),
 
   // ---------------------------------------------------------------------------
+  // Outbound email — shopper notifications (see docs/STOREFRONT.md)
+  //
+  // One platform transport for every shop; each shop supplies only its own
+  // display name and reply-to. With SMTP_HOST unset the driver is `log`: mail
+  // is written to the log, never sent, and the admin shows email as not
+  // configured. It never crashes boot, so a shop without mail still trades.
+  // ---------------------------------------------------------------------------
+  MAIL_DRIVER: z.preprocess((v) => (v === "" ? undefined : v), z.enum(["smtp", "log"]).optional()),
+  SMTP_HOST: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
+  SMTP_PORT: z.preprocess((v) => (v === "" ? undefined : v), port.default(587)),
+  /** true = implicit TLS (port 465). false = STARTTLS upgrade when offered. */
+  SMTP_SECURE: z.preprocess((v) => (v === "" ? undefined : v), bool.default(false)),
+  SMTP_USER: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
+  SMTP_PASS: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
+  /** The verified sending address, e.g. orders@mail.devsfleet.com. The display name is per shop. */
+  MAIL_FROM_ADDRESS: z.preprocess((v) => (v === "" ? undefined : v), z.string().email().optional()),
+
+  // ---------------------------------------------------------------------------
   // WhatsApp (Phase 4 — optional until then)
   // ---------------------------------------------------------------------------
   WHATSAPP_ENABLED: bool.default(false),
@@ -198,6 +216,13 @@ export function validateEnv(raw: Record<string, unknown>): Env {
           "anyone who learns the URL can inject messages.",
       );
     }
+  }
+
+  if (env.MAIL_DRIVER === "smtp" && (!env.SMTP_HOST || !env.MAIL_FROM_ADDRESS)) {
+    throw new Error("MAIL_DRIVER=smtp needs SMTP_HOST and MAIL_FROM_ADDRESS.");
+  }
+  if (env.SMTP_HOST && !env.MAIL_FROM_ADDRESS) {
+    throw new Error("SMTP_HOST is set but MAIL_FROM_ADDRESS is not: mail needs a verified sending address.");
   }
 
   /**

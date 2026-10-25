@@ -87,7 +87,7 @@ export function StockAlertForm({ variantId, productName }: { variantId: string; 
         error={emailError}
       />
       <TextField
-        label="WhatsApp or phone (optional)"
+        label="WhatsApp number (optional)"
         type="tel"
         autoComplete="tel"
         inputMode="tel"
@@ -95,7 +95,7 @@ export function StockAlertForm({ variantId, productName }: { variantId: string; 
         maxLength={20}
         value={phoneValue}
         onChange={(e) => setPhone(e.target.value)}
-        hint="Optional: we can message you there"
+        hint="Optional: we'll message you on WhatsApp when it's back"
       />
       {/* Honeypot: invisible and unreachable for people, tempting for form-filling scripts. */}
       <div aria-hidden="true" className="absolute -left-[9999px] h-0 w-0 overflow-hidden">

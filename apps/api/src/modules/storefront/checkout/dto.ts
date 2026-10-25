@@ -34,6 +34,8 @@ export const PlaceOrderSchema = z
     notes: z.string().trim().max(1000).optional(),
     /** The total the shopper was shown, in fils. A mismatch means they would pay something they did not see. */
     expectedTotalFils: z.number().int().min(0).optional(),
+    /** Ticked "send order updates on WhatsApp". Without it no WhatsApp message is sent for this order. */
+    whatsappUpdates: z.boolean().optional(),
   })
   .refine((dto) => dto.deliveryMethod !== "pickup" || (dto.pickupBranchId && dto.pickupSlotStart), {
     message: "Choose a branch and a pickup time",

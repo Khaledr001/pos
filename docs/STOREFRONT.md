@@ -130,11 +130,18 @@ are checked against the resolved one.
   same answer the product page gives (free stock less the safety buffer, at the branches
   shown online) — and claims the rows whose variant is no longer sold out with one
   conditional update, so two API instances fire each subscription once.
-- **Nothing is sent to the shopper.** There is no email transport in the platform, and the
-  WhatsApp service can only send free text to a conversation with an open 24-hour
-  window (templates are not built). The sweep records `status = notified`,
-  `notified_at`, and leaves `delivered_at` null; a transport belongs at the end of
-  `StockAlertsService.fireForTenant`.
+- **Firing queues a message.** In the same transaction as the claim, each fired alert
+  writes an outbox row (see [Shopper notifications](#shopper-notifications)); the
+  notification sweep sends it by email, and by WhatsApp template when the subscriber gave a
+  phone number (giving one is consent for that alert). `delivered_at` is set only once a
+  message has really left — an alert whose channels were all unavailable stays `notified` with
+  a null `delivered_at`.
+- **Unsubscribing.** Every alert email links to
+  `<shop>/api/v1/stock-alerts/unsubscribe/<token>` (the storefront proxies `/api/v1/*` to the
+  API). That GET only shows a button — link scanners fetch every URL in a message and must not
+  cancel anyone's alert — and the button POSTs `…/<token>/confirm`, which cancels and shows
+  a confirmation page. The email also carries `List-Unsubscribe` (one-click) headers. Both
+  pages are served with a locked-down CSP, `noindex` and `no-store`.
 - Staff: `GET /storefront-admin/stock-alerts` (`product:read`), pending subscribers
   per product, most wanted first. Admin → Online Store → Stock Alerts.
 
@@ -164,6 +171,86 @@ accepts or declines from `/account/quotes`.
   records the decision; staff raise the order from the order desk and `converted_order_id` is
   where it is linked. Routes: `order:read` / `order:write`; pricing and closing are audited.
 - No shopper or staff notification is sent when a quote is requested or priced (see Known gaps).
+
+## Shopper notifications
+
+What the shop tells its shoppers, and how it actually leaves the building.
+
+| Message | Trigger | Where it is queued |
+| --- | --- | --- |
+| Order received | COD order placed; card order **paid** | `WebOrdersService.recordEvent` (`placed`) |
+| Order confirmed / shipped / ready for pickup | Order desk status change | `recordEvent` |
+| Delivered or collected | Hand-over (the sale is created) | `recordEvent` |
+| Cancelled | Staff cancel an order the shopper had placed | `recordEvent` |
+| Refunded | Staff refund a cancelled, paid order | `recordEvent` |
+| Trade quote ready | Staff price a quote | `QuotesAdminService.price` |
+| Back in stock | The stock-alert sweep fires a subscription | `StockAlertsService` |
+
+Never sent: anything for an unpaid card checkout (an abandoned or expired one is not an order
+the shopper placed), the warehouse-internal `packed` step, or a payment that arrives after an
+order was cancelled.
+
+**Outbox, not inline sending.** A change and the message about it are written in ONE
+transaction (`storefront_notifications`, tenant-scoped, RLS like everything else), so a crash
+can neither lose a message nor announce a change that rolled back. Slow or failing mail never
+blocks a checkout. Each row is a **snapshot** (names, formatted totals, links as they were —
+nothing is recomputed at send time) and has a unique `dedupe_key`
+(`<event>:<channel>:<subject>[:version]`), so a retry, a webhook redelivery or two API instances
+cannot queue the same message twice.
+
+**The sweep** (`NotificationSweepService`, every 30 s, like the payment-expiry sweep) claims due
+rows in one `UPDATE … WHERE id IN (SELECT … FOR UPDATE SKIP LOCKED)`, commits the claim, *then*
+sends — no transaction is held open across a mail server or Meta. Concurrent sweepers take
+different rows, so a shopper is never messaged twice (verified with three sweepers over 30
+rows). A row stuck `sending` for 5 minutes (a worker died) is reclaimed. Suspended tenants,
+lapsed trials and plans without the online store send nothing.
+
+**Retries.** A temporary failure (SMTP 4xx, timeout, Meta rate limit or outage) is requeued
+with backoff 1 min → 2 → 4 → 8 → … capped at 6 h, at most 5 attempts, then `failed`. A
+permanent one (SMTP 5xx, a bad address, a template that is missing or not approved, an expired
+token) fails at once. Staff can retry a `failed` row from the log.
+
+**Channels and consent**
+
+| | Email | WhatsApp |
+| --- | --- | --- |
+| Default | on for every message | off |
+| Needs | a valid address | a connected WhatsApp number, an approved template mapped to the message, a valid phone, **and the shopper's consent** |
+| Consent | the shopper gave the address to order or subscribe | order messages: the checkout box "send order updates on WhatsApp" (`web_orders.whatsapp_opt_in`); stock alert: a phone number on the form; quote: only if the shopper opted in on any of their orders |
+
+A channel that is switched on but cannot be used becomes a **`skipped` row with the reason**
+("The shopper did not agree to WhatsApp messages", "No approved WhatsApp template is set…"), so
+"why didn't this customer get a WhatsApp?" has an answer in the log. A channel that is simply
+off leaves no row. Skipped-on-purpose rows cannot be retried — consent and templates cannot be
+retried into existence; the one exception is email skipped only because SMTP was not configured.
+
+**Email.** One platform SMTP transport (`nodemailer`; env in `docs/DEPLOYMENT.md`), one
+verified sender (`MAIL_FROM_ADDRESS`), per-shop *display name* and *reply-to*. Mobile-friendly
+inline-CSS HTML in the shop's accent colour with a plain-text alternative; every dynamic string
+is HTML-escaped, links must be http(s), and CR/LF in a subject, address or name is refused
+(header injection). With no SMTP configured the transport logs and the row is marked
+**skipped**, never "sent" — the platform does not claim to have emailed anyone it did not.
+
+**WhatsApp.** Approved templates only (a shopper has usually never opened the 24-hour window).
+The platform's defaults are in `WHATSAPP_TEMPLATE_DEFS`; the shop submits them with one click and
+the approved ones are mapped to events automatically — see `docs/WHATSAPP.md`.
+
+**Admin API** (`/storefront-admin/notifications`, `storefront:read` / `storefront:write`):
+
+- `GET /` — `NotificationOverview`: the settings, whether email is configured and the From
+  address, whether WhatsApp is connected, and each message's template state
+  (`approved | pending | rejected | paused | missing`, with Meta's reason). If Meta cannot be
+  reached the call fails with Meta's plain-language problem instead of guessing.
+- `POST /templates/sync` — submit the default templates the shop lacks, map the approved ones
+  (a shop's own mapping is never overwritten), return the overview. Run it again later to pick
+  up newly approved templates.
+- `POST /test` `{ channel, to, event? }` — send a clearly marked test through the real
+  transport; `{ ok, error }`. Five an hour per shop.
+- `GET /log?page&status&channel` — `NotificationLogPage` (25 per page, newest first; recipients
+  masked).
+- `POST /log/:id/retry` — requeue a failed row.
+- Rules and the From / reply-to live in `PATCH /storefront-admin/settings` under `notifications`:
+  `events` merges per message, `whatsappTemplates` replaces wholesale.
 
 ## Appearance, sections, navigation, region, headless
 
@@ -384,10 +471,11 @@ verification step before custom domains are offered widely.
 
 ## Known gaps
 
-- **No shopper notifications.** Order confirmation, dispatch and ready-for-
-  pickup emails and WhatsApp messages are not sent yet. The same goes for
-  back-in-stock alerts (recorded, not sent) and for quote requested / quoted. The timeline is
-  visible on the tracking page and the account area.
+- **Quote *requested*, and staff-side alerts for new web orders, are not messaged.** Only the
+  shopper-facing messages in the table above are sent.
+- **No SMS channel**, and no per-shopper notification preferences beyond the checkout's
+  WhatsApp box.
+- **Notification text is English only**; the WhatsApp templates are registered in English.
 - **Fixed-amount coupons** are refused online (see Money above).
 - **Tabby / Tamara** are not integrated.
 - **Courier APIs** are not integrated; staff add the tracking number by hand.

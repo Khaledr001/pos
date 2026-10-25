@@ -6,7 +6,9 @@ import { TenantDatabase } from "../../../database/tenant-database.service.js";
 import { StorefrontCatalogService, type StockLabel } from "../catalog/storefront-catalog.service.js";
 import { currentShopper } from "../context/storefront.guard.js";
 import { StorefrontResolver } from "../context/storefront-resolver.service.js";
+import { NotificationEnqueueService } from "../notifications/notification-enqueue.service.js";
 import type { SubscribeStockAlertDto } from "./dto.js";
+import { confirmUnsubscribePage, unsubscribedPage } from "./unsubscribe-page.js";
 
 const SWEEP_TENANT_LIMIT = 200;
 const SWEEP_ROW_LIMIT = 500;
@@ -26,12 +28,12 @@ export function backInStock<T extends { variantId: string }>(
  * "Tell me when it is back" — subscriptions, the sweep that fires them and the
  * staff view of demand.
  *
- * DELIVERY: there is no email transport in the platform and WhatsApp can only
- * send free text inside a customer-service window a stranger has not opened,
- * so nothing is sent to the shopper yet. The sweep records that the alert
- * fired (`status = notified`, `notified_at`) and leaves `delivered_at` null;
- * it is the single place a transport plugs in. Pretending otherwise would tell
- * a shopper we emailed them.
+ * DELIVERY: firing an alert (`status = notified`) queues an outbox row in the
+ * same transaction (see notifications/). The notification sweep sends it —
+ * email, and a WhatsApp template when the subscriber gave a phone number — and
+ * sets `delivered_at` only once a message has really left. An alert whose
+ * channels were all unavailable stays `notified` with a null `delivered_at`:
+ * we never claim to have told a shopper something we did not.
  */
 @Injectable()
 export class StockAlertsService {
@@ -41,6 +43,7 @@ export class StockAlertsService {
     private readonly db: TenantDatabase,
     private readonly catalog: StorefrontCatalogService,
     private readonly resolver: StorefrontResolver,
+    private readonly notifications: NotificationEnqueueService,
   ) {}
 
   /**
@@ -108,6 +111,16 @@ export class StockAlertsService {
         ),
     );
     return { unsubscribed: true };
+  }
+
+  /** The page behind the email link, named for the shop. */
+  confirmPage(token: string): string {
+    return confirmUnsubscribePage(RequestContext.requireStorefront().name, token);
+  }
+
+  async unsubscribeWithPage(token: string): Promise<string> {
+    await this.unsubscribe(token);
+    return unsubscribedPage(RequestContext.requireStorefront().name);
   }
 
   /** Staff: which products people are waiting for, most wanted first. */
@@ -211,7 +224,10 @@ export class StockAlertsService {
         )
         .returning({ id: schema.stockAlertSubscriptions.id });
 
-      this.logger.log(`${claimed.length} back-in-stock alert(s) fired; no transport configured, nothing was sent to shoppers`);
+      // Same transaction as the claim: an alert fires and is queued, or neither happened.
+      for (const { id } of claimed) await this.notifications.enqueueStockAlert(tx, id);
+
+      this.logger.log(`${claimed.length} back-in-stock alert(s) fired and queued`);
       return claimed.length;
     });
   }

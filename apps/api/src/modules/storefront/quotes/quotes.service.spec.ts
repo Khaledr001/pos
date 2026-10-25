@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { RequestContext, type StorefrontScope } from "../../../common/context/request-context.js";
 import type { TenantDatabase } from "../../../database/tenant-database.service.js";
 import type { CartService } from "../cart/cart.service.js";
+import type { NotificationEnqueueService } from "../notifications/notification-enqueue.service.js";
 import type { StorefrontPricing } from "../pricing/storefront-pricing.service.js";
 import { quoteTotals, withinDiscountCeiling } from "./quote-math.js";
 import { assertShopperMayRespond, assertStaffMayClose, assertStaffMayPrice, effectiveStatus } from "./quote-status.js";
@@ -103,6 +104,10 @@ function fakeTx(options: { quote?: unknown; items?: unknown[]; insertedQuote?: u
   };
   return { tx, inserts, updates };
 }
+
+/** The outbox write is its own unit (notification-enqueue.service.spec.ts); here it only has to be called. */
+const enqueueQuote = vi.fn(async () => undefined);
+const notifications = { enqueueQuote } as unknown as NotificationEnqueueService;
 
 const dbOf = (tx: unknown) => ({ run: (fn: (t: unknown) => unknown) => fn(tx) }) as unknown as TenantDatabase;
 
@@ -291,7 +296,7 @@ describe("QuotesAdminService (staff)", () => {
 
   it("prices every line, totals through calculateDocument and moves the quote to quoted", async () => {
     const { tx, updates } = fakeTx({ quote: quoteRow(), items });
-    const service = new QuotesAdminService(dbOf(tx));
+    const service = new QuotesAdminService(dbOf(tx), notifications);
     await asStaff(user(["order:write"]), () => service.price(QUOTE_ID, body(["10", "2.5"])));
 
     const header = updates.find((u) => "status" in u.set)!;
@@ -302,7 +307,7 @@ describe("QuotesAdminService (staff)", () => {
   it("refuses a price below list without the discount permission", async () => {
     const { tx, updates } = fakeTx({ quote: quoteRow(), items });
     await expect(
-      asStaff(user(["order:write"]), () => new QuotesAdminService(dbOf(tx)).price(QUOTE_ID, body(["9", "2.5"]))),
+      asStaff(user(["order:write"]), () => new QuotesAdminService(dbOf(tx), notifications).price(QUOTE_ID, body(["9", "2.5"]))),
     ).rejects.toMatchObject({ code: ERROR_CODES.INSUFFICIENT_PERMISSIONS });
     expect(updates).toHaveLength(0);
   });
@@ -310,20 +315,20 @@ describe("QuotesAdminService (staff)", () => {
   it("refuses a price beyond the staff member's discount ceiling", async () => {
     const { tx } = fakeTx({ quote: quoteRow(), items });
     await expect(
-      asStaff(user(["order:write", "sale:discount"], "10"), () => new QuotesAdminService(dbOf(tx)).price(QUOTE_ID, body(["8", "2.5"]))),
+      asStaff(user(["order:write", "sale:discount"], "10"), () => new QuotesAdminService(dbOf(tx), notifications).price(QUOTE_ID, body(["8", "2.5"]))),
     ).rejects.toMatchObject({ code: ERROR_CODES.DISCOUNT_EXCEEDS_LIMIT });
   });
 
   it("will not price a quote the shopper has already answered", async () => {
     const { tx } = fakeTx({ quote: quoteRow({ status: "accepted" }), items });
     await expect(
-      asStaff(user(["order:write"]), () => new QuotesAdminService(dbOf(tx)).price(QUOTE_ID, body(["10", "2.5"]))),
+      asStaff(user(["order:write"]), () => new QuotesAdminService(dbOf(tx), notifications).price(QUOTE_ID, body(["10", "2.5"]))),
     ).rejects.toMatchObject({ code: ERROR_CODES.QUOTE_INVALID_STATUS });
   });
 
   it("will not send a quote with an unpriced line, or a validity date in the past", async () => {
     const { tx } = fakeTx({ quote: quoteRow(), items });
-    const service = new QuotesAdminService(dbOf(tx));
+    const service = new QuotesAdminService(dbOf(tx), notifications);
     await expect(
       asStaff(user(["order:write"]), () => service.price(QUOTE_ID, { ...body(["10", "2.5"]), lines: [{ itemId: "a1", unitPrice: "10" }] })),
     ).rejects.toMatchObject({ code: ERROR_CODES.VALIDATION_FAILED });
@@ -335,7 +340,7 @@ describe("QuotesAdminService (staff)", () => {
   it("will not close a quote that is already answered", async () => {
     const { tx } = fakeTx({ quote: quoteRow({ status: "converted" }), items });
     await expect(
-      asStaff(user(["order:write"]), () => new QuotesAdminService(dbOf(tx)).close(QUOTE_ID, { status: "declined" })),
+      asStaff(user(["order:write"]), () => new QuotesAdminService(dbOf(tx), notifications).close(QUOTE_ID, { status: "declined" })),
     ).rejects.toMatchObject({ code: ERROR_CODES.QUOTE_INVALID_STATUS });
   });
 });

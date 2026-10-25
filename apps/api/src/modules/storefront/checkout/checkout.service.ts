@@ -229,6 +229,7 @@ export class CheckoutService {
           pickupSlotStart: delivery.pickupSlotStart,
           pickupSlotEnd: delivery.pickupSlotEnd,
           couponCode: priced.coupon?.code ?? null,
+          whatsappOptIn: dto.whatsappUpdates === true,
           shippingAmount: delivery.line ? Money.toDecimalString(this.deliveryNet(delivery.line), 4) : "0",
           weightKg: Money.toDecimalString(this.carts.weightKg(priced), 4),
           placedAt: isCod ? new Date() : null,
@@ -274,7 +275,8 @@ export class CheckoutService {
       await this.db.run(async (tx) => {
         await this.orders.cancelInTransaction(tx, placed.orderId, "The payment page could not be opened.");
         await tx.update(schema.webOrders).set({ status: "cancelled" }).where(eq(schema.webOrders.orderId, placed.orderId));
-        await this.webOrders.recordEvent(tx, placed.orderId, "cancelled", "The payment page could not be opened.");
+        // The shopper never had an order: they are told on the page, not by message.
+        await this.webOrders.recordEvent(tx, placed.orderId, "cancelled", "The payment page could not be opened.", null, { notify: false });
       });
       throw new AppError(ERROR_CODES.PAYMENT_FAILED, "We could not open the payment page. Your order was not placed — please try again.");
     }

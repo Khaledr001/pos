@@ -22,6 +22,11 @@ import {
   type StorefrontRegion,
   type StorefrontTheme,
 } from "./storefront-appearance.js";
+import {
+  DEFAULT_NOTIFICATION_SETTINGS,
+  resolveNotificationSettings,
+  type StorefrontNotificationSettings,
+} from "./storefront-notifications.js";
 
 // `const T` keeps the literals, so a status is "placed" | "shipped" | …, not string.
 const asConst = <const T extends readonly string[]>(values: T) => values;
@@ -217,6 +222,8 @@ export interface StorefrontSettings {
   /** Country, language formatting and delivery zones. Currency comes from the tenant. */
   region: StorefrontRegion;
   headless: HeadlessSettings;
+  /** Which shopper messages go out, on which channel, with which WhatsApp template. */
+  notifications: StorefrontNotificationSettings;
 }
 
 export const DEFAULT_SHIPPING_RATES: ShippingRate[] = [
@@ -246,6 +253,7 @@ export const DEFAULT_STOREFRONT_SETTINGS: StorefrontSettings = {
   navigation: DEFAULT_NAVIGATION,
   region: DEFAULT_REGION,
   headless: DEFAULT_HEADLESS,
+  notifications: DEFAULT_NOTIFICATION_SETTINGS,
 };
 
 /** Merge stored partial settings over the defaults. One level per section. */
@@ -270,5 +278,6 @@ export function resolveStorefrontSettings(stored: unknown): StorefrontSettings {
     navigation: resolveNavigation(s.navigation),
     region: resolveRegion(s.region),
     headless: { ...d.headless, ...s.headless },
+    notifications: resolveNotificationSettings(s.notifications),
   };
 }

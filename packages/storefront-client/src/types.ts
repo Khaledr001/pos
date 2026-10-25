@@ -314,6 +314,8 @@ export interface PlaceOrderInput {
   trn?: string;
   notes?: string;
   expectedTotalFils?: number;
+  /** The shopper ticked "send order updates on WhatsApp". Without it no WhatsApp message is sent for the order. */
+  whatsappUpdates?: boolean;
 }
 
 // ── orders ──

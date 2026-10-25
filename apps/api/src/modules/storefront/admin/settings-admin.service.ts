@@ -124,7 +124,7 @@ export class SettingsAdminService {
     await this.db.run(async (tx) => {
       const storefront = await this.requireStorefront(tx);
       const current = resolveStorefrontSettings(storefront.settings);
-      const { name, isActive, checkout, theme, region, headless, navigation, ...rest } = dto;
+      const { name, isActive, checkout, theme, region, headless, navigation, notifications, ...rest } = dto;
 
       if (checkout?.fulfilmentBranchId) await this.assertBranch(tx, checkout.fulfilmentBranchId);
       for (const branch of dto.branches ?? []) await this.assertBranch(tx, branch.branchId);
@@ -147,6 +147,15 @@ export class SettingsAdminService {
         navigation: { ...current.navigation, ...navigation },
         region: { ...current.region, ...region },
         headless: { ...current.headless, ...headless },
+        notifications: notifications
+          ? {
+              ...current.notifications,
+              ...(notifications.fromName !== undefined ? { fromName: notifications.fromName } : {}),
+              ...(notifications.replyTo !== undefined ? { replyTo: notifications.replyTo } : {}),
+              events: mergeEventRules(current.notifications.events, notifications.events),
+              whatsappTemplates: notifications.whatsappTemplates ?? current.notifications.whatsappTemplates,
+            }
+          : current.notifications,
         checkout: {
           ...current.checkout,
           ...checkout,
@@ -312,3 +321,11 @@ export class SettingsAdminService {
   }
 }
 
+
+/** Per-event merge: a PATCH that names one event leaves every other rule as it was. */
+export function mergeEventRules(
+  current: StorefrontSettings["notifications"]["events"],
+  patch: Partial<StorefrontSettings["notifications"]["events"]> | undefined,
+): StorefrontSettings["notifications"]["events"] {
+  return { ...current, ...patch };
+}

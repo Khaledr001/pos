@@ -46,6 +46,13 @@ import {
 } from "./dto.js";
 import { ListingsAdminService } from "./listings-admin.service.js";
 import { OrderDeskService } from "./order-desk.service.js";
+import { NotificationsAdminService } from "./notifications-admin.service.js";
+import {
+  ListNotificationLogSchema,
+  TestNotificationSchema,
+  type ListNotificationLogDto,
+  type TestNotificationDto,
+} from "./notifications.dto.js";
 import { SettingsAdminService } from "./settings-admin.service.js";
 import { TradeAdminService } from "./trade-admin.service.js";
 
@@ -304,5 +311,44 @@ export class SettingsAdminController {
   @Audited("storefront_payment_accounts", "remove")
   removePaymentAccount() {
     return this.settings.removePaymentAccount();
+  }
+}
+
+@ApiTags("storefront-admin")
+@Controller("storefront-admin/notifications")
+export class NotificationsAdminController {
+  constructor(private readonly notifications: NotificationsAdminService) {}
+
+  @Get()
+  @RequirePermissions("storefront:read")
+  overview() {
+    return this.notifications.overview();
+  }
+
+  /** Submit the default WhatsApp templates and map the approved ones. Run again to refresh. */
+  @Post("templates/sync")
+  @RequirePermissions("storefront:write")
+  @Audited("storefront_notifications", "sync_templates")
+  syncTemplates() {
+    return this.notifications.syncTemplates();
+  }
+
+  @Post("test")
+  @RequirePermissions("storefront:write")
+  test(@Body(zodPipe(TestNotificationSchema)) dto: TestNotificationDto) {
+    return this.notifications.test(dto);
+  }
+
+  @Get("log")
+  @RequirePermissions("storefront:read")
+  log(@Query(zodPipe(ListNotificationLogSchema)) dto: ListNotificationLogDto) {
+    return this.notifications.log(dto);
+  }
+
+  @Post("log/:id/retry")
+  @RequirePermissions("storefront:write")
+  @Audited("storefront_notifications", "retry")
+  retry(@Param("id", ParseUUIDPipe) id: string) {
+    return this.notifications.retry(id);
   }
 }

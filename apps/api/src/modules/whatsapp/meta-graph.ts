@@ -172,6 +172,19 @@ export function describeGraphError(error: GraphErrorBody | null | undefined, wha
   };
 }
 
+/**
+ * Meta's errors: a template that does not exist or is not approved, a bad
+ * recipient or a missing permission will fail the same way next time; a rate
+ * limit, an outage or the network will not. An unrecognised error is retried
+ * (bounded by MAX_ATTEMPTS) rather than assumed final.
+ */
+export function isPermanentGraphFailure(kind: string, detail?: string): boolean {
+  if (kind === "rate_limited" || kind === "meta_unavailable" || kind === "network") return false;
+  // 132001 template missing, 132000 variable mismatch, 131026 undeliverable, 131030 not on the allow-list.
+  if (detail && /\b(132\d{3}|131026|131030|131047)\b|template/i.test(detail)) return true;
+  return ["token_invalid", "token_expired", "missing_permission", "not_found", "wrong_app_secret"].includes(kind);
+}
+
 export function networkProblem(error: unknown): GraphProblem {
   const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
   return {
@@ -201,6 +214,8 @@ export async function graphCall<T>(
     appSecret?: string;
     method?: "GET" | "POST";
     params?: Record<string, string>;
+    /** JSON request body, for calls (sending a message, creating a template) that need structure. */
+    body?: unknown;
     what?: string;
     fetchImpl?: FetchLike;
   },
@@ -212,7 +227,11 @@ export async function graphCall<T>(
   try {
     const response = await (options.fetchImpl ?? fetch)(url.toString(), {
       method: options.method ?? "GET",
-      headers: { authorization: `Bearer ${options.accessToken}` },
+      headers: {
+        authorization: `Bearer ${options.accessToken}`,
+        ...(options.body !== undefined ? { "content-type": "application/json" } : {}),
+      },
+      ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
       signal: AbortSignal.timeout(GRAPH_TIMEOUT_MS),
     });
     const body = (await response.json().catch(() => null)) as (T & { error?: GraphErrorBody }) | null;

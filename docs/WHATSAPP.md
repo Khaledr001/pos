@@ -21,6 +21,32 @@ Meta Cloud API ──webhook──► POST /api/v1/whatsapp/webhook   (@Public, 
 
 ---
 
+## Template messages (shopper notifications)
+
+Order updates, quote-ready and back-in-stock messages reach a shopper as an
+**approved template** — the only thing Meta accepts outside the 24-hour window,
+and a shopper has usually never written to the shop. Sent by
+`WhatsappTemplateService` (`modules/whatsapp/`) from the shop's own number.
+
+- The platform ships a default template per message (`df_order_placed`,
+  `df_order_shipped`, …; text and variables in `WHATSAPP_TEMPLATE_DEFS`,
+  `packages/shared-types/src/storefront-notifications.ts`). The Notifications screen in the admin
+  (Online Store) has a WhatsApp template setup that submits the ones the account
+  lacks and records the approved ones in the shop's settings. Approval takes
+  minutes to days; press the button again to pick up newly approved ones.
+- A shop that already has its own approved templates can map them instead (the
+  variables must match the order in `WHATSAPP_TEMPLATE_DEFS`).
+- Needs the number's **business account id** (`whatsapp_accounts.businessAccountId`);
+  the connection wizard stores it.
+- **Consent.** A WhatsApp message is only queued when the shopper agreed: the
+  checkout's "send order updates on WhatsApp" box for an order's messages, or
+  giving a phone number on a back-in-stock form for that alert. Otherwise the
+  admin log shows the row as *skipped* with that reason. Skipped-for-consent rows
+  cannot be retried.
+- Failures that cannot succeed on retry (template missing or not approved,
+  bad recipient, expired token) fail at once; rate limits and outages retry with
+  backoff, up to 5 attempts. See `docs/STOREFRONT.md` → Shopper notifications.
+
 ## What works today
 
 | Capability | State |
@@ -28,7 +54,7 @@ Meta Cloud API ──webhook──► POST /api/v1/whatsapp/webhook   (@Public, 
 | Receive text messages | **Working** |
 | Reply with free-form text, inside 24h | **Working** |
 | Configure numbers from the admin panel | **Working** |
-| Template messages (reopen a closed window) | Not built |
+| Approved template messages (order updates, back-in-stock; not yet an inbox reply box) | **Working** — see the note below |
 | Media (images, documents) downloaded to MinIO | Not built |
 | Delivery receipts (sent → delivered → read) | Acknowledged, not recorded |
 | AI auto-reply | Not built — a person answers |
@@ -192,7 +218,7 @@ psql "$DATABASE_URL_MIGRATOR" -c \
 | Handshake fails in Meta's UI | No account row yet, or verify token mismatch. Do step 4 first. |
 | Handshake passes, no messages arrive | Either the app is unpublished (see 3b) or the `messages` field is not subscribed (step 5). |
 | Messages arrive, replies say *Not delivered* | Token expired (temporary instead of system user), or missing `whatsapp_business_messaging`. |
-| Reply box replaced by a window notice | More than 24h since their last message. Needs a template — not built. |
+| Reply box replaced by a window notice | More than 24h since their last message. The inbox can't send a template yet; the shop's automatic order updates are templates and are unaffected. |
 | Nothing at all, `curl` returns 502/523 | The API is not up. Check PM2 and nginx, not WhatsApp. |
 
 Failed sends are stored, not discarded — the message row keeps `status:

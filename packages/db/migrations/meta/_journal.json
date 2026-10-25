@@ -50,6 +50,13 @@
       "when": 1792677116188,
       "tag": "0006_nice_cannonball",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792945539741,
+      "tag": "0007_material_spectrum",
+      "breakpoints": true
     }
   ]
 }

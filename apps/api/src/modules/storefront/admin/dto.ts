@@ -10,6 +10,7 @@ import { slugify } from "@devsfleet/shared-utils";
 import { z } from "zod";
 import { sortSchema } from "../../../common/db/list-query.js";
 import { HeadlessSchema, HomeSectionsSchema, NavigationSchema, RegionSchema, ThemeSchema } from "./appearance.dto.js";
+import { NotificationSettingsSchema } from "./notifications.dto.js";
 import { wireEnum } from "../wire.js";
 
 const decimal = z
@@ -257,6 +258,7 @@ export const UpdateSettingsSchema = z.object({
   navigation: NavigationSchema.optional(),
   region: RegionSchema.optional(),
   headless: HeadlessSchema.optional(),
+  notifications: NotificationSettingsSchema.optional(),
 });
 export type UpdateSettingsDto = z.infer<typeof UpdateSettingsSchema>;
 
