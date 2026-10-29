@@ -1,4 +1,4 @@
-import type { AttributeType, ImageCandidateStatus, SerialNumberStatus } from "@devsfleet/shared-types";
+import type { AttributeType, ImageCandidateStatus, SerialNumberStatus, TaxCategory, TaxExemptionCode } from "@devsfleet/shared-types";
 import { relations, sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
@@ -118,6 +118,8 @@ export const units = pgTable(
      * true  = decimals allowed (cable by the metre, paint by the litre).
      */
     allowsFractions: boolean().notNull().default(false),
+    /** UN/ECE Recommendation 20 code the e-invoice sends: C62 each, MTR metre, KGM kilogram… */
+    unitCode: varchar({ length: 3 }).notNull().default("C62"),
     ...timestamps(),
   },
   (t) => [uniqueIndex("uq_units_tenant_abbr").on(t.tenantId, t.abbreviation)],
@@ -166,6 +168,15 @@ export const products = pgTable(
 
     /** Overrides the tenant's default VAT rate. NULL = inherit. */
     taxRate: money(),
+    /**
+     * VAT category for e-invoicing: S standard, Z zero-rated, E exempt, O out
+     * of scope. A rate alone cannot say whether a 0% line is zero-rated or
+     * exempt, and the two are reported differently. Must agree with the rate
+     * (S needs a rate above 0; the others are 0%).
+     */
+    taxCategory: varchar({ length: 1 }).$type<TaxCategory>().notNull().default("S"),
+    /** Why a category-E line is exempt. */
+    taxExemptionCode: varchar({ length: 12 }).$type<TaxExemptionCode>(),
 
     /** false = sold but not stock-tracked (labour, delivery charge). */
     isStockTracked: boolean().notNull().default(true),

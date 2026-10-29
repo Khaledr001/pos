@@ -97,6 +97,52 @@ describe("parseRow", () => {
   });
 });
 
+describe("parseRow — VAT columns", () => {
+  const TAX_HEADERS = [...HEADERS, "Tax Rate", "Tax Category", "Tax Exemption Code"];
+  const taxRow = (extra: Record<string, unknown>) =>
+    parseRow(
+      TAX_HEADERS,
+      TAX_HEADERS.map((h) => ({ SKU: "A-1", Name: "Thing", Unit: "pcs", "Selling Price": "10", ...extra })[h] ?? ""),
+      2,
+    );
+
+  it("is standard-rated and inherits the tenant's rate when the file says nothing", () => {
+    const r = taxRow({});
+    expect(r.ok && [r.row.taxCategory, r.row.taxRate, r.row.taxExemptionCode]).toEqual(["S", null, null]);
+  });
+
+  it("a rate of 0 alone means zero-rated", () => {
+    const r = taxRow({ "Tax Rate": "0" });
+    expect(r.ok && [r.row.taxCategory, r.row.taxRate]).toEqual(["Z", 0]);
+  });
+
+  it("a non-standard category sets the rate to 0", () => {
+    const r = taxRow({ "Tax Category": "z" });
+    expect(r.ok && [r.row.taxCategory, r.row.taxRate]).toEqual(["Z", 0]);
+  });
+
+  it("reads an exemption reason on an exempt product", () => {
+    const r = taxRow({ "Tax Category": "E", "Tax Exemption Code": "dl8.46.3" });
+    expect(r.ok && [r.row.taxCategory, r.row.taxExemptionCode]).toEqual(["E", "DL8.46.3"]);
+  });
+
+  it("rejects an unknown category or exemption code, naming the SKU", () => {
+    expect(taxRow({ "Tax Category": "X" })).toMatchObject({ ok: false, reason: expect.stringContaining("A-1: taxCategory") });
+    expect(taxRow({ "Tax Category": "E", "Tax Exemption Code": "nope" })).toMatchObject({ ok: false });
+  });
+
+  it("rejects a category that contradicts the rate, or an exemption code on a non-exempt row", () => {
+    expect(taxRow({ "Tax Category": "S", "Tax Rate": "0" })).toMatchObject({ ok: false });
+    expect(taxRow({ "Tax Category": "Z", "Tax Rate": "5" })).toMatchObject({ ok: false });
+    expect(taxRow({ "Tax Category": "Z", "Tax Exemption Code": "DL8.46.1" })).toMatchObject({ ok: false });
+  });
+
+  it("does not leak the VAT columns into the attributes bag", () => {
+    const r = taxRow({ "Tax Category": "Z" });
+    expect(r.ok && r.row.attributes).toEqual({});
+  });
+});
+
 describe("findDuplicateSkus", () => {
   it("finds a SKU repeated across rows", () => {
     const rows = [

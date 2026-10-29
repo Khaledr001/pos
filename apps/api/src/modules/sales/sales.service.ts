@@ -1,5 +1,6 @@
 import { and, asc, count, desc, eq, ilike, inArray, isNotNull, isNull, or, schema, sql } from "@devsfleet/db";
 import {
+  CREDIT_NOTE_REASON_LABELS,
   hasPermission,
   resolveTenantSettings,
   type PaymentMethod,
@@ -10,6 +11,7 @@ import {
   Money,
   calculateDocument,
   formatDocumentNumber,
+  lineTaxFor,
   sequenceKey,
 } from "@devsfleet/shared-utils";
 import { Injectable, Logger } from "@nestjs/common";
@@ -17,6 +19,7 @@ import { assertBranchInScope, branchScope } from "../../common/context/branch-sc
 import { containsPattern, localDateRange } from "../../common/db/list-query.js";
 import { assertExportSize, type ExportSheet } from "../../common/http/send-export.js";
 import { RequestContext } from "../../common/context/request-context.js";
+import { loadUnitCodes } from "../../common/tax/unit-codes.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import { StockService } from "../inventory/stock.service.js";
 import {
@@ -24,7 +27,9 @@ import {
   listedUnitPrice as listedPriceFor,
 } from "../pricing/price-resolver.service.js";
 import { OverrideGrantsService } from "../auth/override-grants.service.js";
+import { EinvoiceEnqueueService } from "../einvoice/einvoice-enqueue.service.js";
 import { SerialsService } from "../serials/serials.service.js";
+import { resolveCreditNote } from "./credit-note.js";
 import { renderInvoicePdf } from "./invoice-pdf.js";
 import type { CreateReturnDto, CreateSaleDto, ExportSalesDto, ListSalesDto, VoidSaleDto } from "./dto.js";
 
@@ -52,6 +57,7 @@ export class SalesService {
     private readonly prices: PriceResolverService,
     private readonly serials: SerialsService,
     private readonly grants: OverrideGrantsService,
+    private readonly einvoice: EinvoiceEnqueueService,
   ) {}
 
   async create(dto: CreateSaleDto): Promise<unknown> {
@@ -122,6 +128,9 @@ export class SalesService {
           variantName: schema.productVariants.variantName,
           productName: schema.products.name,
           taxRate: schema.products.taxRate,
+          taxCategory: schema.products.taxCategory,
+          taxExemptionCode: schema.products.taxExemptionCode,
+          baseUnitId: schema.products.unitId,
           isStockTracked: schema.products.isStockTracked,
           trackSerial: schema.products.trackSerial,
         })
@@ -151,6 +160,12 @@ export class SalesService {
               .where(inArray(schema.variantUnits.variantId, packagingVariantIds))
           : [];
       const packagingBy = new Map(packagings.map((p) => [`${p.variantId}:${p.unitId}`, p]));
+      // The e-invoice names every line's unit by its UN/ECE code, frozen onto
+      // the line like the product name is.
+      const unitCodeFor = await loadUnitCodes(tx, [
+        ...variants.map((v) => v.baseUnitId),
+        ...dto.lines.map((l) => l.unitId),
+      ]);
 
       // --- validate every line before writing anything --------------------
       const canOverrideFloor = hasPermission(effectivePermissions, "price:override_floor");
@@ -327,12 +342,16 @@ export class SalesService {
           }
         }
 
+        // The VAT treatment in force NOW, frozen on the line (rule 5).
+        const lineTax = lineTaxFor(variant, settings.tax.defaultRate);
+
         return {
           ...line,
           variant,
           unitPrice,
           discountPercent,
-          taxPercent: variant.taxRate ?? String(settings.tax.defaultRate),
+          ...lineTax,
+          unitCode: unitCodeFor(line.unitId ?? variant.baseUnitId),
           costPrice: price?.purchasePrice ?? null,
           floorPriceOverriddenBy,
           conversionFactor,
@@ -351,6 +370,7 @@ export class SalesService {
           unitPrice: l.unitPrice,
           discountPercent: l.discountPercent,
           taxPercent: l.taxPercent,
+          taxCategory: l.taxCategory,
         })),
       });
 
@@ -569,6 +589,9 @@ export class SalesService {
             discountPercent: line.discountPercent,
             discountAmount: Money.toDecimalString(computed.discount, 4),
             taxPercent: line.taxPercent,
+            taxCategory: line.taxCategory,
+            taxExemptionCode: line.taxExemptionCode,
+            unitCode: line.unitCode,
             taxAmount: Money.toDecimalString(computed.tax, 4),
             lineSubtotal: Money.toDecimalString(computed.net, 4),
             total: Money.toDecimalString(computed.total, 4),
@@ -730,6 +753,11 @@ export class SalesService {
         }
       }
 
+      // Queue the e-invoice in THIS transaction: an invoice that exists is an
+      // invoice that gets reported, and one that rolls back never is. A
+      // replayed push returned the original above and never reaches here.
+      await this.einvoice.enqueueForSale(tx, sale.id);
+
       const created = await this.findById(sale.id, tx);
       return { ...(created as object), change: Money.toDecimalString(change, 2) };
     });
@@ -772,6 +800,15 @@ export class SalesService {
         throw new AppError(
           ERROR_CODES.SALE_ALREADY_RETURNED,
           "This sale already has returned lines. Void is only for a sale with nothing returned yet — use a return for what remains.",
+        );
+      }
+      // Once an invoice has gone to the e-invoicing network it is a tax
+      // document the authority holds: erasing it here would leave the two
+      // disagreeing. It is corrected with a credit note instead.
+      if (await this.einvoice.hasBeenSent(tx, id)) {
+        throw new AppError(
+          ERROR_CODES.EINVOICE_ALREADY_SENT,
+          "This invoice has been sent to the e-invoicing network. Issue a credit note instead.",
         );
       }
 
@@ -850,6 +887,9 @@ export class SalesService {
         })
         .where(eq(schema.sales.id, id));
 
+      // Nothing was sent (checked above): withdraw the queued e-invoice too.
+      await this.einvoice.cancelForSale(tx, id, dto.reason);
+
       this.logger.log({ saleId: id, voidedBy: user.id }, "Sale voided");
       return this.findById(id, tx);
     });
@@ -907,6 +947,9 @@ export class SalesService {
           unitPrice: schema.saleItems.unitPrice,
           discountPercent: schema.saleItems.discountPercent,
           taxPercent: schema.saleItems.taxPercent,
+          taxCategory: schema.saleItems.taxCategory,
+          taxExemptionCode: schema.saleItems.taxExemptionCode,
+          unitCode: schema.saleItems.unitCode,
           returnedQuantity: schema.saleItems.returnedQuantity,
           costPrice: schema.saleItems.costPrice,
           unitId: schema.saleItems.unitId,
@@ -962,19 +1005,25 @@ export class SalesService {
           unitPrice: l.original.unitPrice,
           discountPercent: l.original.discountPercent,
           taxPercent: l.original.taxPercent,
+          taxCategory: l.original.taxCategory,
         })),
       });
+
+      const credit = resolveCreditNote({ reason: dto.reason, reasonNote: dto.reasonNote });
 
       const branch = await tx.query.branches.findFirst({
         where: (t, { eq: e }) => e(t.id, original!.branchId),
         columns: { code: true },
       });
       const year = new Date().getFullYear();
+      // A return is a TAX CREDIT NOTE: its own CRN series, never an INV number
+      // with a minus sign. (Returns issued before this existed keep the INV
+      // numbers they were given — numbers are never rewritten.)
       const [seq] = await tx.execute<{ next_document_number: number }>(
-        sql`SELECT next_document_number(${tenantId}::uuid, ${sequenceKey("sale", year, branch?.code ?? null)})`,
+        sql`SELECT next_document_number(${tenantId}::uuid, ${sequenceKey("credit_note", year, branch?.code ?? null)})`,
       );
       const returnNumber = formatDocumentNumber({
-        kind: "sale",
+        kind: "credit_note",
         year,
         sequence: Number((seq as { next_document_number?: number })?.next_document_number ?? 1),
         ...(branch?.code ? { branchCode: branch.code } : {}),
@@ -1003,7 +1052,8 @@ export class SalesService {
           ...(dto.localId ? { localId: dto.localId } : {}),
           ...(user.deviceId ? { deviceId: user.deviceId } : {}),
           ...(dto.occurredAt ? { occurredAt: new Date(dto.occurredAt) } : {}),
-          ...(dto.reason ? { notes: dto.reason } : {}),
+          creditReason: credit.code,
+          ...(credit.note ? { creditReasonNote: credit.note, notes: credit.note } : {}),
         })
         .returning();
 
@@ -1028,6 +1078,10 @@ export class SalesService {
           discountPercent: line.original.discountPercent,
           discountAmount: Money.toDecimalString(Money.negate(computed.discount), 4),
           taxPercent: line.original.taxPercent,
+          // The ORIGINAL line's VAT treatment and unit, not today's.
+          taxCategory: line.original.taxCategory,
+          taxExemptionCode: line.original.taxExemptionCode,
+          unitCode: line.original.unitCode,
           taxAmount: Money.toDecimalString(Money.negate(computed.tax), 4),
           lineSubtotal: Money.toDecimalString(Money.negate(computed.net), 4),
           total: Money.toDecimalString(Money.negate(computed.total), 4),
@@ -1138,6 +1192,9 @@ export class SalesService {
           .where(eq(schema.customers.id, original!.customerId));
       }
 
+      // The credit note joins the e-invoicing queue in the same transaction.
+      await this.einvoice.enqueueForSale(tx, returnSale.id);
+
       this.logger.log(
         { originalSaleId: dto.originalSaleId, returnSaleId: returnSale.id },
         "Return recorded",
@@ -1168,8 +1225,34 @@ export class SalesService {
 
       const canViewCost = RequestContext.get()?.user?.abac.canViewCost ?? false;
 
+      const [einvoice, original] = await Promise.all([
+        tx
+          .select({
+            id: schema.einvoiceDocuments.id,
+            status: schema.einvoiceDocuments.status,
+            uuid: schema.einvoiceDocuments.uuid,
+          })
+          .from(schema.einvoiceDocuments)
+          .where(eq(schema.einvoiceDocuments.saleId, id))
+          .limit(1),
+        sale.returnOfSaleId
+          ? tx
+              .select({ saleNumber: schema.sales.saleNumber, occurredAt: schema.sales.occurredAt })
+              .from(schema.sales)
+              .where(eq(schema.sales.id, sale.returnOfSaleId))
+              .limit(1)
+          : Promise.resolve([]),
+      ]);
+
       return {
         ...sale,
+        // An invoice, or the credit note a return is. Derived, not stored: a
+        // return IS a credit note, and historic returns (numbered INV) are
+        // credit notes in every way that matters to a reader.
+        documentType: sale.returnOfSaleId ? ("credit_note" as const) : ("invoice" as const),
+        originalSaleNumber: original[0]?.saleNumber ?? null,
+        originalSaleDate: original[0]?.occurredAt ?? null,
+        einvoice: einvoice[0] ?? null,
         items: items.map(({ costPrice, ...item }) =>
           canViewCost ? { ...item, costPrice } : item,
         ),
@@ -1232,10 +1315,25 @@ export class SalesService {
 
       const settings = resolveTenantSettings(tenant?.settings);
 
-      return { sale, items, tenant, settings, branch, customer, cashier };
+      // A credit note names the invoice it corrects; a document that was
+      // reported as an e-invoice carries its id on the paper copy.
+      const [original, einvoice] = await Promise.all([
+        sale.returnOfSaleId
+          ? tx.query.sales.findFirst({
+              where: (t, { eq: e }) => e(t.id, sale.returnOfSaleId!),
+              columns: { saleNumber: true, occurredAt: true },
+            })
+          : Promise.resolve(undefined),
+        tx.query.einvoiceDocuments.findFirst({
+          where: (t, { eq: e }) => e(t.saleId, id),
+          columns: { uuid: true, status: true },
+        }),
+      ]);
+
+      return { sale, items, tenant, settings, branch, customer, cashier, original, einvoice };
     });
 
-    const { sale, items, tenant, settings, branch, customer, cashier } = data;
+    const { sale, items, tenant, settings, branch, customer, cashier, original, einvoice } = data;
 
     const body = await renderInvoicePdf({
       business: {
@@ -1248,9 +1346,25 @@ export class SalesService {
       branchName: branch?.name ?? null,
       saleNumber: sale.saleNumber,
       occurredAt: sale.occurredAt,
-      currency: settings.currency.base,
+      // The document's own currency, not the books': a foreign-currency
+      // invoice must say so (and state its VAT in the books' currency).
+      currency: sale.currency,
+      baseCurrency: settings.currency.base,
+      exchangeRate: sale.exchangeRate,
       taxLabel: settings.tax.label,
       timezone: settings.locale.timezone,
+      documentType: sale.returnOfSaleId ? "credit_note" : "invoice",
+      ...(sale.returnOfSaleId && original
+        ? {
+            creditNote: {
+              againstNumber: original.saleNumber,
+              againstDate: original.occurredAt,
+              reason: sale.creditReason,
+              note: sale.creditReasonNote,
+            },
+          }
+        : {}),
+      ...(einvoice ? { einvoice: { uuid: einvoice.uuid, status: einvoice.status } } : {}),
       customer: customer
         ? {
             name: customer.name,
@@ -1275,6 +1389,8 @@ export class SalesService {
         lineSubtotal: item.lineSubtotal,
         taxAmount: item.taxAmount,
         total: item.total,
+        taxCategory: item.taxCategory,
+        taxExemptionCode: item.taxExemptionCode,
       })),
       subtotal: sale.subtotal,
       discountAmount: sale.discountAmount,
@@ -1367,6 +1483,10 @@ export class SalesService {
           dueAmount: schema.sales.dueAmount,
           status: schema.sales.status,
           returnOfSaleId: schema.sales.returnOfSaleId,
+          creditReason: schema.sales.creditReason,
+          einvoiceId: schema.einvoiceDocuments.id,
+          einvoiceStatus: schema.einvoiceDocuments.status,
+          einvoiceUuid: schema.einvoiceDocuments.uuid,
           branchName: schema.branches.name,
           branchCode: schema.branches.code,
           customerName: schema.customers.name,
@@ -1383,6 +1503,7 @@ export class SalesService {
         .innerJoin(schema.branches, eq(schema.sales.branchId, schema.branches.id))
         .leftJoin(schema.customers, eq(schema.sales.customerId, schema.customers.id))
         .leftJoin(schema.users, eq(schema.sales.createdBy, schema.users.id))
+        .leftJoin(schema.einvoiceDocuments, eq(schema.einvoiceDocuments.saleId, schema.sales.id))
         .where(where)
         .orderBy(
           query.sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn),
@@ -1393,9 +1514,15 @@ export class SalesService {
         .limit(query.limit)
         .offset(offset);
 
+      const rows = items.map(({ einvoiceId, einvoiceStatus, einvoiceUuid, ...row }) => ({
+        ...row,
+        documentType: row.returnOfSaleId ? ("credit_note" as const) : ("invoice" as const),
+        einvoice: einvoiceId ? { id: einvoiceId, status: einvoiceStatus!, uuid: einvoiceUuid! } : null,
+      }));
+
       const totalPages = Math.max(1, Math.ceil(total / query.limit));
       return {
-        items,
+        items: rows,
         meta: {
           page: query.page,
           limit: query.limit,
@@ -1453,10 +1580,13 @@ export class SalesService {
           paidAmount: schema.sales.paidAmount,
           dueAmount: schema.sales.dueAmount,
           status: schema.sales.status,
+          creditReason: schema.sales.creditReason,
+          einvoiceStatus: schema.einvoiceDocuments.status,
         })
         .from(schema.sales)
         .innerJoin(schema.branches, eq(schema.sales.branchId, schema.branches.id))
         .leftJoin(schema.customers, eq(schema.sales.customerId, schema.customers.id))
+        .leftJoin(schema.einvoiceDocuments, eq(schema.einvoiceDocuments.saleId, schema.sales.id))
         .where(where)
         .orderBy(
           query.sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn),
@@ -1471,7 +1601,13 @@ export class SalesService {
           columns: [
             { header: "Date", kind: "datetime", value: (r: (typeof sales)[number]) => r.occurredAt, width: 18 },
             { header: "Invoice No", value: (r: (typeof sales)[number]) => r.saleNumber, width: 22 },
-            { header: "Type", value: (r: (typeof sales)[number]) => (r.returnOfSaleId ? "Return" : "Sale") },
+            { header: "Type", value: (r: (typeof sales)[number]) => (r.returnOfSaleId ? "Credit note" : "Invoice") },
+            {
+              header: "Credit note reason",
+              value: (r: (typeof sales)[number]) => (r.creditReason ? CREDIT_NOTE_REASON_LABELS[r.creditReason] : ""),
+              width: 24,
+            },
+            { header: "E-invoice", value: (r: (typeof sales)[number]) => r.einvoiceStatus ?? "" },
             { header: "Branch", value: (r: (typeof sales)[number]) => r.branchCode },
             { header: "Customer", value: (r: (typeof sales)[number]) => r.customerName ?? "Walk-in", width: 28 },
             { header: "Customer TRN", value: (r: (typeof sales)[number]) => r.customerTrn, width: 18 },
@@ -1509,6 +1645,7 @@ export class SalesService {
             discountPercent: schema.saleItems.discountPercent,
             lineSubtotal: schema.saleItems.lineSubtotal,
             taxPercent: schema.saleItems.taxPercent,
+            taxCategory: schema.saleItems.taxCategory,
             taxAmount: schema.saleItems.taxAmount,
             total: schema.saleItems.total,
           })
@@ -1538,6 +1675,7 @@ export class SalesService {
             { header: "Discount %", kind: "quantity", value: (r: Line) => r.discountPercent },
             { header: "Net", kind: "money", value: (r: Line) => r.lineSubtotal },
             { header: `${tax} %`, kind: "quantity", value: (r: Line) => r.taxPercent },
+            { header: `${tax} category`, value: (r: Line) => r.taxCategory },
             { header: tax, kind: "money", value: (r: Line) => r.taxAmount },
             { header: "Total", kind: "money", value: (r: Line) => r.total },
           ],

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseEncryptionKey } from "../common/crypto/secret-box.js";
 
 /**
  * Environment validation.
@@ -139,6 +140,23 @@ export const envSchema = z.object({
   MAIL_FROM_ADDRESS: z.preprocess((v) => (v === "" ? undefined : v), z.string().email().optional()),
 
   // ---------------------------------------------------------------------------
+  // Secrets at rest + e-invoicing (see docs/EINVOICING.md)
+  // ---------------------------------------------------------------------------
+  /**
+   * 32 bytes (64 hex characters, or base64) that encrypt stored credentials —
+   * today, a tenant's e-invoicing provider key. Generate with
+   * `openssl rand -hex 32`. Unset in production, the credential-saving
+   * endpoints refuse rather than store a secret in the clear; unset elsewhere,
+   * a fixed development key is used and a warning is logged at boot.
+   */
+  APP_ENCRYPTION_KEY: optionalSecret(32),
+  /**
+   * Let the e-invoicing `gateway` driver call private/loopback addresses (a
+   * local mock ASP). Ignored when NODE_ENV=production.
+   */
+  EINVOICE_GATEWAY_ALLOW_PRIVATE: z.preprocess((v) => (v === "" ? undefined : v), bool.default(false)),
+
+  // ---------------------------------------------------------------------------
   // WhatsApp (Phase 4 — optional until then)
   // ---------------------------------------------------------------------------
   WHATSAPP_ENABLED: bool.default(false),
@@ -217,6 +235,9 @@ export function validateEnv(raw: Record<string, unknown>): Env {
       );
     }
   }
+
+  // A malformed key must stop boot: discovering it when the first credential is saved is too late.
+  if (env.APP_ENCRYPTION_KEY) parseEncryptionKey(env.APP_ENCRYPTION_KEY);
 
   if (env.MAIL_DRIVER === "smtp" && (!env.SMTP_HOST || !env.MAIL_FROM_ADDRESS)) {
     throw new Error("MAIL_DRIVER=smtp needs SMTP_HOST and MAIL_FROM_ADDRESS.");

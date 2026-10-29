@@ -20,3 +20,4 @@ export * from "./storefront-notifications.js";
 export * from "./storefront-forms.js";
 export * from "./storefront-site.js";
 export * from "./site-templates.js";
+export * from "./einvoice.js";

@@ -64,6 +64,13 @@
       "when": 1792949262272,
       "tag": "0008_dusty_zombie",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793261815366,
+      "tag": "0009_sturdy_barracuda",
+      "breakpoints": true
     }
   ]
 }

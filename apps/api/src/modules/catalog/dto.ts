@@ -41,6 +41,16 @@ export const CreateUnitSchema = z.object({
   abbreviation: z.string().trim().min(1).max(10),
   /** true for cable by the metre or paint by the litre; false for countable goods. */
   allowsFractions: z.boolean().default(false),
+  /**
+   * UN/ECE Recommendation 20 code the e-invoice sends for this unit (C62 each,
+   * MTR metre, KGM kilogram…). Omit to infer it from the abbreviation.
+   */
+  unitCode: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z0-9]{2,3}$/, "A unit code is 2–3 letters or digits, like C62 or MTR")
+    .optional(),
 });
 export type CreateUnitDto = z.infer<typeof CreateUnitSchema>;
 

@@ -67,6 +67,17 @@ import {
 import { Money, normalizePhone } from "@devsfleet/shared-utils";
 import { formatMoney as formatAmount, timeAgo } from "@/lib/format";
 import { readListResult, useListData, type SortOrder } from "@/lib/use-list-query";
+import { EinvoiceAddressFields, TrnField } from "@/components/einvoice/customer-fields";
+import {
+  EMPTY_EINVOICE_FIELDS,
+  customerEinvoiceProblems,
+  einvoiceFieldsFrom,
+  einvoiceFieldsPayload,
+  hasEinvoiceFields,
+  isValidTrn,
+  type EinvoiceCustomerFields,
+  type EinvoiceCustomerLike,
+} from "@/lib/einvoice";
 import { useTenantSettings } from "@/lib/tenant-settings";
 import { SortableTh, TableContainer, TableHead, TablePagination, TableSearch, TableSkeletonRows } from "@/components/ui/data-table";
 import { MobileList, MobileRow } from "@/components/ui/mobile-list";
@@ -74,7 +85,7 @@ import { DateRangePicker } from "@/components/ui/date-range-picker";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
-interface Customer {
+interface Customer extends EinvoiceCustomerLike {
   id: string;
   name: string;
   company?: string | null;
@@ -387,7 +398,7 @@ export default function ClientDetailPage() {
   const [editPhone, setEditPhone] = useState("");
   const [editWhatsapp, setEditWhatsapp] = useState("");
   const [editEmail, setEditEmail] = useState("");
-  const [editTrn, setEditTrn] = useState("");
+  const [editEinv, setEditEinv] = useState<EinvoiceCustomerFields>(EMPTY_EINVOICE_FIELDS);
   const [editAddress, setEditAddress] = useState("");
   const [editType, setEditType] = useState<"retail" | "wholesale" | "vip">("retail");
   const [editLocale, setEditLocale] = useState<"en" | "ar">("en");
@@ -675,7 +686,7 @@ export default function ClientDetailPage() {
     setEditPhone(customer.phone || "");
     setEditWhatsapp(customer.whatsappPhone || "");
     setEditEmail(customer.email || "");
-    setEditTrn(customer.trn || "");
+    setEditEinv(einvoiceFieldsFrom(customer));
     setEditAddress(customer.address || "");
     setEditType(customer.type || "retail");
     setEditLocale(customer.locale || "en");
@@ -747,6 +758,10 @@ export default function ClientDetailPage() {
   const handleEditCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!customer) return;
+    if (editEinv.trn.trim() && !isValidTrn(editEinv.trn)) {
+      setPageError("The TRN must be 15 digits starting with 100.");
+      return;
+    }
     setEditSubmitting(true);
     setPageError(null);
 
@@ -759,7 +774,8 @@ export default function ClientDetailPage() {
           phone: editPhone || undefined,
           whatsappPhone: editWhatsapp || undefined,
           email: editEmail || undefined,
-          trn: editTrn || undefined,
+          trn: editEinv.trn.trim() || undefined,
+          ...einvoiceFieldsPayload(editEinv, customer),
           address: editAddress || undefined,
           type: editType,
           locale: editLocale,
@@ -1082,6 +1098,14 @@ export default function ClientDetailPage() {
                       )}
                     </button>
                   )}
+                  {customer.trn && hasEinvoiceFields(customer) && (() => {
+                    const problems = customerEinvoiceProblems(customer);
+                    return problems.length === 0 ? (
+                      <Badge variant="success" className="text-[10px]">E-invoice ready</Badge>
+                    ) : (
+                      <Badge variant="warning" className="text-[10px]" title={problems.join(" · ")}>Missing e-invoice details</Badge>
+                    );
+                  })()}
                   <span className="font-mono text-[11px] text-muted-foreground">
                     ID: {customer.id.slice(0, 8)}...
                     <button
@@ -1189,6 +1213,15 @@ export default function ClientDetailPage() {
                   {customer.address || "—"}
                 </span>
               </div>
+              {customer.trn && hasEinvoiceFields(customer) && customerEinvoiceProblems(customer).length > 0 && (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-[11px] text-amber-700 dark:text-amber-400">
+                  <p className="font-semibold">Not ready for e-invoicing</p>
+                  <ul className="mt-0.5 list-disc pl-4">
+                    {customerEinvoiceProblems(customer).map((p) => <li key={p}>{p}</li>)}
+                  </ul>
+                  <button type="button" onClick={openEditModal} className="mt-1 cursor-pointer underline">Edit profile to fix</button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -2587,15 +2620,12 @@ export default function ClientDetailPage() {
                   placeholder="contact@company.ae"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-medium text-foreground mb-1">TRN</label>
-                <Input
-                  value={editTrn}
-                  onChange={(e) => setEditTrn(e.target.value)}
-                  placeholder="100234567800003"
-                  className="font-mono"
-                />
-              </div>
+              <TrnField
+                id="edit-customer-trn"
+                label="TRN"
+                value={editEinv.trn}
+                onChange={(trn) => setEditEinv((f) => ({ ...f, trn }))}
+              />
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3">
@@ -2653,6 +2683,15 @@ export default function ClientDetailPage() {
                 value={editAddress}
                 onChange={(e) => setEditAddress(e.target.value)}
                 placeholder="Industrial Area 4, Sharjah, UAE"
+              />
+            </div>
+
+            <div className="rounded-xl border border-border p-4 space-y-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">E-invoicing details</p>
+              <EinvoiceAddressFields
+                idPrefix="edit-customer"
+                value={editEinv}
+                onChange={(patch) => setEditEinv((f) => ({ ...f, ...patch }))}
               />
             </div>
 

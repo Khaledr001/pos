@@ -3,6 +3,8 @@ import type { Supplier } from "@devsfleet/db";
 import { AppError, ERROR_CODES } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
 import { RequestContext } from "../../common/context/request-context.js";
+import { partySettings } from "../../common/tax/party.js";
+import { checkedTaxId } from "../../common/tax/tenant-region.js";
 import { containsPattern } from "../../common/db/list-query.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import type { CreateSupplierDto, ListSuppliersDto, UpdateSupplierDto } from "./dto.js";
@@ -22,9 +24,10 @@ export class SuppliersService {
     const tenantId = RequestContext.requireTenantId();
 
     return this.db.run(async (tx) => {
+      const trn = await this.checkedTrn(tx, dto.trn);
       const [supplier] = await tx
         .insert(schema.suppliers)
-        .values({ tenantId, ...dto })
+        .values({ tenantId, ...dto, ...(trn !== undefined ? { trn } : {}) })
         .returning();
 
       if (!supplier) throw new AppError(ERROR_CODES.INTERNAL_ERROR, "Could not create the supplier");
@@ -34,15 +37,25 @@ export class SuppliersService {
 
   async update(id: string, dto: UpdateSupplierDto): Promise<Supplier> {
     return this.db.run(async (tx) => {
+      // Only a request that names the TRN is checked, so an old, unchecked one
+      // never blocks an unrelated edit.
+      const trn = await this.checkedTrn(tx, dto.trn);
       const [updated] = await tx
         .update(schema.suppliers)
-        .set(dto)
+        .set({ ...dto, ...(trn !== undefined ? { trn } : {}) })
         .where(and(eq(schema.suppliers.id, id), isNull(schema.suppliers.deletedAt)))
         .returning();
 
       if (!updated) throw new AppError(ERROR_CODES.NOT_FOUND, `Supplier ${id} not found`);
       return updated;
     });
+  }
+
+  /** The TRN as it will be stored (`undefined` = not part of this write, `null` = cleared). */
+  private async checkedTrn(tx: Parameters<Parameters<TenantDatabase["run"]>[0]>[0], trn: string | undefined) {
+    if (trn === undefined) return undefined;
+    const tenant = await tx.query.tenants.findFirst({ columns: { settings: true } });
+    return checkedTaxId(trn, partySettings(tenant?.settings), "trn");
   }
 
   async findById(id: string): Promise<Supplier> {

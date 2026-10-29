@@ -67,6 +67,7 @@ export function rtl(text: string): string {
 /** Bilingual label pairs, kept together so the two halves cannot drift apart. */
 const L = {
   taxInvoice: ["Tax Invoice", "فاتورة ضريبية"],
+  taxCreditNote: ["Tax Credit Note", "إشعار دائن ضريبي"],
   quotation: ["Quotation", "عرض سعر"],
   no: ["NO", "الرقم"],
   description: ["DESCRIPTION", "التفاصيل"],
@@ -124,6 +125,16 @@ export const COLS = {
   total: 0.11,
 } as const;
 
+/** VAT treatment of a line: S standard, Z zero-rated, E exempt, O out of scope. */
+export type TaxDocumentCategory = "S" | "Z" | "E" | "O";
+
+const CATEGORY_NAME: Record<TaxDocumentCategory, string> = {
+  S: "Standard rated",
+  Z: "Zero-rated",
+  E: "Exempt",
+  O: "Out of scope",
+};
+
 export interface TaxDocumentLine {
   productName: string;
   variantName: string;
@@ -135,10 +146,15 @@ export interface TaxDocumentLine {
   taxAmount: string;
   taxPercent: string;
   total: string;
+  /** Absent = standard-rated, as every line was before categories existed. */
+  taxCategory?: TaxDocumentCategory;
+  /** Why an exempt line is exempt, in words. Printed under the line. */
+  taxCategoryNote?: string | null;
 }
 
 export interface TaxDocumentInput {
-  kind: "invoice" | "quotation";
+  /** `credit_note` is what a return is: its own title and number, and a reference to the invoice it corrects. */
+  kind: "invoice" | "credit_note" | "quotation";
   business: {
     legalName: string;
     trn: string | null;
@@ -177,6 +193,86 @@ export interface TaxDocumentInput {
   dueAmount?: string;
   voided?: boolean;
   notes?: string | null;
+  /** Credit notes only: what it corrects and why. */
+  creditNote?: {
+    againstNumber: string;
+    againstDate: Date | null;
+    /** The reason in words ("Goods or services returned"). */
+    reasonLabel: string | null;
+    note: string | null;
+  };
+  /**
+   * The date the goods or services were supplied, when it is not the issue
+   * date. Printed only when it differs from the issue date (in the shop's
+   * timezone); absent, nothing is printed.
+   */
+  supplyDate?: Date | null;
+  /**
+   * Set when the document is issued in a currency other than the books'
+   * currency. VAT must also be stated in the books' currency (AED), at this
+   * rate — "1 <currency> = <exchangeRate> <baseCurrency>".
+   */
+  foreign?: { baseCurrency: string; exchangeRate: string };
+  /** The e-invoice this document was reported as, when there is one. */
+  einvoice?: { uuid: string; statusLabel: string } | null;
+}
+
+/**
+ * Debug switch for tests only. pdfkit compresses its streams, so a printed
+ * word cannot be read back out of the buffer — an uncompressed render can.
+ */
+export interface RenderOptions {
+  compress?: boolean;
+}
+
+// ── exact decimal helpers (never float) ──────────────────────────────────────
+
+const SCALE = 4;
+const SCALE_FACTOR = 10_000n;
+
+/** "12.5" → 125000n (scaled by 10^4). Digits beyond the fourth are dropped; garbage is zero. */
+function toMinor4(value: string | undefined): bigint {
+  const match = /^\s*(-?)(\d*)(?:\.(\d*))?\s*$/.exec(value ?? "");
+  if (!match) return 0n;
+  const [, sign, whole, frac = ""] = match;
+  const minor = BigInt(whole || "0") * SCALE_FACTOR + BigInt(frac.padEnd(SCALE, "0").slice(0, SCALE) || "0");
+  return sign === "-" ? -minor : minor;
+}
+
+/** Scaled-by-10^4 → "1,234.50", rounding half away from zero at two decimals. */
+function fmtMinor4(minor: bigint): string {
+  const negative = minor < 0n;
+  const abs = negative ? -minor : minor;
+  const cents = (abs + 50n) / 100n;
+  const whole = (cents / 100n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const frac = (cents % 100n).toString().padStart(2, "0");
+  return `${negative && cents !== 0n ? "-" : ""}${whole}.${frac}`;
+}
+
+/** amount × rate, both decimal strings; the result scaled by 10^4. Rate may carry up to 8 decimals. */
+function mulDecimal(amount: string, rate: string): bigint {
+  const m = /^\s*(\d*)(?:\.(\d*))?\s*$/.exec(rate);
+  if (!m) return 0n;
+  const rateScaled = BigInt(m[1] || "0") * 100_000_000n + BigInt((m[2] ?? "").padEnd(8, "0").slice(0, 8) || "0");
+  const product = toMinor4(amount) * rateScaled;
+  const half = 50_000_000n;
+  return (product < 0n ? product - half : product + half) / 100_000_000n;
+}
+
+/** Lines grouped by (category, rate), in the order S, Z, E, O then by rate. Exact sums. */
+export function summariseTax(lines: TaxDocumentLine[]) {
+  const groups = new Map<string, { category: TaxDocumentCategory; rate: string; base: bigint; tax: bigint }>();
+  for (const line of lines) {
+    const category = line.taxCategory ?? "S";
+    const rateKey = toMinor4(line.taxPercent).toString();
+    const key = `${category}|${rateKey}`;
+    const g = groups.get(key) ?? { category, rate: String(Number(line.taxPercent || "0")), base: 0n, tax: 0n };
+    g.base += toMinor4(line.beforeTax);
+    g.tax += toMinor4(line.taxAmount);
+    groups.set(key, g);
+  }
+  const order = ["S", "Z", "E", "O"];
+  return [...groups.values()].sort((a, b) => order.indexOf(a.category) - order.indexOf(b.category) || Number(a.rate) - Number(b.rate));
 }
 
 function money(value: string): string {
@@ -218,9 +314,9 @@ function formatTime(date: Date, timezone: string): string {
   });
 }
 
-export function renderTaxDocument(input: TaxDocumentInput): Promise<Buffer> {
+export function renderTaxDocument(input: TaxDocumentInput, options: RenderOptions = {}): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: "A4", margin: MARGIN, bufferPages: true });
+    const doc = new PDFDocument({ size: "A4", margin: MARGIN, bufferPages: true, compress: options.compress ?? true });
     const chunks: Buffer[] = [];
     doc.on("data", (chunk: Buffer) => chunks.push(chunk));
     doc.on("end", () => resolve(Buffer.concat(chunks)));
@@ -318,8 +414,9 @@ export function renderTaxDocument(input: TaxDocumentInput): Promise<Buffer> {
     }
 
     // Right: the document title, then its meta card.
-    const titleEn = input.kind === "invoice" ? L.taxInvoice[0] : L.quotation[0];
-    const titleAr = input.kind === "invoice" ? L.taxInvoice[1] : L.quotation[1];
+    const title = input.kind === "invoice" ? L.taxInvoice : input.kind === "credit_note" ? L.taxCreditNote : L.quotation;
+    const titleEn = title[0];
+    const titleAr = title[1];
     doc.font("Helvetica-Bold").fontSize(16).fillColor(ACCENT).text(titleEn.toUpperCase(), MARGIN, y, {
       width: contentW,
       align: "right",
@@ -328,12 +425,18 @@ export function renderTaxDocument(input: TaxDocumentInput): Promise<Buffer> {
     const titleW = doc.widthOfString(titleEn.toUpperCase()) + titleEn.length * 0.8;
     ar(titleAr, MARGIN, y + 3.5, { size: 9, width: contentW - titleW - 8, align: "right" });
 
+    const numberLabel = input.kind === "invoice" ? "Invoice No" : input.kind === "credit_note" ? "Credit Note No" : "Quote No";
     const meta: Array<[string, string]> = [
-      [input.kind === "invoice" ? "Invoice No" : "Quote No", input.documentNumber],
+      [numberLabel, input.documentNumber],
       ["Date", formatDate(input.issuedAt, input.timezone)],
     ];
-    if (input.kind === "invoice") meta.push(["Time", formatTime(input.issuedAt, input.timezone)]);
-    else if (input.validUntil) meta.push(["Valid until", input.validUntil]);
+    if (input.kind !== "quotation") {
+      meta.push(["Time", formatTime(input.issuedAt, input.timezone)]);
+      // Only when it differs: a supply date equal to the issue date is noise.
+      if (input.supplyDate && formatDate(input.supplyDate, input.timezone) !== formatDate(input.issuedAt, input.timezone)) {
+        meta.push(["Date of supply", formatDate(input.supplyDate, input.timezone)]);
+      }
+    } else if (input.validUntil) meta.push(["Valid until", input.validUntil]);
 
     const CARD_W = 208;
     const CARD_PAD = 8;
@@ -368,6 +471,23 @@ export function renderTaxDocument(input: TaxDocumentInput): Promise<Buffer> {
     if (input.voided) {
       doc.font("Helvetica-Bold").fontSize(10).fillColor("#B91C1C").text("VOIDED — THIS SALE WAS CANCELLED", MARGIN, y);
       y += 14;
+    }
+
+    // A credit note says what it corrects and why: the reference the buyer's
+    // books (and the tax authority) match it to.
+    if (input.kind === "credit_note" && input.creditNote) {
+      const ref = input.creditNote;
+      const against = ref.againstDate
+        ? `Against invoice ${ref.againstNumber} dated ${formatDate(ref.againstDate, input.timezone)}`
+        : `Against invoice ${ref.againstNumber}`;
+      doc.font("Helvetica-Bold").fontSize(9).fillColor(INK).text(against, MARGIN, y, { width: contentW, lineBreak: false });
+      y += 12;
+      const why = [ref.reasonLabel, ref.note].filter(Boolean).join(" — ");
+      if (why) {
+        doc.font("Helvetica").fontSize(8.5).fillColor(MUTED).text(`Reason: ${why}`, MARGIN, y, { width: contentW });
+        y = Math.max(y + 12, doc.y + 2);
+      }
+      y += 4;
     }
 
     // ── Billed to ────────────────────────────────────────────────────────
@@ -411,7 +531,7 @@ export function renderTaxDocument(input: TaxDocumentInput): Promise<Buffer> {
       // repeated here.
       if (input.customer.phone) detail("Phone: ", input.customer.phone);
       // The customer's own TRN is what makes the tax reclaimable for them.
-      if (input.customer.trn) detail("TRN NO: ", input.customer.trn);
+      if (input.customer.trn) detail("Buyer TRN: ", input.customer.trn);
     } else {
       doc.font("Helvetica-Bold").fontSize(11).fillColor(INK).text("Walk-in Customer", MARGIN, y);
       y += 14;
@@ -440,6 +560,10 @@ export function renderTaxDocument(input: TaxDocumentInput): Promise<Buffer> {
     };
     const PAD = 4;
 
+    // One rate across the document labels the column with it; mixed treatments
+    // (5%, zero-rated, exempt…) must not pretend the first line speaks for all.
+    const distinctRates = new Set(input.lines.map((l) => Number(l.taxPercent || "0")));
+    const uniformRate = distinctRates.size <= 1 ? Number(input.lines[0]?.taxPercent ?? "5") : null;
     const HEAD_EN = 6.6;
     const HEAD_AR = 5.8;
     const heads: ReadonlyArray<
@@ -450,7 +574,7 @@ export function renderTaxDocument(input: TaxDocumentInput): Promise<Buffer> {
       ["qty", L.qty, "center"],
       ["unitPrice", L.unitPrice, "right"],
       ["beforeTax", L.beforeTax, "right"],
-      ["tax", [`TAX ${Number(input.lines[0]?.taxPercent ?? "5")}%`, "الضريبة"], "right"],
+      ["tax", [uniformRate === null ? "TAX" : `TAX ${uniformRate}%`, "الضريبة"], "right"],
       ["total", L.total, "right"],
     ];
 
@@ -515,7 +639,19 @@ export function renderTaxDocument(input: TaxDocumentInput): Promise<Buffer> {
        * clips the second line of a long product name.
        */
       doc.font("Helvetica").fontSize(DESCRIPTION_SIZE);
-      const textH = doc.heightOfString(text, { width: w.description - PAD * 2 });
+      const nameH = doc.heightOfString(text, { width: w.description - PAD * 2 });
+      // A line that is not standard-rated says how it is treated, so the tax
+      // column's 0.00 is explained on the face of the document.
+      const category = line.taxCategory ?? "S";
+      const treatment =
+        category === "S"
+          ? null
+          : `VAT: ${CATEGORY_NAME[category]}${line.taxCategoryNote ? ` — ${line.taxCategoryNote}` : ""}`;
+      const NOTE_SIZE = 7;
+      doc.font("Helvetica").fontSize(NOTE_SIZE);
+      const noteH = treatment ? doc.heightOfString(treatment, { width: w.description - PAD * 2 }) + 1 : 0;
+      const textH = nameH + noteH;
+      doc.font("Helvetica").fontSize(DESCRIPTION_SIZE);
       const rowH = Math.max(ROW_MIN, textH + PAD * 2);
 
       // Break to a new page before drawing, never across a row — a line split
@@ -546,6 +682,13 @@ export function renderTaxDocument(input: TaxDocumentInput): Promise<Buffer> {
           width: w.description - PAD * 2,
           align: "left",
         });
+      if (treatment) {
+        doc
+          .font("Helvetica")
+          .fontSize(NOTE_SIZE)
+          .fillColor(MUTED)
+          .text(treatment, x.description + PAD, descY + nameH + 1, { width: w.description - PAD * 2, align: "left" });
+      }
 
       doc.font("Helvetica").fontSize(8).fillColor(INK);
       doc.text(qty(line.quantity), x.qty + PAD, midY, { width: w.qty - PAD * 2, align: "center" });
@@ -627,10 +770,65 @@ export function renderTaxDocument(input: TaxDocumentInput): Promise<Buffer> {
       y += h;
     };
 
+    const summaryTop = y;
+
+    // The tax summary: how much was taxed (or not) under each treatment. Shown
+    // when the document mixes treatments or carries a non-standard one — an
+    // ordinary all-5% invoice keeps the layout it has always had.
+    const taxGroups = summariseTax(input.lines);
+    const showTaxSummary = taxGroups.length > 1 || taxGroups.some((g) => g.category !== "S");
+    let taxSummaryBottom = summaryTop;
+    if (showTaxSummary) {
+      const tw = boxX - MARGIN - 14;
+      const cols = [
+        { head: "VAT TREATMENT", w: tw * 0.4, align: "left" as const },
+        { head: "RATE", w: tw * 0.12, align: "right" as const },
+        { head: "TAXABLE", w: tw * 0.24, align: "right" as const },
+        { head: input.taxLabel.toUpperCase(), w: tw * 0.24, align: "right" as const },
+      ];
+      let ty = summaryTop;
+      doc.rect(MARGIN, ty, tw, 14).fill("#F9FAFB");
+      doc.rect(MARGIN, ty, tw, 14).lineWidth(0.6).strokeColor(LINE).stroke();
+      let cx = MARGIN;
+      for (const col of cols) {
+        doc.font("Helvetica-Bold").fontSize(6.6).fillColor(MUTED).text(col.head, cx + 4, ty + 4, { width: col.w - 8, align: col.align, lineBreak: false });
+        cx += col.w;
+      }
+      ty += 14;
+      for (const g of taxGroups) {
+        doc.rect(MARGIN, ty, tw, 14).lineWidth(0.4).strokeColor(LINE).stroke();
+        const cells = [`${g.category} · ${CATEGORY_NAME[g.category]}`, `${g.rate}%`, fmtMinor4(g.base), fmtMinor4(g.tax)];
+        cx = MARGIN;
+        cols.forEach((col, i) => {
+          doc.font("Helvetica").fontSize(7.5).fillColor(INK).text(cells[i]!, cx + 4, ty + 3.5, { width: col.w - 8, align: col.align, lineBreak: false });
+          cx += col.w;
+        });
+        ty += 14;
+      }
+      taxSummaryBottom = ty;
+    }
+
     sumRow("Subtotal", input.subtotal);
     if (Number(input.discountAmount || "0") > 0) sumRow("Discount", `-${input.discountAmount}`);
-    sumRow(`${input.taxLabel} (${Number(input.lines[0]?.taxPercent ?? "5")}%)`, input.taxAmount);
+    sumRow(uniformRate === null ? input.taxLabel : `${input.taxLabel} (${uniformRate}%)`, input.taxAmount);
     sumRow("TOTAL", input.total, { band: true, strong: true });
+
+    // VAT must also be stated in the books' currency when the document is in
+    // another one — at the rate used, with exact arithmetic.
+    if (input.foreign && input.foreign.baseCurrency !== input.currency) {
+      const vatInBase = fmtMinor4(mulDecimal(input.taxAmount, input.foreign.exchangeRate));
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(8.5)
+        .fillColor(INK)
+        .text(`Total ${input.taxLabel} in ${input.foreign.baseCurrency}: ${input.foreign.baseCurrency} ${vatInBase}`, boxX, y + 4, { width: boxW, align: "right", lineBreak: false });
+      doc
+        .font("Helvetica")
+        .fontSize(7.5)
+        .fillColor(MUTED)
+        .text(`Exchange rate: 1 ${input.currency} = ${Number(input.foreign.exchangeRate)} ${input.foreign.baseCurrency}`, boxX, y + 15, { width: boxW, align: "right", lineBreak: false });
+      y += 28;
+    }
 
     /**
      * How the customer paid is NOT printed.
@@ -646,7 +844,7 @@ export function renderTaxDocument(input: TaxDocumentInput): Promise<Buffer> {
       sumRow("Balance due", input.dueAmount!, { strong: true });
     }
 
-    y += 12;
+    y = Math.max(y, taxSummaryBottom) + 12;
     if (input.notes) {
       doc.font("Helvetica").fontSize(8).fillColor(MUTED).text(input.notes, MARGIN, y, { width: contentW * 0.6 });
       y = Math.max(y + 12, doc.y + 4);
@@ -671,6 +869,19 @@ export function renderTaxDocument(input: TaxDocumentInput): Promise<Buffer> {
       .fontSize(8.5)
       .fillColor(INK)
       .text(`For ${input.business.legalName}`, MARGIN, footY + 18, { width: contentW, align: "right" });
+
+    // The e-invoice this document was reported as — small, at the foot, so the
+    // paper copy can be matched to what the tax authority's network holds.
+    if (input.einvoice) {
+      doc
+        .font("Helvetica")
+        .fontSize(7)
+        .fillColor(MUTED)
+        .text(`E-invoice ID ${input.einvoice.uuid} · ${input.einvoice.statusLabel}`, MARGIN, doc.page.height - MARGIN - 9, {
+          width: contentW,
+          lineBreak: false,
+        });
+    }
 
     doc.end();
   });

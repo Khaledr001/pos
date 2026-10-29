@@ -718,6 +718,7 @@ export class SyncService {
           lines,
           refunds: raw.refunds,
           ...(raw.reason ? { reason: raw.reason } : {}),
+          ...(raw.reasonNote ? { reasonNote: raw.reasonNote } : {}),
           ...(session ? { cashSessionId: session } : {}),
           localId: item.localId,
           occurredAt: item.occurredAt,

@@ -4,6 +4,8 @@ import { AppError, ERROR_CODES, Money } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
 import { branchScope, requireBranchId } from "../../common/context/branch-scope.js";
 import { RequestContext } from "../../common/context/request-context.js";
+import { checkedSubdivision, partySettings } from "../../common/tax/party.js";
+import { checkedTaxId, fieldError } from "../../common/tax/tenant-region.js";
 import { containsPattern } from "../../common/db/list-query.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import {
@@ -25,6 +27,20 @@ import type {
 
 type Transaction = Parameters<Parameters<TenantDatabase["run"]>[0]>[0];
 
+/** The columns whose values are tax-identity data an e-invoice is built from. */
+const PARTY_KEYS = [
+  "trn",
+  "addressLine1",
+  "addressLine2",
+  "addressCity",
+  "addressSubdivision",
+  "addressPostalCode",
+  "addressCountry",
+  "einvoiceScheme",
+  "einvoiceEndpoint",
+] as const;
+type PartyInput = Partial<Record<(typeof PARTY_KEYS)[number], string | null | undefined>>;
+
 /**
  * Customers: contact record, credit account, and loyalty account in one.
  *
@@ -42,6 +58,7 @@ export class CustomersService {
     const tenantId = RequestContext.requireTenantId();
 
     return this.db.run(async (tx) => {
+      const party = await this.checkedParty(tx, dto);
       const [customer] = await tx
         .insert(schema.customers)
         .values({
@@ -51,7 +68,7 @@ export class CustomersService {
           ...(dto.company ? { company: dto.company } : {}),
           ...(dto.phone ? { phone: dto.phone } : {}),
           ...(dto.email ? { email: dto.email } : {}),
-          ...(dto.trn ? { trn: dto.trn } : {}),
+          ...party,
           ...(dto.address ? { address: dto.address } : {}),
           type: dto.type,
           locale: dto.locale,
@@ -72,6 +89,17 @@ export class CustomersService {
 
   async update(id: string, dto: UpdateCustomerDto): Promise<Customer> {
     return this.db.run(async (tx) => {
+      // Only the party fields (TRN, structured address, Peppol address) are
+      // re-validated, and only when the request names one: fixing a phone
+      // number never fails because an old customer has a TRN typed before TRNs
+      // were checked.
+      const partyTouched = PARTY_KEYS.some((key) => dto[key] !== undefined);
+      const existing = partyTouched
+        ? await tx.query.customers.findFirst({ where: (t, { and: a, eq: e, isNull: n }) => a(e(t.id, id), n(t.deletedAt)) })
+        : undefined;
+      if (partyTouched && !existing) throw new AppError(ERROR_CODES.NOT_FOUND, `Customer ${id} not found`);
+      const party = partyTouched ? await this.checkedParty(tx, dto, existing) : {};
+
       const [updated] = await tx
         .update(schema.customers)
         .set({
@@ -80,7 +108,7 @@ export class CustomersService {
           ...(dto.company !== undefined ? { company: dto.company } : {}),
           ...(dto.phone !== undefined ? { phone: dto.phone } : {}),
           ...(dto.email !== undefined ? { email: dto.email } : {}),
-          ...(dto.trn !== undefined ? { trn: dto.trn } : {}),
+          ...party,
           ...(dto.address !== undefined ? { address: dto.address } : {}),
           ...(dto.type !== undefined ? { type: dto.type } : {}),
           ...(dto.locale !== undefined ? { locale: dto.locale } : {}),
@@ -97,6 +125,43 @@ export class CustomersService {
       if (!updated) throw new AppError(ERROR_CODES.NOT_FOUND, `Customer ${id} not found`);
       return updated;
     });
+  }
+
+  /**
+   * The party fields a write results in, validated against the tenant's region.
+   *
+   * Returns only the columns the request named, normalised (TRN without spaces,
+   * emirate as its code, blanks as null) — so it can be spread straight into an
+   * insert or an update. `existing` is the stored row for an update: the
+   * "Peppol scheme and id come as a pair" rule looks at the result, not just
+   * at what this request happened to send.
+   */
+  private async checkedParty(tx: Transaction, dto: PartyInput, existing?: Customer) {
+    const tenant = await tx.query.tenants.findFirst({ columns: { settings: true } });
+    const settings = partySettings(tenant?.settings);
+    const out: {
+      [K in (typeof PARTY_KEYS)[number]]?: K extends "addressCountry" ? string : string | null;
+    } = {};
+
+    if (dto.trn !== undefined) out.trn = checkedTaxId(dto.trn, settings, "trn");
+
+    const country = (dto.addressCountry ?? existing?.addressCountry ?? "AE").toUpperCase();
+    if (dto.addressCountry !== undefined) out.addressCountry = country;
+    if (dto.addressSubdivision !== undefined) out.addressSubdivision = checkedSubdivision(dto.addressSubdivision, country, "addressSubdivision");
+    for (const key of ["addressLine1", "addressLine2", "addressCity", "addressPostalCode"] as const) {
+      if (dto[key] !== undefined) out[key] = dto[key] ?? null;
+    }
+
+    if (dto.einvoiceScheme !== undefined) out.einvoiceScheme = dto.einvoiceScheme ?? null;
+    if (dto.einvoiceEndpoint !== undefined) out.einvoiceEndpoint = dto.einvoiceEndpoint ?? null;
+    if (dto.einvoiceScheme !== undefined || dto.einvoiceEndpoint !== undefined) {
+      const scheme = dto.einvoiceScheme !== undefined ? dto.einvoiceScheme : (existing?.einvoiceScheme ?? null);
+      const endpoint = dto.einvoiceEndpoint !== undefined ? dto.einvoiceEndpoint : (existing?.einvoiceEndpoint ?? null);
+      if (!!scheme !== !!endpoint) {
+        throw fieldError(scheme ? "einvoiceEndpoint" : "einvoiceScheme", "Give both the Peppol scheme and the address, or neither.");
+      }
+    }
+    return out;
   }
 
   /**

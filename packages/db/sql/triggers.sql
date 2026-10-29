@@ -133,6 +133,53 @@ CREATE TRIGGER trg_audit_log_immutable
     FOR EACH ROW EXECUTE FUNCTION public.prevent_ledger_mutation();
 
 -- -----------------------------------------------------------------------------
+-- E-invoice documents
+--
+-- The event log is append-only. A document may change status and be retried
+-- while it is still being fixed (queued / rejected / failed), but once it has
+-- gone to the network (submitting / submitted / delivered) the XML, its hash,
+-- the snapshot it was built from and its identity are frozen: a sent tax
+-- invoice is corrected with a credit note, never edited. Documents are never
+-- deleted.
+-- -----------------------------------------------------------------------------
+DROP TRIGGER IF EXISTS trg_einvoice_events_immutable ON public.einvoice_events;
+CREATE TRIGGER trg_einvoice_events_immutable
+    BEFORE UPDATE OR DELETE ON public.einvoice_events
+    FOR EACH ROW EXECUTE FUNCTION public.prevent_ledger_mutation();
+
+CREATE OR REPLACE FUNCTION public.guard_einvoice_document()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        RAISE EXCEPTION 'e-invoice documents cannot be deleted'
+            USING ERRCODE = 'restrict_violation';
+    END IF;
+    IF OLD.uuid IS DISTINCT FROM NEW.uuid
+       OR OLD.sale_id IS DISTINCT FROM NEW.sale_id
+       OR OLD.doc_type IS DISTINCT FROM NEW.doc_type
+       OR OLD.document_number IS DISTINCT FROM NEW.document_number THEN
+        RAISE EXCEPTION 'an e-invoice document''s identity cannot change'
+            USING ERRCODE = 'restrict_violation';
+    END IF;
+    IF OLD.status IN ('submitting', 'submitted', 'delivered')
+       AND (OLD.xml IS DISTINCT FROM NEW.xml
+            OR OLD.xml_sha256 IS DISTINCT FROM NEW.xml_sha256
+            OR OLD.snapshot IS DISTINCT FROM NEW.snapshot) THEN
+        RAISE EXCEPTION 'a sent e-invoice cannot be changed. Issue a credit note instead.'
+            USING ERRCODE = 'restrict_violation';
+    END IF;
+    RETURN NEW;
+END
+$$;
+
+DROP TRIGGER IF EXISTS trg_einvoice_documents_guard ON public.einvoice_documents;
+CREATE TRIGGER trg_einvoice_documents_guard
+    BEFORE UPDATE OR DELETE ON public.einvoice_documents
+    FOR EACH ROW EXECUTE FUNCTION public.guard_einvoice_document();
+
+-- -----------------------------------------------------------------------------
 -- Same-tenant references
 --
 -- A foreign key proves the referenced row EXISTS. It does not prove it belongs

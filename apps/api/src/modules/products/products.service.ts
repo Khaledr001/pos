@@ -1,7 +1,7 @@
 import { and, asc, count, desc, eq, ilike, isNull, or, schema, sql } from "@devsfleet/db";
 import type { AttributeDefinition } from "@devsfleet/db";
 import type { Paginated } from "@devsfleet/shared-types";
-import { AppError, ERROR_CODES, searchKey, normalizeBarcode, variantSearchKey } from "@devsfleet/shared-utils";
+import { AppError, ERROR_CODES, resolveProductTax, searchKey, normalizeBarcode, variantSearchKey } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
 import { createHash } from "node:crypto";
 import { RequestContext } from "../../common/context/request-context.js";
@@ -253,6 +253,12 @@ export class ProductsService {
     await this.planLimits.assertCanCreate("products");
 
     const tenantId = RequestContext.requireTenantId();
+    // Refused before anything is written; the category and the rate must agree.
+    const tax = resolveProductTax({
+      taxRate: dto.taxRate,
+      taxCategory: dto.taxCategory,
+      taxExemptionCode: dto.taxExemptionCode,
+    });
 
     const productId = await this.db.run(async (tx) => {
       const sku = dto.sku ?? (await this.nextSku(tx, dto.categoryId ?? null));
@@ -269,7 +275,9 @@ export class ProductsService {
           unitId: dto.unitId,
           attributes: dto.attributes,
           nameTranslations: dto.nameTranslations,
-          ...(dto.taxRate !== undefined ? { taxRate: String(dto.taxRate) } : {}),
+          ...(tax.taxRate !== null ? { taxRate: tax.taxRate } : {}),
+          taxCategory: tax.taxCategory,
+          taxExemptionCode: tax.taxExemptionCode,
           isStockTracked: dto.isStockTracked,
           trackSerial: dto.trackSerial,
           trackExpiry: dto.trackExpiry,
@@ -387,6 +395,21 @@ export class ProductsService {
       });
       if (!existing) throw new AppError(ERROR_CODES.PRODUCT_NOT_FOUND, `Product ${id} not found`);
 
+      // Only a request that names a tax field re-resolves the trio; a rename
+      // must never reinterpret a product's stored VAT treatment.
+      const taxTouched =
+        dto.taxRate !== undefined || dto.taxCategory !== undefined || dto.taxExemptionCode !== undefined;
+      const tax = taxTouched
+        ? resolveProductTax(
+            { taxRate: dto.taxRate, taxCategory: dto.taxCategory, taxExemptionCode: dto.taxExemptionCode },
+            {
+              taxRate: existing.taxRate,
+              taxCategory: existing.taxCategory,
+              taxExemptionCode: existing.taxExemptionCode,
+            },
+          )
+        : null;
+
       const [updated] = await tx
         .update(schema.products)
         .set({
@@ -401,7 +424,9 @@ export class ProductsService {
           ...(dto.categoryId !== undefined ? { categoryId: dto.categoryId } : {}),
           ...(dto.brandId !== undefined ? { brandId: dto.brandId } : {}),
           ...(dto.attributes !== undefined ? { attributes: dto.attributes } : {}),
-          ...(dto.taxRate !== undefined ? { taxRate: String(dto.taxRate) } : {}),
+          ...(tax
+            ? { taxRate: tax.taxRate, taxCategory: tax.taxCategory, taxExemptionCode: tax.taxExemptionCode }
+            : {}),
           ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
         })
         .where(eq(schema.products.id, id))
@@ -897,6 +922,7 @@ export class ProductsService {
           productId: schema.products.id,
           productName: schema.products.name,
           taxRate: schema.products.taxRate,
+          taxCategory: schema.products.taxCategory,
           unitAbbr: schema.units.abbreviation,
           categoryName: schema.categories.name,
           imageUrl: schema.productVariants.imageUrl,

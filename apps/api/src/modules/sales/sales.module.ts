@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module.js";
+import { EinvoiceModule } from "../einvoice/einvoice.module.js";
 import { InventoryModule } from "../inventory/inventory.module.js";
 import { PricingModule } from "../pricing/pricing.module.js";
 import { SerialsModule } from "../serials/serials.module.js";
@@ -13,7 +14,7 @@ import { SalesService } from "./sales.service.js";
  * PriceResolverService instance (Stage 5.1).
  */
 @Module({
-  imports: [AuthModule, InventoryModule, SerialsModule, PricingModule],
+  imports: [AuthModule, EinvoiceModule, InventoryModule, SerialsModule, PricingModule],
   controllers: [SalesController],
   providers: [SalesService],
   exports: [SalesService],
