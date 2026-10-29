@@ -168,6 +168,20 @@ checks pass.
 - [ ] Courier API integration; Tabby / Tamara
 - [ ] Encrypt payment credentials at rest (with `whatsapp_accounts`)
 
+## UAE e-invoicing (PINT AE) — see [EINVOICING.md](EINVOICING.md)
+
+Mandatory from 1 Jan 2027 for businesses with revenue ≥ AED 50M, 1 Jul 2027 for
+the rest (B2B only; B2C is outside the mandate for now).
+
+- [x] E-invoice document queue: eligibility, frozen snapshot, PINT AE XML, hash, append-only history, immutable once sent
+- [x] Validator that names the fix and where; checked against the official Schematron (opt-in suite)
+- [x] ASP connector slot: sandbox + generic HTTPS gateway, signed callbacks, SSRF-guarded, credentials encrypted at rest
+- [x] Admin API: settings, provider, readiness, register, XML download, retry, send-held
+- [ ] A connector for a named accredited ASP (each has its own API)
+- [ ] VAT computed per (category, rate) group so large invoices stay inside PINT AE's 0.02 tolerance
+- [ ] B2C reporting, reverse charge, other transaction types, HS / SAC item classification
+- [ ] Encrypt WhatsApp and Stripe credentials with the same `SecretBox`
+
 ## Cross-cutting, not phase-bound
 
 - [ ] Integration test suite proving RLS actually isolates tenants

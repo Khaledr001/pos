@@ -1,4 +1,5 @@
 import type { Currency, Locale, PrintFormat, TaxMode } from "./enums.js";
+import { DEFAULT_EINVOICE_SETTINGS, resolveEinvoiceSettings, type EinvoiceSettings, type PartyAddress } from "./einvoice.js";
 
 /**
  * Shape of `tenants.settings` (JSONB).
@@ -14,6 +15,8 @@ export interface TenantSettings {
   trn?: string;
   logoUrl?: string;
   addressLines?: string[];
+  /** Structured address of the legal entity: what an e-invoice needs where `addressLines` is just print. */
+  legalAddress?: PartyAddress;
   phone?: string;
   email?: string;
 
@@ -105,6 +108,9 @@ export interface TenantSettings {
     /** Points a customer must hold before any may be redeemed. */
     minimumRedeemable: number;
   };
+
+  /** UAE e-invoicing (PINT AE over Peppol, through an accredited service provider). */
+  einvoice: EinvoiceSettings;
 }
 
 export const DEFAULT_TENANT_SETTINGS: TenantSettings = {
@@ -153,6 +159,7 @@ export const DEFAULT_TENANT_SETTINGS: TenantSettings = {
     redemptionValue: 0.05,
     minimumRedeemable: 100,
   },
+  einvoice: DEFAULT_EINVOICE_SETTINGS,
 };
 
 /**
@@ -183,5 +190,6 @@ export function resolveTenantSettings(stored: unknown): TenantSettings {
     whatsapp: { ...d.whatsapp, ...s.whatsapp },
     inventory: { ...d.inventory, ...s.inventory },
     loyalty: { ...d.loyalty, ...s.loyalty },
+    einvoice: resolveEinvoiceSettings(s.einvoice),
   };
 }

@@ -12,7 +12,8 @@
  * environment (see CLAUDE.md's "Not yet decided" — the schema stayed a
  * skeleton for exactly this reason), so this expects a canonical header set
  * instead of a guessed real-world one: sku, name, category, brand, unit,
- * barcode, sellingPrice, purchasePrice, minSellingPrice, taxRate — matched
+ * barcode, sellingPrice, purchasePrice, minSellingPrice, taxRate, taxCategory,
+ * taxExemptionCode — matched
  * case-insensitively with punctuation/spacing stripped (row-schema.ts).
  * Run `profile.ts` against the real file first and rename its columns to
  * match; anything left over lands in `products.attributes` (JSONB), keyed
@@ -206,6 +207,8 @@ async function applyRow(
         unitId,
         attributes: row.attributes,
         ...(row.taxRate !== null ? { taxRate: String(row.taxRate) } : {}),
+        taxCategory: row.taxCategory,
+        taxExemptionCode: row.taxExemptionCode,
       })
       .returning({ id: schema.products.id });
     if (!product) throw new Error(`Could not create product ${row.sku}`);

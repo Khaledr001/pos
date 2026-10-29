@@ -2,8 +2,11 @@ import type {
   Currency,
   DocumentSource,
   OrderStatus,
+  CreditNoteReason,
   QuotationStatus,
   SaleStatus,
+  TaxCategory,
+  TaxExemptionCode,
   TaxMode,
 } from "@devsfleet/shared-types";
 import { relations, sql } from "drizzle-orm";
@@ -83,6 +86,11 @@ const lineItemFields = {
   discountAmount: money().notNull().default("0"),
   /** Snapshotted, not read from tenant settings — VAT rates change. */
   taxPercent: percent().notNull().default("0"),
+  /** VAT category as it was when the document was issued (rate alone cannot tell zero-rated from exempt). */
+  taxCategory: varchar({ length: 1 }).$type<TaxCategory>().notNull().default("S"),
+  taxExemptionCode: varchar({ length: 12 }).$type<TaxExemptionCode>(),
+  /** UN/ECE unit code as it was when issued; the e-invoice sends it. */
+  unitCode: varchar({ length: 3 }).notNull().default("C62"),
   taxAmount: money().notNull().default("0"),
   /** Line net after discount, before tax. */
   lineSubtotal: money().notNull().default("0"),
@@ -242,6 +250,9 @@ export const sales = pgTable(
     returnOfSaleId: uuid().references((): AnyPgColumn => sales.id, {
       onDelete: "restrict",
     }),
+    /** Set on a return (credit note): the PINT AE reason code, and any free-text detail. */
+    creditReason: varchar({ length: 12 }).$type<CreditNoteReason>(),
+    creditReasonNote: text(),
     voidedAt: timestamp({ withTimezone: true, mode: "date" }),
     voidedBy: uuid().references(() => users.id, { onDelete: "set null" }),
     voidReason: text(),

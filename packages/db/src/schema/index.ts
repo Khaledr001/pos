@@ -32,3 +32,4 @@ export * from "./whatsapp.js";
 export * from "./sync.js";
 export * from "./system.js";
 export * from "./storefront.js";
+export * from "./einvoice.js";

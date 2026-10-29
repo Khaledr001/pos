@@ -80,14 +80,14 @@ export type AttributeType = (typeof ATTRIBUTE_TYPES)[number];
  * can rename, delete, or add its own via the Units of Measure page.
  */
 export const COMMON_UNITS = [
-  { name: "Piece", abbreviation: "pcs", allowsFractions: false },
-  { name: "Box", abbreviation: "box", allowsFractions: false },
-  { name: "Roll", abbreviation: "roll", allowsFractions: false },
-  { name: "Metre", abbreviation: "m", allowsFractions: true },
-  { name: "Kilogram", abbreviation: "kg", allowsFractions: true },
-  { name: "Litre", abbreviation: "ltr", allowsFractions: true },
-  { name: "Bag", abbreviation: "bag", allowsFractions: false },
-  { name: "Set", abbreviation: "set", allowsFractions: false },
+  { name: "Piece", abbreviation: "pcs", allowsFractions: false, unitCode: "C62" },
+  { name: "Box", abbreviation: "box", allowsFractions: false, unitCode: "XBX" },
+  { name: "Roll", abbreviation: "roll", allowsFractions: false, unitCode: "XRO" },
+  { name: "Metre", abbreviation: "m", allowsFractions: true, unitCode: "MTR" },
+  { name: "Kilogram", abbreviation: "kg", allowsFractions: true, unitCode: "KGM" },
+  { name: "Litre", abbreviation: "ltr", allowsFractions: true, unitCode: "LTR" },
+  { name: "Bag", abbreviation: "bag", allowsFractions: false, unitCode: "C62" },
+  { name: "Set", abbreviation: "set", allowsFractions: false, unitCode: "SET" },
 ] as const;
 
 // -----------------------------------------------------------------------------

@@ -32,22 +32,84 @@ const phoneField = z
   .max(20)
   .transform((value) => normalizePhone(value) ?? undefined);
 
-export const CreateCustomerSchema = z.object({
+/** Optional text that may be cleared with null and ignores blanks. */
+const clearable = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .transform((v) => (v === "" ? null : v))
+    .nullable()
+    .optional();
+
+/**
+ * What a customer IS, with no defaults. Create adds the defaults a NEW
+ * customer starts from; Update is this shape made partial. Kept apart because
+ * Zod 4 applies a `.default()` even through `.partial()` — an update built from
+ * the create schema silently reset every customer's type, language and
+ * payment terms to the defaults whenever anyone fixed a phone number.
+ */
+const CustomerFields = z.object({
   branchId: z.string().uuid().nullable().optional(),
   name: z.string().trim().min(1, "Give the customer a name").max(255),
   company: z.string().trim().max(255).optional(),
   phone: phoneField.optional(),
   email: z.string().trim().toLowerCase().email().max(255).optional(),
-  trn: z.string().trim().max(20).optional(),
+  /**
+   * Tax registration number. Checked against the tenant's region in the
+   * service (a UAE business's TRN is 15 digits starting 100) and stored
+   * without spaces or dashes; blank clears it.
+   */
+  trn: z.string().trim().max(24).optional(),
   address: z.string().trim().max(1000).optional(),
-  type: z.enum(CUSTOMER_TYPES).default("retail"),
-  locale: z.enum(LOCALES).default("en"),
+
+  /**
+   * The same address, structured — what an e-invoice needs where `address`
+   * is just print. For the UAE `addressSubdivision` is the emirate (AUH, DXB,
+   * SHJ, UAQ, FUJ, AJM, RAK).
+   */
+  addressLine1: clearable(200),
+  addressLine2: clearable(200),
+  addressCity: clearable(100),
+  addressSubdivision: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .max(20)
+    .transform((v) => (v === "" ? null : v))
+    .nullable()
+    .optional(),
+  addressPostalCode: clearable(20),
+  /** ISO 3166-1 alpha-2. */
+  addressCountry: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z]{2}$/, "Use a two-letter country code, like AE")
+    .optional(),
+  /** The buyer's Peppol address, when it is not simply their TIN: scheme (4 digits) and id. Both or neither. */
+  einvoiceScheme: z
+    .string()
+    .trim()
+    .regex(/^\d{4}$/, "A Peppol scheme is 4 digits, like 0235")
+    .nullable()
+    .optional(),
+  einvoiceEndpoint: clearable(100),
+
+  type: z.enum(CUSTOMER_TYPES),
+  locale: z.enum(LOCALES),
   priceListId: z.string().uuid().nullable().optional(),
-  creditLimit: zMoney().default(ZERO_MONEY),
-  paymentTermDays: z.coerce.number().int().min(0).max(365).default(0),
+  paymentTermDays: z.coerce.number().int().min(0).max(365),
   /** E.164. What the WhatsApp bot matches an inbound message against. */
   whatsappPhone: phoneField.optional(),
   notes: z.string().trim().max(1000).optional(),
+});
+
+export const CreateCustomerSchema = CustomerFields.extend({
+  type: z.enum(CUSTOMER_TYPES).default("retail"),
+  locale: z.enum(LOCALES).default("en"),
+  creditLimit: zMoney().default(ZERO_MONEY),
+  paymentTermDays: z.coerce.number().int().min(0).max(365).default(0),
   /** Minted on the terminal when created offline. */
   localId: z.string().uuid().optional(),
   /** The terminal's clock at the moment of creation. */
@@ -55,7 +117,7 @@ export const CreateCustomerSchema = z.object({
 });
 export type CreateCustomerDto = z.infer<typeof CreateCustomerSchema>;
 
-export const UpdateCustomerSchema = CreateCustomerSchema.partial().extend({
+export const UpdateCustomerSchema = CustomerFields.partial().extend({
   isActive: z.boolean().optional(),
 });
 export type UpdateCustomerDto = z.infer<typeof UpdateCustomerSchema>;

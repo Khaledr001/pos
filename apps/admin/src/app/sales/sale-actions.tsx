@@ -2,7 +2,16 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { AlertCircle, Ban, Loader2, PackageOpen, Undo2 } from "lucide-react";
-import { DEFAULT_TENANT_SETTINGS, type PaymentMethod } from "@devsfleet/shared-types";
+import {
+  CREDIT_NOTE_REASONS,
+  CREDIT_NOTE_REASON_LABELS,
+  DEFAULT_CREDIT_NOTE_REASON,
+  DEFAULT_TENANT_SETTINGS,
+  type CreditNoteReason,
+  type EinvoiceStatus,
+  type PaymentMethod,
+} from "@devsfleet/shared-types";
+import { SENT_INVOICE_HINT, isSentEinvoice } from "@/lib/einvoice";
 import { Money, calculateDocument } from "@devsfleet/shared-utils";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
@@ -64,6 +73,8 @@ export interface ActionableSale {
   voidedAt?: string | null;
   /** Set when this document is itself a return — neither action applies. */
   returnOfSaleId?: string | null;
+  /** This document's e-invoice, when it has one. A sent one cannot be voided. */
+  einvoice?: { status: EinvoiceStatus } | null;
 }
 
 /**
@@ -77,6 +88,8 @@ export interface ActionableSale {
 export function saleActionState(sale: ActionableSale | null): {
   canVoid: boolean;
   voidBlockedReason: string | null;
+  /** The void is closed specifically because the invoice already went to the e-invoicing network. */
+  voidBlockedBySentInvoice: boolean;
   canReturn: boolean;
   returnBlockedReason: string | null;
 } {
@@ -84,6 +97,7 @@ export function saleActionState(sale: ActionableSale | null): {
     return {
       canVoid: false,
       voidBlockedReason: null,
+      voidBlockedBySentInvoice: false,
       canReturn: false,
       returnBlockedReason: null,
     };
@@ -94,6 +108,7 @@ export function saleActionState(sale: ActionableSale | null): {
     return {
       canVoid: false,
       voidBlockedReason: reason,
+      voidBlockedBySentInvoice: false,
       canReturn: false,
       returnBlockedReason: reason,
     };
@@ -104,18 +119,25 @@ export function saleActionState(sale: ActionableSale | null): {
     return {
       canVoid: false,
       voidBlockedReason: reason,
+      voidBlockedBySentInvoice: false,
       canReturn: false,
       returnBlockedReason: "This sale was voided — there is nothing to return.",
     };
   }
 
   const partlyReturned = sale.status === "returned" || sale.status === "partially_returned";
+  // A tax invoice that has gone to the network cannot be cancelled, only
+  // corrected by a credit note — which is what a return now issues.
+  const sent = isSentEinvoice(sale.einvoice?.status);
 
   return {
-    canVoid: !partlyReturned,
-    voidBlockedReason: partlyReturned
-      ? "Something on this sale has already been returned, so it did happen. Return what is left instead."
-      : null,
+    canVoid: !partlyReturned && !sent,
+    voidBlockedReason: sent
+      ? SENT_INVOICE_HINT
+      : partlyReturned
+        ? "Something on this sale has already been returned, so it did happen. Return what is left instead."
+        : null,
+    voidBlockedBySentInvoice: sent,
     canReturn: sale.status !== "returned" || remainingLines(sale).length > 0,
     returnBlockedReason:
       sale.status === "returned" && remainingLines(sale).length === 0
@@ -141,22 +163,27 @@ export function VoidSaleDialog({
   open,
   onClose,
   onDone,
+  onRefused,
   accessToken,
 }: {
   sale: ActionableSale | null;
   open: boolean;
   onClose: () => void;
   onDone: () => void;
+  /** The server refused because the invoice was already sent — the page should re-read the sale. */
+  onRefused?: () => void;
   accessToken: string | undefined;
 }) {
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sentRefused, setSentRefused] = useState(false);
 
   useEffect(() => {
     if (open) {
       setReason("");
       setError(null);
+      setSentRefused(false);
     }
   }, [open]);
 
@@ -169,7 +196,15 @@ export function VoidSaleDialog({
       onDone();
       onClose();
     } catch (err: any) {
-      setError(err?.message || "The void was refused.");
+      if (err?.code === "EINVOICE_ALREADY_SENT") {
+        // The server knows something the page did not: re-read the sale so its
+        // e-invoice status shows, and keep the explanation on screen.
+        setSentRefused(true);
+        setError(err?.message || SENT_INVOICE_HINT);
+        onRefused?.();
+      } else {
+        setError(err?.message || "The void was refused.");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -231,7 +266,7 @@ export function VoidSaleDialog({
           <Button
             variant="destructive"
             onClick={() => void submit()}
-            disabled={submitting || !reason.trim()}
+            disabled={submitting || !reason.trim() || sentRefused}
           >
             {submitting ? (
               <>
@@ -295,7 +330,8 @@ export function ReturnSaleDialog({
   const [refundMethod, setRefundMethod] = useState<PaymentMethod>("card");
   const [refundReference, setRefundReference] = useState("");
   const [refundAmount, setRefundAmount] = useState("");
-  const [reason, setReason] = useState("");
+  const [reason, setReason] = useState<CreditNoteReason>(DEFAULT_CREDIT_NOTE_REASON);
+  const [reasonNote, setReasonNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -307,7 +343,8 @@ export function ReturnSaleDialog({
     setRefundMethod("card");
     setRefundReference("");
     setRefundAmount("");
-    setReason("");
+    setReason(DEFAULT_CREDIT_NOTE_REASON);
+    setReasonNote("");
     setError(null);
   }, [open]);
 
@@ -398,14 +435,16 @@ export function ReturnSaleDialog({
            */
           cashSessionId: null,
           localId: crypto.randomUUID(),
-          ...(reason.trim() ? { reason: reason.trim() } : {}),
+          // A return is a tax credit note: the reason is a PINT AE code, the note is free text.
+          reason,
+          ...(reasonNote.trim() ? { reasonNote: reasonNote.trim() } : {}),
         },
         { accessToken },
       );
       onDone();
       onClose();
     } catch (err: any) {
-      setError(err?.message || "The return was refused.");
+      setError(err?.message || "The credit note was refused.");
     } finally {
       setSubmitting(false);
     }
@@ -417,11 +456,12 @@ export function ReturnSaleDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Undo2 className="size-5 text-primary" />
-            Return against {sale?.saleNumber ?? "this sale"}
+            Issue credit note against {sale?.saleNumber ?? "this sale"}
           </DialogTitle>
           <DialogDescription>
             Take back some or all of it. Enter a quantity on each line coming back and
-            say whether the goods are resellable.
+            say whether the goods are resellable. This issues a tax credit note that
+            refers to the original invoice.
           </DialogDescription>
         </DialogHeader>
 
@@ -566,18 +606,33 @@ export function ReturnSaleDialog({
               </p>
             </div>
 
-            <div>
-              <label htmlFor="return-reason" className="mb-1 block text-xs font-medium">
-                Reason
-              </label>
-              <Input
-                id="return-reason"
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                placeholder="Wrong size"
-                maxLength={500}
-                className="h-9"
-              />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label htmlFor="return-reason" className="mb-1 block text-xs font-medium">
+                  Credit note reason <span className="text-destructive">*</span>
+                </label>
+                <SelectField
+                  id="return-reason"
+                  size="sm"
+                  label="Credit note reason"
+                  value={reason}
+                  onValueChange={(v) => setReason(v as CreditNoteReason)}
+                  options={CREDIT_NOTE_REASONS.map((r) => ({ value: r, label: CREDIT_NOTE_REASON_LABELS[r] }))}
+                />
+              </div>
+              <div>
+                <label htmlFor="return-reason-note" className="mb-1 block text-xs font-medium">
+                  Note
+                </label>
+                <Input
+                  id="return-reason-note"
+                  value={reasonNote}
+                  onChange={(e) => setReasonNote(e.target.value)}
+                  placeholder="Wrong size"
+                  maxLength={500}
+                  className="h-9"
+                />
+              </div>
             </div>
 
             <div className="space-y-1 rounded-lg border border-border bg-secondary/40 p-3 text-xs">
@@ -628,12 +683,12 @@ export function ReturnSaleDialog({
             {submitting ? (
               <>
                 <Loader2 className="size-4 animate-spin" />
-                Recording…
+                Issuing…
               </>
             ) : (
               <>
                 <PackageOpen className="size-4" />
-                Take back {currency} {Money.toDecimalString(dueBack, 2)}
+                Issue credit note {currency} {Money.toDecimalString(dueBack, 2)}
               </>
             )}
           </Button>
