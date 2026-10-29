@@ -55,6 +55,8 @@ import {
   Shapes,
   ClipboardList,
   Inbox,
+  FileCheck2,
+  ReceiptText,
 } from "lucide-react";
 import { hasPermission, type Permission } from "@devsfleet/shared-types";
 import { useAuth } from "@/lib/auth-context";
@@ -117,6 +119,12 @@ type NavItem = {
   short?: string;
   icon: typeof LayoutDashboard;
   permission?: Permission;
+  /**
+   * Active only on this exact path, not on anything below it. Needed when a
+   * sibling lives under this item's prefix (Settings vs Settings/E-invoicing),
+   * which would otherwise light both up at once.
+   */
+  exact?: boolean;
   children?: SubItem[];
 };
 
@@ -166,6 +174,7 @@ const NAV_SECTIONS: NavSection[] = [
           { label: "Quotations", href: "/quotations", icon: FileText, permission: "quotation:read" },
           { label: "Day Close Registers", href: "/day-close", icon: Wallet, permission: "day_close:read" },
           { label: "Cash Drawers", href: "/cash-drawers", icon: Banknote, permission: "day_close:read" },
+          { label: "E-invoices", href: "/einvoicing", icon: FileCheck2, permission: "sale:read" },
         ],
       },
       { label: "Expenses", href: "/expenses", icon: Receipt, permission: "expense:read" },
@@ -257,7 +266,8 @@ const NAV_SECTIONS: NavSection[] = [
       { label: "Terminals & POS", short: "Devices", href: "/devices", icon: Tablet, permission: "branch:read" },
       { label: "Releases", href: "/releases", icon: Download, permission: "device:manage" },
       { label: "Audit Trail", short: "Audit", href: "/audit-log", icon: ScrollText, permission: "audit:read" },
-      { label: "Settings", href: "/settings", icon: Settings, permission: "settings:read" },
+      { label: "Settings", href: "/settings", icon: Settings, permission: "settings:read", exact: true },
+      { label: "E-invoicing", href: "/settings/einvoicing", icon: ReceiptText, permission: "settings:read" },
     ],
   },
 ];
@@ -553,7 +563,7 @@ export function Sidebar({
   // ── An item with no children ───────────────────────────────────────────────
   const renderFlatItem = (item: NavItem) => {
     const Icon = item.icon;
-    const isActive = isRouteActive(pathname, item.href);
+    const isActive = item.exact ? pathname === item.href : isRouteActive(pathname, item.href);
     const showLabel = !collapsed || mobileOpen;
 
     const link = (

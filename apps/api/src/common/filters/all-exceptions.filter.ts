@@ -68,6 +68,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
         status: this.statusForCode(exception.code),
         code: exception.code,
         message: exception.message,
+        ...(fieldDetails(exception) ? { details: fieldDetails(exception)! } : {}),
       };
     }
 
@@ -251,6 +252,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       case ERROR_CODES.SALE_ALREADY_VOIDED:
       case ERROR_CODES.SALE_ALREADY_RETURNED:
       case ERROR_CODES.CANNOT_RETURN_A_RETURN:
+      case ERROR_CODES.EINVOICE_ALREADY_SENT:
       case ERROR_CODES.PRICE_CHANGED:
       case ERROR_CODES.QUOTE_INVALID_STATUS:
       case ERROR_CODES.QUOTE_EXPIRED:
@@ -336,4 +338,19 @@ function findPostgresError(
   }
 
   return candidate.cause ? findPostgresError(candidate.cause, depth + 1) : null;
+}
+
+/**
+ * `{ fields: { "<path>": ["<message>"] } }` on an AppError — a service
+ * reporting which field is wrong, in the same shape a schema failure has.
+ * Anything else in `details` is server context and stays server-side.
+ */
+function fieldDetails(error: AppError): Record<string, string[]> | null {
+  const fields = error.details?.["fields"];
+  if (!fields || typeof fields !== "object") return null;
+  const out: Record<string, string[]> = {};
+  for (const [path, messages] of Object.entries(fields as Record<string, unknown>)) {
+    if (Array.isArray(messages) && messages.every((m) => typeof m === "string")) out[path] = messages as string[];
+  }
+  return Object.keys(out).length > 0 ? out : null;
 }

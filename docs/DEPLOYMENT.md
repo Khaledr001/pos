@@ -363,6 +363,23 @@ SMTP is set), never marked sent. `MAIL_DRIVER=smtp` without `SMTP_HOST` or
 
 ---
 
+## E-invoicing (UAE)
+
+The e-invoice module needs one secret and, to leave the sandbox, a provider.
+See [EINVOICING.md](EINVOICING.md) for the regime, the document lifecycle and
+the provider contract.
+
+| Variable | Meaning |
+| --- | --- |
+| `APP_ENCRYPTION_KEY` | 32 bytes (`openssl rand -hex 32`) that encrypt stored provider credentials. **Required in production** for any tenant that connects a provider: unset, saving credentials is refused. Keep it with the other secrets and back it up with them — losing or changing it makes stored credentials unreadable, and tenants re-enter them. |
+| `EINVOICE_GATEWAY_ALLOW_PRIVATE` | Development only: lets the gateway driver call a mock provider on a private address. Ignored in production. |
+
+The queue sweep runs inside the API process (every 30 seconds, safe to run on
+several instances). Make sure the public API URL is reachable by the provider:
+status callbacks arrive at `POST /api/v1/einvoice/callback/<token>`.
+
+---
+
 ## Troubleshooting
 
 **502 from nginx.** PM2 is down or still booting.

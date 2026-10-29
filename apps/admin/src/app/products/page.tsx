@@ -35,7 +35,17 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectField,
 } from "@/components/ui/select";
+import {
+  TAX_CATEGORIES,
+  TAX_CATEGORY_LABELS,
+  TAX_EXEMPTION_CODES,
+  TAX_EXEMPTION_LABELS,
+  taxCategoryMatchesRate,
+  type TaxCategory,
+  type TaxExemptionCode,
+} from "@devsfleet/shared-types";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -73,6 +83,9 @@ interface Product {
   unit?: { name: string };
   category?: { name: string } | null;
   taxRate?: number;
+  /** VAT category for e-invoicing. Absent on older payloads — treated as standard-rated. */
+  taxCategory?: TaxCategory;
+  taxExemptionCode?: TaxExemptionCode | null;
   variants?: ProductVariant[];
   images?: ProductImage[];
 }
@@ -988,6 +1001,9 @@ function EditProductDialog({
   const [fCategoryId, setFCategoryId] = useState("");
   const [fBrandId, setFBrandId] = useState("");
   const [fTaxRate, setFTaxRate] = useState("");
+  const [fTaxCategory, setFTaxCategory] = useState<TaxCategory>("S");
+  const [fExemption, setFExemption] = useState<TaxExemptionCode | "">("");
+  const defaultTaxRate = useTenantSettings().tax.defaultRate;
   const [fIsActive, setFIsActive] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1016,13 +1032,40 @@ function EditProductDialog({
     setFCategoryId(product.categoryId ?? "");
     setFBrandId(product.brandId ?? "");
     setFTaxRate(product.taxRate !== undefined && product.taxRate !== null ? String(product.taxRate) : "");
+    setFTaxCategory(product.taxCategory ?? "S");
+    setFExemption(product.taxExemptionCode ?? "");
     setFIsActive(product.isActive);
     void fetchImages(product.id);
   }, [product, fetchImages]);
 
+  /**
+   * A rate alone cannot say whether a 0% product is zero-rated or exempt, so
+   * the category is stored beside it — and the two must agree. Blank rate means
+   * "inherit the business default", which is a positive rate, so any category
+   * other than S needs an explicit 0 here.
+   */
+  const rateBlank = fTaxRate.trim() === "";
+  const effectiveRate = rateBlank ? defaultTaxRate : Number(fTaxRate);
+  const categoryProblem: string | null = !Number.isFinite(effectiveRate)
+    ? null
+    : fTaxCategory === "S"
+      ? taxCategoryMatchesRate("S", effectiveRate)
+        ? null
+        : "Standard-rated products need a tax rate above 0%."
+      : rateBlank
+        ? `${TAX_CATEGORY_LABELS[fTaxCategory]} products must have an explicit 0% tax rate. The blank rate uses the business default (${defaultTaxRate}%).`
+        : taxCategoryMatchesRate(fTaxCategory, effectiveRate)
+          ? null
+          : `${TAX_CATEGORY_LABELS[fTaxCategory]} products must have a 0% tax rate.`;
+  const exemptionMissing = fTaxCategory === "E" && fExemption === "";
+
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     if (!product) return;
+    if (categoryProblem) {
+      setError(categoryProblem);
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -1034,6 +1077,8 @@ function EditProductDialog({
           categoryId: fCategoryId || null,
           brandId: fBrandId || null,
           taxRate: fTaxRate ? Number(fTaxRate) : undefined,
+          taxCategory: fTaxCategory,
+          taxExemptionCode: fTaxCategory === "E" && fExemption ? fExemption : null,
           isActive: fIsActive,
         },
         { accessToken },
@@ -1175,7 +1220,53 @@ function EditProductDialog({
                   className="font-mono"
                 />
               </div>
+              <div>
+                <label htmlFor="product-tax-category" className="block text-xs font-medium text-foreground mb-1.5">VAT category</label>
+                <SelectField
+                  id="product-tax-category"
+                  size="sm"
+                  label="VAT category"
+                  value={fTaxCategory}
+                  onValueChange={(v) => {
+                    setFTaxCategory(v as TaxCategory);
+                    if (v !== "E") setFExemption("");
+                  }}
+                  options={TAX_CATEGORIES.map((c) => ({ value: c, label: `${c} — ${TAX_CATEGORY_LABELS[c]}` }))}
+                />
+              </div>
+              {fTaxCategory === "E" && (
+                <div>
+                  <label htmlFor="product-exemption" className="block text-xs font-medium text-foreground mb-1.5">Exemption reason</label>
+                  <SelectField
+                    id="product-exemption"
+                    size="sm"
+                    label="Exemption reason"
+                    placeholder="— Choose a reason —"
+                    value={fExemption}
+                    onValueChange={(v) => setFExemption(v as TaxExemptionCode | "")}
+                    options={TAX_EXEMPTION_CODES.map((c) => ({ value: c, label: `${c} — ${TAX_EXEMPTION_LABELS[c]}` }))}
+                  />
+                </div>
+              )}
             </div>
+            {categoryProblem && (
+              <div role="alert" className="flex flex-wrap items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-2 text-[11px] text-destructive">
+                <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                <span className="min-w-0 flex-1">{categoryProblem}</span>
+                {fTaxCategory !== "S" && (
+                  <button type="button" onClick={() => setFTaxRate("0")} className="cursor-pointer underline">Set rate to 0%</button>
+                )}
+              </div>
+            )}
+            {!categoryProblem && exemptionMissing && (
+              <p className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-[11px] text-amber-700 dark:text-amber-400">
+                <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                Exempt products should name a reason — the e-invoice asks for it.
+              </p>
+            )}
+            <p className="text-[11px] text-muted-foreground">
+              VAT category tells the tax authority why a product is taxed (or not). Standard = taxed at the rate above; Zero-rated, Exempt and Out of scope are 0%. Leave as Standard for ordinary goods.
+            </p>
             <label className="flex items-center gap-2 text-xs font-medium text-foreground">
               <input
                 type="checkbox"
@@ -1256,7 +1347,7 @@ function EditProductDialog({
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={submitting}>
+            <Button type="submit" disabled={submitting || !!categoryProblem}>
               {submitting ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
@@ -1435,6 +1526,10 @@ function ProductDetailDrawer({
                   <StatTile label="Brand" value={brandLabel || "—"} />
                   <StatTile label="Unit of Measure" value={unitAbbr || "—"} />
                   <StatTile label="Tax Rate" value={full.taxRate != null ? `${full.taxRate}%` : "—"} mono />
+                  <StatTile
+                    label="VAT Category"
+                    value={full.taxCategory ? `${full.taxCategory} — ${TAX_CATEGORY_LABELS[full.taxCategory]}` : "S — Standard rate"}
+                  />
                 </div>
               </Reveal>
 

@@ -36,3 +36,19 @@ describe("storefront environment", () => {
     expect(() => validateEnv({ ...base, NODE_ENV: "production", STOREFRONT_DEV_PAYMENTS: "true" })).toThrow(/STOREFRONT_DEV_PAYMENTS/);
   });
 });
+
+
+describe("e-invoicing environment", () => {
+  it("treats a blank key copied from .env.example as not set", () => {
+    const env = validateEnv({ ...base, APP_ENCRYPTION_KEY: "", EINVOICE_GATEWAY_ALLOW_PRIVATE: "" });
+    expect(env.APP_ENCRYPTION_KEY).toBeUndefined();
+    expect(env.EINVOICE_GATEWAY_ALLOW_PRIVATE).toBe(false);
+  });
+
+  it("accepts a 32-byte key as hex or base64 and stops boot on a malformed one", () => {
+    const hex = "ab".repeat(32);
+    expect(validateEnv({ ...base, APP_ENCRYPTION_KEY: hex }).APP_ENCRYPTION_KEY).toBe(hex);
+    expect(validateEnv({ ...base, APP_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64") }).APP_ENCRYPTION_KEY).toBeDefined();
+    expect(() => validateEnv({ ...base, APP_ENCRYPTION_KEY: "x".repeat(40) })).toThrow(/32 bytes/);
+  });
+});

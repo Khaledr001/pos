@@ -1,4 +1,13 @@
 import { renderTaxDocument, type TaxDocumentInput } from "@devsfleet/pdf-documents";
+import {
+  CREDIT_NOTE_REASON_LABELS,
+  EINVOICE_STATUS_LABELS,
+  TAX_EXEMPTION_LABELS,
+  type CreditNoteReason,
+  type EinvoiceStatus,
+  type TaxCategory,
+  type TaxExemptionCode,
+} from "@devsfleet/shared-types";
 
 /**
  * A sale as an A4 bilingual tax invoice.
@@ -26,6 +35,9 @@ export interface InvoicePdfLine {
   lineSubtotal: string;
   taxAmount: string;
   total: string;
+  /** Snapshotted on the line. Absent on a line written before categories existed = standard-rated. */
+  taxCategory?: TaxCategory;
+  taxExemptionCode?: TaxExemptionCode | null;
 }
 
 export interface InvoicePdfInput {
@@ -61,11 +73,29 @@ export interface InvoicePdfInput {
   /** A voided sale still has a downloadable document — stamped, never hidden. */
   voided: boolean;
   notes: string | null;
+  /**
+   * `credit_note` for a return: its own title, number and reference to the
+   * invoice it corrects. Absent = an ordinary invoice.
+   */
+  documentType?: "invoice" | "credit_note";
+  creditNote?: {
+    againstNumber: string;
+    againstDate: Date | null;
+    reason: CreditNoteReason | null;
+    note: string | null;
+  };
+  /** The document's own exchange rate to the books' currency; with a currency that differs from `baseCurrency` it makes the VAT-in-AED line appear. */
+  exchangeRate?: string;
+  baseCurrency?: string;
+  /** The e-invoice this document was reported as, when there is one. */
+  einvoice?: { uuid: string; status: EinvoiceStatus } | null;
 }
 
-export function renderInvoicePdf(input: InvoicePdfInput): Promise<Buffer> {
-  const document: TaxDocumentInput = {
-    kind: "invoice",
+/** The sale (or credit note) as the shared tax-document layout takes it. Pure, so the mapping is testable. */
+export function toTaxDocument(input: InvoicePdfInput): TaxDocumentInput {
+  const isCreditNote = input.documentType === "credit_note";
+  return {
+    kind: isCreditNote ? "credit_note" : "invoice",
     business: input.business,
     branchName: input.branchName,
     documentNumber: input.saleNumber,
@@ -84,6 +114,8 @@ export function renderInvoicePdf(input: InvoicePdfInput): Promise<Buffer> {
       taxAmount: line.taxAmount,
       taxPercent: line.taxPercent,
       total: line.total,
+      ...(line.taxCategory ? { taxCategory: line.taxCategory } : {}),
+      ...(line.taxCategory === "E" && line.taxExemptionCode ? { taxCategoryNote: TAX_EXEMPTION_LABELS[line.taxExemptionCode] } : {}),
     })),
     subtotal: input.subtotal,
     discountAmount: input.discountAmount,
@@ -92,7 +124,24 @@ export function renderInvoicePdf(input: InvoicePdfInput): Promise<Buffer> {
     dueAmount: input.dueAmount,
     voided: input.voided,
     notes: input.notes,
+    ...(isCreditNote && input.creditNote
+      ? {
+          creditNote: {
+            againstNumber: input.creditNote.againstNumber,
+            againstDate: input.creditNote.againstDate,
+            reasonLabel: input.creditNote.reason ? CREDIT_NOTE_REASON_LABELS[input.creditNote.reason] : null,
+            // A legacy note that merely repeats the reason adds nothing.
+            note: input.creditNote.note,
+          },
+        }
+      : {}),
+    ...(input.baseCurrency && input.exchangeRate && input.baseCurrency !== input.currency
+      ? { foreign: { baseCurrency: input.baseCurrency, exchangeRate: input.exchangeRate } }
+      : {}),
+    ...(input.einvoice ? { einvoice: { uuid: input.einvoice.uuid, statusLabel: EINVOICE_STATUS_LABELS[input.einvoice.status] } } : {}),
   };
+}
 
-  return renderTaxDocument(document);
+export function renderInvoicePdf(input: InvoicePdfInput): Promise<Buffer> {
+  return renderTaxDocument(toTaxDocument(input));
 }

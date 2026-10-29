@@ -18,12 +18,20 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
+import { SelectField } from "@/components/ui/select";
+import { DEFAULT_UNIT_CODE, UNIT_CODE_PRESETS } from "@devsfleet/shared-types";
+
+/** Sentinel for "a code that is not in the preset list". */
+const OTHER_CODE = "__other";
+const PRESET_CODES: readonly string[] = UNIT_CODE_PRESETS.map((u) => u.code);
 
 interface Unit {
   id: string;
   name: string;
   abbreviation: string;
   allowsFractions: boolean;
+  /** UN/ECE Recommendation 20 code the e-invoice sends. Absent on older payloads. */
+  unitCode?: string;
 }
 
 export default function UnitsPage() {
@@ -42,6 +50,11 @@ export default function UnitsPage() {
   const [fName, setFName] = useState("");
   const [fAbbreviation, setFAbbreviation] = useState("");
   const [fAllowsFractions, setFAllowsFractions] = useState(false);
+  const [fCodeChoice, setFCodeChoice] = useState<string>(DEFAULT_UNIT_CODE);
+  const [fCustomCode, setFCustomCode] = useState("");
+  /** The code to send: the preset, or the typed one when "Other" is chosen. */
+  const fUnitCode = (fCodeChoice === OTHER_CODE ? fCustomCode : fCodeChoice).trim().toUpperCase();
+  const unitCodeValid = /^[A-Z0-9]{2,3}$/.test(fUnitCode);
 
   const fetchUnits = useCallback(async () => {
     setLoading(true);
@@ -66,6 +79,8 @@ export default function UnitsPage() {
     setFName("");
     setFAbbreviation("");
     setFAllowsFractions(false);
+    setFCodeChoice(DEFAULT_UNIT_CODE);
+    setFCustomCode("");
     setActionError(null);
   }
 
@@ -75,6 +90,9 @@ export default function UnitsPage() {
     setFName(unit.name);
     setFAbbreviation(unit.abbreviation);
     setFAllowsFractions(unit.allowsFractions);
+    const code = unit.unitCode ?? DEFAULT_UNIT_CODE;
+    setFCodeChoice(PRESET_CODES.includes(code) ? code : OTHER_CODE);
+    setFCustomCode(PRESET_CODES.includes(code) ? "" : code);
     setActionError(null);
   }
 
@@ -85,6 +103,10 @@ export default function UnitsPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!unitCodeValid) {
+      setActionError("The unit code is 2–3 letters or digits, e.g. C62, MTR, KGM.");
+      return;
+    }
     setSubmitting(true);
     setActionError(null);
 
@@ -93,14 +115,14 @@ export default function UnitsPage() {
         // `allowsFractions` can't change once set — see LookupsService.updateUnit.
         await api.patch(
           `/units/${editing.id}`,
-          { name: fName, abbreviation: fAbbreviation },
+          { name: fName, abbreviation: fAbbreviation, unitCode: fUnitCode },
           { accessToken: tokens?.accessToken },
         );
         setActionSuccess(`"${fName}" updated.`);
       } else {
         await api.post(
           "/units",
-          { name: fName, abbreviation: fAbbreviation, allowsFractions: fAllowsFractions },
+          { name: fName, abbreviation: fAbbreviation, allowsFractions: fAllowsFractions, unitCode: fUnitCode },
           { accessToken: tokens?.accessToken },
         );
         setActionSuccess(`"${fName}" created.`);
@@ -196,6 +218,7 @@ export default function UnitsPage() {
             subtitle={<span className="font-mono uppercase">{unit.abbreviation}</span>}
             fields={[
               { label: "Abbreviation", value: <span className="font-mono uppercase">{unit.abbreviation}</span> },
+              { label: "E-invoice code", value: <span className="font-mono">{unit.unitCode ?? DEFAULT_UNIT_CODE}</span> },
               {
                 label: "Fractional qty",
                 value: (
@@ -226,16 +249,17 @@ export default function UnitsPage() {
               <tr>
                 <SortableTh column="name" sortBy="name" sortOrder={nameOrder} onSort={() => setNameOrder((o) => (o === "asc" ? "desc" : "asc"))}>Name</SortableTh>
                 <Th>Abbreviation</Th>
+                <Th>E-invoice code</Th>
                 <Th align="center">Fractional Qty</Th>
                 <Th align="right">Actions</Th>
               </tr>
             </TableHead>
             <TableBody
-              columns={4}
+              columns={5}
               loading={loading && units.length === 0}
               empty={
                 <TableEmpty
-                  columns={4}
+                  columns={5}
                   icon={Ruler}
                   title="No units yet"
                   action={
@@ -250,6 +274,7 @@ export default function UnitsPage() {
                 <tr key={unit.id} className="hover:bg-secondary/30 transition-colors">
                   <td className="px-4 py-3.5 font-medium text-foreground">{unit.name}</td>
                   <td className="px-4 py-3.5 font-mono text-muted-foreground uppercase">{unit.abbreviation}</td>
+                  <td className="px-4 py-3.5 font-mono text-muted-foreground">{unit.unitCode ?? DEFAULT_UNIT_CODE}</td>
                   <td className="px-4 py-3.5 text-center">
                     <Badge variant={unit.allowsFractions ? "success" : "secondary"}>
                       {unit.allowsFractions ? "Yes" : "Whole only"}
@@ -321,6 +346,33 @@ export default function UnitsPage() {
                 placeholder="e.g. roll"
                 className="font-mono"
               />
+            </div>
+            <div>
+              <label htmlFor="unit-code" className="block text-xs font-medium text-foreground mb-1.5">E-invoice unit code</label>
+              <SelectField
+                id="unit-code"
+                size="sm"
+                label="E-invoice unit code"
+                value={fCodeChoice}
+                onValueChange={setFCodeChoice}
+                options={[
+                  ...UNIT_CODE_PRESETS.map((u) => ({ value: u.code, label: `${u.code} — ${u.label}` })),
+                  { value: OTHER_CODE, label: "Other…" },
+                ]}
+              />
+              {fCodeChoice === OTHER_CODE && (
+                <Input
+                  aria-label="Unit code"
+                  maxLength={3}
+                  value={fCustomCode}
+                  onChange={(e) => setFCustomCode(e.target.value.toUpperCase())}
+                  placeholder="e.g. MTR"
+                  className="mt-2 font-mono uppercase"
+                />
+              )}
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                The UN/ECE code sent on electronic invoices for this unit (C62 = each). Pick the nearest match — it is what the buyer&rsquo;s system reads.
+              </p>
             </div>
             <div>
               <label className={cn("flex items-center gap-2 text-xs font-medium", editing ? "text-muted-foreground" : "text-foreground")}>

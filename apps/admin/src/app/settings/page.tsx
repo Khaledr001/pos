@@ -10,6 +10,8 @@ import { invalidateTenantSettings } from "@/lib/tenant-settings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import Link from "next/link";
+import { isValidTrn } from "@/lib/einvoice";
 
 interface TenantResponse {
   id: string;
@@ -176,7 +178,12 @@ export default function SettingsPage() {
                   <label className="block text-xs font-medium text-foreground mb-1.5">
                     Tax Registration Number (TRN)
                   </label>
-                  <Input value={trn} onChange={(e) => setTrn(e.target.value)} className="font-mono" />
+                  <Input value={trn} onChange={(e) => setTrn(e.target.value)} className="font-mono" aria-invalid={trn.trim() !== "" && !isValidTrn(trn)} />
+                  <p className={trn.trim() !== "" && !isValidTrn(trn) ? "mt-1 text-[11px] text-destructive" : "mt-1 text-[11px] text-muted-foreground"}>
+                    {trn.trim() !== "" && !isValidTrn(trn)
+                      ? "A UAE TRN is 15 digits starting with 100."
+                      : <>Needed for e-invoicing — set it up under <Link href="/settings/einvoicing" className="text-primary hover:underline">E-invoicing</Link>.</>}
+                  </p>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-foreground mb-1.5">Phone</label>

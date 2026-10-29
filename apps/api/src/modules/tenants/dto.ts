@@ -55,10 +55,30 @@ export type RegisterTenantDto = z.infer<typeof RegisterTenantSchema>;
 
 export const UpdateTenantSettingsSchema = z.object({
   legalName: z.string().trim().max(255).optional(),
-  trn: z.string().trim().max(20).optional(),
+  /** Checked against the business's region in the service: a UAE TRN is 15 digits starting 100. Blank clears it. */
+  trn: z.string().trim().max(24).optional(),
   phone: z.string().trim().max(20).optional(),
   email: z.string().trim().email().max(255).optional(),
   addressLines: z.array(z.string().max(255)).max(6).optional(),
+  /**
+   * The registered address, structured: what an e-invoice's seller block is
+   * built from, where `addressLines` is only what prints on paper. For the UAE
+   * `subdivision` is the emirate (AUH, DXB, SHJ, UAQ, FUJ, AJM, RAK).
+   */
+  legalAddress: z
+    .object({
+      line1: z.string().trim().min(1).max(200),
+      line2: z.string().trim().max(200).optional(),
+      city: z.string().trim().min(1).max(100),
+      subdivision: z.string().trim().min(1).max(20),
+      postalCode: z.string().trim().max(20).optional(),
+      countryCode: z
+        .string()
+        .trim()
+        .toUpperCase()
+        .regex(/^[A-Z]{2}$/, "Use a two-letter country code, like AE"),
+    })
+    .optional(),
   logoUrl: z.string().url().max(500).optional(),
 
   tax: z

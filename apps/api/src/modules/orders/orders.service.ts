@@ -6,12 +6,15 @@ import {
   Money,
   calculateDocument,
   type DocumentTotals,
+  categoryForResolvedRate,
   formatDocumentNumber,
+  lineTaxFor,
   sequenceKey,
 } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
 import { assertBranchInScope, branchFilter, requireBranchId } from "../../common/context/branch-scope.js";
 import { RequestContext } from "../../common/context/request-context.js";
+import { loadUnitCodes } from "../../common/tax/unit-codes.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import { StockService } from "../inventory/stock.service.js";
 import { PriceResolverService } from "../pricing/price-resolver.service.js";
@@ -102,9 +105,13 @@ export class OrdersService {
         return {
           ...line,
           unitPrice,
-          taxPercent: variants.get(line.variantId)!.taxRate ?? String(settings.tax.defaultRate),
+          ...lineTaxFor(variants.get(line.variantId)!, settings.tax.defaultRate),
         };
       });
+      const unitCodeFor = await loadUnitCodes(
+        tx,
+        dto.lines.map((line) => variants.get(line.variantId)!.unitId),
+      );
 
       const totals = calculateDocument({
         taxMode: settings.tax.mode,
@@ -117,6 +124,7 @@ export class OrdersService {
           unitPrice: line.unitPrice,
           discountPercent: String(line.discountPercent ?? 0),
           taxPercent: line.taxPercent,
+          taxCategory: line.taxCategory,
         })),
       });
 
@@ -168,6 +176,9 @@ export class OrdersService {
             discountPercent: String(line.discountPercent ?? 0),
             discountAmount: Money.toDecimalString(computed.discount, 4),
             taxPercent: line.taxPercent,
+            taxCategory: line.taxCategory,
+            taxExemptionCode: line.taxExemptionCode,
+            unitCode: unitCodeFor(variant.unitId),
             taxAmount: Money.toDecimalString(computed.tax, 4),
             lineSubtotal: Money.toDecimalString(computed.net, 4),
             total: Money.toDecimalString(computed.total, 4),
@@ -431,14 +442,23 @@ export class OrdersService {
       input.lines.map((line) => line.variantId),
     );
 
+    // The channel priced each line through its own resolver, so the RATE is
+    // decided; the category it is reported under comes from the product.
+    const lineTax = input.lines.map((line) => categoryForResolvedRate(variants.get(line.variantId)!, line.taxPercent));
+    const unitCodeFor = await loadUnitCodes(
+      tx,
+      input.lines.map((line) => line.unitId ?? variants.get(line.variantId)!.unitId),
+    );
+
     const totals = calculateDocument({
       taxMode: settings.tax.mode,
       decimals: settings.currency.decimals,
-      lines: input.lines.map((line) => ({
+      lines: input.lines.map((line, index) => ({
         quantity: line.quantity,
         unitPrice: line.unitPrice,
         discountPercent: line.discountPercent,
         taxPercent: line.taxPercent,
+        taxCategory: lineTax[index]!.taxCategory,
       })),
     });
 
@@ -482,6 +502,9 @@ export class OrdersService {
           discountPercent: line.discountPercent,
           discountAmount: Money.toDecimalString(computed.discount, 4),
           taxPercent: line.taxPercent,
+          taxCategory: lineTax[index]!.taxCategory,
+          taxExemptionCode: lineTax[index]!.taxExemptionCode,
+          unitCode: unitCodeFor(line.unitId ?? variant.unitId),
           taxAmount: Money.toDecimalString(computed.tax, 4),
           lineSubtotal: Money.toDecimalString(computed.net, 4),
           total: Money.toDecimalString(computed.total, 4),
@@ -583,6 +606,9 @@ export class OrdersService {
         variantName: schema.productVariants.variantName,
         productName: schema.products.name,
         taxRate: schema.products.taxRate,
+        taxCategory: schema.products.taxCategory,
+        taxExemptionCode: schema.products.taxExemptionCode,
+        unitId: schema.products.unitId,
       })
       .from(schema.productVariants)
       .innerJoin(schema.products, eq(schema.productVariants.productId, schema.products.id))

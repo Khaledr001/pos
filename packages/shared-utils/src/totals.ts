@@ -1,4 +1,4 @@
-import type { TaxMode } from "@devsfleet/shared-types";
+import { defaultTaxCategory, TAX_CATEGORIES, type TaxCategory, type TaxMode } from "@devsfleet/shared-types";
 import {
   type Minor4,
   add,
@@ -34,6 +34,12 @@ export interface LineInput {
   discountAmount?: MoneyInput;
   /** 0-100. Defaults to the tenant's configured rate; pass 0 for exempt lines. */
   taxPercent?: MoneyInput;
+  /**
+   * VAT category (S standard, Z zero-rated, E exempt, O out of scope). Absent =
+   * derived from the rate: taxed is S, untaxed is Z. It does not change the
+   * arithmetic — only how the line is reported in the tax breakdown.
+   */
+  taxCategory?: TaxCategory;
 }
 
 export interface LineTotals {
@@ -57,14 +63,25 @@ export interface DocumentInput {
   decimals?: number;
 }
 
+export interface TaxBreakdownEntry {
+  category: TaxCategory;
+  rate: string;
+  base: Minor4;
+  tax: Minor4;
+}
+
 export interface DocumentTotals {
   lines: LineTotals[];
   subtotal: Minor4;
   discountAmount: Minor4;
   taxAmount: Minor4;
   total: Minor4;
-  /** Tax broken out by rate — required on a UAE tax invoice with mixed rates. */
-  taxBreakdown: Array<{ rate: string; base: Minor4; tax: Minor4 }>;
+  /**
+   * Tax broken out by category and rate — required on a UAE tax invoice with
+   * mixed treatments. Zero-rated and exempt lines stay separate even though
+   * both are 0%.
+   */
+  taxBreakdown: TaxBreakdownEntry[];
 }
 
 const HUNDRED = 100n;
@@ -178,6 +195,8 @@ export function calculateDocument(input: DocumentInput): DocumentTotals {
     });
   }
 
+  finalLines = settleTaxByGroup(lines, finalLines, taxMode, decimals);
+
   const subtotal = add(...finalLines.map((l) => l.net));
   const taxAmount = add(...finalLines.map((l) => l.tax));
   const lineDiscounts = add(...finalLines.map((l) => l.discount));
@@ -192,25 +211,124 @@ export function calculateDocument(input: DocumentInput): DocumentTotals {
   };
 }
 
-function buildTaxBreakdown(
+/**
+ * Re-settle VAT per (category, rate) group instead of per line.
+ *
+ * Each line was rounded on its own by `calculateLine`, which is right for one
+ * line but drifts on a long invoice: 100 lines of 0.30 at 5% round to 0.02 each,
+ * so the document says 2.00 VAT where 5% of the 30.00 taxable amount is 1.50.
+ * A tax invoice's VAT per rate must agree with rate x taxable amount (the UAE
+ * e-invoice rules allow only 0.02 of difference), so the group's VAT is rounded
+ * ONCE from the group's taxable amount and then spread back over its lines
+ * (largest remainder) so the lines still add up to it to the last fil.
+ *
+ * Exclusive: line nets stay as they are; each line's tax is its share.
+ * Inclusive: the customer's price for each line is what it is — the line total
+ * stays exactly the discounted shelf price — and the group's tax is extracted
+ * from the group's gross in one division, then shared out the same way.
+ *
+ * A group with a single line, or no tax, is already exact and left alone.
+ */
+function settleTaxByGroup(
   inputs: LineInput[],
   totals: LineTotals[],
-): Array<{ rate: string; base: Minor4; tax: Minor4 }> {
-  const byRate = new Map<string, { base: Minor4; tax: Minor4 }>();
+  taxMode: TaxMode,
+  decimals: number,
+): LineTotals[] {
+  const groups = new Map<string, number[]>();
+  inputs.forEach((line, i) => {
+    const rate = toMinor(line.taxPercent ?? 0);
+    if (rate === 0n) return;
+    const category = line.taxCategory ?? defaultTaxCategory(String(line.taxPercent ?? 0));
+    const key = `${category}|${rate}`;
+    const members = groups.get(key);
+    if (members) members.push(i);
+    else groups.set(key, [i]);
+  });
+
+  const result = totals.slice();
+  const unit = 10n ** BigInt(4 - decimals);
+
+  for (const [key, members] of groups) {
+    if (members.length < 2) continue;
+    const rate = BigInt(key.split("|")[1] as string);
+
+    if (taxMode === "inclusive") {
+      const gross = members.map((i) => (totals[i] as LineTotals).total);
+      const groupGross = add(...gross);
+      const exactNet = divideRoundHalfUp(groupGross * HUNDRED * 10_000n, HUNDRED * 10_000n + rate);
+      const groupTax = groupGross - roundTo(exactNet, decimals);
+      const shares = spreadRounded(groupTax, gross, unit);
+      members.forEach((lineIndex, k) => {
+        const line = totals[lineIndex] as LineTotals;
+        const tax = shares[k] as Minor4;
+        result[lineIndex] = { ...line, tax, net: line.total - tax };
+      });
+    } else {
+      const nets = members.map((i) => (totals[i] as LineTotals).net);
+      const groupTax = roundTo(percentOf(add(...nets), rate), decimals);
+      const shares = spreadRounded(groupTax, nets, unit);
+      members.forEach((lineIndex, k) => {
+        const line = totals[lineIndex] as LineTotals;
+        const tax = shares[k] as Minor4;
+        result[lineIndex] = { ...line, tax, total: line.net + tax };
+      });
+    }
+  }
+  return result;
+}
+
+/**
+ * Split `amount` over `weights` in whole multiples of `unit`, by largest
+ * remainder, so the parts sum to the amount exactly. Signs are handled on
+ * magnitudes: a credit note's negative weights and amount split like a positive
+ * one. All-zero weights give the first line everything.
+ */
+function spreadRounded(amount: Minor4, weights: Minor4[], unit: Minor4): Minor4[] {
+  const sign = amount < 0n ? -1n : 1n;
+  const magnitude = amount < 0n ? -amount : amount;
+  const absWeights = weights.map((w) => (w < 0n ? -w : w));
+  const totalWeight = absWeights.reduce((a, b) => a + b, 0n);
+  if (totalWeight === 0n) return weights.map((_, i) => (i === 0 ? amount : 0n));
+
+  const units = magnitude / unit;
+  const parts = absWeights.map((w) => {
+    const exact = units * w;
+    return { whole: exact / totalWeight, remainder: exact % totalWeight };
+  });
+  let left = units - parts.reduce((a, p) => a + p.whole, 0n);
+  const order = parts.map((_, i) => i).sort((a, b) => {
+    const diff = (parts[b] as { remainder: bigint }).remainder - (parts[a] as { remainder: bigint }).remainder;
+    return diff > 0n ? 1 : diff < 0n ? -1 : a - b;
+  });
+  for (const i of order) {
+    if (left === 0n) break;
+    (parts[i] as { whole: bigint }).whole += 1n;
+    left -= 1n;
+  }
+  return parts.map((p) => sign * p.whole * unit);
+}
+
+function buildTaxBreakdown(inputs: LineInput[], totals: LineTotals[]): TaxBreakdownEntry[] {
+  const groups = new Map<string, TaxBreakdownEntry>();
 
   inputs.forEach((line, i) => {
     const totalsForLine = totals[i];
     if (!totalsForLine) return;
 
     const rate = String(line.taxPercent ?? 0);
-    const existing = byRate.get(rate) ?? { base: 0n, tax: 0n };
-    byRate.set(rate, {
+    const category = line.taxCategory ?? defaultTaxCategory(rate);
+    // Keyed on the numeric rate so "5" and "5.0000" are one group, as they are one rate.
+    const key = `${category}|${toMinor(rate)}`;
+    const existing = groups.get(key) ?? { category, rate, base: 0n, tax: 0n };
+    groups.set(key, {
+      ...existing,
       base: existing.base + totalsForLine.net,
       tax: existing.tax + totalsForLine.tax,
     });
   });
 
-  return [...byRate.entries()]
-    .map(([rate, v]) => ({ rate, ...v }))
-    .sort((a, b) => Number(a.rate) - Number(b.rate));
+  return [...groups.values()].sort(
+    (a, b) => Number(a.rate) - Number(b.rate) || TAX_CATEGORIES.indexOf(a.category) - TAX_CATEGORIES.indexOf(b.category),
+  );
 }

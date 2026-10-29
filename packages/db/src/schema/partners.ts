@@ -32,6 +32,20 @@ export const customers = pgTable(
     /** UAE Tax Registration Number. Required on a tax invoice above the threshold. */
     trn: varchar({ length: 20 }),
     address: text(),
+    /**
+     * Structured address for e-invoicing, beside the free-text `address` above
+     * (which stays what prints on a receipt). All nullable: a till customer has none.
+     */
+    addressLine1: varchar({ length: 200 }),
+    addressLine2: varchar({ length: 200 }),
+    addressCity: varchar({ length: 100 }),
+    /** Emirate (AUH, DXB…) for the UAE; region elsewhere. */
+    addressSubdivision: varchar({ length: 20 }),
+    addressPostalCode: varchar({ length: 20 }),
+    addressCountry: varchar({ length: 2 }).notNull().default("AE"),
+    /** The buyer's Peppol address when it is not simply their TIN (scheme 0235). */
+    einvoiceScheme: varchar({ length: 4 }),
+    einvoiceEndpoint: varchar({ length: 100 }),
     type: varchar({ length: 20 }).$type<CustomerType>().notNull().default("retail"),
     /** Language for WhatsApp replies and printed documents. */
     locale: varchar({ length: 5 }).$type<Locale>().notNull().default("en"),

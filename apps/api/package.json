@@ -59,9 +59,11 @@
     "@types/passport-jwt": "^4.0.1",
     "@types/supertest": "^6.0.3",
     "pino-pretty": "^13.1.1",
+    "saxon-js": "^2.7.0",
     "supertest": "^7.1.4",
     "typescript": "^5.9.2",
     "unplugin-swc": "^1.5.7",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "xslt3": "^2.7.0"
   }
 }

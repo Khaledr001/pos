@@ -1,4 +1,10 @@
-import { normalizeBarcode } from "@devsfleet/shared-utils";
+import {
+  TAX_CATEGORIES,
+  TAX_EXEMPTION_CODES,
+  type TaxCategory,
+  type TaxExemptionCode,
+} from "@devsfleet/shared-types";
+import { AppError, normalizeBarcode, resolveProductTax } from "@devsfleet/shared-utils";
 
 /**
  * The canonical column headers this importer understands, matched
@@ -24,6 +30,8 @@ export const KNOWN_HEADERS = new Set([
   "purchaseprice",
   "minsellingprice",
   "taxrate",
+  "taxcategory",
+  "taxexemptioncode",
 ]);
 
 export interface ParsedProductRow {
@@ -40,7 +48,11 @@ export interface ParsedProductRow {
   sellingPrice: number;
   purchasePrice: number;
   minSellingPrice: number | null;
+  /** The rate the product is stored with: null = inherit the tenant's, 0 for any non-standard category. */
   taxRate: number | null;
+  /** S standard, Z zero-rated, E exempt, O out of scope. Omitted in the file = derived from the rate. */
+  taxCategory: TaxCategory;
+  taxExemptionCode: TaxExemptionCode | null;
   /**
    * Every column this importer does not recognise, keyed by its ORIGINAL
    * header text (not normalized) so it stays readable in the JSONB bag —
@@ -124,6 +136,29 @@ export function parseRow(headers: string[], values: unknown[], rowNumber: number
     }
   }
 
+  // Optional VAT columns: "Tax Category" (S/Z/E/O) and "Tax Exemption Code"
+  // (DL8.46.x, exempt products only). The same rules as the product form
+  // apply — the category and the rate must agree.
+  const taxCategoryRaw = get("taxcategory").toUpperCase();
+  if (taxCategoryRaw && !(TAX_CATEGORIES as readonly string[]).includes(taxCategoryRaw)) {
+    return { ok: false, rowNumber, reason: `${sku}: taxCategory must be one of ${TAX_CATEGORIES.join(", ")}` };
+  }
+  const exemptionRaw = get("taxexemptioncode").toUpperCase();
+  if (exemptionRaw && !(TAX_EXEMPTION_CODES as readonly string[]).includes(exemptionRaw)) {
+    return { ok: false, rowNumber, reason: `${sku}: taxExemptionCode must be one of ${TAX_EXEMPTION_CODES.join(", ")}` };
+  }
+  let tax;
+  try {
+    tax = resolveProductTax({
+      taxRate: taxRate ?? undefined,
+      taxCategory: (taxCategoryRaw || undefined) as TaxCategory | undefined,
+      taxExemptionCode: (exemptionRaw || undefined) as TaxExemptionCode | undefined,
+    });
+  } catch (error) {
+    if (error instanceof AppError) return { ok: false, rowNumber, reason: `${sku}: ${error.message}` };
+    throw error;
+  }
+
   const barcodeRaw = get("barcode");
   const barcode = barcodeRaw ? normalizeBarcode(barcodeRaw) : null;
 
@@ -150,7 +185,9 @@ export function parseRow(headers: string[], values: unknown[], rowNumber: number
       sellingPrice,
       purchasePrice,
       minSellingPrice,
-      taxRate,
+      taxRate: tax.taxRate === null ? null : Number(tax.taxRate),
+      taxCategory: tax.taxCategory,
+      taxExemptionCode: tax.taxExemptionCode,
       attributes,
     },
   };

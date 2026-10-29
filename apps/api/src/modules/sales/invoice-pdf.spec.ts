@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { renderInvoicePdf, type InvoicePdfInput } from "./invoice-pdf.js";
+import { renderInvoicePdf, toTaxDocument, type InvoicePdfInput } from "./invoice-pdf.js";
 
 /**
  * Same posture as quotation-pdf.spec.ts, and for the same reason: pdfkit's
@@ -133,6 +133,88 @@ describe("renderInvoicePdf", () => {
 
   it("handles an empty line list without throwing", async () => {
     const buffer = await renderInvoicePdf({ ...BASE, lines: [] });
+    expect(buffer.subarray(0, 5).toString("latin1")).toBe("%PDF-");
+  });
+});
+
+describe("toTaxDocument", () => {
+  it("an ordinary sale is a tax invoice with no credit-note, foreign-currency or e-invoice parts", () => {
+    const doc = toTaxDocument(BASE);
+    expect(doc.kind).toBe("invoice");
+    expect(doc.creditNote).toBeUndefined();
+    expect(doc.foreign).toBeUndefined();
+    expect(doc.einvoice).toBeUndefined();
+    expect(doc.lines[0]!.taxCategory).toBeUndefined();
+  });
+
+  it("a return is a credit note that names the invoice it corrects and says why in words", () => {
+    const doc = toTaxDocument({
+      ...BASE,
+      saleNumber: "CRN-SHJ-2026-000004",
+      documentType: "credit_note",
+      creditNote: {
+        againstNumber: "INV-SHJ-2026-000123",
+        againstDate: new Date("2026-01-10T08:00:00Z"),
+        reason: "DL8.61.1.D",
+        note: "Damaged in transit",
+      },
+    });
+    expect(doc.kind).toBe("credit_note");
+    expect(doc.documentNumber).toBe("CRN-SHJ-2026-000004");
+    expect(doc.creditNote).toEqual({
+      againstNumber: "INV-SHJ-2026-000123",
+      againstDate: new Date("2026-01-10T08:00:00Z"),
+      reasonLabel: "Goods or services returned",
+      note: "Damaged in transit",
+    });
+  });
+
+  it("a credit note record with no original found still renders as a credit note", () => {
+    const doc = toTaxDocument({ ...BASE, documentType: "credit_note" });
+    expect(doc.kind).toBe("credit_note");
+    expect(doc.creditNote).toBeUndefined();
+  });
+
+  it("carries each line's VAT category, and spells out an exemption reason in words", () => {
+    const doc = toTaxDocument({
+      ...BASE,
+      lines: [
+        { ...BASE.lines[0]!, taxCategory: "S" },
+        { ...BASE.lines[0]!, taxCategory: "Z", taxPercent: "0" },
+        { ...BASE.lines[0]!, taxCategory: "E", taxPercent: "0", taxExemptionCode: "DL8.46.3" },
+      ],
+    });
+    expect(doc.lines.map((l) => l.taxCategory)).toEqual(["S", "Z", "E"]);
+    expect(doc.lines[2]!.taxCategoryNote).toBe("Bare land");
+    expect(doc.lines[1]!.taxCategoryNote).toBeUndefined();
+  });
+
+  it("states VAT in the books' currency only when the document's currency differs", () => {
+    expect(toTaxDocument({ ...BASE, baseCurrency: "AED", exchangeRate: "1" }).foreign).toBeUndefined();
+    expect(toTaxDocument({ ...BASE, currency: "USD", baseCurrency: "AED", exchangeRate: "3.6725" }).foreign).toEqual({
+      baseCurrency: "AED",
+      exchangeRate: "3.6725",
+    });
+  });
+
+  it("labels the e-invoice status in words", () => {
+    const doc = toTaxDocument({ ...BASE, einvoice: { uuid: "0b2c1d2e-1111-4222-8333-444455556666", status: "delivered" } });
+    expect(doc.einvoice).toEqual({ uuid: "0b2c1d2e-1111-4222-8333-444455556666", statusLabel: "Delivered" });
+  });
+});
+
+describe("renderInvoicePdf — credit note", () => {
+  it("renders a credit note PDF with negative lines", async () => {
+    const buffer = await renderInvoicePdf({
+      ...BASE,
+      saleNumber: "CRN-SHJ-2026-000004",
+      documentType: "credit_note",
+      creditNote: { againstNumber: "INV-SHJ-2026-000123", againstDate: BASE.occurredAt, reason: "VD", note: null },
+      lines: [{ ...BASE.lines[0]!, quantity: "-30", lineSubtotal: "-82.50", taxAmount: "-4.13", total: "-86.63" }],
+      subtotal: "-82.50",
+      taxAmount: "-4.13",
+      total: "-86.63",
+    });
     expect(buffer.subarray(0, 5).toString("latin1")).toBe("%PDF-");
   });
 });

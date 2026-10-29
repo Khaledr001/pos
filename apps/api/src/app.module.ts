@@ -20,6 +20,7 @@ import { DatabaseModule } from "./database/database.module.js";
 import { AuthModule } from "./modules/auth/auth.module.js";
 import { BranchesModule } from "./modules/branches/branches.module.js";
 import { HealthModule } from "./modules/health/health.module.js";
+import { EinvoiceModule } from "./modules/einvoice/einvoice.module.js";
 import { NotificationsModule } from "./modules/notifications/notifications.module.js";
 import { AiModule } from "./modules/ai/ai.module.js";
 import { WhatsappModule } from "./modules/whatsapp/whatsapp.module.js";
@@ -175,6 +176,7 @@ import { StorefrontModule } from "./modules/storefront/storefront.module.js";
     DevicesModule,
     TransfersModule,
     NotificationsModule,
+    EinvoiceModule,
     AiModule,
     WhatsappModule,
     StorefrontModule,

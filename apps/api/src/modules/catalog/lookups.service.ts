@@ -1,10 +1,58 @@
 import { and, asc, count, eq, isNull, schema } from "@devsfleet/db";
 import type { Brand, Unit } from "@devsfleet/db";
+import { DEFAULT_UNIT_CODE } from "@devsfleet/shared-types";
 import { AppError, ERROR_CODES, slugify } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
 import { RequestContext } from "../../common/context/request-context.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import type { CreateBrandDto, CreateUnitDto, UpdateBrandDto, UpdateUnitDto } from "./dto.js";
+
+/**
+ * Unit abbreviations → the UN/ECE code the e-invoice sends for them.
+ *
+ * Packaging units (box, pack, roll) use the Recommendation 21 codes with their
+ * X prefix (XBX, XPK, XRO): the official PINT AE validation rejects the bare
+ * Rec 20 forms BX, PK and ROL. Every value here must be in UNIT_CODE_PRESETS
+ * (or be a 3-character upper-case code) — a spec asserts it.
+ */
+export const ABBREVIATION_UNIT_CODES: Readonly<Record<string, string>> = {
+  m: "MTR",
+  mtr: "MTR",
+  meter: "MTR",
+  metre: "MTR",
+  kg: "KGM",
+  kgs: "KGM",
+  g: "GRM",
+  gm: "GRM",
+  l: "LTR",
+  ltr: "LTR",
+  litre: "LTR",
+  liter: "LTR",
+  ml: "MLT",
+  box: "XBX",
+  bx: "XBX",
+  pack: "XPK",
+  pk: "XPK",
+  roll: "XRO",
+  rol: "XRO",
+  set: "SET",
+  pair: "PR",
+  pr: "PR",
+  sqm: "MTK",
+  m2: "MTK",
+  m3: "MTQ",
+  hr: "HUR",
+  hour: "HUR",
+};
+
+/**
+ * The UN/ECE code a unit most likely means, from what it is called.
+ * Only a starting point: the owner can set it explicitly, and an unrecognised
+ * abbreviation falls back to C62 ("one" — each / piece), which is always valid.
+ */
+export function inferUnitCode(abbreviation: string): string {
+  return ABBREVIATION_UNIT_CODES[abbreviation.trim().toLowerCase().replace(/\./g, "")] ?? DEFAULT_UNIT_CODE;
+}
 
 /**
  * Brands and units.
@@ -126,6 +174,7 @@ export class LookupsService {
           name: dto.name,
           abbreviation: dto.abbreviation,
           allowsFractions: dto.allowsFractions,
+          unitCode: dto.unitCode ?? inferUnitCode(dto.abbreviation),
         })
         .returning();
 
@@ -148,6 +197,7 @@ export class LookupsService {
         .set({
           ...(dto.name !== undefined ? { name: dto.name } : {}),
           ...(dto.abbreviation !== undefined ? { abbreviation: dto.abbreviation } : {}),
+          ...(dto.unitCode !== undefined ? { unitCode: dto.unitCode } : {}),
         })
         .where(eq(schema.units.id, id))
         .returning();

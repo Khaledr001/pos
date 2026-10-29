@@ -6,11 +6,13 @@ import {
   Money,
   calculateDocument,
   formatDocumentNumber,
+  lineTaxFor,
   sequenceKey,
 } from "@devsfleet/shared-utils";
 import { Injectable } from "@nestjs/common";
 import { assertBranchInScope, branchFilter, requireBranchId } from "../../common/context/branch-scope.js";
 import { RequestContext } from "../../common/context/request-context.js";
+import { loadUnitCodes } from "../../common/tax/unit-codes.js";
 import { containsPattern } from "../../common/db/list-query.js";
 import { TenantDatabase } from "../../database/tenant-database.service.js";
 import { OrdersService } from "../orders/orders.service.js";
@@ -82,9 +84,13 @@ export class QuotationsService {
         return {
           ...line,
           unitPrice: line.unitPrice ?? price.unitPrice,
-          taxPercent: variants.get(line.variantId)!.taxRate ?? String(settings.tax.defaultRate),
+          ...lineTaxFor(variants.get(line.variantId)!, settings.tax.defaultRate),
         };
       });
+      const unitCodeFor = await loadUnitCodes(
+        tx,
+        dto.lines.map((line) => variants.get(line.variantId)!.unitId),
+      );
 
       const totals = calculateDocument({
         lines: lines.map((line) => ({
@@ -92,6 +98,7 @@ export class QuotationsService {
           unitPrice: line.unitPrice,
           ...(line.discountPercent ? { discountPercent: line.discountPercent } : {}),
           taxPercent: line.taxPercent,
+          taxCategory: line.taxCategory,
         })),
         taxMode: settings.tax.mode,
         ...(dto.documentDiscountPercent
@@ -144,6 +151,9 @@ export class QuotationsService {
             discountPercent: String(line.discountPercent ?? 0),
             discountAmount: Money.toDecimalString(computed.discount, 4),
             taxPercent: line.taxPercent,
+            taxCategory: line.taxCategory,
+            taxExemptionCode: line.taxExemptionCode,
+            unitCode: unitCodeFor(variant.unitId),
             taxAmount: Money.toDecimalString(computed.tax, 4),
             lineSubtotal: Money.toDecimalString(computed.net, 4),
             total: Money.toDecimalString(computed.total, 4),
@@ -574,6 +584,9 @@ export class QuotationsService {
         variantName: schema.productVariants.variantName,
         productName: schema.products.name,
         taxRate: schema.products.taxRate,
+        taxCategory: schema.products.taxCategory,
+        taxExemptionCode: schema.products.taxExemptionCode,
+        unitId: schema.products.unitId,
       })
       .from(schema.productVariants)
       .innerJoin(schema.products, eq(schema.productVariants.productId, schema.products.id))

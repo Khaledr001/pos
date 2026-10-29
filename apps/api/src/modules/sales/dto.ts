@@ -103,7 +103,18 @@ export const CreateReturnSchema = z.object({
    * balance, with no cash or card movement at all.
    */
   refunds: z.array(RefundSchema).default([]),
+  /**
+   * Why the credit note is issued. A PINT AE reason code (DL8.61.1.D goods
+   * returned, DL8.61.1.A cancelled, DL8.61.1.C price changed, VD volume
+   * discount, DL8.61.1.E tax error, DL8.61.1.B tax treatment changed).
+   *
+   * Free text is still accepted — clients written before credit notes sent a
+   * plain sentence here — and is kept as the note, with the code defaulting to
+   * "goods returned". New clients send the code and put prose in `reasonNote`.
+   */
   reason: z.string().trim().max(500).optional(),
+  /** Detail printed beside the reason on the credit note. */
+  reasonNote: z.string().trim().max(500).optional(),
   cashSessionId: z.string().uuid().nullable().optional(),
   localId: z.string().uuid().optional(),
   occurredAt: z.string().datetime().optional(),
@@ -143,6 +154,7 @@ export const PushReturnSchema = z.object({
   lines: z.array(PushReturnLineSchema).min(1, "A return needs at least one line"),
   refunds: z.array(RefundSchema).default([]),
   reason: z.string().trim().max(500).optional(),
+  reasonNote: z.string().trim().max(500).optional(),
   cashSessionId: z.string().uuid().optional(),
 });
 export type PushReturnDto = z.infer<typeof PushReturnSchema>;

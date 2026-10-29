@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState, useCallback } from "react";
+import Link from "next/link";
+import { CREDIT_NOTE_REASON_LABELS, type CreditNoteReason } from "@devsfleet/shared-types";
 import {
   RefreshCw, CreditCard, Banknote, Receipt, ShoppingCart,
   Printer, AlertCircle, FileText, Ban, Undo2, X,
@@ -26,6 +28,9 @@ import {
   DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import { usePermission } from "@/lib/require-auth";
+import { EinvoiceStatusBadge } from "@/components/einvoice/status-badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { SENT_INVOICE_HINT, type EinvoiceRef } from "@/lib/einvoice";
 import {
   ReturnSaleDialog,
   VoidSaleDialog,
@@ -60,8 +65,6 @@ interface SaleDetail extends Sale {
   discountAmount?: string;
   notes?: string | null;
   voidedAt?: string | null;
-  /** Set when this document is itself a return — it can be neither voided nor returned. */
-  returnOfSaleId?: string | null;
 }
 
 interface Sale {
@@ -85,7 +88,20 @@ interface Sale {
   payments?: SalePayment[];
   /** Distinct tender types — what the list endpoint sends instead of `payments`. */
   paymentMethods?: string[];
+  /** Set when this document is itself a return (a credit note) — it can be neither voided nor returned. */
+  returnOfSaleId?: string | null;
+  /** "invoice" or "credit_note". Older payloads omit it; `returnOfSaleId` then says the same thing. */
+  documentType?: "invoice" | "credit_note";
+  creditReason?: CreditNoteReason | null;
+  creditReasonNote?: string | null;
+  /** The invoice a credit note refers to. */
+  originalSaleNumber?: string | null;
+  /** Where this document stands with the e-invoicing network, when it is subject to it. */
+  einvoice?: EinvoiceRef | null;
 }
+
+const isCreditNote = (sale: Pick<Sale, "documentType" | "returnOfSaleId"> | null | undefined): boolean =>
+  sale?.documentType === "credit_note" || (!sale?.documentType && !!sale?.returnOfSaleId);
 
 const PAYMENT_ICONS: Record<string, React.ReactNode> = {
   cash: <Banknote className="h-3.5 w-3.5 text-emerald-500" />,
@@ -208,7 +224,7 @@ export default function SalesPage() {
       const { blob } = await apiDownload(`/sales/${sale.id}/invoice`, {
         accessToken: tokens?.accessToken,
       });
-      printBlob(blob, `Invoice ${sale.saleNumber || sale.id}`);
+      printBlob(blob, `${isCreditNote(sale) ? "Credit note" : "Invoice"} ${sale.saleNumber || sale.id}`);
     } catch (err: any) {
       setError(err?.message || "Failed to load the invoice for printing.");
     } finally {
@@ -324,7 +340,7 @@ export default function SalesPage() {
           <MobileRow
             key={sale.id}
             title={sale.saleNumber || sale.invoiceNumber || "—"}
-            subtitle={sale.customerName || sale.customer?.name || "Walk-in Customer"}
+            subtitle={`${isCreditNote(sale) ? "Credit note · " : ""}${sale.customerName || sale.customer?.name || "Walk-in Customer"}`}
             badge={
               <Badge variant={sale.status === "completed" ? "success" : sale.status === "void" ? "destructive" : "secondary"}>
                 {sale.status}
@@ -335,6 +351,7 @@ export default function SalesPage() {
               { label: "Subtotal", value: formatMoney(sale.subtotal), numeric: true },
               { label: taxHeader, value: formatMoney(sale.taxAmount), numeric: true },
               { label: "Payment", value: <span className="capitalize">{primaryPaymentMethod(sale)}</span> },
+              ...(sale.einvoice ? [{ label: "E-invoice", value: <EinvoiceStatusBadge status={sale.einvoice.status} /> }] : []),
               { label: "Date", value: formatTime(sale.occurredAt || sale.createdAt) },
               { label: "Branch", value: sale.branchName || sale.branch?.name || sale.branchCode || "—" },
             ]}
@@ -349,7 +366,7 @@ export default function SalesPage() {
                   size="sm"
                   onClick={() => void printInvoice(sale)}
                   disabled={printing === sale.id}
-                  aria-label={`Print invoice ${sale.saleNumber || ""}`}
+                  aria-label={`Print ${isCreditNote(sale) ? "credit note" : "invoice"} ${sale.saleNumber || ""}`}
                 >
                   <Printer className="h-3.5 w-3.5" />
                   {printing === sale.id ? "…" : "Print"}
@@ -420,6 +437,12 @@ export default function SalesPage() {
                       <span className="underline decoration-dotted underline-offset-2">
                         {sale.saleNumber || sale.invoiceNumber || "—"}
                       </span>
+                      {(isCreditNote(sale) || sale.einvoice) && (
+                        <span className="mt-1 flex flex-wrap items-center gap-1 font-sans">
+                          {isCreditNote(sale) && <Badge variant="warning" className="text-[10px]">Credit note</Badge>}
+                          {sale.einvoice && <EinvoiceStatusBadge status={sale.einvoice.status} className="text-[10px]" />}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3.5 font-medium text-foreground max-w-45 truncate" title={sale.customerName || sale.customer?.name || undefined}>
                       {sale.customerName || sale.customer?.name || "Walk-in Customer"}
@@ -463,7 +486,7 @@ export default function SalesPage() {
                           void printInvoice(sale);
                         }}
                         disabled={printing === sale.id}
-                        aria-label={`Print invoice ${sale.saleNumber || ""}`}
+                        aria-label={`Print ${isCreditNote(sale) ? "credit note" : "invoice"} ${sale.saleNumber || ""}`}
                       >
                         <Printer className="h-3.5 w-3.5" />
                         {printing === sale.id ? "…" : "Print"}
@@ -487,9 +510,10 @@ export default function SalesPage() {
               </div>
               <div>
                 <DialogTitle className="font-mono">
-                  {selected?.saleNumber || selected?.invoiceNumber || "Invoice"}
+                  {selected?.saleNumber || selected?.invoiceNumber || (isCreditNote(selected) ? "Credit note" : "Invoice")}
                 </DialogTitle>
                 <DialogDescription>
+                  {isCreditNote(selected) ? "Tax credit note · " : ""}
                   {formatTime(selected?.occurredAt || selected?.createdAt)}
                   {selected?.branchName ? ` · ${selected.branchName}` : ""}
                 </DialogDescription>
@@ -501,6 +525,31 @@ export default function SalesPage() {
             <div className="flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <span>This sale was voided. The invoice is kept, and downloads stamped as voided.</span>
+            </div>
+          )}
+
+          {isCreditNote(selected) && (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400">
+              <p className="font-semibold">
+                Credit note{selected?.originalSaleNumber ? <> against <span className="font-mono">{selected.originalSaleNumber}</span></> : null}
+              </p>
+              {(selected?.creditReason || selected?.creditReasonNote) && (
+                <p className="mt-0.5">
+                  {selected?.creditReason ? (CREDIT_NOTE_REASON_LABELS[selected.creditReason] ?? selected.creditReason) : ""}
+                  {selected?.creditReason && selected?.creditReasonNote ? " — " : ""}
+                  {selected?.creditReasonNote ?? ""}
+                </p>
+              )}
+            </div>
+          )}
+
+          {selected?.einvoice && (
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border p-3 text-xs">
+              <span className="font-semibold uppercase tracking-wider text-[11px] text-muted-foreground">E-invoice</span>
+              <EinvoiceStatusBadge status={selected.einvoice.status} />
+              <Link href={`/einvoicing?doc=${selected.einvoice.id}`} className="ml-auto text-primary underline-offset-2 hover:underline">
+                View in e-invoice register
+              </Link>
             </div>
           )}
 
@@ -619,8 +668,22 @@ export default function SalesPage() {
               {mayReturn && actions.canReturn && (
                 <Button variant="outline" onClick={() => setReturning(true)}>
                   <Undo2 className="h-4 w-4" />
-                  Return items
+                  Issue credit note
                 </Button>
+              )}
+              {mayVoid && actions.voidBlockedBySentInvoice && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    {/* A disabled button swallows hover; the span is what the tooltip hangs on. */}
+                    <span tabIndex={0} className="inline-flex" aria-label={SENT_INVOICE_HINT}>
+                      <Button variant="outline" disabled className="pointer-events-none">
+                        <Ban className="h-4 w-4" />
+                        Void sale
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{SENT_INVOICE_HINT}</TooltipContent>
+                </Tooltip>
               )}
               {mayVoid && actions.canVoid && (
                 <Button
@@ -642,7 +705,7 @@ export default function SalesPage() {
                 className="gap-2"
               >
                 <Printer className="h-4 w-4" />
-                {printing === selected?.id ? "Opening print…" : "Print Tax Invoice"}
+                {printing === selected?.id ? "Opening print…" : isCreditNote(selected) ? "Print Credit Note" : "Print Tax Invoice"}
               </Button>
             </div>
           </DialogFooter>
@@ -654,6 +717,7 @@ export default function SalesPage() {
         open={voiding}
         onClose={() => setVoiding(false)}
         onDone={() => void refreshAfterAction()}
+        onRefused={() => void refreshAfterAction()}
         accessToken={tokens?.accessToken}
       />
 

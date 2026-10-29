@@ -117,6 +117,8 @@ export const ERROR_CODES = {
   CANNOT_RETURN_A_RETURN: "CANNOT_RETURN_A_RETURN",
   CASH_SESSION_NOT_OPEN: "CASH_SESSION_NOT_OPEN",
   CASH_SESSION_ALREADY_OPEN: "CASH_SESSION_ALREADY_OPEN",
+  /** The invoice has gone to the e-invoicing network; it can only be corrected with a credit note. */
+  EINVOICE_ALREADY_SENT: "EINVOICE_ALREADY_SENT",
 
   // financial operations
   DAY_ALREADY_OPEN: "DAY_ALREADY_OPEN",

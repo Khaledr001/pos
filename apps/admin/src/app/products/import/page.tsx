@@ -156,7 +156,7 @@ export default function BulkImportPage() {
           <h2 className="text-lg font-bold text-card-foreground">Download the template</h2>
         </div>
         <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
-          One row per product. Columns marked with * are required. Unit must match a name that already exists (see the "Valid Values" sheet inside the template). Category and Brand are created automatically when the name is new; a Sub Category is created under its Category, and the product is filed under the sub-category. SKU is optional — leave it blank and one is auto-generated from the category prefix (e.g. ELC-0007). Current Stock creates opening stock in the selected warehouse. A workbook with one sheet per department is imported in one go.
+          One row per product. Columns marked with * are required. Unit must match a name that already exists (see the "Valid Values" sheet inside the template). Category and Brand are created automatically when the name is new; a Sub Category is created under its Category, and the product is filed under the sub-category. SKU is optional — leave it blank and one is auto-generated from the category prefix (e.g. ELC-0007). Current Stock creates opening stock in the selected warehouse. If your template has the optional Tax Category (S, Z, E or O) and Tax Exemption Code columns, fill them for zero-rated, exempt or out-of-scope goods; a blank means standard-rated (S) — it is what electronic tax invoices report. A workbook with one sheet per department is imported in one go.
         </p>
         <Button variant="outline" onClick={downloadTemplate} className="gap-2">
           <Download className="h-4 w-4 text-muted-foreground" />

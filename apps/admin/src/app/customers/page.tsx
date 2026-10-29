@@ -30,10 +30,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { EinvoiceAddressFields, TrnField } from "@/components/einvoice/customer-fields";
+import {
+  EMPTY_EINVOICE_FIELDS,
+  customerEinvoiceProblems,
+  einvoiceFieldsPayload,
+  hasEinvoiceFields,
+  isValidTrn,
+  type EinvoiceCustomerFields,
+  type EinvoiceCustomerLike,
+} from "@/lib/einvoice";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
-interface Customer {
+interface Customer extends EinvoiceCustomerLike {
   id: string;
   name: string;
   company?: string;
@@ -49,6 +59,21 @@ interface Customer {
 
 const CUSTOMER_TYPES = ["retail", "wholesale", "vip"] as const;
 type CustomerType = typeof CUSTOMER_TYPES[number];
+
+/**
+ * A small readiness chip for a business customer (one with a TRN). Nothing for
+ * a till customer, and nothing when the list payload carries no address fields
+ * at all — a false "Missing details" is worse than no chip.
+ */
+function EinvoiceChip({ customer }: { customer: Customer }) {
+  if (!customer.trn || !hasEinvoiceFields(customer)) return null;
+  const problems = customerEinvoiceProblems(customer);
+  return problems.length === 0 ? (
+    <Badge variant="success" className="text-[10px]">E-invoice ready</Badge>
+  ) : (
+    <Badge variant="warning" className="text-[10px]" title={problems.join(" · ")}>Missing details</Badge>
+  );
+}
 
 const TYPE_GRADIENT: Record<string, string> = {
   wholesale: "from-blue-500 to-indigo-600",
@@ -103,7 +128,7 @@ export default function CustomersPage() {
   const [fCompany, setFCompany] = useState("");
   const [fPhone, setFPhone] = useState("");
   const [fEmail, setFEmail] = useState("");
-  const [fTrn, setFTrn] = useState("");
+  const [fEinv, setFEinv] = useState<EinvoiceCustomerFields>(EMPTY_EINVOICE_FIELDS);
   const [fType, setFType] = useState<CustomerType>("retail");
   const [fCreditLimit, setFCreditLimit] = useState("0");
   const [fPaymentTerms, setFPaymentTerms] = useState("0");
@@ -114,6 +139,10 @@ export default function CustomersPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (fEinv.trn.trim() && !isValidTrn(fEinv.trn)) {
+      setActionError("The TRN must be 15 digits starting with 100.");
+      return;
+    }
     setSubmitting(true);
     setActionError(null);
 
@@ -125,7 +154,8 @@ export default function CustomersPage() {
           company: fCompany || undefined,
           phone: fPhone || undefined,
           email: fEmail || undefined,
-          trn: fTrn || undefined,
+          trn: fEinv.trn.trim() || undefined,
+          ...einvoiceFieldsPayload(fEinv),
           type: fType,
           creditLimit: fCreditLimit.trim() || "0",
           paymentTermDays: parseInt(fPaymentTerms) || 0,
@@ -137,7 +167,7 @@ export default function CustomersPage() {
 
       setActionSuccess(`Customer "${fName}" created successfully.`);
       setIsModalOpen(false);
-      setFName(""); setFCompany(""); setFPhone(""); setFEmail(""); setFTrn("");
+      setFName(""); setFCompany(""); setFPhone(""); setFEmail(""); setFEinv(EMPTY_EINVOICE_FIELDS);
       setFType("retail"); setFCreditLimit("0"); setFPaymentTerms("0");
       setFWhatsappPhone(""); setFNotes("");
       fetchCustomers();
@@ -265,7 +295,7 @@ export default function CustomersPage() {
               fields={[
                 { label: "Phone", value: c.phone ?? c.email ?? "—" },
                 { label: "Company", value: c.company ?? "—" },
-                ...(c.trn ? [{ label: "TRN", value: c.trn }] : []),
+                ...(c.trn ? [{ label: "TRN", value: <span className="inline-flex flex-wrap items-center gap-1.5"><span className="font-mono">{c.trn}</span><EinvoiceChip customer={c} /></span> }] : []),
                 { label: "Credit limit", value: formatMoney(c.creditLimit ?? "0", { currency }), numeric: true },
                 { label: "Outstanding", value: formatMoney(c.creditBalance ?? "0", { currency }), numeric: true },
                 {
@@ -362,7 +392,12 @@ export default function CustomersPage() {
                     <td className="px-4 py-3.5">
                       <div className="flex flex-col">
                         <span className="font-medium text-foreground">{c.company ?? "—"}</span>
-                        {c.trn && <span className="text-[10px] text-muted-foreground font-mono">TRN: {c.trn}</span>}
+                        {c.trn && (
+                          <span className="flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+                            <span className="font-mono">TRN: {c.trn}</span>
+                            <EinvoiceChip customer={c} />
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="px-4 py-3.5">
@@ -418,7 +453,7 @@ export default function CustomersPage() {
 
       {/* Add Customer Dialog */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <div className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-linear-to-br from-emerald-500 to-teal-600 text-white">
@@ -462,11 +497,14 @@ export default function CustomersPage() {
                   <label className="block text-xs font-medium text-foreground mb-1.5">Email</label>
                   <Input type="email" value={fEmail} onChange={e => setFEmail(e.target.value)} placeholder="contact@example.com" />
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-foreground mb-1.5">TRN (Tax Registration Number)</label>
-                  <Input value={fTrn} onChange={e => setFTrn(e.target.value)} placeholder="100234567800003" className="font-mono" />
-                </div>
+                <TrnField id="new-customer-trn" value={fEinv.trn} onChange={(trn) => setFEinv((f) => ({ ...f, trn }))} />
               </div>
+            </div>
+
+            {/* E-invoicing */}
+            <div className="rounded-xl border border-border p-4 space-y-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">E-invoicing details (businesses with a TRN)</p>
+              <EinvoiceAddressFields idPrefix="new-customer" value={fEinv} onChange={(patch) => setFEinv((f) => ({ ...f, ...patch }))} />
             </div>
 
             {/* Business Terms */}
