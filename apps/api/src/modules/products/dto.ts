@@ -1,5 +1,6 @@
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from "@devsfleet/shared-types";
 import { z } from "zod";
+import { TaxCategorySchema, TaxExemptionCodeSchema } from "../../common/tax/tax-category.js";
 import { ZERO_MONEY, zMoney } from "../../common/validation/money.js";
 import { zQueryBoolean } from "../../common/pipes/zod-validation.pipe.js";
 
@@ -37,24 +38,46 @@ const VariantInputSchema = z.object({
   isActive: z.boolean().default(true),
 });
 
-export const CreateProductSchema = z.object({
+/**
+ * What a product IS, with no defaults. Create adds the defaults a NEW product
+ * starts from; Update is this shape made partial. Kept apart because Zod 4
+ * applies a `.default()` even through `.partial()`: an update built from the
+ * create schema read as "attributes: {}, nameTranslations: {}" and wiped both
+ * on every PATCH — including one that only fixed a product's VAT category.
+ */
+const ProductFields = z.object({
   name: z.string().trim().min(1).max(500),
   /** Auto-generated from the category prefix when omitted. */
   sku: z.string().trim().min(1).max(50).optional(),
   description: z.string().max(5000).optional(),
   categoryId: z.string().uuid().nullable().optional(),
   brandId: z.string().uuid().nullable().optional(),
-  unitId: z.string().uuid(),
 
-  attributes: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).default({}),
-  nameTranslations: z.record(z.string(), z.string()).default({}),
+  attributes: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
+  nameTranslations: z.record(z.string(), z.string()),
 
   /** Overrides the tenant VAT rate. Omit to inherit. */
   taxRate: z.coerce.number().min(0).max(100).optional(),
+  /**
+   * How the product is reported for VAT: S standard, Z zero-rated, E exempt, O
+   * out of scope. Omit for S. Must agree with `taxRate` — see resolveProductTax.
+   */
+  taxCategory: TaxCategorySchema.optional(),
+  /** Why an exempt (E) product is exempt. */
+  taxExemptionCode: TaxExemptionCodeSchema.nullable().optional(),
+  isStockTracked: z.boolean(),
+  trackSerial: z.boolean(),
+  trackExpiry: z.boolean(),
+  warrantyMonths: z.coerce.number().int().min(0).optional(),
+});
+
+export const CreateProductSchema = ProductFields.extend({
+  unitId: z.string().uuid(),
+  attributes: ProductFields.shape.attributes.default({}),
+  nameTranslations: ProductFields.shape.nameTranslations.default({}),
   isStockTracked: z.boolean().default(true),
   trackSerial: z.boolean().default(false),
   trackExpiry: z.boolean().default(false),
-  warrantyMonths: z.coerce.number().int().min(0).optional(),
 
   /**
    * At least one. A product with no variant is unsellable, and the rest of the
@@ -64,16 +87,11 @@ export const CreateProductSchema = z.object({
 });
 export type CreateProductDto = z.infer<typeof CreateProductSchema>;
 
-export const UpdateProductSchema = CreateProductSchema.omit({
-  variants: true,
-  unitId: true,
-})
-  .partial()
-  .extend({
-    isActive: z.boolean().optional(),
-    /** Omit to leave variants untouched; supply to upsert the listed ones. */
-    variants: z.array(VariantInputSchema).optional(),
-  });
+export const UpdateProductSchema = ProductFields.partial().extend({
+  isActive: z.boolean().optional(),
+  /** Omit to leave variants untouched; supply to upsert the listed ones. */
+  variants: z.array(VariantInputSchema).optional(),
+});
 export type UpdateProductDto = z.infer<typeof UpdateProductSchema>;
 
 export const ListProductsSchema = z.object({

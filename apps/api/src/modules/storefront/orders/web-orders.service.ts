@@ -82,7 +82,9 @@ export class WebOrdersService {
 
   private invoiceSale(tx: Transaction, orderId: string) {
     return tx.query.sales.findFirst({
-      where: (t, { eq: e }) => e(t.orderId, orderId),
+      // The tax invoice, never a credit note raised against it: the shopper is
+      // not offered those (yet), and a return carries no order id today.
+      where: (t, { and: a, eq: e, isNull: n }) => a(e(t.orderId, orderId), n(t.returnOfSaleId)),
       columns: { id: true, saleNumber: true, createdAt: true },
       orderBy: (t, { asc }) => asc(t.createdAt),
     });

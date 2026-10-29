@@ -9,6 +9,7 @@
 
 export * as Money from "./money.js";
 export * from "./totals.js";
+export * from "./tax-category.js";
 export * from "./document-number.js";
 export * from "./text.js";
 export * from "./result.js";

@@ -204,6 +204,11 @@ carry for FTA reporting) — that would favour the first-class-table design D15
 rejected. Not confirmed either way at the time of this decision; revisit
 before Stage 2 ships if it matters for this tenant's actual VAT reporting.
 
+> **Superseded in part by [D21](#d21--returns-are-credit-notes-sent-e-invoices-are-corrected-never-voided).**
+> A return is still a linked negative sale row — that part stands — but it is
+> numbered from its own `CRN` series, not the invoice sequence, and it is
+> reported as a credit note.
+
 ---
 
 ## D16 — Thermal printer over USB as a raw device file; A4 via `pdfkit`
@@ -459,6 +464,50 @@ Consequences worth knowing:
   reproduces exactly.
 - Card payments use each tenant's own Stripe account, never a platform key,
   stored like WhatsApp credentials (plaintext, the same known gap).
+
+## D21 — Returns are credit notes; sent e-invoices are corrected, never voided
+
+**Decided**, when UAE e-invoicing (PINT AE over Peppol, through an accredited
+service provider) was added.
+
+- **A return is a tax credit note.** D15's shape is kept — a negative `sales`
+  row with `returnOfSaleId` — but its number now comes from the `credit_note`
+  sequence (`CRN-<branch>-<year>-<n>`, gapless in the same transaction), never
+  the invoice's `INV` series, and it carries a PINT AE reason code
+  (`credit_reason`: DL8.61.1.A–E, `VD`) with an optional note. It prints as a
+  "Tax Credit Note" naming the invoice it corrects. Returns issued before this
+  keep the `INV` numbers they were given: numbers are never rewritten.
+  Clients written before reasons existed sent a free-text `reason`; the
+  server keeps that as the note and defaults the code to "goods returned".
+- **A sent invoice is never voided.** `SalesService.void` refuses
+  (`EINVOICE_ALREADY_SENT`, 409) once the sale's e-invoice has gone to the
+  network; the correction is a credit note. An invoice that was only queued
+  is cancelled together with its sale.
+- **VAT treatment is a category, not just a rate.** A 0% line is zero-rated
+  (`Z`), exempt (`E`, with a reason) or out of scope (`O`), and those are
+  reported differently, so `products`, and every document line, carry
+  `tax_category` beside `tax_percent`, snapshotted at issue (rule 5). The
+  category must agree with the rate; `resolveProductTax` (shared-utils) is the
+  one place that is decided, used by the API and the spreadsheet importer.
+  Lines also freeze their UN/ECE `unit_code`.
+- **`calculateDocument`'s `taxBreakdown` groups by (category, rate)**, so
+  zero-rated and exempt lines stay separate on a tax summary.
+- **Tax-identity data is validated at the door, never rewritten.** A UAE
+  business's TRN is 15 digits starting 100; customers, suppliers and the
+  tenant's own TRN are checked on write only when the request names the field,
+  and values stored before this are left alone. The tenant settings PATCH is a
+  top-level jsonb merge of just the keys it changed, so one part of the
+  platform cannot overwrite another's block (the e-invoicing connection's)
+  with a stale copy.
+
+Consequence worth knowing: Zod 4 applies `.default()` even through
+`.partial()`, so an update schema derived from a create schema silently resets
+defaulted fields. Customers, suppliers and products had that bug (a phone-number
+fix reset the customer's type and payment terms; a VAT-category fix would have
+wiped the product's attributes). Update schemas are now built from a
+defaults-free base — keep them that way.
+
+---
 
 ## Still open
 

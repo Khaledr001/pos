@@ -33,6 +33,7 @@ const ROUTE_PERMISSIONS: Array<[string, Permission]> = [
   ["/customers", "customer:read"],
   ["/suppliers", "supplier:read"],
   ["/sales", "sale:read"],
+  ["/einvoicing", "sale:read"],
   ["/sell", "sale:create"],
   ["/quotations", "quotation:read"],
   ["/reports", "report:read"],

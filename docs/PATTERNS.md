@@ -117,6 +117,21 @@ always shows up on the receipt.
 
 ---
 
+## Tax categories and tax ids
+
+- A product has a `tax_category` (S/Z/E/O) beside its `tax_rate`. Never infer
+  "exempt" from a 0% rate: write and read it through `resolveProductTax` and
+  `lineTaxFor` (shared-utils), which also keep the two in agreement.
+- A new document line snapshots `lineTaxFor(product, tenantDefaultRate)` plus
+  its unit's `unit_code`; a return copies the ORIGINAL line's snapshot.
+- Tax registration numbers are validated at the service, because the rule
+  depends on the tenant (`checkedTaxId` in `common/tax/tenant-region.ts`). Throw
+  `fieldError(path, message)` for a field-level refusal: it is an `AppError`
+  (so offline sync treats it as a permanent no) that the filter renders as
+  `details: { path: [message] }`.
+- An update DTO is built from a defaults-free base — Zod 4 applies `.default()`
+  through `.partial()`. See D21.
+
 ## Errors
 
 ```ts

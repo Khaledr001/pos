@@ -145,8 +145,12 @@ reserves stock, a sale moves money and deducts stock. A walk-in POS sale jumps
 straight to `sales`; a WhatsApp enquiry walks the whole path. Both land in the
 same table, so reporting never unions.
 
-Line items snapshot `product_name`, `product_sku`, `tax_percent` and
-`cost_price`. `sales.occurred_at` is the terminal's clock (what belongs on the
+Line items snapshot `product_name`, `product_sku`, `tax_percent`, `tax_category`
+(S standard · Z zero-rated · E exempt · O out of scope — a rate alone cannot say
+which a 0% line is), `tax_exemption_code`, `unit_code` (UN/ECE Rec 20/21) and
+`cost_price`. A product's `tax_category` must agree with its `tax_rate`
+(`resolveProductTax` in shared-utils). A return is a negative sale numbered from
+the `CRN` credit-note series (D21). `sales.occurred_at` is the terminal's clock (what belongs on the
 receipt); `created_at` is when the server first saw it — hours apart on an
 offline sale.
 
