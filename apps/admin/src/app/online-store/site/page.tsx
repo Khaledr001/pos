@@ -26,7 +26,6 @@ import { SelectField } from "@/components/ui/select";
 import { Field, Loading, Notice, PageHeader, errorText } from "../shared";
 import { OptionCards } from "../option-cards";
 import { setKnownSiteMode } from "../site-mode";
-import { StoreTabs } from "../store-nav";
 import { useStoreSettings } from "../use-store-settings";
 
 const MODE_COPY: Record<SiteMode, { title: string; text: string }> = {
@@ -98,7 +97,6 @@ export default function SiteTypePage() {
     return (
       <div className="space-y-6">
         <PageHeader title="Site type" description="What kind of website you run." />
-        <StoreTabs current="/online-store/site" />
         {error && <Notice kind="error" message={error} onClose={() => setError(null)} />}
         <Card className="p-6 text-sm text-muted-foreground">Create your online store first, in Store Settings.</Card>
       </div>
@@ -149,7 +147,6 @@ export default function SiteTypePage() {
           </>
         )}
       </PageHeader>
-      <StoreTabs current="/online-store/site" />
 
       {success && <Notice kind="success" message={success} onClose={() => setSuccess(null)} />}
       {error && <Notice kind="error" message={error} onClose={() => setError(null)} />}

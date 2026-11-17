@@ -887,6 +887,321 @@ const DEFAULT_TENANT_SETTINGS = {
     timezone: "Asia/Dubai"
   }
 };
+const REGION_PRESETS = {
+  AE: {
+    label: "United Arab Emirates",
+    country: "AE",
+    callingCode: "971",
+    zoneLabel: "Emirate",
+    zones: [
+      { code: "ABU_DHABI", name: "Abu Dhabi" },
+      { code: "DUBAI", name: "Dubai" },
+      { code: "SHARJAH", name: "Sharjah" },
+      { code: "AJMAN", name: "Ajman" },
+      { code: "UMM_AL_QUWAIN", name: "Umm Al Quwain" },
+      { code: "RAS_AL_KHAIMAH", name: "Ras Al Khaimah" },
+      { code: "FUJAIRAH", name: "Fujairah" }
+    ],
+    taxLabel: "VAT",
+    taxIdLabel: "TRN",
+    formatLocale: "en-AE"
+  },
+  SA: {
+    label: "Saudi Arabia",
+    country: "SA",
+    callingCode: "966",
+    zoneLabel: "Region",
+    zones: [
+      { code: "RIYADH", name: "Riyadh" },
+      { code: "MAKKAH", name: "Makkah" },
+      { code: "MADINAH", name: "Madinah" },
+      { code: "EASTERN", name: "Eastern Province" },
+      { code: "QASSIM", name: "Qassim" },
+      { code: "ASIR", name: "Asir" },
+      { code: "TABUK", name: "Tabuk" },
+      { code: "HAIL", name: "Hail" },
+      { code: "NORTHERN_BORDERS", name: "Northern Borders" },
+      { code: "JAZAN", name: "Jazan" },
+      { code: "NAJRAN", name: "Najran" },
+      { code: "AL_BAHA", name: "Al Baha" },
+      { code: "AL_JOUF", name: "Al Jouf" }
+    ],
+    taxLabel: "VAT",
+    taxIdLabel: "VAT No.",
+    formatLocale: "en-SA"
+  },
+  QA: {
+    label: "Qatar",
+    country: "QA",
+    callingCode: "974",
+    zoneLabel: "Municipality",
+    zones: [
+      { code: "DOHA", name: "Doha" },
+      { code: "AL_RAYYAN", name: "Al Rayyan" },
+      { code: "AL_WAKRAH", name: "Al Wakrah" },
+      { code: "AL_KHOR", name: "Al Khor" },
+      { code: "UMM_SALAL", name: "Umm Salal" },
+      { code: "AL_DAAYEN", name: "Al Daayen" },
+      { code: "AL_SHAMAL", name: "Al Shamal" },
+      { code: "AL_SHAHANIYA", name: "Al Shahaniya" }
+    ],
+    taxLabel: "Tax",
+    taxIdLabel: "Tax ID",
+    formatLocale: "en-QA"
+  },
+  KW: {
+    label: "Kuwait",
+    country: "KW",
+    callingCode: "965",
+    zoneLabel: "Governorate",
+    zones: [
+      { code: "AL_ASIMAH", name: "Al Asimah" },
+      { code: "HAWALLI", name: "Hawalli" },
+      { code: "FARWANIYA", name: "Farwaniya" },
+      { code: "AHMADI", name: "Ahmadi" },
+      { code: "JAHRA", name: "Jahra" },
+      { code: "MUBARAK_AL_KABEER", name: "Mubarak Al-Kabeer" }
+    ],
+    taxLabel: "Tax",
+    taxIdLabel: "Tax ID",
+    formatLocale: "en-KW"
+  },
+  BH: {
+    label: "Bahrain",
+    country: "BH",
+    callingCode: "973",
+    zoneLabel: "Governorate",
+    zones: [
+      { code: "CAPITAL", name: "Capital" },
+      { code: "MUHARRAQ", name: "Muharraq" },
+      { code: "NORTHERN", name: "Northern" },
+      { code: "SOUTHERN", name: "Southern" }
+    ],
+    taxLabel: "VAT",
+    taxIdLabel: "VAT No.",
+    formatLocale: "en-BH"
+  },
+  OM: {
+    label: "Oman",
+    country: "OM",
+    callingCode: "968",
+    zoneLabel: "Governorate",
+    zones: [
+      { code: "MUSCAT", name: "Muscat" },
+      { code: "DHOFAR", name: "Dhofar" },
+      { code: "BATINAH_NORTH", name: "North Al Batinah" },
+      { code: "BATINAH_SOUTH", name: "South Al Batinah" },
+      { code: "SHARQIYAH_NORTH", name: "North Al Sharqiyah" },
+      { code: "SHARQIYAH_SOUTH", name: "South Al Sharqiyah" },
+      { code: "DAKHILIYAH", name: "Ad Dakhiliyah" },
+      { code: "DHAHIRAH", name: "Ad Dhahirah" },
+      { code: "BURAIMI", name: "Al Buraimi" },
+      { code: "WUSTA", name: "Al Wusta" },
+      { code: "MUSANDAM", name: "Musandam" }
+    ],
+    taxLabel: "VAT",
+    taxIdLabel: "VAT No.",
+    formatLocale: "en-OM"
+  },
+  PK: {
+    label: "Pakistan",
+    country: "PK",
+    callingCode: "92",
+    zoneLabel: "Province",
+    zones: [
+      { code: "PUNJAB", name: "Punjab" },
+      { code: "SINDH", name: "Sindh" },
+      { code: "KPK", name: "Khyber Pakhtunkhwa" },
+      { code: "BALOCHISTAN", name: "Balochistan" },
+      { code: "ISLAMABAD", name: "Islamabad Capital Territory" },
+      { code: "GILGIT_BALTISTAN", name: "Gilgit-Baltistan" },
+      { code: "AJK", name: "Azad Jammu & Kashmir" }
+    ],
+    taxLabel: "GST",
+    taxIdLabel: "NTN",
+    formatLocale: "en-PK"
+  },
+  BD: {
+    label: "Bangladesh",
+    country: "BD",
+    callingCode: "880",
+    zoneLabel: "Division",
+    zones: [
+      { code: "DHAKA", name: "Dhaka" },
+      { code: "CHATTOGRAM", name: "Chattogram" },
+      { code: "RAJSHAHI", name: "Rajshahi" },
+      { code: "KHULNA", name: "Khulna" },
+      { code: "BARISHAL", name: "Barishal" },
+      { code: "SYLHET", name: "Sylhet" },
+      { code: "RANGPUR", name: "Rangpur" },
+      { code: "MYMENSINGH", name: "Mymensingh" }
+    ],
+    taxLabel: "VAT",
+    taxIdLabel: "BIN",
+    formatLocale: "en-BD"
+  }
+};
+const DEFAULT_REGION_CODE = "AE";
+stripLabel(REGION_PRESETS[DEFAULT_REGION_CODE]);
+function stripLabel(r) {
+  const { label: _label, ...region } = r;
+  return region;
+}
+const asConst = (values) => values;
+const NOTIFICATION_EVENTS = asConst([
+  "order_placed",
+  "order_confirmed",
+  "order_shipped",
+  "order_ready_for_pickup",
+  "order_delivered",
+  "order_cancelled",
+  "order_refunded",
+  "quote_quoted",
+  "stock_back_in_stock"
+]);
+({
+  events: Object.fromEntries(NOTIFICATION_EVENTS.map((e) => [e, { email: true, whatsapp: false }]))
+});
+const CONTACT_FORM_SLUG = "contact";
+const aboutBody = "We started with a simple idea: do the work properly, be honest about what it costs, and look after people long after the job is done.\n\nToday our team brings years of hands-on experience, a wide network of trusted suppliers and a habit of answering the phone. Tell us what you need and we'll tell you plainly how we can help.";
+const faqItems = [
+  { q: "How do I get a quote?", a: "Send us a message with a few details about what you need and we'll reply with a clear, itemised quote — usually within one working day." },
+  { q: "How quickly can you start?", a: "It depends on the size of the job. After we hear from you we'll confirm a realistic start date before you commit to anything." },
+  { q: "Do you work with businesses as well as individuals?", a: "Yes. We work with homeowners, small businesses and larger organisations, and can set up regular or account arrangements." },
+  { q: "What if something isn't right?", a: "Tell us straight away. We stand behind our work and will put it right." }
+];
+const contactPage = () => ({
+  slug: "contact",
+  title: "Contact us",
+  seoDescription: "Get in touch: send us a message, call us or visit.",
+  layout: "full",
+  sections: [
+    { id: "intro", type: "hero", enabled: true, settings: { variant: "minimal", headline: "Contact us", subheadline: "Tell us what you need and we'll get back to you shortly." } },
+    { id: "details", type: "contact_info", enabled: true, settings: { title: "Find us", showBranches: true, showHours: true, showSocial: true } },
+    { id: "message", type: "form", enabled: true, settings: { title: "Send us a message", subtitle: "We usually reply within one working day.", formSlug: CONTACT_FORM_SLUG, layout: "split" }, style: { background: "surface" } },
+    { id: "map", type: "map", enabled: true, settings: { mode: "branches", height: "md" } }
+  ]
+});
+const aboutPage = (extra = []) => ({
+  slug: "about",
+  title: "About us",
+  seoDescription: "Who we are, what we believe in and how we work.",
+  layout: "full",
+  sections: [
+    { id: "intro", type: "hero", enabled: true, settings: { variant: "minimal", headline: "About us", subheadline: "Who we are and what we stand for." } },
+    { id: "story", type: "image_text", enabled: true, settings: { title: "Our story", body: aboutBody, imageSide: "right", bullets: ["Straightforward advice", "Fair, upfront prices", "Support after the sale"] } },
+    ...extra,
+    { id: "next", type: "cta_banner", enabled: true, settings: { headline: "Let's talk about what you need", text: "A short message is all it takes to get started.", ctaLabel: "Contact us", ctaHref: "/pages/contact", showWhatsapp: true }, style: { background: "accent" } }
+  ]
+});
+({
+  catalogue: {
+    pages: [aboutPage(), contactPage()]
+  },
+  corporate: {
+    pages: [
+      aboutPage([
+        {
+          id: "numbers",
+          type: "stats",
+          enabled: true,
+          settings: {
+            items: [
+              { value: "15+", label: "Years of experience" },
+              { value: "500+", label: "Projects completed" },
+              { value: "100%", label: "Commitment to quality" }
+            ]
+          },
+          style: { background: "dark" }
+        },
+        {
+          id: "team",
+          type: "cards",
+          enabled: true,
+          settings: {
+            title: "The team",
+            subtitle: "The people you'll work with.",
+            variant: "person",
+            columns: 3,
+            items: [
+              { title: "Founder & Director", text: "Leads the business and every major project." },
+              { title: "Operations Manager", text: "Keeps schedules, suppliers and people on track." },
+              { title: "Customer Care Lead", text: "Your first call for questions and support." }
+            ]
+          }
+        }
+      ]),
+      {
+        slug: "services",
+        title: "Services",
+        seoDescription: "What we do and how we work.",
+        layout: "full",
+        sections: [
+          { id: "intro", type: "hero", enabled: true, settings: { variant: "minimal", headline: "Our services", subheadline: "Everything you need, from the first idea to ongoing support." } },
+          {
+            id: "list",
+            type: "cards",
+            enabled: true,
+            settings: {
+              title: "What we offer",
+              variant: "card",
+              columns: 3,
+              items: [
+                { title: "Consulting & planning", text: "Understand the need, set the scope and agree a plan and budget." },
+                { title: "Delivery & installation", text: "Skilled people and quality materials, delivered to the agreed timeline." },
+                { title: "Support & maintenance", text: "Regular checks and fast help when something needs attention." }
+              ]
+            }
+          },
+          {
+            id: "process",
+            type: "steps",
+            enabled: true,
+            settings: {
+              title: "Our process",
+              items: [
+                { title: "Discuss", text: "We listen and ask the right questions." },
+                { title: "Quote", text: "A clear, itemised price with timings." },
+                { title: "Deliver", text: "We do the work and keep you updated." },
+                { title: "Support", text: "We're here after the job is done." }
+              ]
+            },
+            style: { background: "surface" }
+          },
+          { id: "faq", type: "faq", enabled: true, settings: { title: "Common questions", items: faqItems } },
+          { id: "next", type: "cta_banner", enabled: true, settings: { headline: "Have a project in mind?", ctaLabel: "Request a quote", ctaHref: "/pages/contact", showWhatsapp: true }, style: { background: "accent" } }
+        ]
+      },
+      {
+        slug: "projects",
+        title: "Projects",
+        seoDescription: "A look at some of our recent work.",
+        layout: "full",
+        sections: [
+          { id: "intro", type: "hero", enabled: true, settings: { variant: "minimal", headline: "Our projects", subheadline: "A look at some of our recent work." } },
+          { id: "gallery", type: "gallery", enabled: true, settings: { title: "Gallery", columns: 3, items: [] } },
+          {
+            id: "featured",
+            type: "cards",
+            enabled: true,
+            settings: {
+              title: "Featured projects",
+              variant: "overlay",
+              columns: 3,
+              items: [
+                { title: "Project one", text: "A short description of the brief and the result." },
+                { title: "Project two", text: "A short description of the brief and the result." },
+                { title: "Project three", text: "A short description of the brief and the result." }
+              ]
+            }
+          },
+          { id: "next", type: "cta_banner", enabled: true, settings: { headline: "Want results like these?", ctaLabel: "Get in touch", ctaHref: "/pages/contact" }, style: { background: "accent" } }
+        ]
+      },
+      contactPage()
+    ]
+  }
+});
 const MONEY_SCALE = 4;
 const SCALE_FACTOR = 10000n;
 function toMinor(value) {

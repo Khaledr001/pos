@@ -22,7 +22,6 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { SelectField } from "@/components/ui/select";
 import { Field, Loading, Notice, PageHeader, errorText } from "../shared";
-import { StoreTabs } from "../store-nav";
 import { useStoreSettings } from "../use-store-settings";
 import { DeliveryLog } from "./delivery-log";
 
@@ -112,7 +111,6 @@ export default function NotificationsPage() {
     return (
       <div className="space-y-6">
         <PageHeader title="Notifications" description="Order, quote and stock messages to your shoppers." />
-        <StoreTabs current="/online-store/notifications" />
         {error && <Notice kind="error" message={error} onClose={() => setError(null)} />}
         <Card className="p-6 text-sm text-muted-foreground">
           {store?.storefront ? "Could not load notification status. Try refreshing." : "Create your online store first, in Store Settings."}
@@ -168,7 +166,6 @@ export default function NotificationsPage() {
           </>
         )}
       </PageHeader>
-      <StoreTabs current="/online-store/notifications" />
 
       {success && <Notice kind="success" message={success} onClose={() => setSuccess(null)} />}
       {error && <Notice kind="error" message={error} onClose={() => setError(null)} />}

@@ -25,7 +25,6 @@ import { SelectField } from "@/components/ui/select";
 import { MobileEmpty, MobileList, MobileRow } from "@/components/ui/mobile-list";
 import { Table, TableBody, TableContainer, TableEmpty, TableHead, Th } from "@/components/ui/data-table";
 import { Field, Loading, Notice, PageHeader, errorText, textareaClass } from "../shared";
-import { StoreTabs } from "../store-nav";
 
 const MAX_NOTIFY = 5;
 const MAX_OPTIONS = 30;
@@ -245,7 +244,6 @@ export default function FormsPage() {
       <PageHeader title="Forms" description="Contact, quote and enquiry forms for your website. Every submission arrives in Leads.">
         {mayWrite && <Button size="sm" onClick={() => setEditing(blankForm())}><Plus className="h-4 w-4" /> New form</Button>}
       </PageHeader>
-      <StoreTabs current="/online-store/forms" />
       {success && <Notice kind="success" message={success} onClose={() => setSuccess(null)} />}
       {error && <Notice kind="error" message={error} onClose={() => setError(null)} />}
       {loading && forms.length === 0 ? (

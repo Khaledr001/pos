@@ -26,7 +26,6 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Field, Loading, Notice, PageHeader } from "../shared";
 import { OptionCards } from "../option-cards";
-import { StoreTabs } from "../store-nav";
 import { useStoreSettings } from "../use-store-settings";
 import { ThemePreview } from "./theme-preview";
 
@@ -122,7 +121,6 @@ export default function AppearancePage() {
     return (
       <div className="space-y-6">
         <PageHeader title="Appearance" description="Colours, fonts and layout of your website." />
-        <StoreTabs current="/online-store/appearance" />
         {error && <Notice kind="error" message={error} onClose={() => setError(null)} />}
         <Card className="p-6 text-sm text-muted-foreground">Create your online store first, in Store Settings.</Card>
       </div>
@@ -163,7 +161,6 @@ export default function AppearancePage() {
           </>
         )}
       </PageHeader>
-      <StoreTabs current="/online-store/appearance" />
 
       {success && <Notice kind="success" message={success} onClose={() => setSuccess(null)} />}
       {error && <Notice kind="error" message={error} onClose={() => setError(null)} />}

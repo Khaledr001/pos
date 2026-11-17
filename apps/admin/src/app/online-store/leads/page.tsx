@@ -16,7 +16,6 @@ import { SelectField } from "@/components/ui/select";
 import { MobileEmpty, MobileList, MobileRow } from "@/components/ui/mobile-list";
 import { Table, TableBody, TableContainer, TableEmpty, TableHead, TablePagination, Th } from "@/components/ui/data-table";
 import { Field, Loading, Notice, PageHeader, errorText, textareaClass } from "../shared";
-import { StoreTabs } from "../store-nav";
 
 const PAGE_SIZE = 25;
 
@@ -122,7 +121,6 @@ export default function LeadsPage() {
       <PageHeader title="Leads" description="Enquiries and messages from your website forms.">
         <Button size="sm" variant="outline" disabled={exporting || totalAll === 0} onClick={() => void exportCsv()}><Download className="h-4 w-4" /> {exporting ? "Exporting..." : "Export CSV"}</Button>
       </PageHeader>
-      <StoreTabs current="/online-store/leads" />
       {success && <Notice kind="success" message={success} onClose={() => setSuccess(null)} />}
       {error && !open && <Notice kind="error" message={error} onClose={() => setError(null)} />}
 

@@ -7,7 +7,6 @@ import { usePermission } from "@/lib/require-auth";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Loading, Notice, PageHeader } from "../shared";
-import { StoreTabs } from "../store-nav";
 import { useStoreSettings } from "../use-store-settings";
 import { SectionEditor, listProblems, useSectionLookups } from "../components/section-editor";
 
@@ -30,7 +29,6 @@ export default function HomeSectionsPage() {
     return (
       <div className="space-y-6">
         <PageHeader title="Home page" description="Choose and order the sections of your home page." />
-        <StoreTabs current="/online-store/home" />
         {error && <Notice kind="error" message={error} onClose={() => setError(null)} />}
         <Card className="p-6 text-sm text-muted-foreground">Create your online store first, in Store Settings.</Card>
       </div>
@@ -52,7 +50,6 @@ export default function HomeSectionsPage() {
           </>
         )}
       </PageHeader>
-      <StoreTabs current="/online-store/home" />
 
       {success && <Notice kind="success" message={success} onClose={() => setSuccess(null)} />}
       {error && <Notice kind="error" message={error} onClose={() => setError(null)} />}

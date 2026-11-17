@@ -19,7 +19,6 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { SelectField } from "@/components/ui/select";
 import { Field, Loading, Notice, PageHeader, textareaClass } from "../shared";
-import { StoreTabs } from "../store-nav";
 import { useStoreSettings } from "../use-store-settings";
 
 interface PageRow { slug: string; title: string; kind: string; isPublished: boolean }
@@ -74,7 +73,6 @@ export default function NavigationPage() {
     return (
       <div className="space-y-6">
         <PageHeader title="Navigation" description="Menus and footer links." />
-        <StoreTabs current="/online-store/navigation" />
         {error && <Notice kind="error" message={error} onClose={() => setError(null)} />}
         <Card className="p-6 text-sm text-muted-foreground">Create your online store first, in Store Settings.</Card>
       </div>
@@ -99,7 +97,6 @@ export default function NavigationPage() {
           </>
         )}
       </PageHeader>
-      <StoreTabs current="/online-store/navigation" />
 
       {success && <Notice kind="success" message={success} onClose={() => setSuccess(null)} />}
       {error && <Notice kind="error" message={error} onClose={() => setError(null)} />}

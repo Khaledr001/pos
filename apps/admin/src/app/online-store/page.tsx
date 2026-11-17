@@ -312,10 +312,6 @@ export default function OnlineStorePage() {
       <PageHeader title="Online Store" description="Your website's settings. Products, prices and stock are the POS's own.">
         <Link href="/online-store/orders"><Button variant="outline" size="sm">Orders</Button></Link>
         <Link href="/online-store/listings"><Button variant="outline" size="sm">Listings</Button></Link>
-        <Link href="/online-store/appearance"><Button variant="outline" size="sm">Appearance</Button></Link>
-        <Link href="/online-store/home"><Button variant="outline" size="sm">Home page</Button></Link>
-        <Link href="/online-store/navigation"><Button variant="outline" size="sm">Navigation</Button></Link>
-        <Link href="/online-store/content"><Button variant="outline" size="sm">Content</Button></Link>
         <Link href="/online-store/coupons"><Button variant="outline" size="sm">Promo codes</Button></Link>
         {mayWrite && <Button size="sm" disabled={saving || !!originProblem || !!regionProblem} onClick={() => void save()}><Save className="h-4 w-4" /> Save settings</Button>}
       </PageHeader>
