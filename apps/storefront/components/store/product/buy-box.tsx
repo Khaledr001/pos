@@ -190,7 +190,7 @@ export function BuyBox({ product }: { product: ProductDetail }) {
             <Store className="mt-0.5 size-5 shrink-0 text-steel" aria-hidden />
             <span>
               Pickup:{" "}
-              {variant.availability.branches.length
+              {variant.availability.branches?.length
                 ? variant.availability.branches.map((b, i) => (
                     <span key={b.code}>
                       {i > 0 && ", "}

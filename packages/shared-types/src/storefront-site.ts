@@ -30,6 +30,13 @@ export interface SiteSettings {
   mode: SiteMode;
   /** Catalogue mode: show prices or hide them (the API stops sending them). Ignored in other modes. */
   showPrices: boolean;
+  /**
+   * Catalogue mode: send exact stock (free quantity, per-branch breakdown) or
+   * only an in-stock / low / out-of-stock label. A showroom that sells by quote
+   * rarely wants competitors reading its stock levels. Ignored in other modes:
+   * a shop always shows stock, because a shopper needs it to order.
+   */
+  showStock: boolean;
   /** Catalogue mode: how a visitor asks about a product. At least one should be on. */
   enquiry: {
     form: boolean;
@@ -50,6 +57,7 @@ export const DEFAULT_SITE: SiteSettings = {
   template: "shop",
   mode: "shop",
   showPrices: true,
+  showStock: true,
   enquiry: { form: true, whatsapp: true, call: false, formSlug: DEFAULT_ENQUIRY_FORM_SLUG },
   features: { search: true, account: true },
   headerCta: null,
@@ -61,6 +69,8 @@ export interface SiteFeatures {
   products: boolean;
   /** Prices are sent to browsers. */
   prices: boolean;
+  /** Exact stock quantities and the per-branch breakdown are sent; otherwise only a stock label. */
+  stock: boolean;
   cart: boolean;
   checkout: boolean;
   /** Shopper sign-in, order history, saved lists, trade accounts, quotes. */
@@ -81,6 +91,7 @@ export function resolveSiteFeatures(site: SiteSettings): SiteFeatures {
       return {
         products: true,
         prices: true,
+        stock: true,
         cart: true,
         checkout: true,
         accounts: site.features.account,
@@ -94,6 +105,7 @@ export function resolveSiteFeatures(site: SiteSettings): SiteFeatures {
       return {
         products: true,
         prices: site.showPrices,
+        stock: site.showStock,
         cart: false,
         checkout: false,
         accounts: false,
@@ -107,6 +119,7 @@ export function resolveSiteFeatures(site: SiteSettings): SiteFeatures {
       return {
         products: false,
         prices: false,
+        stock: false,
         cart: false,
         checkout: false,
         accounts: false,

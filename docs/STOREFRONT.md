@@ -308,6 +308,7 @@ storefront's navigation and the API's checks cannot disagree.
 |---|---|---|---|
 | Product, category, brand pages | yes | yes | no |
 | Prices sent to browsers | yes | `showPrices` | no |
+| Stock quantities and per-branch stock sent | yes | `showStock` | no |
 | Cart, checkout | yes | no | no |
 | Shopper accounts, quotes, saved lists | `features.account` | no | no |
 | Order tracking | yes | no | no |
@@ -346,6 +347,14 @@ price sort falls back to the default (either would let a visitor bisect prices).
 The price sheet is never queried. A text search on a site that turned search off
 is refused, not just hidden. A settings save also refreshes the `catalog` cache tag,
 so flipping a shop to a catalogue clears cached product pages that held prices.
+
+**Stock hiding** (catalogue with `showStock: false`, the catalogue template's
+default) works the same way: a product's `variants[].availability` is the stock
+`label` alone; `available` and `branches` are not sent (`publicAvailability()` in
+the catalogue service). Cards keep their `inStock` boolean. The full figures stay
+on the server, where back-in-stock alerts still read them. A shop always sends
+stock, since a shopper needs it to order; stores saved before the setting existed
+default to `true`.
 
 `GET /content/home` on a `showcase` site runs no catalogue queries and drops the
 sections that need products (`COMMERCE_SECTION_TYPES`); `GET /content/store`

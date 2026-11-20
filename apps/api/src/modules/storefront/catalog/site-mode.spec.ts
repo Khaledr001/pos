@@ -1,11 +1,19 @@
-import { DEFAULT_STOREFRONT_SETTINGS, DEFAULT_TENANT_SETTINGS, type SiteSettings, type StorefrontSettings } from "@devsfleet/shared-types";
+import {
+  DEFAULT_SITE,
+  DEFAULT_STOREFRONT_SETTINGS,
+  DEFAULT_TENANT_SETTINGS,
+  resolveSite,
+  resolveSiteFeatures,
+  type SiteSettings,
+  type StorefrontSettings,
+} from "@devsfleet/shared-types";
 import { ERROR_CODES } from "@devsfleet/shared-utils";
 import { describe, expect, it } from "vitest";
 import { RequestContext } from "../../../common/context/request-context.js";
 import type { TenantDatabase } from "../../../database/tenant-database.service.js";
 import type { StorefrontPricing } from "../pricing/storefront-pricing.service.js";
 import type { ListProductsDto } from "./dto.js";
-import { StorefrontCatalogService } from "./storefront-catalog.service.js";
+import { StorefrontCatalogService, publicAvailability } from "./storefront-catalog.service.js";
 
 const settings = (site: Partial<SiteSettings>): StorefrontSettings => ({
   ...DEFAULT_STOREFRONT_SETTINGS,
@@ -84,5 +92,40 @@ describe("catalogue price hiding", () => {
   it("hides prices for a shop too if its owner is in catalogue mode only — a shop always shows them", async () => {
     const [card] = await cardsFor(settings({ mode: "shop", showPrices: false }));
     expect(card!.fromPrice).not.toBeNull();
+  });
+});
+
+describe("catalogue stock hiding", () => {
+  const stock = {
+    label: "LOW_STOCK" as const,
+    available: 7,
+    branches: [
+      { code: "DXB", name: "Dubai", label: "LOW_STOCK" as const },
+      { code: "SHJ", name: "Sharjah", label: "OUT_OF_STOCK" as const },
+    ],
+  };
+
+  it("sends the quantity and branches when stock levels are shown", () => {
+    expect(publicAvailability(stock, true)).toEqual(stock);
+  });
+
+  it("sends only the label when they are hidden, and nothing that reveals a quantity or a branch", () => {
+    const hidden = publicAvailability(stock, false);
+    expect(hidden).toEqual({ label: "LOW_STOCK" });
+    expect(JSON.stringify(hidden)).not.toMatch(/7|DXB|Sharjah|available|branches/);
+  });
+
+  it("follows the setting on a catalogue site", () => {
+    expect(resolveSiteFeatures({ ...DEFAULT_SITE, mode: "catalogue", showStock: false }).stock).toBe(false);
+    expect(resolveSiteFeatures({ ...DEFAULT_SITE, mode: "catalogue", showStock: true }).stock).toBe(true);
+  });
+
+  it("always shows stock in a shop, where a shopper needs it to order", () => {
+    expect(resolveSiteFeatures({ ...DEFAULT_SITE, mode: "shop", showStock: false }).stock).toBe(true);
+  });
+
+  it("keeps showing stock for shops saved before the setting existed", () => {
+    const { showStock: _omitted, ...stored } = DEFAULT_SITE;
+    expect(resolveSite({ ...stored, mode: "catalogue" }).showStock).toBe(true);
   });
 });

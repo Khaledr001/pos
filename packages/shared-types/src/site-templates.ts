@@ -121,6 +121,8 @@ export const SITE_TEMPLATES: Record<SiteTemplateId, SiteTemplate> = {
       template: "catalogue",
       mode: "catalogue",
       showPrices: true,
+      // A catalogue sells by enquiry: say whether it is in stock, not how many.
+      showStock: false,
       enquiry: { form: true, whatsapp: true, call: false, formSlug: DEFAULT_ENQUIRY_FORM_SLUG },
       features: { search: true, account: false },
       headerCta: { label: "Get a quote", href: "/pages/contact" },

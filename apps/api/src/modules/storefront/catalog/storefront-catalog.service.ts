@@ -379,7 +379,7 @@ export class StorefrontCatalogService {
                 subjects
                   .find((s) => s.variantId === variant.id)!
                   .units.map((u) => ({ uom: u.uom, unitId: u.unitId, factor: Number(u.conversionFactor), price: null as PriceView | null })),
-            availability: stock,
+            availability: publicAvailability(stock, ctx.showStock),
           };
         }),
         related: linked("related"),
@@ -509,6 +509,7 @@ export class StorefrontCatalogService {
       decimals: tenantSettings.currency.decimals,
       taxMode: tenantSettings.tax.mode,
       showPrices: siteFeatures().prices,
+      showStock: siteFeatures().stock,
     };
   }
 
@@ -741,6 +742,20 @@ export interface ListingContext {
   decimals: number;
   /** False on a catalogue site that hides prices: nothing price-bearing is queried or sent. */
   showPrices: boolean;
+  /** False on a catalogue site that hides stock levels: only the label leaves the server. */
+  showStock: boolean;
+}
+
+/**
+ * The stock a product page may send. With stock levels hidden it is the label
+ * alone: the free quantity and the per-branch list stay on the server, where
+ * back-in-stock alerts and checkout still use the full figures.
+ */
+export function publicAvailability(
+  stock: { label: StockLabel; available: number; branches: { code: string; name: string; label: StockLabel }[] },
+  showStock: boolean,
+): { label: StockLabel; available?: number; branches?: { code: string; name: string; label: StockLabel }[] } {
+  return showStock ? stock : { label: stock.label };
 }
 
 function emptyFacets() {

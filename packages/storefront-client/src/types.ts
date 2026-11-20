@@ -156,8 +156,9 @@ export interface ProductVariant {
   units: VariantUnit[];
   availability: {
     label: StockLabel;
-    available: number;
-    branches: { code: string; name: string; label: StockLabel }[];
+    /** Absent when a catalogue site hides stock levels (`site.showStock` off): only the label is sent. */
+    available?: number;
+    branches?: { code: string; name: string; label: StockLabel }[];
   };
 }
 

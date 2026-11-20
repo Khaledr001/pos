@@ -205,6 +205,10 @@ export default function SiteTypePage() {
               <input type="checkbox" className="h-4 w-4" checked={draft.showPrices} onChange={(e) => set({ showPrices: e.target.checked })} /> Show prices
             </label>
             <p className="-mt-2 text-[11px] text-muted-foreground">{draft.showPrices ? "Visitors see prices but cannot order." : "Prices are hidden and never sent to visitors' browsers: they ask you for a price instead."}</p>
+            <label className="flex items-center gap-2 text-xs font-medium">
+              <input type="checkbox" className="h-4 w-4" checked={draft.showStock} onChange={(e) => set({ showStock: e.target.checked })} /> Show stock levels
+            </label>
+            <p className="-mt-2 text-[11px] text-muted-foreground">{draft.showStock ? "Visitors see how many are available and at which branch." : "Visitors only see in stock, low stock or out of stock. Quantities and branches are never sent to their browsers."}</p>
 
             <fieldset className="space-y-2">
               <legend className="text-xs font-medium text-foreground">How visitors enquire about a product</legend>

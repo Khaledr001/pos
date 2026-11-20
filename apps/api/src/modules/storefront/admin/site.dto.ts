@@ -12,6 +12,7 @@ export const SiteSchema = z
     template: z.enum([...SITE_TEMPLATE_IDS, "custom"]),
     mode: z.enum(SITE_MODES),
     showPrices: z.boolean(),
+    showStock: z.boolean(),
     enquiry: z
       .object({
         form: z.boolean(),
