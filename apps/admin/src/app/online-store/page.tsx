@@ -30,10 +30,16 @@ const NEW_ZONE_RATE = { baseFee: "20.00", baseWeightKg: 5, perKgFee: "2.00", fre
 /** "Al Ain" -> "AL_AIN": the stored zone code, stable once an address or order uses it. */
 const zoneCodeFor = (name: string) => name.trim().toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 20);
 
-const isHttpsOrigin = (v: string) => {
+/**
+ * Mirrors the API's rule (storefront/admin/appearance.dto.ts): https, or
+ * http://localhost while developing. It used to demand https only, so a store
+ * that allowed a local dev site could not save ANY setting from this page.
+ */
+const isAllowedOrigin = (v: string) => {
   try {
-    const u = new URL(v);
-    return u.protocol === "https:" && u.origin === v;
+    const u = new URL(v.toLowerCase());
+    const isLocal = u.protocol === "http:" && u.hostname === "localhost";
+    return (u.protocol === "https:" || isLocal) && u.origin === v.toLowerCase() && /^[a-z0-9.-]+$/.test(u.hostname);
   } catch {
     return false;
   }
@@ -176,7 +182,7 @@ export default function OnlineStorePage() {
   }
 
   const origins = originsText.split("\n").map((o) => o.trim()).filter(Boolean);
-  const originProblem = origins.length > MAX_HEADLESS_ORIGINS ? `At most ${MAX_HEADLESS_ORIGINS} origins.` : origins.find((o) => !isHttpsOrigin(o)) ? "Each origin must be exact, like https://shop.example.com (https, no path, no trailing slash)." : null;
+  const originProblem = origins.length > MAX_HEADLESS_ORIGINS ? `At most ${MAX_HEADLESS_ORIGINS} origins.` : origins.find((o) => !isAllowedOrigin(o)) ? "Each origin must be exact, like https://shop.example.com (https, or http://localhost while developing; no path, no trailing slash)." : null;
   const regionProblem = !draft
     ? null
     : !/^\d{1,4}$/.test(draft.region.callingCode)
